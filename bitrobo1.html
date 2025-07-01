@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bitrobo 庫存決策模擬工具 (Gemini API 整合版)</title>
+    <title>避錯寶 庫存決策模擬工具 (Gemini API 整合版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://js.puter.com/v2/"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
@@ -50,7 +51,6 @@
 <body class="bg-slate-200">
 
     <div class="w-full max-w-6xl mx-auto my-10 bg-white rounded-2xl shadow-2xl flex min-h-[800px]">
-        <!-- Left Panel: Inputs -->
         <div class="w-1/3 bg-slate-800 text-white p-8 rounded-l-2xl flex flex-col">
             <div class="flex-grow">
                 <h1 class="text-3xl font-bold mb-2">避錯寶</h1>
@@ -58,7 +58,6 @@
 
                 <h2 class="text-lg font-semibold text-slate-300 mb-4">步驟 1: 輸入商品資訊</h2>
                 <div class="space-y-5">
-                    <!-- Product Category -->
                     <div>
                         <label class="text-sm text-slate-400">商品類別</label>
                         <select id="category" class="mt-1 w-full p-3 bg-slate-700 border border-slate-600 rounded-lg focus:ring-2 focus:ring-cyan-400 focus:border-cyan-400 transition">
@@ -68,12 +67,10 @@
                             <option value="apparel">服飾 (Apparel)</option>
                         </select>
                     </div>
-                    <!-- Product Name -->
                     <div>
                         <label class="text-sm text-slate-400">商品名稱/關鍵字</label>
                         <input type="text" id="product_name" value="Nike Dunk Low Panda" class="mt-1 w-full p-3 bg-slate-700 border border-slate-600 rounded-lg focus:ring-2 focus:ring-cyan-400 focus:border-cyan-400 transition">
                     </div>
-                    <!-- Cost & Price -->
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                            <label class="text-sm text-slate-400">單位成本 (NT$)</label>
@@ -86,18 +83,15 @@
                     </div>
                 </div>
             </div>
-            <!-- Action Button -->
             <button id="run_button" class="w-full bg-gradient-to-r from-cyan-400 to-blue-500 text-slate-900 font-bold py-4 px-4 rounded-xl shadow-lg hover:shadow-cyan-400/30 focus:outline-none focus:ring-4 focus:ring-cyan-300 transition-all duration-300 transform hover:scale-105 flex items-center justify-center gap-3">
                 <span id="button-text">產生 AI 分析報告</span>
                 <div id="button-loader" class="loader" style="display: none; width: 25px; border-width: 4px;"></div>
             </button>
         </div>
 
-        <!-- Right Panel: Dashboard -->
         <div class="w-2/3 p-10 bg-slate-100 rounded-r-2xl">
             <h2 class="text-2xl font-bold text-slate-800 mb-6">分析儀表板 (Analysis Dashboard)</h2>
             <div id="output_area" class="space-y-6">
-                <!-- Initial state or loader -->
                 <div id="initial-state" class="text-center text-slate-500 pt-20">
                     <p>請在左側輸入商品資訊，</p>
                     <p>點擊按鈕以獲取 AI 的專業分析報告。</p>
@@ -130,7 +124,7 @@
             window.requestAnimationFrame(step);
         }
 
-        // --- Main Function to Call Gemini API ---
+        // --- Main Function to Call AI via Puter.js ---
         async function getAiAnalysis() {
             // 1. Show loading state
             initialState.style.display = 'none';
@@ -140,7 +134,7 @@
             outputArea.innerHTML = `
                 <div class="flex flex-col items-center justify-center pt-20">
                     <div class="loader"></div>
-                    <p class="mt-4 text-slate-500">正在呼叫 Gemini，請稍候...</p>
+                    <p class="mt-4 text-slate-500">正在呼叫 AI 服務，請稍候...</p>
                 </div>`;
 
             // 2. Get user inputs
@@ -148,23 +142,8 @@
             const productName = document.getElementById('product_name').value;
             const costPerUnit = parseFloat(document.getElementById('cost_per_unit').value) || 0;
             const sellPrice = parseFloat(document.getElementById('sell_price').value) || 0;
-
-            // 3. Construct the prompt for Gemini
-            const prompt = `
-                您是「避錯寶」，一個專為台灣中小型電商和代購業者設計的 AI 庫存決策專家。您的目標是分析商品潛力，並提供精準的進貨建議以避免產生「死庫存」。
-
-                請根據以下商品資訊，以及您對當前（2025年中）市場趨勢的了解，進行分析。
-
-                商品資訊:
-                - 商品類別: ${category}
-                - 商品名稱: ${productName}
-                - 單位成本: NT$ ${costPerUnit}
-                - 預計售價: NT$ ${sellPrice}
-
-                請嚴格依照以下 JSON 格式回傳您的分析結果，不要有任何額外的文字或解釋:
-            `;
-
-            // 4. Define the structured JSON schema for the response
+            
+            // 3. Define the structured JSON schema for the response
             const schema = {
                 type: "OBJECT",
                 properties: {
@@ -176,42 +155,49 @@
                 },
                 required: ["trendScore", "riskLevel", "minStock", "maxStock", "recommendationText"]
             };
+            
+            // 4. Construct the prompt for Puter.js
+            const prompt = `
+                您是「避錯寶」，一個專為台灣中小型電商和代購業者設計的 AI 庫存決策專家。您的目標是分析商品潛力，並提供精準的進貨建議以避免產生「死庫存」。
+                請根據以下商品資訊，以及您對當前（2025年中）市場趨勢的了解，進行分析。
 
-            // 5. Make the API call
+                商品資訊:
+                - 商品類別: ${category}
+                - 商品名稱: ${productName}
+                - 單位成本: NT$ ${costPerUnit}
+                - 預計售價: NT$ ${sellPrice}
+
+                請嚴格依照以下 JSON 格式回傳您的分析結果。不要輸出除了 JSON 物件本身以外的任何文字、註解、或 markdown 語法 (例如 \`\`\`json)。
+                你的回傳內容必須是一個可以直接被 JSON.parse() 解析的字串。
+
+                JSON 格式定義:
+                ${JSON.stringify(schema, null, 2)}
+            `;
+
+            // 5. Make the API call using Puter.js
             try {
-                const apiKey = ""; // API key is handled by the environment
-                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-                
-                const payload = {
-                    contents: [{ role: "user", parts: [{ text: prompt }] }],
-                    generationConfig: {
-                        responseMimeType: "application/json",
-                        responseSchema: schema,
-                        temperature: 0.5,
-                    }
-                };
-
-                const response = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
+                const response = await puter.ai.chat(prompt, {
+                   model: 'google/gemini-2.0-flash-lite-001', // Free model via Puter.js
+                   stream: false // We want the full response at once
                 });
-
-                if (!response.ok) {
-                    throw new Error(`API 錯誤: ${response.status} ${response.statusText}`);
-                }
-
-                const result = await response.json();
                 
-                if (result.candidates && result.candidates.length > 0) {
-                    const aiData = JSON.parse(result.candidates[0].content.parts[0].text);
+                if (response.message && response.message.content) {
+                    // AI response might be wrapped in ```json ... ```, so we clean it up.
+                    let jsonString = response.message.content;
+                    const jsonMatch = jsonString.match(/```json\n([\s\S]*?)\n```/);
+                    if (jsonMatch && jsonMatch[1]) {
+                        jsonString = jsonMatch[1];
+                    }
+                    
+                    const aiData = JSON.parse(jsonString);
                     updateDashboard(aiData, costPerUnit, sellPrice);
+
                 } else {
                     throw new Error("AI 未能提供有效的分析結果。");
                 }
 
             } catch (error) {
-                console.error("Gemini API call failed:", error);
+                console.error("Puter.js API call failed:", error);
                 outputArea.innerHTML = `
                     <div class="text-center text-red-500 pt-20">
                         <p>AI 分析失敗！</p>
@@ -281,11 +267,11 @@
                 </div>
                 <div class="fade-in-item p-6 rounded-2xl glassmorphism shadow-lg" style="animation-delay: 0.6s;">
                      <h3 class="text-lg font-semibold text-slate-800 flex items-center gap-2 mb-3">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-cyan-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
-                        Bitrobo AI 顧問建議
-                    </h3>
-                    <p class="text-slate-700">${recommendationText}</p>
-                    <p class="mt-4 text-sm text-slate-500 italic">*備註：若採納 Bitrobo 庫存優化建議，預計可降低 <b>20%</b> 的滯銷庫存成本，為您節省約 <b>NT$ ${costSaved.toLocaleString()}</b>。</p>
+                         <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-cyan-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
+                         Bitrobo AI 顧問建議
+                     </h3>
+                     <p class="text-slate-700">${recommendationText}</p>
+                     <p class="mt-4 text-sm text-slate-500 italic">*備註：若採納 Bitrobo 庫存優化建議，預計可降低 <b>20%</b> 的滯銷庫存成本，為您節省約 <b>NT$ ${costSaved.toLocaleString()}</b>。</p>
                 </div>`;
             
             outputArea.innerHTML = resultHTML;
@@ -316,7 +302,7 @@
             animateValue(document.querySelector('.cost-value'), 0, totalCost, 1000);
             animateValue(document.querySelector('.revenue-value'), 0, potentialRevenue, 1000);
             animateValue(document.querySelector('.profit-value'), 0, potentialProfit, 1000);
-            animateValue(document.querySelector('.roi-value'), 0, roi, 1000);
+            animateValue(document.querySelector('.roi-value'), 0, Math.round(roi), 1000);
         }
 
         runButton.addEventListener('click', getAiAnalysis);
