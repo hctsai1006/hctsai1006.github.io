@@ -9,19 +9,22 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
     <style>
+        /* * 主題顏色設定
+         * 這裡定義了終端機介面的各種顏色，方便統一管理與修改。
+         */
         :root {
             --bg: #2c001e;
-            --prompt-user: #76E07A;
-            --prompt-host: #88A9D4;
-            --prompt-dir: #58a6ff;
-            --text: #E5E5E5;
-            --command: #76E07A;
-            --output-title: #E5E5E5;
-            --link: #58a6ff;
-            --dir: #58a6ff;
-            --error: #f87171;
-            --neofetch-logo: #88A9D4;
-            --neofetch-title: #76E07A;
+            --prompt-user: #76E07A; /* 使用者名稱顏色 */
+            --prompt-host: #88A9D4; /* 主機名稱顏色 */
+            --prompt-dir: #58a6ff;  /* 當前目錄顏色 */
+            --text: #E5E5E5;        /* 主要文字顏色 */
+            --command: #76E07A;     /* 指令文字顏色 */
+            --output-title: #E5E5E5;/* 輸出標題顏色 */
+            --link: #58a6ff;        /* 連結顏色 */
+            --dir: #58a6ff;         /* 目錄顏色 */
+            --error: #f87171;       /* 錯誤訊息顏色 */
+            --neofetch-logo: #88A9D4; /* Neofetch Logo 顏色 */
+            --neofetch-title: #76E07A; /* Neofetch 標題顏色 */
         }
         body {
             background-color: #300a24;
@@ -37,6 +40,7 @@
             box-shadow: 0 0 25px rgba(236, 72, 153, 0.15);
             cursor: text;
         }
+        /* 提示符號樣式 */
         .prompt > span:first-child { color: var(--prompt-user); }
         .prompt > span:nth-child(2) { color: var(--text); }
         .prompt > span:nth-child(3) { color: var(--prompt-host); }
@@ -44,6 +48,7 @@
         .prompt > span:nth-child(5) { color: var(--prompt-dir); }
         .prompt > span:last-child { color: var(--text); padding-left: 0.5rem; }
         
+        /* 其他元素樣式 */
         .command { color: var(--command); }
         .output { white-space: pre-wrap; color: var(--text); }
         .output-title { color: var(--output-title); font-weight: bold; }
@@ -63,8 +68,11 @@
 </head>
 <body class="p-2 sm:p-4">
 
+    <!-- 終端機主體結構 -->
     <div id="terminal" class="terminal p-4 rounded-md">
+        <!-- 歷史指令與輸出會顯示在這裡 -->
         <div id="terminal-content"></div>
+        <!-- 目前的輸入行 -->
         <div class="flex items-center">
             <div class="prompt" id="prompt-line">
                 <span>user</span><span>@</span><span>hctsai1006</span><span>:</span><span>~</span><span>$</span>
@@ -74,89 +82,132 @@
     </div>
 
     <script>
+        // DOM 元素獲取
         const terminal = document.getElementById('terminal');
         const terminalContent = document.getElementById('terminal-content');
         const terminalInput = document.getElementById('terminal-input');
         const promptLine = document.getElementById('prompt-line');
 
+        // 狀態變數
         let commandHistory = [];
         let historyIndex = 0;
         let isNetToolsInstalled = false;
         let ifconfigFailCount = 0;
         const startTime = new Date();
         
+        // 核心：指令與對應的輸出內容
+        // 這裡儲存了所有網站的資訊，更新內容主要在此處進行
         const commands = {
             'help': `
 <span class="output-title">可用指令:</span>
-  <span class="command">profile</span>          - 關於我 (完整介紹)
-  <span class="command">whoami</span>           - 顯示目前使用者
-  <span class="command">ls -l ./projects</span> - 專案與社會創新
-  <span class="command">cat honors.md</span>    - 主要榮譽與肯定
-  <span class="command">./run_performance</span>- 跨域展演 (藝術 & 演說)
-  <span class="command">neofetch</span>         - 顯示系統資訊
-  <span class="command">connect</span>          - 聯絡方式
-  <span class="command">clear</span>            - 清除畫面
-  <span class="command">reboot</span>           - 重新啟動
+  <span class="command">profile</span>               - 關於我 (我是誰？)
+  <span class="command">ls -l ./projects</span>      - 專案與社會創新列表
+  <span class="command">cat honors.md</span>         - 主要榮譽與肯定
+  <span class="command">./run_performance</span>     - 跨域展演 (藝術 & 演說)
+  <span class="command">neofetch</span>              - 顯示系統資訊
+  <span class="command">connect</span>               - 聯絡方式
+  <span class="command">clear</span>                 - 清除畫面
+  <span class="command">reboot</span>                - 重新啟動
+<span class="output-title">提示:</span> 可使用 <span class="command">cat &lt;專案名稱&gt;/README.md</span> 查看專案詳情。
 `,
             'profile': `
-<span class="output-title">hctsai1006 (蔡秀吉)</span>
+<span class="output-title">hctsai1006 (蔡秀吉 / Ting-Yi Tsai, Alex)</span>
 --------------------------------------------------
-身份: 學術研究者 / 卯咪 / 前瞻科技轉譯者
-地點: 台灣，北榮旁邊讀大學
-學歷: 國立陽明交通大學 & 國立清華大學
-核心理念: 透過科技與行動，解決真實世界的問題。
-個人特質: 我的故事始於鄉村的泥土與夜市的喧囂，這份早熟的歷練，成為我所有行動的初衷。我相信教育與科技是翻轉生命最強大的力量。
+<span class="command">身份:</span> 學術研究者 / 社會創新實踐家 / 前瞻科技轉譯者
+<span class="command">地點:</span> 台灣 台北 / 捷克 布拉格 (訪問研究)
+<span class="command">學歷:</span> 國立陽明交通大學 (AI生醫) & 國立清華大學 (電資)
+<span class="command">核心理念:</span> 「找到你的為什麼，革自己的命。」
+我相信教育與科技是翻轉生命最強大的力量，並致力於透過行動解決真實世界的問題。我的故事始於鄉村的泥土與夜市的喧囂，這份早熟的歷練，成為我所有行動的初衷。
 `,
             'whoami': 'user',
             'ls': `專案列表請輸入 <span class="command">ls -l ./projects</span>`,
             'ls -l ./projects': `
-<span class="output-title">total 4</span>
+<span class="output-title">total 6</span>
+drwxr-xr-x 1 user user 4096 Jul 08 18:30 <span class="dir-color command">O-RAN聯邦學習/</span>
+drwxr-xr-x 1 user user 4096 Jul 08 18:31 <span class="dir-color command">海洋通訊衛星/</span>
 drwxr-xr-x 1 user user 4096 Jun 10 10:20 <span class="dir-color command">語您童行/</span>
 drwxr-xr-x 1 user user 4096 Jun 10 10:21 <span class="dir-color command">108課綱平台/</span>
 drwxr-xr-x 1 user user 4096 Jun 10 10:22 <span class="dir-color command">5G智慧醫療/</span>
 drwxr-xr-x 1 user user 4096 Jun 10 10:23 <span class="dir-color command">藝童教育/</span>
 `,
+            'cat o-ran聯邦學習/readme.md': `
+<span class="output-title"># 專案: 基於聯邦學習與O-RAN的智慧無線資源管理</span>
+- <span class="command">性質:</span> 國科會大專學生研究計畫 (112-2813-C-007-064-E)
+- <span class="command">摘要:</span> 為應對下世代行動通訊的挑戰，本研究於O-RAN架構中引入聯邦學習(Federated Learning)框架。透過設計多個xApps進行網路切片、負載監控與功率控制，在保護終端設備隱私的同時，實現智慧化的無線資源管理，以追求更高的網路效能與系統韌性。
+- <span class="command">關鍵字:</span> O-RAN, RIC, xApp, Federated Learning, 6G
+`,
+            'cat 海洋通訊衛星/readme.md': `
+<span class="output-title"># 專案: O-RAN整合低軌衛星之船舶通訊系統</span>
+- <span class="command">性質:</span> 2023 臺灣海洋治理國際研討會 - 論文競賽第三名
+- <span class="command">摘要:</span> 為提升我國海洋通訊韌性，本計畫規劃於近海、離岸平台與船舶建置能與低軌衛星(LEO)通訊的O-RAN基站。此系統不僅能即時預警海域的異常輻射污染，更能透過5G低延遲特性，提供海上作業人員即時海象與導航資訊，加速我國前瞻通訊基礎設施發展 (SDG9)。
+- <span class="command">關鍵字:</span> LEO, O-RAN, 5G, 海洋通訊, SDG9
+`,
+            'cat 語您童行/readme.md': `
+<span class="output-title"># 專案: 語您童行 (Tai-Gi)</span>
+- <span class="command">性質:</span> 教育部青年發展署 Young飛全球行動計畫 - 卓越行動獎
+- <span class="command">摘要:</span> 為翻轉本土語言的刻板印象，團隊致力於本土文化傳承與保存。我們透過製作台語、客語的科普教育影片(如普拿疼藥物介紹)，並與國際語言傳承組織交流，為台灣社會注入國際議題的能量。成果獲公視、教育廣播電台專訪，並榮登陽明交大官網。
+- <span class="command">關鍵字:</span> 本土語言, 優質教育 (SDG4), 社會創新, 數位行銷
+`,
+            'cat 108課綱平台/readme.md': `
+<span class="output-title"># 專案: 108課綱高等教育資源整合平台</span>
+- <span class="command">性質:</span> g0v 零時小學校黑客松 - 獲獎隊伍
+- <span class="command">摘要:</span> 為弭平城鄉教育資源不平等的鴻溝，我發起了此專案。平台整合了大學18學群的升學經驗、學習歷程檔案、校內師資與競賽資訊，希望能降低偏鄉學子的求知門檻，讓他們擁有更多選擇權。此專案亦代表陽明交大參與 Google Solution Challenge。
+- <span class="command">關鍵字:</span> 教育不平等, 資源整合, g0v, Google Solution Challenge
+`,
+            'cat 5g智慧醫療/readme.md': `
+<span class="output-title"># 專案: 5G O-RAN 智慧醫療專網</span>
+- <span class="command">性質:</span> 經濟部工業局 2022通訊大賽 - 5G領航創新應用競賽前十
+- <span class="command">摘要:</span> 以個人團隊參賽，提出在醫院場域建置低成本、易部署的O-RAN 5G專網。利用室內定位演算法與5G低延遲特性，智慧化分配健檢人流，解決病患等待焦慮並優化醫院資源。後續可整合無線化醫療器材，提升臨床醫療品質。
+- <span class="command">關鍵字:</span> 5G, O-RAN, MEC, 智慧醫療, 室內定位
+`,
+            'cat 藝童教育/readme.md': `
+<span class="output-title"># 專案: 藝童教育</span>
+- <span class="command">性質:</span> 2022 NYCU 創新創業競賽 - 獲選團隊 (獲五萬元創業金)
+- <span class="command">摘要:</span> 「學童的夢，讓我們來守護。」洞見弱勢家庭在藝能教育與親子互動上的需求，我與夥伴共同創辦「藝童教育」。我們規劃並執行實體親子共學課程，內容涵蓋美術繪畫與台語兒童劇場，旨在為孩子創造更優質的成長環境。
+- <span class="command">關鍵字:</span> 社會創新, 親子共學, 藝術教育, 創新創業
+`,
             'cat honors.md': `
 <span class="output-title"># 主要榮譽與肯定</span>
-
-- 2023 總統教育獎 - 奮發向上獎: 全國性最高榮譽，肯定其逆境奮鬥與社會服務精神。
-- 2023 捷克政府全額獎學金: 將以訪問學者身份赴查理大學與捷克理工大學進行為期10個月的研究。
-- 國科會大專生研究計畫: 獲補助主持「基於聯邦學習與O-RAN」之前瞻通訊研究。
-- 教育部青年署 卓越行動獎: 肯定「語您童行」計畫在社會創新與文化傳承上的貢獻。
-- 跨國企業與政府肯定: 研究教材獲經濟部採納，並獲微軟、Google等企業頒發獎項與認證。
+- <span class="command">2023 總統教育獎 - 奮發向上獎:</span> 全國性最高榮譽，肯定逆境奮發與社會服務精神。
+- <span class="command">2023 捷克政府全額獎學金:</span> 以訪問學者身份赴查理大學與捷克理工大學進行為期10個月的研究。
+- <span class="command">國科會大專生研究計畫:</span> 獲補助主持「基於聯邦學習與O-RAN」之前瞻通訊研究。
+- <span class="command">教育部青年署 卓越行動獎:</span> 肯定「語您童行」計畫在社會創新與文化傳承上的貢獻。
+- <span class="command">跨國企業與政府肯定:</span> 研究教材獲經濟部採納，並獲微軟少年英雄獎、Google獎學金與多項認證。
+- <span class="command">海洋治理國際研討會 論文獎:</span> 以O-RAN結合低軌衛星之研究獲海洋工程組第三名。
 `,
             './run_performance': `
 <span class="output-title">執行中... ./run_performance</span>
 在硬核的科技之外，我相信藝術與溝通的力量。
 
 <span class="command">傳統戲曲</span>
-- 蘭陽戲劇團: 擔綱《天公疼憨人》一劇主角。
-- 全國歌仔戲比賽: 從近三千人中脫穎而出，晉級複賽。
+- <span class="command">蘭陽戲劇團:</span> 擔綱《天公疼憨人》一劇主角「尚福氣」，演繹自身的傻憨與赤子之心。
+- <span class="command">全國歌仔戲比賽:</span> 從近三千人中脫穎而出，晉級複賽，並獲吳念真導演邀請擔任廣告編劇。
 
 <span class="command">演說與展演</span>
-- SITCON/COSCUP: 於 SITCON X年會擔任講者，站上「中研院以全台語進行技術演說」。
-- 單口喜劇: 以孔乙己作為背景，用詼諧的方式，訴說著南部人北上讀書的各種不適應。
-- Podcast: 擔任新竹縣教育局青年播客代表，分享大學生活議題。
+- <span class="command">SITCON / COSCUP:</span> 於台灣兩大開源年會擔任講者，並站上中研院以「全台語」進行5G O-RAN技術演說。
+- <span class="command">單口喜劇:</span> 以孔乙己為背景，用詼諧反諷的段子，訴說南部囡仔北上求學的文化衝擊與生活真相。
+- <span class="command">Podcast:</span> 擔任新竹縣教育局青年播客代表，分享大學生活、開學焦慮與親子關係等議題。
 `,
             'neofetch': ``, // Placeholder, will be generated dynamically
             'connect': `
 <span class="output-title">聯絡方式:</span>
-  Email: <a href="mailto:hctsai@linux.com" class="link">hctsai@linux.com</a>
+  Email: <a href="mailto:thc1006@ieee.org" class="link">thc1006@ieee.org</a>
   Facebook: <a href="https://www.fb.com/thc1006/" target="_blank" class="link">www.fb.com/thc1006/</a>
 `,
             'clear': '',
             'reboot': ''
         };
 
+        // 歡迎訊息
         const welcomeMessage = [
 `
-    __ __ __          __ __   ___  __           __
-   / // /_ ____ __  / // /  / _ \\/ /_ _  __ __/ /
-  / _  / // /\\ \\ / / _  /  / ___/ / // |/ // // /
- /_//_/\\_,_//_\\_\\ /_//_/  /_/  /_/\\_,_/|__/\\_,_/
+      __ __ __            __ __   ___  __            __
+     / // /_ ____ __   / // /  / _ \\/ /_ _  __ __/ /
+   / _  / // /\\ \\ / / _  /  / ___/ / // |/ // // /
+  /_//_/\\_,_//_\\_\\ /_//_/  /_/  /_/\\_,_/|__/\\_,_/
 `,
             " ",
-            "Booting Hsiu-Chi Tsai's Portfolio OS...",
+            "Booting Hsiu-Chi Tsai's Portfolio OS v2.0...",
             "System check... OK",
             "Welcome!",
             " ",
@@ -164,11 +215,13 @@ drwxr-xr-x 1 user user 4096 Jun 10 10:23 <span class="dir-color command">藝童�
             " ",
         ];
         
+        // 讓終端機在點擊時聚焦到輸入框
         terminal.addEventListener('click', () => terminalInput.focus());
 
+        // 處理使用者輸入
         terminalInput.addEventListener('keydown', (event) => {
             if (event.key === 'Enter') {
-                const command = terminalInput.value.trim().toLowerCase();
+                const command = terminalInput.value.trim();
                 terminalInput.value = '';
 
                 if (command) {
@@ -197,38 +250,49 @@ drwxr-xr-x 1 user user 4096 Jun 10 10:23 <span class="dir-color command">藝童�
             }
         });
 
+        // 執行指令的核心函式
         function runCommand(command) {
+            const lowerCaseCommand = command.toLowerCase();
             const commandLine = document.createElement('div');
             const newPrompt = promptLine.cloneNode(true);
             const commandText = document.createElement('span');
             commandText.className = 'command ml-2';
-            commandText.textContent = command;
+            commandText.textContent = command; // 顯示原始大小寫的指令
             commandLine.appendChild(newPrompt);
             commandLine.appendChild(commandText);
             terminalContent.appendChild(commandLine);
 
-            if (commands.hasOwnProperty(command)) {
-                let output = commands[command];
+            // 處理 'cat' 指令
+            if (lowerCaseCommand.startsWith('cat ') && lowerCaseCommand.endsWith('/readme.md')) {
+                const projectKey = lowerCaseCommand.substring(4);
+                if (commands.hasOwnProperty('cat ' + projectKey)) {
+                    addOutput(commands['cat ' + projectKey]);
+                } else {
+                    addOutput(`<span class="error">cat: ${command.substring(4)}: No such file or directory</span>`);
+                }
+            } else if (commands.hasOwnProperty(lowerCaseCommand)) {
+                let output = commands[lowerCaseCommand];
                 
-                if (command === 'clear' || command === 'reboot') {
+                if (lowerCaseCommand === 'clear' || lowerCaseCommand === 'reboot') {
                     terminalContent.innerHTML = '';
-                    if (command === 'reboot') addOutput('Rebooting...');
-                    setTimeout(() => executeLines(welcomeMessage, () => terminalInput.focus()), command === 'reboot' ? 1000 : 0);
+                    if (lowerCaseCommand === 'reboot') addOutput('Rebooting...');
+                    setTimeout(() => executeLines(welcomeMessage, () => terminalInput.focus()), lowerCaseCommand === 'reboot' ? 1000 : 0);
                     return;
                 }
                 
-                if (command === 'neofetch') {
+                if (lowerCaseCommand === 'neofetch') {
                     output = generateNeofetch();
                 }
 
                 addOutput(output);
             } else {
-                handleSpecialCommands(command);
+                handleSpecialCommands(lowerCaseCommand);
             }
             
             terminal.scrollTop = terminal.scrollHeight;
         }
         
+        // 輔助函式：新增輸出到終端機
         function addOutput(text) {
             const line = document.createElement('div');
             line.className = 'output px-4';
@@ -237,6 +301,7 @@ drwxr-xr-x 1 user user 4096 Jun 10 10:23 <span class="dir-color command">藝童�
             terminal.scrollTop = terminal.scrollHeight;
         }
 
+        // 處理一些有趣的隱藏指令 (Easter Eggs)
         function handleSpecialCommands(command) {
             let output = '';
             if (command.startsWith('ping')) {
@@ -275,28 +340,29 @@ drwxr-xr-x 1 user user 4096 Jun 10 10:23 <span class="dir-color command">藝童�
                     break;
                 case 'sl':
                     output = `
-<pre>       ...____________________ ,
-      ..../ / | | | | | | | | | | |\\
-     ..// / / / / / / / / / / / / / /\\
-    .// / / / / / / / / / / / / / / /|\\
- ..### / / / / / / / / / / / / / / / / |\\
+<pre>      ...____________________ ,
+     ..../ / | | | | | | | | | | |\\
+    ..// / / / / / / / / / / / / / /\\
+   .// / / / / / / / / / / / / / / /|\\
+..### / / / / / / / / / / / / / / / / |\\
 .#### / / / / / / / / / / / / / / / / /|
 ...##================================##
- ...../       /o\\       /o\\       /o\\
+ ...../        /o\\        /o\\        /o\\
  .....\\_____/ooo/_______/ooo/_______/ooo/</pre>`;
                     break;
                 case 'exit':
-                     addOutput('Logging out...');
-                     setTimeout(() => {
-                        document.body.innerHTML = '<div class="h-screen w-screen flex items-center justify-center text-2xl">Connection closed.</div>';
-                     }, 1000);
-                     return;
+                    addOutput('Logging out...');
+                    setTimeout(() => {
+                        document.body.innerHTML = '<div class="h-screen w-screen flex items-center justify-center text-2xl bg-black">Connection closed.</div>';
+                    }, 1000);
+                    return;
                 default:
-                     output = `<span class="error">${command}: command not found</span>`;
+                    output = `<span class="error">${command}: command not found</span>`;
             }
             addOutput(output);
         }
 
+        // 模擬安裝過程
         function simulateInstallation() {
             terminalInput.disabled = true;
             const steps = [
@@ -324,6 +390,7 @@ drwxr-xr-x 1 user user 4096 Jun 10 10:23 <span class="dir-color command">藝童�
             nextStep();
         }
 
+        // 模擬 ping 指令
         function simulatePing(command) {
             const target = command.split(' ')[1] || '127.0.0.1';
             addOutput(`PING ${target} (::1) 56 data bytes`);
@@ -347,6 +414,7 @@ drwxr-xr-x 1 user user 4096 Jun 10 10:23 <span class="dir-color command">藝童�
             }, 1000);
         }
 
+        // 模擬危險指令
         function simulateSudoRm() {
             terminalInput.disabled = true;
             addOutput('[sudo] password for user: ');
@@ -357,6 +425,7 @@ drwxr-xr-x 1 user user 4096 Jun 10 10:23 <span class="dir-color command">藝童�
             }, 2000);
         }
 
+        // 動態生成 Neofetch 資訊
         function getUptime() {
             const now = new Date();
             const diff = now - startTime;
@@ -371,37 +440,38 @@ drwxr-xr-x 1 user user 4096 Jun 10 10:23 <span class="dir-color command">藝童�
             const memory = `${Math.floor(Math.random() * 4096) + 2048}MiB / 16384MiB`;
             const logo = `
 <pre style="color:var(--neofetch-logo)">
-          ./+o+-
+           ./+o+-
         yyyyy- -yyyyy+
      ://+//////-yyyyyyo
    .++ .yyyyyyy-//////o
   /o/o+./yyyyyyyo///+/o
  +o+o+o+--/oy/--/o/o/+
-  .ooo--/\`.-//-\`--ooo.
+  .ooo--/\\\`.-//-\`--ooo.
    //o \`--- \` -o/o/o/.
     -/o/o- -o/o/o//.
-     -o/o.\`-o/o/o/
-      -o/o.\`-o/o/
+     -o/o.\\\`-o/o/o/
+      -o/o.\\\`-o/o/
         --..-
 </pre>`;
             const info = `
 <span style="color:var(--neofetch-title)">user@hctsai1006</span>
 ------------------
-<span style="color:var(--neofetch-title)">OS</span>: Portfolio.OS x86_64
-<span style="color:var(--neofetch-title)">Host</span>: Hsiu-Chi Tsai
+<span style="color:var(--neofetch-title)">OS</span>: Portfolio.OS v2.0 x86_64
+<span style="color:var(--neofetch-title)">Host</span>: Hsiu-Chi Tsai (Alex)
 <span style="color:var(--neofetch-title)">Kernel</span>: 6.1.0-vanilla-js
 <span style="color:var(--neofetch-title)">Uptime</span>: ${uptime}
 <span style="color:var(--neofetch-title)">Shell</span>: bash 5.1.16 (sim)
 <span style="color:var(--neofetch-title)">Resolution</span>: ${resolution}
-<span style="color:var(--neofetch-title)">Theme</span>: Ubuntu-Vibes [HTML]
+<span style="color:var(--neofetch-title)">Fields</span>: O-RAN, BCI, Med-AI, Ed-Tech, Social Innovation
 <span style="color:var(--neofetch-title)">Terminal</span>: this.browser
 <span style="color:var(--neofetch-title)">CPU</span>: Your Brain
 <span style="color:var(--neofetch-title)">GPU</span>: Imagination
 <span style="color:var(--neofetch-title)">Memory</span>: ${memory}
 `;
-            return `<div class="flex">${logo}<div class="ml-4">${info}</div></div>`;
+            return `<div class="flex flex-col sm:flex-row">${logo}<div class="sm:ml-4">${info}</div></div>`;
         }
         
+        // 逐行顯示訊息的函式
         function executeLines(lines, callback) {
             let i = 0;
             function nextLine() {
@@ -415,6 +485,7 @@ drwxr-xr-x 1 user user 4096 Jun 10 10:23 <span class="dir-color command">藝童�
             nextLine();
         }
         
+        // 頁面載入後執行的初始函式
         executeLines(welcomeMessage, () => {
             runCommand('help');
             terminalInput.focus();
