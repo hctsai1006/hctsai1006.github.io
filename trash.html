@@ -1,0 +1,1566 @@
+
+<!DOCTYPE html>
+<html lang="zh-Hant">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="author" content="xiaowan">
+    <meta name="author" content="enyi">
+    <meta name="author" content="yt.sun">
+    <title>ExoGenesis</title>
+    <link rel="icon" type="image/png" href="/img/logo.png">
+    <link rel="apple-touch-icon" href="/img/logo.png">
+    <style>
+        html,
+        body {
+            margin: 0;
+            height: 100%;
+            background: #000;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, .85);
+            color: #fff;
+            padding: 6px 10px;
+            font: 12px/1.5 "Courier New", monospace;
+            border-radius: 4px;
+            pointer-events: none;
+            display: none;
+            white-space: pre-line;
+            z-index: 10;
+            max-width: 260px;
+        }
+
+        #hud {
+            position: absolute;
+            left: 10px;
+            top: 10px;
+            z-index: 6;
+            color: #cfe4ff;
+            font: 12px/1.4 system-ui, "Noto Sans TC", sans-serif;
+            background: rgba(3, 10, 24, .5);
+            padding: 6px 8px;
+            border-radius: 8px;
+            border: 1px solid rgba(120, 160, 220, .3);
+        }
+
+        body.dragging,
+        body.dragging * {
+            cursor: grabbing !important;
+        }
+
+        body,
+        body * {
+            cursor: grab;
+        }
+
+        #panel {
+            position: absolute;
+            right: 10px;
+            top: 10px;
+            z-index: 7;
+            width: 320px;
+            padding: 10px 12px;
+            background: rgba(3, 10, 24, .75);
+            border: 1px solid rgba(120, 160, 220, .3);
+            border-radius: 10px;
+            color: #e6f0ff;
+            font: 12px/1.5 system-ui, "Noto Sans TC", sans-serif;
+            backdrop-filter: blur(6px);
+            pointer-events: auto;
+        }
+
+        #panel .row {
+            margin-bottom: 10px;
+        }
+
+        #panel label {
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        #panel input[type="range"] {
+            width: 100%;
+        }
+
+        #planetList {
+            position: absolute;
+            top: 50px;
+            left: 10px;
+            width: 220px;
+            background: rgba(3, 10, 24, 0.75);
+            border: 1px solid rgba(120, 160, 220, 0.3);
+            border-radius: 10px;
+            padding: 10px;
+            color: #e6f0ff;
+            font: 12px/1.5 system-ui, 'Noto Sans TC', sans-serif;
+            z-index: 8;
+        }
+
+        #planetListUl,
+        #habitablePlanetListUl {
+            max-height: 160px;
+            overflow-y: auto;
+            padding-left: 1em;
+            margin: 0;
+        }
+
+
+        #planetInfo {
+            position: absolute;
+            top: 130px;
+            right: 10px;
+            width: 320px;
+            max-height: 80%;
+            overflow-y: auto;
+            overflow-x: hidden;
+            background: rgba(3, 10, 24, 0.75);
+            border: 1px solid rgba(120, 160, 220, 0.3);
+            border-radius: 10px;
+            padding: 10px;
+            color: #e6f0ff;
+            font: 12px/1.5 system-ui, 'Noto Sans TC', sans-serif;
+            z-index: 8;
+            display: none;
+        }
+
+        #planetCharts {
+            margin-top: 10px;
+        }
+
+        #planetCharts .chart {
+            width: 100%;
+            height: 220px;
+        }
+
+        #imgModal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            justify-content: center;
+            align-items: center;
+        }
+
+        #modalImage {
+            max-width: 90%;
+            max-height: 90%;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.6);
+            border-radius: 8px;
+        }
+    </style>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-3.1.1.min.js" charset="utf-8"></script>
+    <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "name": "ExoGenesis",
+    "author": [
+      { "@type": "Person", "name": "xiaowan" },
+      { "@type": "Person", "name": "enyi" },
+      { "@type": "Person", "name": "yt.sun" }
+    ]
+  }
+  </script>
+</head>
+
+<body>
+    <div id="tooltip"></div>
+    <div id="hud"> loading… </div>
+    <!-- Create My Planet btn -->
+    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#planetModal"
+        style="position: absolute; bottom: 20px; left: 10px; z-index: 9;">
+        ＋ Create My Planet
+    </button>
+
+    <!-- 右側 gmag 篩選面板(預設 2.7~10) -->
+    <div id="panel">
+        <div class="row">
+            <label>G mag maximum：<span id="gmaxLabel">10.0</span></label>
+            <input id="gmax" type="range" min="2.7" max="10" step="0.1" value="10.0">
+        </div>
+    </div>
+    <!-- 左側行星列表 -->
+    <div id="planetList">
+        <div id="planetToggle" style="cursor: pointer; margin-bottom: 6px;">
+            ▶ list of exoplanets
+        </div>
+        <ul id="planetListUl" style="padding-left: 1em; margin: 0; display: none; overflow-y: auto; max-height: 300px;">
+            <!-- 一般行星清單 -->
+        </ul>
+
+        <div id="habPlanetToggle" style="cursor: pointer; margin-top: 10px; margin-bottom: 6px;">
+            ▶ list of habitable exoplanets
+        </div>
+        <ul id="habitablePlanetListUl"
+            style="padding-left: 1em; margin: 0; display: none; overflow-y: auto; max-height: 300px;">
+            <!-- 適居行星清單 -->
+        </ul>
+    </div>
+
+
+    <!-- 右側行星資訊面板 -->
+    <div id="planetInfo"></div>
+
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        const tooltip = document.getElementById('tooltip');
+        const HUD = document.getElementById('hud');
+        var totalStars = 0;
+
+        const SHOW_ONCE_KEY = 'guideModal.dismissed';
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // 若設定為只顯示一次，且使用者已勾選「下次不要再顯示」，則不彈出
+            const dismissed = localStorage.getItem(SHOW_ONCE_KEY) === '1';
+            if (dismissed) return;
+
+            const modalEl = document.getElementById('guideModal');
+            const guideModal = new bootstrap.Modal(modalEl, {
+                backdrop: true,
+                keyboard: true,
+                focus: true
+            });
+
+            guideModal.show();
+
+            // 使用者關閉時，若勾選「下次不要再顯示」，則記錄在 localStorage
+            modalEl.addEventListener('hidden.bs.modal', () => {
+                const dontShow = document.getElementById('dontShowAgain')?.checked;
+                if (dontShow) {
+                    localStorage.setItem(SHOW_ONCE_KEY, '1');
+                }
+            });
+        });
+
+        function clamp01(x) { return Math.min(1, Math.max(0, x)); }
+
+        function setOverlayColorFilter(rgb, alphaDelta) {
+            const el = document.getElementById('canvasFilter');
+            if (!el || !Array.isArray(rgb) || rgb.length < 3 || alphaDelta == null) return;
+
+            // 顏色與強度
+            const [r, g, b] = rgb.map(v => Math.max(0, Math.min(255, Math.round(Number(v) || 0))));
+            const a = clamp01(Math.abs(Number(alphaDelta) || 0)); // 強度 0~1
+
+            // 負→加深，用 multiply；正→增亮，用 screen(若不支援可用 'lighter')補差filter
+            const mode = (alphaDelta < 0) ? 'multiply' : 'screen';
+
+            el.style.background = `rgb(${r}, ${g}, ${b})`;
+            el.style.opacity = String(a);
+            el.style.mixBlendMode = mode;
+        }
+
+        function clearOverlayColorFilter() {
+            const el = document.getElementById('canvasFilter');
+            if (!el) return;
+            el.style.background = 'transparent';
+            el.style.opacity = '0';
+            el.style.mixBlendMode = 'normal';
+        }
+
+        // === 場景 / 相機 / 渲染器(相機固定原點) ===
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.001, 1e9);
+        camera.position.set(0, 0, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(innerWidth, innerHeight);
+        renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+        renderer.setClearColor(0x020819, 1);
+        // --- 包一層，讓覆蓋層能疊在 canvas 上 ---
+        const canvasWrap = document.createElement('div');
+        canvasWrap.id = 'canvasWrap';
+        Object.assign(canvasWrap.style, {
+            position: 'fixed',
+            inset: '0',
+            zIndex: '0'// 讓 HUD/tooltip(較大 z-index) 在上面
+        });
+        const canvasFilter = document.createElement('div');
+        canvasFilter.id = 'canvasFilter';
+        Object.assign(canvasFilter.style, {
+            position: 'absolute',
+            inset: '0',
+            pointerEvents: 'none', // 不擋滑鼠
+            zIndex: '1',
+            background: 'transparent',
+            opacity: '0',
+            mixBlendMode: 'normal'
+        });
+
+        canvasWrap.appendChild(renderer.domElement);
+        canvasWrap.appendChild(canvasFilter);
+        document.body.appendChild(canvasWrap);
+
+        // 旋轉用群組(旋轉 sky，而不是相機)
+        const sky = new THREE.Group();
+        scene.add(sky);
+
+
+        // === 從 bp-rp 計算 Teff 的函式(用於 tooltip 顯示) ===
+        // Mucciarelli et al. 2021(Gaia EDR3 color–Teff 關係)
+        function teffFromBpRp(bp_rp, { feh = 0, luminosityClass = "dwarf" } = {}) {
+            const coeffs = {
+                dwarf: { b0: 0.4929, b1: 0.5092, b2: -0.0353, b3: 0.0192, b4: -0.0020, b5: -0.0395, cmin: 0.39, cmax: 1.50, sigmaK: 61 },
+                giant: { b0: 0.5323, b1: 0.4775, b2: -0.0344, b3: -0.0110, b4: -0.0020, b5: -0.0009, cmin: 0.33, cmax: 1.81, sigmaK: 83 }
+            };
+            const k = coeffs[luminosityClass] || coeffs.dwarf;
+            const C = bp_rp;
+            const theta = k.b0 + k.b1 * C + k.b2 * C * C + k.b3 * feh + k.b4 * feh * feh + k.b5 * feh * C;
+            const Teff = 5040 / theta;
+            return {
+                Teff,
+                bp_rp: C,
+                feh,
+                luminosityClass,
+                inRange: (C >= k.cmin && C <= k.cmax),
+                relationScatter_K: k.sigmaK
+            };
+        }
+
+        function kelvinToRGB(kelvin) {
+            let T = Math.max(1000, Math.min(40000, kelvin)) / 100;
+            let r, g, b;
+
+            if (T <= 66) {
+                r = 255;
+                g = 99.4708025861 * Math.log(T) - 161.1195681661;
+                if (T <= 19) {
+                    b = 0;
+                } else {
+                    b = 138.5177312231 * Math.log(T - 10) - 305.0447927307;
+                }
+            } else {
+                // 紅、綠通道(高色溫區)
+                r = 329.698727446 * Math.pow(T - 60, -0.1332047592);
+                g = 288.122169528 * Math.pow(T - 60, -0.0755148492);
+                b = 255;
+            }
+
+            // 2) 限制並四捨五入到 0~255
+            const clamp = v => Math.max(0, Math.min(255, Math.round(v)));
+            return { r: clamp(r), g: clamp(g), b: clamp(b) };
+        }
+
+        // === 滾輪 = FOV 縮放 ===
+        const FOV_MIN = 20, FOV_MAX = 90, FOV_SENS = 1.0015;
+        function onWheel(e) {
+            e.preventDefault();
+            const factor = Math.pow(FOV_SENS, e.deltaY);
+            camera.fov = THREE.MathUtils.clamp(camera.fov * factor, FOV_MIN, FOV_MAX);
+            camera.updateProjectionMatrix();
+            updatePointsThreshold(); // FOV 改變時重算 threshold
+        }
+        renderer.domElement.addEventListener('wheel', onWheel, { passive: false });
+
+        // === Raycaster(Points) + 滑鼠 NDC ===
+        const raycaster = new THREE.Raycaster();
+        raycaster.params.Points.threshold = 0.01; // 初始值，會被動態更新覆蓋
+        const mouseNDC = new THREE.Vector2();
+
+        // === 資料與幾何 ===
+        const DATA_URL = './data/bright_stars.json';
+
+        let starPoints = null;
+        let starDataClean = []; // 與 geometry 對齊的資料
+        let planetDataClean = [];
+        let medianDist = 1000;  // 中位距離，用於換算 threshold
+
+        // 近大遠小:世界單位的點大小(整體偏大，遠處較易見)
+        const POINT_SIZE_WORLD = 0.25;
+        const HOVER_MARGIN_PX = 3;
+
+        // 觀察者'世界位移'(僅 HUD 顯示用)
+        const observerPos = new THREE.Vector3();
+        function updateHUDCount() {
+            HUD.textContent = `Count of stars：${totalStars.toLocaleString()}｜Distance to origin point(Earth)：${observerPos.length().toFixed(2)} pc`;
+        }
+
+
+        // 亮度資料與顯示數量
+        let gmagArray = null;       // 和 positions 對齊的 gmag 值
+        let currentShownCount = 0;  // 目前篩選後顯示的數量
+
+        fetch(DATA_URL)
+            .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+            .then(raw => {
+                if (!Array.isArray(raw)) throw new Error('資料不是 Array');
+                const clean = raw.filter(s =>
+                    (Number.isFinite(s?.x) && Number.isFinite(s?.y) && Number.isFinite(s?.z)) ||
+                    (Number.isFinite(s?.theta) && Number.isFinite(s?.phi) && Number.isFinite(s?.r ?? s?.distance))
+                );
+                starDataClean = clean;
+
+                const N = clean.length;
+                totalStars = N;                // ★ 新增
+                updateHUDCount();             // 先顯示總數，等會兒套用篩選後會再更新
+
+                const positions = new Float32Array(N * 3);
+                const colors = new Float32Array(N * 3);
+                gmagArray = new Float32Array(N); // ★ 新增：收集 gmag
+                const col = new THREE.Color();
+                const dists = [];
+                let maxR2 = 0;
+
+                for (let i = 0; i < N; i++) {
+                    const s = clean[i];
+                    let x, y, z;
+                    if (Number.isFinite(s.x) && Number.isFinite(s.y) && Number.isFinite(s.z)) {
+                        x = s.x; y = s.y; z = s.z;
+                    } else {
+                        const r = Number.isFinite(s.r) ? s.r : s.distance;
+                        const phi = s.phi;
+                        const theta = s.theta;
+                        const v = new THREE.Vector3().setFromSpherical(new THREE.Spherical(r, phi, theta));
+                        x = v.x; y = v.y; z = v.z;
+                    }
+                    const j = i * 3;
+                    positions[j] = x; positions[j + 1] = y; positions[j + 2] = z;
+
+                    // const t = THREE.MathUtils.clamp(s.bp_rp_norm ?? 0.5, 0, 1);
+                    // const hue = 0.66 * (1 - t);
+                    // col.setHSL(hue, 1, 0.8);
+                    // const G = s.Gmag ?? s.g_mag ?? 6.0;
+                    // const bright = THREE.MathUtils.clamp((6 - G) / 6, 0.2, 1.0);
+                    // colors[j] = col.r * bright; colors[j + 1] = col.g * bright; colors[j + 2] = col.b * bright;
+
+                    // --- 明亮度仍用 Gmag 縮放(保留你的邏輯) ---
+                    const Gm = s.Gmag ?? s.g_mag ?? 6.0;
+                    const bright = THREE.MathUtils.clamp((6 - Gm) / 6, 0.2, 1.0);
+
+                    // --- 決定色溫(Kelvin)---
+                    // 1) 優先：直接用 bp_rp 推回 Teff
+                    // 2) 次要：如果資料本身已有 teff/Teff 就直接使用
+                    // 3) 備援：若只有歸一化 bp_rp_norm，就大致映射到 2500–12000K 區間
+                    // 4) 最後：用太陽 5772K 當預設
+                    let TeffK;
+                    if (Number.isFinite(s.bp_rp)) {
+                        const { Teff } = teffFromBpRp(s.bp_rp, {
+                            feh: Number.isFinite(s.feh) ? s.feh : 0,
+                            luminosityClass: (typeof s.luminosityClass === 'string') ? s.luminosityClass : 'dwarf'
+                        });
+                        TeffK = Teff;
+                    } else if (Number.isFinite(s.Teff) || Number.isFinite(s.teff)) {
+                        TeffK = Number.isFinite(s.Teff) ? s.Teff : s.teff;
+                    } else if (Number.isFinite(s.bp_rp_norm)) {
+                        // 簡單線性映射，讓缺值也有合理顏色
+                        TeffK = 2500 + s.bp_rp_norm * (12000 - 2500);
+                    } else {
+                        TeffK = 5772; // 太陽
+                    }
+
+                    // Kelvin → sRGB(0~255)
+                    const { r: R8, g: G8, b: B8 } = kelvinToRGB(TeffK);
+
+                    // 轉成 linear 空間給 three.js(因為 BufferAttribute 通常是 linear)
+                    // 用 THREE.Color 幫我們做 sRGB→linear 轉換
+                    col.setRGB(R8 / 255, G8 / 255, B8 / 255).convertSRGBToLinear();
+
+                    // 實際填入顏色(再乘上亮度)
+                    colors[j] = col.r * bright;
+                    colors[j + 1] = col.g * bright;
+                    colors[j + 2] = col.b * bright;
+
+                    // 存 gmag(缺值以 Infinity 排除)
+                    const gmag = Number.isFinite(s.Gmag) ? s.Gmag :
+                        Number.isFinite(s.g_mag) ? s.g_mag : Infinity;
+                    gmagArray[i] = gmag;
+
+                    const r2 = x * x + y * y + z * z;
+                    if (r2 > maxR2) maxR2 = r2;
+                    dists.push(Math.sqrt(r2));
+                }
+
+                dists.sort((a, b) => a - b);
+                medianDist = dists.length ? dists[(dists.length / 2) | 0] : 1000;
+
+                camera.far = Math.max(1e3, Math.sqrt(maxR2) * 2);
+                camera.updateProjectionMatrix();
+
+                const geom = new THREE.BufferGeometry();
+                geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+                const STAR_TEX = makeRoundSprite(96, 0.0, 0.5);
+                const mat = new THREE.PointsMaterial({
+                    size: POINT_SIZE_WORLD,
+                    sizeAttenuation: true,    // ✅ 近大遠小(世界單位)
+                    map: STAR_TEX,
+                    alphaTest: 0.3,
+                    vertexColors: true,
+                    transparent: false,
+                    blending: THREE.AdditiveBlending,
+                    depthWrite: false
+                });
+
+                starPoints = new THREE.Points(geom, mat);
+                sky.add(starPoints);
+
+                updatePointsThreshold(); // 載入完成後先算一次
+
+                // 資料載入後立即套用預設 gmag 篩選
+                let g_min = 2.7, g_max = 10.0; // 預設值
+                // 固定 gmin，預設最大值 10.0
+
+                // 亮度篩選函式只依 gmax 調整
+                function applyBrightnessFilter() {
+                    if (!starPoints || !gmagArray) return;
+
+                    const idx = [];
+                    for (let i = 0; i < gmagArray.length; i++) {
+                        const g = gmagArray[i];
+                        if (g >= gmin && g <= gmax) idx.push(i);
+                    }
+
+                    const indexAttr = (idx.length > 65535) ? new Uint32Array(idx) : new Uint16Array(idx);
+                    starPoints.geometry.setIndex(new THREE.BufferAttribute(indexAttr, 1));
+                    starPoints.geometry.index.needsUpdate = true;
+
+                    totalStars = idx.length;
+                    updateHUDCount();
+                }
+            });
+
+
+        const PLANET_URL = './data/planet.json';
+        let planetPoints = null;
+        let planetCount = 0;
+        let showPlanets = true; // 預設顯示
+
+
+        function createPlanetPoints(dataArray) {
+            const clean = dataArray.filter(p =>
+                (Number.isFinite(p?.x) && Number.isFinite(p?.y) && Number.isFinite(p?.z)) ||
+                (Number.isFinite(p?.dec) && Number.isFinite(p?.ra) && (Number.isFinite(p?.sy_dist) || Number.isFinite(p?.pl_radius_re)))
+            );
+            planetCount = clean.length;
+            planetDataClean = clean;
+
+            const positions = new Float32Array(planetCount * 3);
+            const colors = new Float32Array(planetCount * 3);
+            const isPlanet = new Uint8Array(planetCount);
+            const col = new THREE.Color();
+
+            for (let i = 0; i < planetCount; i++) {
+                const p = clean[i];
+                let x, y, z;
+                if (Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.z)) {
+                    x = p.x; y = p.y; z = p.z;
+                } else {
+                    const r = p.sy_dist ?? p.pl_radius_re;
+                    const v = new THREE.Vector3().setFromSpherical(new THREE.Spherical(r, p.ra, p.dec));
+                    x = v.x; y = v.y; z = v.z;
+                }
+                const j = i * 3;
+                positions[j] = x; positions[j + 1] = y; positions[j + 2] = z;
+
+                col.setRGB(0.95, 0.85, 0.70).convertSRGBToLinear();
+                const bright = 0.95;
+                colors[j] = col.r * bright;
+                colors[j + 1] = col.g * bright;
+                colors[j + 2] = col.b * bright;
+
+                isPlanet[i] = 1;
+            }
+
+            const geom = new THREE.BufferGeometry();
+            geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            geom.setAttribute('isPlanet', new THREE.BufferAttribute(isPlanet, 1));
+
+            const tex = makeRoundSprite(96, 0.0, 0.5);
+            const mat = new THREE.PointsMaterial({
+                size: POINT_SIZE_WORLD * 1.2,
+                sizeAttenuation: true,
+                map: tex,
+                alphaTest: 0.3,
+                vertexColors: true,
+                transparent: false,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+            });
+
+            const points = new THREE.Points(geom, mat);
+            points.renderOrder = 1;
+            return { cleanData: clean, points };
+        }
+
+        function loadPlanets(url = PLANET_URL) {
+            return fetch(url)
+                .then(r => {
+                    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                    return r.json();
+                })
+                .then(raw => {
+                    const { cleanData, points } = createPlanetPoints(raw);
+                    planetPoints = points;
+                    planetDataClean = cleanData;
+                    planetCount = cleanData.length;
+
+                    sky.add(planetPoints);
+                    applyPlanetFilter();
+                    renderPlanetList();
+                    renderHabitablePlanetList();
+
+                })
+                .catch(err => {
+                    console.error('exoplanets loading failed：', err);
+                    HUD.textContent += `｜exoplanets loading failed：${err.message}`;
+                });
+        }
+
+
+        function renderPlanetList() {
+            const ul = document.getElementById("planetListUl");
+            ul.innerHTML = "";
+            planetDataClean.forEach((p, i) => {
+                const li = document.createElement("li");
+                li.style.cursor = "pointer";
+                li.style.marginBottom = "4px";
+                li.textContent = p.pl_name || `exoplanets ${i + 1}`;
+                li.addEventListener("click", () => flyToPlanet(i));
+                ul.appendChild(li);
+            });
+        }
+        function renderHabitablePlanetList() {
+            const ul = document.getElementById("habitablePlanetListUl");
+            ul.innerHTML = "";
+            let count = 0;
+
+            planetDataClean.forEach((p, i) => {
+                const reasonsStr = typeof p.reasons === "string" ? p.reasons : "";
+                if (!reasonsStr.trim()) return;
+
+                const reasonCodes = reasonsStr
+                    .split(";")
+                    .map(code => parseInt(code.trim()))
+                    .filter(code => !isNaN(code));
+
+                if (reasonCodes.includes(0)) {
+                    const li = document.createElement("li");
+                    li.style.cursor = "pointer";
+                    li.style.marginBottom = "4px";
+                    li.textContent = p.pl_name || `exoplanets ${i + 1}`;
+                    li.addEventListener("click", () => flyToPlanet(i));
+                    ul.appendChild(li);
+                    count++;
+                }
+            });
+
+            // 加入圖片元素在適居清單底下
+            const img = document.createElement("img");
+            img.src = "./img/habitable_candidates_plot.png";
+            img.alt = "exoplanets habitable graph";
+            img.style.width = "100%";
+            img.style.marginTop = "10px";
+            img.style.borderRadius = "6px";
+            img.style.cursor = "zoom-in";
+
+            img.addEventListener("click", () => {
+                const modal = document.getElementById("imgModal");
+                const modalImg = document.getElementById("modalImage");
+                modalImg.src = img.src;
+                modal.style.display = "flex";
+            });
+            ul.appendChild(img);
+        }
+        document.getElementById("imgModal").addEventListener("click", (e) => {
+            if (e.target.id === "imgModal") {
+                e.currentTarget.style.display = "none";
+            }
+        });
+        document.addEventListener("keydown", (e) => {
+            if (e.key === "Escape") {
+                document.getElementById("imgModal").style.display = "none";
+            }
+        });
+
+
+        const planetToggle = document.getElementById('planetToggle');
+        const planetListUl = document.getElementById('planetListUl');
+
+        let isExpanded = false;
+
+        planetToggle.addEventListener('click', () => {
+            isExpanded = !isExpanded;
+            planetListUl.style.display = isExpanded ? 'block' : 'none';
+            planetToggle.textContent = (isExpanded ? '▼' : '▶') + ' list of exoplanets';
+        });
+        const habToggle = document.getElementById('habPlanetToggle');
+        const habListUl = document.getElementById('habitablePlanetListUl');
+        let habExpanded = false;
+
+        habToggle.addEventListener('click', () => {
+            habExpanded = !habExpanded;
+            habListUl.style.display = habExpanded ? 'block' : 'none';
+            habToggle.textContent = (habExpanded ? '▼' : '▶') + ' list of habitable exoplanets';
+        });
+
+
+        function flyToPlanet(index) {
+            if (!planetPoints || !planetDataClean.length) return;
+
+            const attrPos = planetPoints.geometry.getAttribute('position');
+            const local = new THREE.Vector3(
+                attrPos.getX(index), attrPos.getY(index), attrPos.getZ(index)
+            );
+            const world = sky.localToWorld(local.clone());
+
+            const target = sky.position.clone().sub(world);
+            move.active = true;
+            move.start.copy(sky.position);
+            move.end.copy(target);
+            move.t = 0;
+
+            const dist = world.length();
+            move.duration = THREE.MathUtils.clamp(dist * 0.003, 2.0, 7.0);
+
+            observerPos.add(world);
+            showPlanetInfo(index);
+            updateHUDCount();
+        }
+
+        async function fetchFilter(density) {
+            const url = `/query/filter?` + new URLSearchParams({ density: String(density) });
+            const resp = await fetch(url, { method: 'GET' });
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            return await resp.json();
+        }
+
+        async function fetchMaterial(density) {
+            const url = `/query/material?` + new URLSearchParams({ density: String(density) });
+            const resp = await fetch(url, { method: 'GET' });
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            return await resp.json();
+        }
+
+        /** 嘗試從行星物件推得可用的 pid(你後端看起來有 loc_rowid) */
+        function resolvePidFromPlanet(p) {
+            const candidate =
+                p?.loc_rowid ?? p?.id ?? p?.pid ?? p?.pl_id ?? p?.plid ?? p?.pl_rowid ?? p?.pl_name;
+            return (candidate !== undefined && candidate !== null) ? String(candidate) : "";
+        }
+
+        /** 質量、半長軸、自轉週期 */
+        function renderTimeSeriesForPlanet(p) {
+            const container = document.getElementById("planetCharts");
+            if (!container) return;
+
+            // 清空舊圖
+            container.innerHTML = "";
+
+            // 還沒載完資料就顯示提示
+            const series = p.time_series;
+            if (!series || !Array.isArray(series) || series.length === 0) {
+                container.innerHTML = `<div style="opacity:.7;">(timeseries DNE)</div>`;
+                return;
+            }
+
+            const pid = resolvePidFromPlanet(p);
+
+
+            if (!series || !Array.isArray(series) || series.length === 0) {
+                container.innerHTML = `<div style="opacity:.7;"> timeseries DNE(pid: ${pid || "Unknown"})</div>`;
+                return;
+            }
+
+            // 建立三個圖表容器
+            const massDiv = document.createElement("div"); massDiv.className = "chart"; massDiv.id = "chart_mass";
+            const smaDiv = document.createElement("div"); smaDiv.className = "chart"; smaDiv.id = "chart_sma";
+            const rotDiv = document.createElement("div"); rotDiv.className = "chart"; rotDiv.id = "chart_rot";
+            container.appendChild(massDiv);
+            container.appendChild(smaDiv);
+            container.appendChild(rotDiv);
+
+            const x = series.map(d => d.time);
+
+            // 質量
+            Plotly.newPlot(massDiv, [{
+                x,
+                y: series.map(d => d.pl_massj),
+                mode: "lines+markers",
+                name: "Mass",
+            }], {
+                title: { text: "mass evolution", x: 0.5 },
+                margin: { t: 40, r: 10, l: 40, b: 30 },
+                xaxis: {
+                    title: { text: "Time (days)" },
+                    automargin: true,
+                    title: { text: "Time (days)", standoff: 10 },
+                },
+                yaxis: {
+                    title: { text: "Mass (Mj)", standoff: 10 },
+                    automargin: true,
+                }
+            }, { displayModeBar: false });
+
+            // 半長軸
+            Plotly.newPlot(smaDiv, [{
+                x,
+                y: series.map(d => d.pl_orbsmax),
+                mode: "lines+markers",
+                name: "SMA",
+            }], {
+                title: { text: "semi-major axis", x: 0.5 },
+                margin: { t: 40, r: 10, l: 40, b: 30 },
+                xaxis: {
+                    title: { text: "Time (days)" },
+                    automargin: true,
+                    title: { text: "Time (days)", standoff: 10 },
+                },
+                yaxis: {
+                    title: { text: "a (AU)", standoff: 10 },
+                    automargin: true,
+                }
+            }, { displayModeBar: false });
+
+
+            // 自轉週期
+            Plotly.newPlot(rotDiv, [{
+                x,
+                y: series.map(d => d.P_rot_days),
+                mode: "lines+markers",
+                name: "Rotation",
+            }], {
+                title: { text: "rotation period", x: 0.5 },
+                margin: { t: 40, r: 10, l: 40, b: 30 },
+                xaxis: {
+                    title: { text: "Time (days)" },
+                    automargin: true,
+                    title: { text: "Time (days)", standoff: 10 },
+                },
+                yaxis: {
+                    title: { text: "Period (days)", standoff: 10 },
+                    automargin: true,
+                }
+            }, { displayModeBar: false });
+        }
+        const REASON_CODES = {
+            0: "✅ potentially habitable",
+            1: "❌ missing planetary mass data",
+            2: "❌ planetary mass exceeds the habitable range",
+            3: "❌ missing stellar mass data",
+            4: "❌ stellar mass exceeds the habitable range",
+            5: "❌ missing semi-major axis data",
+            6: "❌ semi-major axis exceeds the habitable range",
+            7: "❌ missing system distance data",
+            8: "❌ distance too large",
+            9: "❌ missing equilibrium temperature data",
+            10: "❌ equilibrium temperature exceeds the habitable range"
+        };
+
+        function toSubTagChem(str) {
+            let out = String(str).replace(/([A-Za-z])(\d+)/g, (_, sym, nums) => `${sym}<sub>${nums}</sub>`);
+            out = out.replace(/\)(\d+)/g, (_, nums) => `)</sub>${nums}</sub>`.replace(/<\/sub><sub>/g, ""));
+            return out;
+        }
+
+        function showPlanetInfo(index) {
+            const p = planetDataClean[index];
+            if (!p) return;
+
+            const div = document.getElementById('planetInfo');
+            div.style.display = 'block';
+
+            // 資訊區塊 + 時間序列容器(內嵌在同一區塊中)
+            div.innerHTML = `<strong>🌍 ${p.pl_name ?? 'unnamed planet'}</strong><br><br>
+        🔭 Distance：${p.sy_dist?.toFixed(2) ?? 'N/A'} pc<br>
+        🔥 Temperature：${p.T_eq_est ?? 'N/A'} K<br>
+        🌡 Mass：${p.pl_masse ?? 'N/A'} Mj<br>
+        🪐 Radius：${p.pl_orbsmax ?? 'N/A'} AU<br>
+        🧭 Coordinate：RA=${p.ra ?? 'N/A'}, Dec=${p.dec ?? 'N/A'}<br>
+        <div id="filterStatus" style="margin-top: 8px;"></div>
+        <div id="habitableStatus" style="margin-top: 8px;"></div><br>
+        <strong>📈 exoplanets evolution</strong><br>
+        <div id="planetCharts" style="margin-top: 8px;"></div>
+    `;
+
+            if (p?.atm_density != null) {
+                fetchFilter(p.atm_density).then(data => {
+                    let html_add = ``;
+                    const avg_color = data?.avg_color ?? null;
+                    const mixed_alpha = data?.mixed_alpha ?? null;
+                    const phase = data?.phase ?? null;
+                    const prediction = data?.prediction ?? null;
+                    if (avg_color && mixed_alpha) {
+                        setOverlayColorFilter(avg_color, mixed_alpha);
+                    }
+                    else {
+                        clearOverlayColorFilter();
+                    }
+
+                    if (phase) {
+                        html_add += `gas status：${phase}<br>`;
+                    }
+                    if (prediction) {
+                        const entries = Object.entries(prediction)
+                            .map(([name, val]) => {
+                                const n = Number(val);
+                                var name2 = String(name);
+                                name2 = toSubTagChem(name2);
+                                var pct = Number.isFinite(n) ? (n <= 1 ? n * 100 : n) : 0;
+                                if (pct < 0.01) {
+                                    pct = null;
+                                }
+                                return [name2, pct];
+                            })
+                            .sort((a, b) => b[1] - a[1]);
+
+                        if (entries.length) {
+                            html_add += `component：<br>`;
+                            for (const [name, pct] of entries) {
+                                if (pct === null) {
+                                    html_add += `${name}：N/A %<br>`;
+                                } else {
+                                    html_add += `${name}：${isFinite(pct) ? pct.toFixed(2) : 'N/A'}%<br>`;
+                                }
+                            }
+                        }
+                    }
+                    const filterStatus = document.getElementById('filterStatus');
+                    filterStatus.innerHTML = html_add;
+                });
+            }
+            renderTimeSeriesForPlanet(p);
+
+            // 顯示適居性評估結果
+            var reasonHtml = p?.reasons ?? null;
+
+            if (reasonHtml) {
+                reasonHtml = reasonHtml.split(";")
+                    .map(r => {
+                        const code = parseInt(r);
+                        return REASON_CODES[code] ?? `❓ reasons code ${code}`;
+                    })
+                    .join("<br>");
+                div.querySelector("#habitableStatus").innerHTML = `<strong>🌱 habitability assessment</strong><br>${reasonHtml}`;
+            }
+
+            // 顯示礦物材質圖
+            if (p.surface_density != null) {
+                fetchMaterial(p.surface_density).then(data => {
+                    const src = data?.mineral ?? null;
+                    if (src) {
+                        div.insertAdjacentHTML('beforeend', `<br>Material:<br><img src="/img/gnd/${src}.png">`);
+                    }
+                });
+            }
+
+            // 時間序列繪圖函式
+            renderTimeSeriesForPlanet(p);
+
+            //新增查看按鈕
+            function mountPlanetModal(p) {
+                const modalId = `planetModal-${p?.id ?? crypto.randomUUID()}`;
+                if (!document.getElementById(modalId)) {
+                    document.body.insertAdjacentHTML('beforeend', `
+      <div class="modal fade" id="${modalId}" tabindex="-1" aria-labelledby="${modalId}-label" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-scrollable modal-lg">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title" id="${modalId}-label">Data for ${p?.pl_name ?? 'Unknown'}</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              <pre id="${modalId}-pre" style="white-space: pre-wrap; word-break: break-all; margin:0;"></pre>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-primary" id="${modalId}-download">Download as JSON</button>
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+          </div>
+        </div>
+      </div>`);
+
+                    const pre = document.getElementById(`${modalId}-pre`);
+                    pre.textContent = JSON.stringify(p, null, 2);
+
+                    // 綁定下載
+                    const dlBtn = document.getElementById(`${modalId}-download`);
+                    dlBtn.addEventListener('click', () => {
+                        // pretty JSON；若要最小化檔案可用 JSON.stringify(p)
+                        const json = JSON.stringify(p, null, 2);
+
+                        // 檔名：pl_name-id.json；把特殊字元轉為底線
+                        const safeName = String(p?.pl_name ?? 'planet').replace(/[^\w.-]+/g, '_');
+                        const suffix = p?.id != null ? `-${p.id}` : `-${Date.now()}`;
+                        const filename = `${safeName}${suffix}.json`;
+
+                        // 產生 Blob 並觸發下載
+                        const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = filename;
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
+                        URL.revokeObjectURL(url);
+
+                        // 若想下載後自動關閉 modal(可選)
+                        // const modalEl = document.getElementById(modalId);
+                        // bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+                    });
+                }
+                return modalId;
+            }
+
+            // 你的按鈕放在 div 內即可
+            if (p?.is_create === true) {
+                const modalId = mountPlanetModal(p);
+                div.insertAdjacentHTML('beforeend', `
+    <br>
+    <button type="button" class="btn btn-primary btn-sm"
+            data-bs-toggle="modal" data-bs-target="#${modalId}">
+      Show Data
+    </button>`);
+            }
+
+        }
+
+        // ====== 以「索引」做顯示/隱藏(不改恆星 index)======
+        function applyPlanetFilter() {
+            if (!planetPoints) return;
+            const n = planetCount;
+            if (showPlanets) {
+                // 顯示：設滿索引(0..n-1)
+                const idx = (n > 65535) ? new Uint32Array(n) : new Uint16Array(n);
+                for (let i = 0; i < n; i++) idx[i] = i;
+                planetPoints.geometry.setIndex(new THREE.BufferAttribute(idx, 1));
+            } else {
+                // 隱藏：設為空索引
+                const idx = new Uint16Array(0);
+                planetPoints.geometry.setIndex(new THREE.BufferAttribute(idx, 1));
+            }
+            planetPoints.geometry.index.needsUpdate = true;
+        }
+
+        // 對外 API：切換是否顯示行星(UI 勾選時可呼叫)
+        function setShowPlanets(flag) {
+            showPlanets = !!flag;
+            applyPlanetFilter();
+        }
+        loadPlanets();
+
+
+        // === 動態 threshold(世界單位) ===
+        function updatePointsThreshold() {
+            const pixelRatio = renderer.getPixelRatio ? renderer.getPixelRatio() : (window.devicePixelRatio || 1);
+            const heightPx = renderer.domElement.height || Math.round((renderer.domElement.clientHeight || innerHeight) * pixelRatio);
+            const worldPerPixel = (2 * medianDist * Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5))) / heightPx;
+            const sizeWorld = starPoints?.material?.size ?? POINT_SIZE_WORLD;
+            raycaster.params.Points.threshold = (sizeWorld * 0.5) + (HOVER_MARGIN_PX * worldPerPixel);
+        }
+
+        // === Arcball 自由旋轉 ===
+        let dragging = false;
+        let lastN = null; // 上一次投影到球面的單位向量
+        const ROT_SPEED = 1.2; // 旋轉靈敏度
+
+        function projectOnBall(clientX, clientY) {
+            const rect = renderer.domElement.getBoundingClientRect();
+            const x = ((clientX - rect.left) / rect.width) * 2 - 1;
+            const y = -((clientY - rect.top) / rect.height) * 2 + 1;
+            const r = 0.8;
+            const len2 = x * x + y * y;
+            if (len2 <= r * r) {
+                const z = Math.sqrt(r * r - len2);
+                return new THREE.Vector3(x, y, z).normalize();
+            } else {
+                const len = Math.sqrt(len2);
+                return new THREE.Vector3((x / len) * r, (y / len) * r, 0).normalize();
+            }
+        }
+
+        function makeRoundSprite(size = 64, inner = 0.0, outer = 0.5) {
+            const canvas = document.createElement('canvas');
+            canvas.width = canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            const cx = size / 2, cy = size / 2, r = size * outer;
+            const g = ctx.createRadialGradient(cx, cy, size * inner, cx, cy, r);
+            g.addColorStop(0.0, 'rgba(255,255,255,1.0)');
+            g.addColorStop(0.7, 'rgba(255,255,255,0.6)');
+            g.addColorStop(1.0, 'rgba(255,255,255,0.0)');
+            ctx.clearRect(0, 0, size, size);
+            ctx.fillStyle = g;
+            ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.generateMipmaps = false;
+            tex.minFilter = THREE.LinearFilter;
+            tex.magFilter = THREE.LinearFilter;
+            tex.needsUpdate = true;
+            return tex;
+        }
+
+        // 拖曳旋轉
+        renderer.domElement.addEventListener('mousedown', (e) => {
+            dragging = true;
+            lastN = projectOnBall(e.clientX, e.clientY);
+            document.body.classList.add('dragging');
+        });
+        window.addEventListener('mouseup', () => {
+            dragging = false;
+            lastN = null;
+            document.body.classList.remove('dragging');
+        });
+        window.addEventListener('mouseleave', () => {
+            dragging = false;
+            lastN = null;
+            document.body.classList.remove('dragging');
+            tooltip.style.display = 'none';
+        });
+
+        renderer.domElement.addEventListener('mousemove', (e) => {
+            // 先更新 hover 用 NDC
+            const rect = renderer.domElement.getBoundingClientRect();
+            mouseNDC.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+            mouseNDC.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+            if (dragging) {
+                const currN = projectOnBall(e.clientX, e.clientY);
+                if (lastN) {
+                    const axis = new THREE.Vector3().crossVectors(lastN, currN);
+                    const dot = THREE.MathUtils.clamp(lastN.dot(currN), -1, 1);
+                    const angle = Math.acos(dot) * ROT_SPEED;
+                    if (axis.lengthSq() > 1e-8 && angle > 1e-6) {
+                        const qDelta = new THREE.Quaternion().setFromAxisAngle(axis.normalize(), angle);
+                        sky.quaternion.premultiply(qDelta);
+                    }
+                }
+                lastN = currN;
+            }
+        });
+
+
+        // ===================== Hover Tooltip(排除 A 星命中) =====================
+        let ignoreStarIndex = null;
+
+        renderer.domElement.addEventListener('mousemove', (e) => {
+            if (!starPoints || !starDataClean.length) {
+                tooltip.style.display = 'none';
+                return;
+            }
+
+            raycaster.setFromCamera(mouseNDC, camera);
+            let hits = raycaster.intersectObject(starPoints);
+            let hits2 = raycaster.intersectObject(planetPoints);
+
+            // 若沒命中，用寬鬆條件再嘗試一次
+            if (!hits.length) {
+                const old = raycaster.params.Points.threshold;
+                raycaster.params.Points.threshold = old * 1.6;
+                hits = raycaster.intersectObject(starPoints);
+                raycaster.params.Points.threshold = old;
+            }
+            if (!hits2.length) {
+                const old = raycaster.params.Points.threshold;
+                raycaster.params.Points.threshold = old * 1.6;
+                hits2 = raycaster.intersectObject(planetPoints);
+                raycaster.params.Points.threshold = old;
+            }
+
+            // 移除被忽略的星(如剛剛飛去的 A 星)
+            if (hits.length && ignoreStarIndex !== null) {
+                hits = hits.filter(h => h.index !== ignoreStarIndex);
+            }
+            if (hits2.length && ignoreStarIndex !== null) {
+                hits2 = hits2.filter(h => h.index !== ignoreStarIndex);
+            }
+
+            // 命中結果中已排除 A 星，接著照常顯示 tooltip
+            if (hits.length) {
+                const idx = hits[0].index;
+                const s = starDataClean[idx];
+                if (!s) { tooltip.style.display = 'none'; return; }
+                tooltip.style.display = 'block';
+                tooltip.style.left = (e.clientX + 10) + 'px';
+                tooltip.style.top = (e.clientY + 10) + 'px';
+                tooltip.innerText = [
+                    `✨ ${s.designation ?? 'Unnamed'}`,
+                    `Gmag: ${s.Gmag ?? s.g_mag ?? 'N/A'}`,
+                    `bp-rp: ${s.bp_rp ?? 'N/A'}`,
+                    `distance: ${Number.isFinite(s.distance) ? s.distance.toFixed(1) + ' pc' :
+                        Number.isFinite(s.r) ? s.r.toFixed(1) : 'Unknown'
+                    }`,
+                    `T: ${teffFromBpRp(s.bp_rp ?? 0.5).Teff.toFixed(0)} K`
+                ].join('\n');
+            } else if (hits2.length) {
+                const idx = hits2[0].index;
+                const s = planetDataClean[idx];
+                if (!s) { tooltip.style.display = 'none'; return; }
+                tooltip.style.display = 'block';
+                tooltip.style.left = (e.clientX + 10) + 'px';
+                tooltip.style.top = (e.clientY + 10) + 'px';
+                tooltip.innerText = [
+                    `✨ ${s.pl_name ?? 'Unnamed'}`,
+                    `T_eq_est: ${s.T_eq_est ?? 'N/A'}`,
+                    `rastr: ${s.rastr ?? 'N/A'}`,
+                    `decstr: ${Number.isFinite(s.decstr) ? s.decstr.toFixed(1) + ' pc' :
+                        Number.isFinite(s.r) ? s.r.toFixed(1) : 'Unknown'
+                    }`
+                ].join('\n');
+            } else {
+                tooltip.style.display = 'none';
+            }
+        });
+
+        // === 雙擊星體 → 啟動「時間制」移動動畫 ===
+        const move = {
+            active: false,
+            start: new THREE.Vector3(),
+            end: new THREE.Vector3(),
+            t: 0,             // 0→1
+            duration: 3.5     // 秒：想更慢就拉大(例如 5.0)
+        };
+        const clock = new THREE.Clock();
+        function easeInOutCubic(x) {
+            return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+        }
+
+        // 雙擊星體/行星 → 飛行
+        renderer.domElement.addEventListener('dblclick', () => {
+            // 只在「兩者都不存在」時才退出
+            if (!starPoints && !planetPoints) return;
+
+            raycaster.setFromCamera(mouseNDC, camera);
+
+            // 取得命中(允許其中之一不存在)
+            let starHits = starPoints ? raycaster.intersectObject(starPoints) : [];
+            let planetHits = planetPoints ? raycaster.intersectObject(planetPoints) : [];
+
+            // 只對恆星命中做忽略過濾；不要過濾行星
+            if (starHits.length && ignoreStarIndex !== null) {
+                starHits = starHits.filter(h => h.index !== ignoreStarIndex);
+            }
+
+            // 若都沒命中就離開
+            if (!starHits.length && !planetHits.length) return;
+
+            // 同時命中時選「距離 ray 最近」者(或你想改成優先行星也可)
+            const pick = (() => {
+                if (starHits.length && planetHits.length) {
+                    return (starHits[0].distance <= planetHits[0].distance)
+                        ? { kind: 'star', hit: starHits[0] }
+                        : { kind: 'planet', hit: planetHits[0] };
+                }
+                if (planetHits.length) return { kind: 'planet', hit: planetHits[0] };
+                return { kind: 'star', hit: starHits[0] };
+            })();
+
+            const isStar = pick.kind === 'star';
+            const index = pick.hit.index;
+
+            // 只在飛到「恆星」時，才設定忽略索引(避免之後 hover 一直黏著)
+            ignoreStarIndex = isStar ? index : null;
+            tooltip.style.display = 'none';
+
+            // 正確取用對應的 geometry
+            const src = isStar ? starPoints : planetPoints;
+            const attrPos = src.geometry.getAttribute('position');
+
+            // 防呆：index 越界就離開
+            if (index < 0 || index >= attrPos.count) return;
+
+            const local = new THREE.Vector3(
+                attrPos.getX(index),
+                attrPos.getY(index),
+                attrPos.getZ(index)
+            );
+            const world = sky.localToWorld(local.clone());
+
+            const target = sky.position.clone().sub(world);
+            move.active = true;
+            move.start.copy(sky.position);
+            move.end.copy(target);
+            move.t = 0;
+
+            const dist = world.length();
+            move.duration = THREE.MathUtils.clamp(dist * 0.003, 2.0, 7.0);
+
+            observerPos.add(world);
+            updateHUDCount();
+
+            // 若是行星，順手更新右側資訊
+            if (!isStar) showPlanetInfo(index);
+            if (isStar) {
+                clearOverlayColorFilter();
+            }
+        });
+
+
+        // R 鍵：時間制回原點
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'r') {
+                move.active = true;
+                move.start.copy(sky.position);
+                move.end.set(0, 0, 0);
+                move.t = 0;
+                move.duration = 2.0;
+                observerPos.set(0, 0, 0);
+
+                ignoreStarIndex = null;        // 清除忽略
+                tooltip.style.display = 'none';
+                clearOverlayColorFilter();    // 清除濾鏡
+                updateHUDCount();          // 更新 HUD
+            }
+        });
+
+        // === 渲染迴圈(含時間制移動) ===
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const dt = clock.getDelta(); // 秒
+            if (move.active) {
+                move.t += dt / move.duration;
+                const k = easeInOutCubic(Math.min(move.t, 1));
+                sky.position.lerpVectors(move.start, move.end, k);
+                if (move.t >= 1) {
+                    move.active = false;
+                    sky.position.copy(move.end);
+                }
+                // // ★ 變更：用「目前顯示數量」更新 HUD
+            }
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // === 視窗變動 ===
+        addEventListener('resize', () => {
+            camera.aspect = innerWidth / innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(innerWidth, innerHeight);
+            updatePointsThreshold(); // 畫面高度變了也要重算
+        });
+
+        // ===================== ★ 新增：gmag 亮度篩選(索引過濾，不改 positions) =====================
+        let gmax = 10.0;
+
+        function applyBrightnessFilter() {
+            if (!starPoints || !gmagArray) return;
+
+            const idx = [];
+            for (let i = 0; i < gmagArray.length; i++) {
+                const g = gmagArray[i];
+                if (g <= gmax) idx.push(i);
+            }
+
+            const indexAttr = (idx.length > 65535) ? new Uint32Array(idx) : new Uint16Array(idx);
+            starPoints.geometry.setIndex(new THREE.BufferAttribute(indexAttr, 1));
+            starPoints.geometry.index.needsUpdate = true;
+
+            currentShownCount = idx.length;       // 目前顯示數量
+            totalStars = idx.length;
+            updateHUDCount();    // 更新 HUD
+        }
+
+        // 右側面板 UI 綁定
+        const gmaxInput = document.getElementById('gmax');
+        const gmaxLabel = document.getElementById('gmaxLabel');
+
+        function syncBrightnessFromUI() {
+            let mx = parseFloat(gmaxInput.value);
+            gmax = mx;
+            gmaxLabel.textContent = gmax.toFixed(1);
+            applyBrightnessFilter();
+        }
+        gmaxInput.addEventListener('input', syncBrightnessFromUI);
+        // ===================== ★ 新增結束 =====================
+        document.getElementById('planetForm').addEventListener('submit', async function (e) {
+            e.preventDefault();
+
+            const form = e.target;
+            const formData = new FormData(form);
+            const payload = {};
+            formData.forEach((value, key) => payload[key] = value);
+
+            try {
+                const response = await fetch('/query/generate_planet', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const result = await response.json();  // ✅ 先 fetch 並解析
+                const planet = Array.isArray(result) ? result[0] : result;
+                planet.pl_name = payload.pl_name;
+                // console.log("✅ The planet form was successfully submitted, and the server responded as follow: ↓↓↓");
+                // console.table(result);  // ← 表格顯示 JSON 結果
+
+                // ✅ 先把焦點移出 Modal(避免 aria-hidden 祖先內仍保留焦點)
+                if (e.submitter && typeof e.submitter.blur === 'function') e.submitter.blur();
+                else if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+
+
+                // ✅ 清空表單、關閉 Modal
+                form.reset();
+                const modal = bootstrap.Modal.getInstance(document.getElementById('planetModal'));
+                modal.hide();
+
+                // ✅ 把焦點移回觸發按鈕(避免接下來又落在隱藏樹內)
+                const triggerBtn = document.querySelector('[data-bs-toggle="modal"][data-bs-target="#planetModal"]');
+                if (triggerBtn) triggerBtn.focus();
+
+
+                // ✅ 新增到資料、重建行星點群(含 tooltip, list 等)
+                const newPlanet = {
+                    ...planet,
+                    // 可能用到的位置欄位一律數字化
+                    ra: planet.ra !== undefined ? Number(planet.ra) : undefined,
+                    dec: planet.dec !== undefined ? Number(planet.dec) : undefined,
+                    sy_dist: planet.sy_dist !== undefined
+                        ? Number(planet.sy_dist)
+                        : (planet.pl_radius_re !== undefined ? Number(planet.pl_radius_re) : undefined),
+                    x: planet.x !== undefined ? Number(planet.x) : undefined,
+                    y: planet.y !== undefined ? Number(planet.y) : undefined,
+                    z: planet.z !== undefined ? Number(planet.z) : undefined,
+                    is_create: true,
+                };
+                planetDataClean.push(newPlanet);
+
+                //planetDataClean.push(result);
+
+                // ✅ 即時新增行星清單項目
+                const ul = document.getElementById("planetListUl");
+                const index = planetDataClean.length;
+                const li = document.createElement("li");
+                li.style.cursor = "pointer";
+                li.style.marginBottom = "4px";
+                li.textContent = planet.pl_name || `exoplanets ${index}`;
+                li.addEventListener("click", () => flyToPlanet(index - 1)); // index - 1，因為 push 後才有新資料
+                ul.appendChild(li);
+
+                // ✅ 接著更新整體幾何與點群(如原本邏輯)
+                if (planetPoints) {
+                    sky.remove(planetPoints);
+                }
+                const { cleanData, points } = createPlanetPoints(planetDataClean);
+                planetPoints = points;
+                planetDataClean = cleanData;
+                planetCount = cleanData.length;
+
+                sky.add(planetPoints);
+                applyPlanetFilter();
+                renderPlanetList();  // (可省略，已 append)
+
+                flyToPlanet(index - 1); // 直接飛到新行星
+
+
+            } catch (err) {
+                console.error('❌ ERROR：', err);
+                alert('ERROR creating new planet');
+            }
+        });
+
+    </script>
+    <!-- Modal 對話框 -->
+    <div class="modal fade" id="planetModal" tabindex="-1" aria-labelledby="planetModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <form class="modal-content" method="post" id="planetForm">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="planetModalLabel">custom planet information</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="pl_name" class="form-label">label</label>
+                        <input type="text" class="form-control" id="pl_name" name="pl_name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="pl_radius_re" class="form-label">r(distance)</label>
+                        <input type="number" class="form-control" id="pl_radius_re" name="pl_radius_re" step="any"
+                            required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="ra" class="form-label">θ(zenith angle，0~π)</label>
+                        <input type="number" class="form-control" id="ra" name="ra" step="any" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="dec" class="form-label">φ(azimuth angle，0~2π)</label>
+                        <input type="number" class="form-control" id="dec" name="dec" step="any" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="pl_masse" class="form-label">planetary mass(in Earth masses)</label>
+                        <input type="number" class="form-control" id="pl_masse" name="pl_masse" step="any">
+                    </div>
+                    <div class="mb-3">
+                        <label for="st_mass" class="form-label">stellar mass(in solar masses)</label>
+                        <input type="number" class="form-control" id="st_mass" name="st_mass" step="any">
+                    </div>
+                    <div class="mb-3">
+                        <label for="pl_orbsmax" class="form-label">planetary orbital semi-major axis (AU)</label>
+                        <input type="number" class="form-control" id="pl_orbsmax" name="pl_orbsmax" step="any">
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="reset" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Planet</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <!-- 放大圖片 Modal -->
+    <div id="imgModal">
+        <img id="modalImage" src="" alt="放大圖">
+    </div>
+    <div class="modal fade" id="guideModal" tabindex="-1" aria-labelledby="guideModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-scrollable modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-semibold" id="guideModalLabel">User Guide</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <div class="modal-body">
+                    <ol class="mb-0">
+                        <li>Drag the mouse to rotate the view.</li>
+                        <li>Use the mouse wheel to zoom; double-click a target to move the camera to it.</li>
+                        <li>Press <kbd>R</kbd> to return to the origin (Earth).</li>
+                        <li>Adjust the <b></b>"G mag maximum"</b> slider on the top-right to filter stars by brightness.
+                        </li>
+                        <li>Hover a star to show the tooltip; click to open detailed info.</li>
+                        <li>Use <b>"Create My Planet"</b> (bottom-left) to create a new planet; prediction results will
+                            appear next.</li>
+                        <li>Press <kbd>Esc</kbd>, click the backdrop, or use the top-right close button to exit.</li>
+                    </ol>
+                </div>
+
+                <div class="modal-footer">
+                    <div class="form-check me-auto">
+                        <input class="form-check-input" type="checkbox" value="" id="dontShowAgain">
+                        <label class="form-check-label" for="dontShowAgain">Don't show again</label>
+                    </div>
+                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Got it</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</body>
+
+</html>
