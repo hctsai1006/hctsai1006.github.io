@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Q-ASA 量子異構訊號圖譜 - 解決方案視覺化</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        /* 自訂量子科技風格變數與動畫 */
+        :root {
+            --bg-dark: #0f172a;
+            --quantum-purple: #8b5cf6;
+            --quantum-glow: rgba(139, 92, 246, 0.6);
+            --active-red: #ef4444;
+            --allo-cyan: #06b6d4;
+            --ligand-green: #10b981;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: #e2e8f0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow-x: hidden;
+        }
+
+        /* 網路節點與邊緣的動畫效果 */
+        .node { transition: all 0.5s ease; fill: #475569; }
+        .edge { transition: all 0.5s ease; stroke: #334155; stroke-width: 2; }
+        
+        .node.active-site { fill: var(--active-red); filter: drop-shadow(0 0 8px var(--active-red)); }
+        .node.allo-site { fill: var(--allo-cyan); filter: drop-shadow(0 0 8px var(--allo-cyan)); }
+        .node.coarse-grained { fill: var(--quantum-purple); r: 25; filter: drop-shadow(0 0 12px var(--quantum-glow)); }
+
+        .edge.quantum-path {
+            stroke: var(--quantum-purple);
+            stroke-width: 3;
+            stroke-dasharray: 10;
+            animation: dash 1.5s linear infinite, glow 2s ease-in-out infinite alternate;
+        }
+
+        @keyframes dash { to { stroke-dashoffset: -20; } }
+        @keyframes glow { 
+            from { filter: drop-shadow(0 0 2px var(--quantum-purple)); }
+            to { filter: drop-shadow(0 0 8px #c4b5fd); }
+        }
+
+        /* UI 元件轉場 */
+        .step-content {
+            display: none;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+        .step-content.active {
+            display: flex;
+            opacity: 1;
+            animation: fadeIn 0.5s forwards;
+        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* 矩陣視覺化 */
+        .matrix-grid {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 2px;
+            background: #1e293b;
+            padding: 4px;
+            border-radius: 8px;
+        }
+        .matrix-cell {
+            aspect-ratio: 1;
+            background: #334155;
+            border-radius: 2px;
+            transition: background 1s ease;
+        }
+        .matrix-cell.hot { background: var(--allo-cyan); box-shadow: 0 0 5px var(--allo-cyan); }
+        .matrix-cell.warm { background: var(--quantum-purple); }
+
+        /* 蛋白質表面輪廓與藥物配體 */
+        .protein-surface {
+            transition: all 1s ease;
+            fill: rgba(71, 85, 105, 0.4);
+            stroke: #64748b;
+            stroke-width: 2;
+        }
+        .holo-ligand {
+            fill: rgba(16, 185, 129, 0.3);
+            stroke: var(--ligand-green);
+            stroke-width: 3;
+            filter: drop-shadow(0 0 10px var(--ligand-green));
+            opacity: 0;
+            transition: opacity 1s ease, transform 1s ease;
+            transform: scale(0.8) translate(50px, -20px);
+        }
+        .holo-ligand.validated {
+            opacity: 1;
+            transform: scale(1) translate(0, 0);
+            animation: pulse-ligand 2s infinite alternate;
+        }
+        @keyframes pulse-ligand {
+            from { filter: drop-shadow(0 0 5px var(--ligand-green)); }
+            to { filter: drop-shadow(0 0 15px #34d399); }
+        }
+        
+        .hidden-element { opacity: 0; pointer-events: none; }
+        .visible-element { opacity: 1; }
+
+        /* 量子方程式字體 */
+        .math-font { font-family: 'Courier New', Courier, monospace; letter-spacing: 1px; }
+    </style>
+</head>
+<body class="h-screen flex flex-col">
+
+    <!-- 頂部導航 -->
+    <header class="bg-slate-900 border-b border-slate-700 p-4 flex justify-between items-center z-10 shadow-lg">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg bg-purple-600/20 border border-purple-500 flex items-center justify-center text-purple-400">
+                <i class="fa-solid fa-network-wired"></i>
+            </div>
+            <div>
+                <h1 class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-cyan-400">Q-ASA 解決方案架構</h1>
+                <p class="text-xs text-slate-400">Cleveland Clinic Challenge: Quantum Simulation of Allosteric Signal Propagation</p>
+            </div>
+        </div>
+        <div class="flex gap-2">
+            <button onclick="prevStep()" id="btn-prev" class="px-4 py-2 rounded bg-slate-800 text-slate-300 hover:bg-slate-700 disabled:opacity-50 transition"><i class="fa-solid fa-chevron-left mr-2"></i>上一步</button>
+            <button onclick="nextStep()" id="btn-next" class="px-4 py-2 rounded bg-purple-600 text-white hover:bg-purple-500 disabled:opacity-50 transition">下一步<i class="fa-solid fa-chevron-right ml-2"></i></button>
+        </div>
+    </header>
+
+    <!-- 主要內容區 -->
+    <main class="flex-1 flex overflow-hidden">
+        
+        <!-- 左側：視覺化舞台 -->
+        <section class="w-2/3 relative flex items-center justify-center bg-slate-950 p-8">
+            <!-- 裝飾背景 -->
+            <div class="absolute inset-0 opacity-20" style="background-image: radial-gradient(circle at center, #8b5cf6 0%, transparent 70%); pointer-events: none;"></div>
+            
+            <!-- SVG 畫布：蛋白質網路 -->
+            <svg id="protein-svg" class="w-full h-full max-w-2xl max-h-2xl relative z-10" viewBox="0 0 800 600">
+                <!-- 蛋白質表面 (Step 1, 6 顯示) -->
+                <path id="protein-blob" class="protein-surface" d="M 400 100 C 600 80, 750 200, 700 400 C 650 600, 400 550, 200 500 C 50 450, 100 250, 200 150 C 250 100, 300 110, 400 100 Z" />
+                
+                <!-- Holo 藥物結合口袋 (Step 6 顯示) -->
+                <path id="holo-ligand" class="holo-ligand" d="M 520 120 L 600 100 L 640 150 L 590 220 L 510 200 Z" />
+                <g id="validation-tag" class="opacity-0 transition-opacity duration-500 transform translate-y-5">
+                    <rect x="660" y="100" width="120" height="30" rx="4" fill="#064e3b" stroke="#10b981" stroke-width="1"/>
+                    <text x="720" y="120" fill="#34d399" font-size="12" font-weight="bold" text-anchor="middle">Holo Validation Match</text>
+                </g>
+
+                <!-- 網路群組 -->
+                <g id="network-group" class="opacity-0 transition-opacity duration-1000">
+                    <!-- Edges (將透過 JS 生成) -->
+                    <g id="edges"></g>
+                    <!-- Nodes (將透過 JS 生成) -->
+                    <g id="nodes"></g>
+                </g>
+
+                <!-- 浮動方程式 (Step 3 顯示) -->
+                <g id="quantum-math" class="opacity-0 transition-opacity duration-500 transform translate-y-10">
+                    <rect x="250" y="50" width="300" height="80" rx="10" fill="rgba(15, 23, 42, 0.8)" stroke="#8b5cf6" stroke-width="2"/>
+                    <text x="400" y="85" fill="#e2e8f0" font-size="20" text-anchor="middle" class="math-font">U(t) = e^{-iHt}</text>
+                    <text x="400" y="115" fill="#94a3b8" font-size="14" text-anchor="middle" class="math-font">H = L_{GNM} + α·diag(v_s)</text>
+                </g>
+            </svg>
+        </section>
+
+        <!-- 右側：步驟解說面板 -->
+        <section class="w-1/3 bg-slate-900 border-l border-slate-800 p-8 flex flex-col relative">
+            
+            <!-- 步驟指示器 -->
+            <div class="flex justify-between mb-8 relative">
+                <div class="absolute top-1/2 left-0 w-full h-0.5 bg-slate-700 -z-10 -translate-y-1/2"></div>
+                <!-- 步驟點將由 JS 動態生成 -->
+                <div id="step-indicators" class="flex justify-between w-full"></div>
+            </div>
+
+            <!-- 動態內容區 -->
+            <div id="content-container" class="flex-1 relative">
+                
+                <!-- Step 1 內容 -->
+                <div class="step-content flex-col h-full active" id="step-1">
+                    <div class="text-sm text-purple-400 font-bold mb-2">STAGE 1: INPUT</div>
+                    <h2 class="text-3xl font-bold mb-4">輸入 Apo PDB 結構</h2>
+                    <p class="text-slate-300 leading-relaxed mb-6">
+                        我們的 <strong>Layer 1 引擎</strong>首先接收無配體結合的 <strong class="text-white">Apo PDB 結構</strong> (如 KRAS 4OBE 或 BCR-ABL1 1OPL)。
+                        這些蛋白質表面缺乏傳統的深層口袋，被業界視為<strong class="text-red-400">「難成藥標靶 (Undruggable targets)」</strong>。
+                    </p>
+                    <div class="bg-slate-800 p-4 rounded-lg border border-slate-700 mt-auto">
+                        <h4 class="text-sm font-bold text-slate-200 mb-2"><i class="fa-solid fa-file-lines text-slate-400 mr-2"></i>競賽規範對齊</h4>
+                        <ul class="text-sm text-slate-400 space-y-2">
+                            <li><i class="fa-solid fa-check text-green-500 mr-2"></i><strong>絕不使用</strong>古典 MD 軌跡當輸入。</li>
+                            <li><i class="fa-solid fa-check text-green-500 mr-2"></i>預處理：保留催化結構域，移除溶劑與輔因子。</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Step 2 內容 -->
+                <div class="step-content flex-col h-full" id="step-2">
+                    <div class="text-sm text-purple-400 font-bold mb-2">STAGE 2: ABSTRACTION</div>
+                    <h2 class="text-3xl font-bold mb-4">建構交互作用網路</h2>
+                    <p class="text-slate-300 leading-relaxed mb-4">
+                        我們不直接做全原子模擬，而是將問題降維成 <strong>Graph-Ranking Problem</strong>。
+                    </p>
+                    <ul class="list-disc pl-5 text-slate-300 space-y-2 mb-6">
+                        <li><strong>節點 (Nodes)：</strong>代表個別殘基 (Residues)。</li>
+                        <li><strong>邊緣 (Edges)：</strong>利用高斯網路模型 (GNM) 或 Cα 距離定義彈性接觸力。</li>
+                        <li><span class="text-red-400 font-bold">作用中心 (Seed Set S)：</span>將已知的催化位點或保守序列標記為訊號源。</li>
+                    </ul>
+                    <div class="bg-slate-800 p-4 rounded-lg border border-slate-700 mt-auto">
+                        <p class="text-sm text-slate-400">這建立了連通性矩陣 $A$ 或拉普拉斯矩陣 $L$，我們也準備了多種 Graph 的 <span class="text-white font-bold">Ensemble over Hamiltonians</span> 以增加穩健性。</p>
+                    </div>
+                </div>
+
+                <!-- Step 3 內容 -->
+                <div class="step-content flex-col h-full" id="step-3">
+                    <div class="text-sm text-purple-400 font-bold mb-2">STAGE 3: QUANTUM CORE</div>
+                    <h2 class="text-3xl font-bold mb-4">量子漫步訊號傳遞</h2>
+                    <p class="text-slate-300 leading-relaxed mb-4">
+                        定義 Hamiltonian <span class="font-mono text-purple-300">H = A + α·diag(v_s)</span>，利用對角線修改 (self-loop trick) 在作用中心加入位勢擾動。
+                    </p>
+                    <p class="text-slate-300 leading-relaxed mb-6">
+                        接著利用<strong>連續時間量子漫步 ($U(t) = e^{-iHt}$)</strong> 計算訊號從作用中心傳播到蛋白質各處的機率振幅。
+                    </p>
+                    <div class="bg-purple-900/30 p-4 rounded-lg border border-purple-500/50 mt-auto">
+                        <h4 class="text-sm font-bold text-purple-300 mb-2"><i class="fa-solid fa-bolt text-yellow-400 mr-2"></i>為什麼用量子？</h4>
+                        <p class="text-xs text-purple-200">作為 Biological signal transmission proxy，量子干涉效應比傳統 PageRank 擴散模型更能捕捉複雜非線性動態連通性 (Dynamic Connectivity)。</p>
+                    </div>
+                </div>
+
+                <!-- Step 4 內容 -->
+                <div class="step-content flex-col h-full" id="step-4">
+                    <div class="text-sm text-purple-400 font-bold mb-2">STAGE 4: DELIVERABLES</div>
+                    <h2 class="text-3xl font-bold mb-4">輸出矩陣與 Top-5</h2>
+                    <p class="text-slate-300 leading-relaxed mb-4">
+                        完美對齊競賽要求，直接產出兩項核心成果：
+                    </p>
+                    
+                    <div class="flex gap-4 mb-6">
+                        <div class="w-1/2">
+                            <h4 class="text-sm font-bold text-white mb-2">1. 完整 Connectivity Matrix</h4>
+                            <div class="matrix-grid" id="demo-matrix">
+                                <!-- JS 會填滿小格子 -->
+                            </div>
+                        </div>
+                        <div class="w-1/2 flex flex-col justify-center">
+                            <h4 class="text-sm font-bold text-white mb-2">2. Top-5 Hit List</h4>
+                            <ul class="text-sm space-y-1 font-mono">
+                                <li class="text-cyan-400 flex items-center"><i class="fa-solid fa-crosshairs mr-2"></i>Residue 142</li>
+                                <li class="text-cyan-400 flex items-center"><i class="fa-solid fa-crosshairs mr-2"></i>Residue 145</li>
+                                <li class="text-cyan-400 flex items-center"><i class="fa-solid fa-crosshairs mr-2"></i>Residue 102</li>
+                                <li class="text-slate-400 flex items-center"><i class="fa-solid fa-crosshairs mr-2"></i>Residue 88 </li>
+                                <li class="text-slate-400 flex items-center"><i class="fa-solid fa-crosshairs mr-2"></i>Residue 211</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-slate-800 p-4 rounded-lg border border-slate-700 mt-auto">
+                        <p class="text-sm text-slate-400">圖中 <span class="text-cyan-400 font-bold">青色節點</span> 即為量子分數最高、具備強大異構潛力的 Top-5 Residues。</p>
+                    </div>
+                </div>
+
+                <!-- Step 5 內容 -->
+                <div class="step-content flex-col h-full" id="step-5">
+                    <div class="text-sm text-purple-400 font-bold mb-2">STAGE 5: EXECUTION (LAYER 2)</div>
+                    <h2 class="text-3xl font-bold mb-4">粗粒化與硬體展示</h2>
+                    <p class="text-slate-300 leading-relaxed mb-4">
+                        為了展現 Scalability，這是我們的 <strong>Layer 2 模組</strong>。
+                    </p>
+                    <p class="text-slate-300 leading-relaxed mb-6">
+                        將高分區域殘基<strong>粗粒化 (Coarse-grain)</strong> 為表面區塊 (Patch Graph)，壓縮至 6-12 Qubits，並在真實量子硬體上展示 $e^{-iHt}$ 的電路執行。
+                    </p>
+                    <div class="grid grid-cols-2 gap-4 mt-auto">
+                        <div class="bg-slate-800 p-4 rounded-lg border border-slate-700 flex flex-col items-center justify-center text-center">
+                            <i class="fa-brands fa-aws text-3xl text-orange-400 mb-2"></i>
+                            <span class="text-sm font-bold text-white">AWS Braket</span>
+                            <span class="text-xs text-slate-400">硬體執行 / 混合模擬</span>
+                        </div>
+                        <div class="bg-slate-800 p-4 rounded-lg border border-slate-700 flex flex-col items-center justify-center text-center">
+                            <i class="fa-solid fa-microchip text-3xl text-blue-400 mb-2"></i>
+                            <span class="text-sm font-bold text-white">Classiq</span>
+                            <span class="text-xs text-slate-400">深度受限電路合成</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 6 內容 (全新新增) -->
+                <div class="step-content flex-col h-full" id="step-6">
+                    <div class="text-sm text-green-400 font-bold mb-2">STAGE 6: VALIDATION (LAYER 3)</div>
+                    <h2 class="text-3xl font-bold mb-4">生物學解釋與驗證</h2>
+                    <p class="text-slate-300 leading-relaxed mb-4">
+                        這不是一場純數學遊戲。我們的 <strong>Layer 3</strong> 將提供極具說服力的生物物理解釋。
+                    </p>
+                    <ul class="list-disc pl-5 text-slate-300 space-y-2 mb-6 text-sm">
+                        <li><strong>Holo Pocket Enrichment：</strong>將 Top-5 節點疊加至已知的藥物結合結構 (如 KRAS 6OIM)，驗證是否成功命中真實的 Allosteric 藥物口袋 (綠色框線)。</li>
+                        <li><strong>Classical Baselines 比較：</strong>利用 <strong>PRS (微擾響應掃描)</strong> 與 <strong>GNM</strong> 作為古典基準，證明量子漫步在訊號傳遞分數上超越傳統擴散模型。</li>
+                    </ul>
+                    <div class="bg-green-900/30 p-4 rounded-lg border border-green-500/50 mt-auto">
+                        <h4 class="text-sm font-bold text-green-300 mb-1"><i class="fa-solid fa-vial text-green-400 mr-2"></i>Interpretability</h4>
+                        <p class="text-xs text-green-200">透過 3D 視覺化與統計顯著性，為化學家提供直接 Actionable 的藥物設計依據。</p>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+    </main>
+
+    <script>
+        // --- 狀態與資料定義 ---
+        let currentStep = 1;
+        const totalSteps = 6; // 增加為 6 步
+        
+        // 蛋白質網路資料 (簡化模型)
+        const nodesData = [
+            // Active Site (Seed) - 中間偏左
+            { id: 0, x: 250, y: 300, type: 'active', group: 1 },
+            { id: 1, x: 220, y: 330, type: 'active', group: 1 },
+            { id: 2, x: 280, y: 320, type: 'active', group: 1 },
+            
+            // Allosteric Site (Target) - 右上角，與 Holo ligand 對齊
+            { id: 3, x: 550, y: 150, type: 'allo', group: 2 },
+            { id: 4, x: 580, y: 180, type: 'allo', group: 2 },
+            { id: 5, x: 610, y: 140, type: 'allo', group: 2 },
+            { id: 6, x: 540, y: 190, type: 'allo', group: 2 },
+
+            // 中繼路徑 / 普通殘基
+            { id: 7, x: 320, y: 250, type: 'normal', group: 3 },
+            { id: 8, x: 380, y: 220, type: 'normal', group: 3 },
+            { id: 9, x: 450, y: 200, type: 'normal', group: 3 },
+            { id: 10, x: 480, y: 240, type: 'normal', group: 3 },
+            { id: 11, x: 420, y: 300, type: 'normal', group: 3 },
+            
+            // 遠端 / 不相干殘基
+            { id: 12, x: 180, y: 180, type: 'normal', group: 4 },
+            { id: 13, x: 250, y: 150, type: 'normal', group: 4 },
+            { id: 14, x: 600, y: 400, type: 'normal', group: 5 },
+            { id: 15, x: 520, y: 450, type: 'normal', group: 5 },
+            { id: 16, x: 680, y: 350, type: 'normal', group: 5 },
+            { id: 17, x: 350, y: 450, type: 'normal', group: 6 },
+            { id: 18, x: 400, y: 500, type: 'normal', group: 6 }
+        ];
+
+        // 邊界定義
+        const edgesData = [
+            { s: 0, t: 1 }, { s: 0, t: 2 }, { s: 1, t: 2 }, 
+            { s: 3, t: 4 }, { s: 4, t: 5 }, { s: 3, t: 6 }, { s: 5, t: 6 }, 
+            { s: 2, t: 7 }, { s: 7, t: 8 }, { s: 8, t: 9 }, { s: 9, t: 3 }, 
+            { s: 8, t: 11 }, { s: 11, t: 10 }, { s: 10, t: 4 }, { s: 9, t: 10 },
+            { s: 0, t: 12 }, { s: 12, t: 13 }, { s: 13, t: 7 },
+            { s: 11, t: 17 }, { s: 17, t: 18 }, { s: 10, t: 15 }, 
+            { s: 15, t: 14 }, { s: 14, t: 16 }, { s: 6, t: 14 }
+        ];
+
+        // --- 初始化 UI ---
+        function init() {
+            renderSteps();
+            renderNetwork();
+            renderMatrix();
+            updateState();
+        }
+
+        function renderSteps() {
+            const container = document.getElementById('step-indicators');
+            let html = '';
+            for (let i = 1; i <= totalSteps; i++) {
+                html += `
+                    <div id="step-dot-${i}" class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300 ${i === 1 ? 'bg-purple-500 text-white shadow-[0_0_10px_#8b5cf6]' : 'bg-slate-800 text-slate-500 border border-slate-700'}">
+                        ${i}
+                    </div>
+                `;
+            }
+            container.innerHTML = html;
+        }
+
+        function renderNetwork() {
+            const edgesGroup = document.getElementById('edges');
+            const nodesGroup = document.getElementById('nodes');
+            
+            edgesData.forEach((edge, i) => {
+                const source = nodesData[edge.s];
+                const target = nodesData[edge.t];
+                
+                const isPath = (source.id === 2 && target.id === 7) || 
+                               (source.id === 7 && target.id === 8) || 
+                               (source.id === 8 && target.id === 9) || 
+                               (source.id === 9 && target.id === 3) ||
+                               (source.id === 8 && target.id === 11) ||
+                               (source.id === 11 && target.id === 10) ||
+                               (source.id === 10 && target.id === 4);
+                
+                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                line.setAttribute('x1', source.x);
+                line.setAttribute('y1', source.y);
+                line.setAttribute('x2', target.x);
+                line.setAttribute('y2', target.y);
+                line.setAttribute('id', `edge-${i}`);
+                line.setAttribute('class', `edge ${isPath ? 'main-path' : ''}`);
+                edgesGroup.appendChild(line);
+            });
+
+            nodesData.forEach(node => {
+                const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                circle.setAttribute('cx', node.x);
+                circle.setAttribute('cy', node.y);
+                circle.setAttribute('r', 8);
+                circle.setAttribute('id', `node-${node.id}`);
+                circle.setAttribute('class', `node base-type-${node.type} group-${node.group}`);
+                nodesGroup.appendChild(circle);
+            });
+        }
+
+        function renderMatrix() {
+            const grid = document.getElementById('demo-matrix');
+            let html = '';
+            for(let i=0; i<64; i++) {
+                html += `<div class="matrix-cell" id="cell-${i}"></div>`;
+            }
+            grid.innerHTML = html;
+        }
+
+        // --- 狀態更新邏輯 ---
+        function nextStep() {
+            if (currentStep < totalSteps) {
+                currentStep++;
+                updateState();
+            }
+        }
+
+        function prevStep() {
+            if (currentStep > 1) {
+                currentStep--;
+                updateState();
+            }
+        }
+
+        function updateState() {
+            document.getElementById('btn-prev').disabled = (currentStep === 1);
+            document.getElementById('btn-next').disabled = (currentStep === totalSteps);
+            
+            if(currentStep === totalSteps) {
+                document.getElementById('btn-next').innerHTML = '完成 <i class="fa-solid fa-check ml-2"></i>';
+            } else {
+                document.getElementById('btn-next').innerHTML = '下一步 <i class="fa-solid fa-chevron-right ml-2"></i>';
+            }
+
+            for (let i = 1; i <= totalSteps; i++) {
+                const dot = document.getElementById(`step-dot-${i}`);
+                if (i === currentStep) {
+                    // 第6步給予特別的綠色標示
+                    if(i === 6) {
+                        dot.className = "w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300 bg-emerald-500 text-white shadow-[0_0_15px_#10b981]";
+                    } else {
+                        dot.className = "w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300 bg-purple-500 text-white shadow-[0_0_15px_#8b5cf6]";
+                    }
+                } else if (i < currentStep) {
+                    dot.className = "w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300 bg-purple-900 text-purple-200";
+                } else {
+                    dot.className = "w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300 bg-slate-800 text-slate-500 border border-slate-700";
+                }
+            }
+
+            document.querySelectorAll('.step-content').forEach(el => el.classList.remove('active'));
+            document.getElementById(`step-${currentStep}`).classList.add('active');
+
+            triggerVisualAnimation(currentStep);
+        }
+
+        function triggerVisualAnimation(step) {
+            const blob = document.getElementById('protein-blob');
+            const network = document.getElementById('network-group');
+            const math = document.getElementById('quantum-math');
+            const nodes = document.querySelectorAll('.node');
+            const edges = document.querySelectorAll('.edge');
+            const ligand = document.getElementById('holo-ligand');
+            const valTag = document.getElementById('validation-tag');
+
+            // Reset classes
+            nodes.forEach(n => {
+                n.classList.remove('active-site', 'allo-site', 'coarse-grained');
+                n.setAttribute('r', 8);
+                n.style.opacity = 1;
+            });
+            edges.forEach(e => {
+                e.classList.remove('quantum-path');
+                e.style.opacity = 1;
+            });
+            math.classList.remove('opacity-100', 'translate-y-0');
+            math.classList.add('opacity-0', 'translate-y-10');
+            ligand.classList.remove('validated');
+            valTag.classList.remove('opacity-100', 'translate-y-0');
+            valTag.classList.add('opacity-0', 'translate-y-5');
+
+            switch(step) {
+                case 1: // Input
+                    blob.style.opacity = 1;
+                    network.style.opacity = 0;
+                    break;
+
+                case 2: // Graph
+                    blob.style.opacity = 0.1;
+                    network.style.opacity = 1;
+                    nodes.forEach(n => {
+                        if(n.classList.contains('base-type-active')) n.classList.add('active-site');
+                    });
+                    break;
+
+                case 3: // Quantum
+                    blob.style.opacity = 0;
+                    network.style.opacity = 1;
+                    math.classList.remove('opacity-0', 'translate-y-10');
+                    math.classList.add('opacity-100', 'translate-y-0');
+                    
+                    nodes.forEach(n => {
+                        if(n.classList.contains('base-type-active')) n.classList.add('active-site');
+                    });
+                    
+                    document.querySelectorAll('.main-path').forEach(e => e.classList.add('quantum-path'));
+                    break;
+
+                case 4: // Matrix & Top 5
+                    network.style.opacity = 1;
+                    nodes.forEach(n => {
+                        if(n.classList.contains('base-type-active')) n.classList.add('active-site');
+                        if(n.classList.contains('base-type-allo')) n.classList.add('allo-site');
+                    });
+                    
+                    setTimeout(() => {
+                        for(let i=0; i<64; i++) {
+                            const cell = document.getElementById(`cell-${i}`);
+                            cell.className = 'matrix-cell';
+                            if(i === 12 || i === 13 || i === 20 || i === 21 || i === 29) {
+                                setTimeout(() => cell.classList.add('hot'), Math.random() * 500);
+                            } else if (Math.random() > 0.7) {
+                                setTimeout(() => cell.classList.add('warm'), Math.random() * 800);
+                            }
+                        }
+                    }, 100);
+                    break;
+
+                case 5: // Coarse-graining
+                    network.style.opacity = 1;
+                    edges.forEach(e => e.style.opacity = 0.1);
+                    
+                    const reprNodes = [1, 4, 8, 12, 15, 18];
+                    nodes.forEach(n => {
+                        const id = parseInt(n.id.split('-')[1]);
+                        if(reprNodes.includes(id)) {
+                            n.classList.add('coarse-grained');
+                            if(n.classList.contains('base-type-active')) n.style.fill = 'var(--active-red)';
+                            if(n.classList.contains('base-type-allo')) n.style.fill = 'var(--allo-cyan)';
+                        } else {
+                            n.style.opacity = 0;
+                        }
+                    });
+
+                    const cgEdges = [[1,8], [8,4], [1,12], [8,18], [4,15]];
+                    cgEdges.forEach(pair => {
+                        const s = nodesData[pair[0]];
+                        const t = nodesData[pair[1]];
+                        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                        line.setAttribute('x1', s.x);
+                        line.setAttribute('y1', s.y);
+                        line.setAttribute('x2', t.x);
+                        line.setAttribute('y2', t.y);
+                        line.setAttribute('class', 'edge quantum-path cg-temp-edge');
+                        document.getElementById('edges').appendChild(line);
+                    });
+                    break;
+
+                case 6: // Validation (Layer 3)
+                    blob.style.opacity = 0.2; // 稍微顯示表面
+                    network.style.opacity = 1;
+                    
+                    // 恢復所有節點可見，但只 Highlight Top-5 (Allo) 和 Active
+                    nodes.forEach(n => {
+                        if(n.classList.contains('base-type-active')) n.classList.add('active-site');
+                        if(n.classList.contains('base-type-allo')) n.classList.add('allo-site');
+                    });
+                    
+                    // 顯示 Holo 藥物結合框，展示我們找出的 Allo 節點完美落在裡面
+                    setTimeout(() => {
+                        ligand.classList.add('validated');
+                        valTag.classList.remove('opacity-0', 'translate-y-5');
+                        valTag.classList.add('opacity-100', 'translate-y-0');
+                    }, 300);
+                    
+                    // 從 Active 到 Ligand 畫一條虛擬的 PRS/GNM 訊號流做對比
+                    document.querySelectorAll('.main-path').forEach(e => {
+                        e.style.stroke = 'var(--ligand-green)';
+                        e.style.strokeDasharray = '5';
+                    });
+                    break;
+            }
+
+            if(step !== 5) {
+                document.querySelectorAll('.cg-temp-edge').forEach(e => e.remove());
+            }
+            if(step !== 6) {
+                document.querySelectorAll('.main-path').forEach(e => {
+                    e.style.stroke = '';
+                    e.style.strokeDasharray = '';
+                });
+            }
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
