@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Q-ASA 量子異構訊號圖譜 - 解決方案視覺化</title>
+    <title>Q-PocketRank 量子異構訊號圖譜 - 解決方案視覺化</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -15,6 +15,7 @@
             --active-red: #ef4444;
             --allo-cyan: #06b6d4;
             --ligand-green: #10b981;
+            --ai-yellow: #f59e0b; /* PocketMiner AI 熱點顏色 */
         }
 
         body {
@@ -26,17 +27,20 @@
 
         /* 網路節點與邊緣的動畫效果 */
         .node { transition: all 0.5s ease; fill: #475569; }
-        .edge { transition: all 0.5s ease; stroke: #334155; stroke-width: 2; }
+        .edge { transition: all 0.5s ease; stroke: #334155; stroke-width: 2; opacity: 0; }
         
         .node.active-site { fill: var(--active-red); filter: drop-shadow(0 0 8px var(--active-red)); }
         .node.allo-site { fill: var(--allo-cyan); filter: drop-shadow(0 0 8px var(--allo-cyan)); }
+        .node.ai-hotspot { fill: var(--ai-yellow); filter: drop-shadow(0 0 8px var(--ai-yellow)); }
         .node.coarse-grained { fill: var(--quantum-purple); r: 25; filter: drop-shadow(0 0 12px var(--quantum-glow)); }
 
+        .edge.visible { opacity: 1; }
         .edge.quantum-path {
             stroke: var(--quantum-purple);
             stroke-width: 3;
             stroke-dasharray: 10;
             animation: dash 1.5s linear infinite, glow 2s ease-in-out infinite alternate;
+            opacity: 1;
         }
 
         @keyframes dash { to { stroke-dashoffset: -20; } }
@@ -75,6 +79,7 @@
         }
         .matrix-cell.hot { background: var(--allo-cyan); box-shadow: 0 0 5px var(--allo-cyan); }
         .matrix-cell.warm { background: var(--quantum-purple); }
+        .matrix-cell.ai-prior { background: rgba(245, 158, 11, 0.5); }
 
         /* 蛋白質表面輪廓與藥物配體 */
         .protein-surface {
@@ -115,11 +120,11 @@
     <header class="bg-slate-900 border-b border-slate-700 p-4 flex justify-between items-center z-10 shadow-lg">
         <div class="flex items-center gap-3">
             <div class="w-10 h-10 rounded-lg bg-purple-600/20 border border-purple-500 flex items-center justify-center text-purple-400">
-                <i class="fa-solid fa-network-wired"></i>
+                <i class="fa-solid fa-brain"></i>
             </div>
             <div>
-                <h1 class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-cyan-400">Q-ASA 解決方案架構</h1>
-                <p class="text-xs text-slate-400">Cleveland Clinic Challenge: Quantum Simulation of Allosteric Signal Propagation</p>
+                <h1 class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-cyan-400">Q-PocketRank 四層架構</h1>
+                <p class="text-xs text-slate-400">PocketMiner-guided Quantum Allosteric Signal Ranking</p>
             </div>
         </div>
         <div class="flex gap-2">
@@ -138,29 +143,33 @@
             
             <!-- SVG 畫布：蛋白質網路 -->
             <svg id="protein-svg" class="w-full h-full max-w-2xl max-h-2xl relative z-10" viewBox="0 0 800 600">
-                <!-- 蛋白質表面 (Step 1, 6 顯示) -->
+                <!-- 蛋白質表面 -->
                 <path id="protein-blob" class="protein-surface" d="M 400 100 C 600 80, 750 200, 700 400 C 650 600, 400 550, 200 500 C 50 450, 100 250, 200 150 C 250 100, 300 110, 400 100 Z" />
                 
-                <!-- Holo 藥物結合口袋 (Step 6 顯示) -->
+                <!-- Holo 藥物結合口袋 (Step 7 顯示) -->
                 <path id="holo-ligand" class="holo-ligand" d="M 520 120 L 600 100 L 640 150 L 590 220 L 510 200 Z" />
                 <g id="validation-tag" class="opacity-0 transition-opacity duration-500 transform translate-y-5">
                     <rect x="660" y="100" width="120" height="30" rx="4" fill="#064e3b" stroke="#10b981" stroke-width="1"/>
-                    <text x="720" y="120" fill="#34d399" font-size="12" font-weight="bold" text-anchor="middle">Holo Validation Match</text>
+                    <text x="720" y="120" fill="#34d399" font-size="12" font-weight="bold" text-anchor="middle">Holo Validation</text>
+                </g>
+
+                <!-- AI Prior 標籤 (Step 2 顯示) -->
+                <g id="ai-tag" class="opacity-0 transition-opacity duration-500 transform translate-y-5">
+                    <rect x="650" y="380" width="140" height="30" rx="4" fill="#78350f" stroke="#f59e0b" stroke-width="1"/>
+                    <text x="720" y="400" fill="#fcd34d" font-size="12" font-weight="bold" text-anchor="middle">PocketMiner Prior</text>
                 </g>
 
                 <!-- 網路群組 -->
                 <g id="network-group" class="opacity-0 transition-opacity duration-1000">
-                    <!-- Edges (將透過 JS 生成) -->
                     <g id="edges"></g>
-                    <!-- Nodes (將透過 JS 生成) -->
                     <g id="nodes"></g>
                 </g>
 
-                <!-- 浮動方程式 (Step 3 顯示) -->
+                <!-- 浮動方程式 (Step 4 顯示) -->
                 <g id="quantum-math" class="opacity-0 transition-opacity duration-500 transform translate-y-10">
-                    <rect x="250" y="50" width="300" height="80" rx="10" fill="rgba(15, 23, 42, 0.8)" stroke="#8b5cf6" stroke-width="2"/>
-                    <text x="400" y="85" fill="#e2e8f0" font-size="20" text-anchor="middle" class="math-font">U(t) = e^{-iHt}</text>
-                    <text x="400" y="115" fill="#94a3b8" font-size="14" text-anchor="middle" class="math-font">H = L_{GNM} + α·diag(v_s)</text>
+                    <rect x="200" y="30" width="400" height="90" rx="10" fill="rgba(15, 23, 42, 0.8)" stroke="#8b5cf6" stroke-width="2"/>
+                    <text x="400" y="65" fill="#e2e8f0" font-size="20" text-anchor="middle" class="math-font">U(t) = e^{-iHt}</text>
+                    <text x="400" y="100" fill="#94a3b8" font-size="14" text-anchor="middle" class="math-font">H = A + λ·L_GNM + β·diag(p_PocketMiner)</text>
                 </g>
             </svg>
         </section>
@@ -168,10 +177,9 @@
         <!-- 右側：步驟解說面板 -->
         <section class="w-1/3 bg-slate-900 border-l border-slate-800 p-8 flex flex-col relative">
             
-            <!-- 步驟指示器 -->
+            <!-- 步驟指示器 (更新為 7 步) -->
             <div class="flex justify-between mb-8 relative">
                 <div class="absolute top-1/2 left-0 w-full h-0.5 bg-slate-700 -z-10 -translate-y-1/2"></div>
-                <!-- 步驟點將由 JS 動態生成 -->
                 <div id="step-indicators" class="flex justify-between w-full"></div>
             </div>
 
@@ -180,71 +188,85 @@
                 
                 <!-- Step 1 內容 -->
                 <div class="step-content flex-col h-full active" id="step-1">
-                    <div class="text-sm text-purple-400 font-bold mb-2">STAGE 1: INPUT</div>
+                    <div class="text-sm text-slate-400 font-bold mb-2">STAGE 1: INPUT</div>
                     <h2 class="text-3xl font-bold mb-4">輸入 Apo PDB 結構</h2>
                     <p class="text-slate-300 leading-relaxed mb-6">
-                        我們的 <strong>Layer 1 引擎</strong>首先接收無配體結合的 <strong class="text-white">Apo PDB 結構</strong> (如 KRAS 4OBE 或 BCR-ABL1 1OPL)。
-                        這些蛋白質表面缺乏傳統的深層口袋，被業界視為<strong class="text-red-400">「難成藥標靶 (Undruggable targets)」</strong>。
+                        系統首先接收無配體結合的 <strong class="text-white">Apo 結構</strong> (如 KRAS 4OBE)。
+                        這時的蛋白質表面通常呈現閉合狀態，缺乏明顯的結合口袋，被視為「難成藥標靶」。
                     </p>
                     <div class="bg-slate-800 p-4 rounded-lg border border-slate-700 mt-auto">
                         <h4 class="text-sm font-bold text-slate-200 mb-2"><i class="fa-solid fa-file-lines text-slate-400 mr-2"></i>競賽規範對齊</h4>
                         <ul class="text-sm text-slate-400 space-y-2">
-                            <li><i class="fa-solid fa-check text-green-500 mr-2"></i><strong>絕不使用</strong>古典 MD 軌跡當輸入。</li>
-                            <li><i class="fa-solid fa-check text-green-500 mr-2"></i>預處理：保留催化結構域，移除溶劑與輔因子。</li>
+                            <li><i class="fa-solid fa-check text-green-500 mr-2"></i>完全基於結構拓撲 (Topology)。</li>
+                            <li><i class="fa-solid fa-check text-green-500 mr-2"></i><strong>絕不</strong>依賴 Classical MD 軌跡作為輸入。</li>
                         </ul>
                     </div>
                 </div>
 
-                <!-- Step 2 內容 -->
+                <!-- Step 2 內容 (Layer 0 新增) -->
                 <div class="step-content flex-col h-full" id="step-2">
-                    <div class="text-sm text-purple-400 font-bold mb-2">STAGE 2: ABSTRACTION</div>
-                    <h2 class="text-3xl font-bold mb-4">建構交互作用網路</h2>
+                    <div class="text-sm text-yellow-500 font-bold mb-2">STAGE 2: LAYER 0</div>
+                    <h2 class="text-3xl font-bold mb-4">AI 隱藏口袋先驗預測</h2>
                     <p class="text-slate-300 leading-relaxed mb-4">
-                        我們不直接做全原子模擬，而是將問題降維成 <strong>Graph-Ranking Problem</strong>。
+                        我們導入了 <strong>PocketMiner (或 FPocket)</strong> 作為 <strong class="text-yellow-400">AI Candidate Generator</strong>。
                     </p>
-                    <ul class="list-disc pl-5 text-slate-300 space-y-2 mb-6">
-                        <li><strong>節點 (Nodes)：</strong>代表個別殘基 (Residues)。</li>
-                        <li><strong>邊緣 (Edges)：</strong>利用高斯網路模型 (GNM) 或 Cα 距離定義彈性接觸力。</li>
-                        <li><span class="text-red-400 font-bold">作用中心 (Seed Set S)：</span>將已知的催化位點或保守序列標記為訊號源。</li>
-                    </ul>
-                    <div class="bg-slate-800 p-4 rounded-lg border border-slate-700 mt-auto">
-                        <p class="text-sm text-slate-400">這建立了連通性矩陣 $A$ 或拉普拉斯矩陣 $L$，我們也準備了多種 Graph 的 <span class="text-white font-bold">Ensemble over Hamiltonians</span> 以增加穩健性。</p>
+                    <p class="text-slate-300 leading-relaxed mb-6">
+                        利用 GVP-GNN (幾何向量感知圖神經網路) 快速掃描單一 Apo 結構，預測哪些殘基在動態中<strong class="text-yellow-400">「可能」會形成隱藏口袋 (Cryptic pockets)</strong>。
+                    </p>
+                    <div class="bg-yellow-900/30 p-4 rounded-lg border border-yellow-700/50 mt-auto">
+                        <h4 class="text-sm font-bold text-yellow-400 mb-2"><i class="fa-solid fa-lightbulb text-yellow-500 mr-2"></i>縮小搜尋空間</h4>
+                        <p class="text-xs text-yellow-200">圖中 <span class="text-yellow-400 font-bold">黃色節點</span> 即為 AI 預測的口袋熱點 (Likelihood)。但注意，AI 只能找出「可能成穴的地方」，還無法證明它們與作用中心的「動態連通性」。</p>
                     </div>
                 </div>
 
                 <!-- Step 3 內容 -->
                 <div class="step-content flex-col h-full" id="step-3">
-                    <div class="text-sm text-purple-400 font-bold mb-2">STAGE 3: QUANTUM CORE</div>
-                    <h2 class="text-3xl font-bold mb-4">量子漫步訊號傳遞</h2>
+                    <div class="text-sm text-purple-400 font-bold mb-2">STAGE 3: ABSTRACTION</div>
+                    <h2 class="text-3xl font-bold mb-4">建構交互作用網路</h2>
                     <p class="text-slate-300 leading-relaxed mb-4">
-                        定義 Hamiltonian <span class="font-mono text-purple-300">H = A + α·diag(v_s)</span>，利用對角線修改 (self-loop trick) 在作用中心加入位勢擾動。
+                        準備進入量子環境，我們將 3D 結構降維成圖論模型 (Graph)。
                     </p>
-                    <p class="text-slate-300 leading-relaxed mb-6">
-                        接著利用<strong>連續時間量子漫步 ($U(t) = e^{-iHt}$)</strong> 計算訊號從作用中心傳播到蛋白質各處的機率振幅。
-                    </p>
-                    <div class="bg-purple-900/30 p-4 rounded-lg border border-purple-500/50 mt-auto">
-                        <h4 class="text-sm font-bold text-purple-300 mb-2"><i class="fa-solid fa-bolt text-yellow-400 mr-2"></i>為什麼用量子？</h4>
-                        <p class="text-xs text-purple-200">作為 Biological signal transmission proxy，量子干涉效應比傳統 PageRank 擴散模型更能捕捉複雜非線性動態連通性 (Dynamic Connectivity)。</p>
+                    <ul class="list-disc pl-5 text-slate-300 space-y-2 mb-6 text-sm">
+                        <li><strong>節點 (Nodes)：</strong>代表個別殘基。</li>
+                        <li><strong>邊緣 (Edges)：</strong>基於距離或 GNM (高斯網路模型) 彈性接觸力。</li>
+                        <li><span class="text-red-400 font-bold">作用中心 (Seed Set)：</span>標記已知的催化位點為訊號源 (紅點)。</li>
+                    </ul>
+                    <div class="bg-slate-800 p-4 rounded-lg border border-slate-700 mt-auto">
+                        <p class="text-sm text-slate-400">將 <strong>Layer 0 的 PocketMiner 分數</strong> ($p_j$) 轉換為節點權重特徵，融入即將生成的哈密頓矩陣中。</p>
                     </div>
                 </div>
 
-                <!-- Step 4 內容 -->
+                <!-- Step 4 內容 (Layer 1) -->
                 <div class="step-content flex-col h-full" id="step-4">
-                    <div class="text-sm text-purple-400 font-bold mb-2">STAGE 4: DELIVERABLES</div>
+                    <div class="text-sm text-purple-400 font-bold mb-2">STAGE 4: LAYER 1 (QUANTUM CORE)</div>
+                    <h2 class="text-3xl font-bold mb-4">量子漫步訊號傳遞</h2>
+                    <p class="text-slate-300 leading-relaxed mb-4">
+                        我們定義了融合 AI 先驗的 Hamiltonian：
+                        <br/><span class="font-mono text-xs text-purple-300">H = A + λ·L_GNM + β·diag(p_PocketMiner)</span>
+                    </p>
+                    <p class="text-slate-300 leading-relaxed mb-6">
+                        利用<strong>連續時間量子漫步 ($e^{-iHt}$)</strong> 計算訊號從作用中心傳播的機率振幅。這回答了關鍵問題：<strong class="text-purple-300">「這些 AI 找出的口袋，哪個真正與 active site 具有量子層級的動態連通性？」</strong>
+                    </p>
+                    <div class="bg-purple-900/30 p-4 rounded-lg border border-purple-500/50 mt-auto">
+                        <p class="text-xs text-purple-200">這建立了完美的分工：AI 預測「哪裡會開口袋」，量子漫步排序「哪個口袋真的能發生異構調控 (Allostery)」。</p>
+                    </div>
+                </div>
+
+                <!-- Step 5 內容 -->
+                <div class="step-content flex-col h-full" id="step-5">
+                    <div class="text-sm text-purple-400 font-bold mb-2">STAGE 5: DELIVERABLES</div>
                     <h2 class="text-3xl font-bold mb-4">輸出矩陣與 Top-5</h2>
                     <p class="text-slate-300 leading-relaxed mb-4">
-                        完美對齊競賽要求，直接產出兩項核心成果：
+                        演算法輸出了競賽要求的兩項核心產物，部分 AI 預測的高分點因缺乏連通性被淘汰，留下真正的 Allosteric Sites。
                     </p>
                     
                     <div class="flex gap-4 mb-6">
                         <div class="w-1/2">
-                            <h4 class="text-sm font-bold text-white mb-2">1. 完整 Connectivity Matrix</h4>
-                            <div class="matrix-grid" id="demo-matrix">
-                                <!-- JS 會填滿小格子 -->
-                            </div>
+                            <h4 class="text-xs font-bold text-white mb-2">1. Quantum Connectivity Matrix</h4>
+                            <div class="matrix-grid" id="demo-matrix"></div>
                         </div>
                         <div class="w-1/2 flex flex-col justify-center">
-                            <h4 class="text-sm font-bold text-white mb-2">2. Top-5 Hit List</h4>
+                            <h4 class="text-xs font-bold text-white mb-2">2. Top-5 Hit List</h4>
                             <ul class="text-sm space-y-1 font-mono">
                                 <li class="text-cyan-400 flex items-center"><i class="fa-solid fa-crosshairs mr-2"></i>Residue 142</li>
                                 <li class="text-cyan-400 flex items-center"><i class="fa-solid fa-crosshairs mr-2"></i>Residue 145</li>
@@ -256,48 +278,46 @@
                     </div>
                     
                     <div class="bg-slate-800 p-4 rounded-lg border border-slate-700 mt-auto">
-                        <p class="text-sm text-slate-400">圖中 <span class="text-cyan-400 font-bold">青色節點</span> 即為量子分數最高、具備強大異構潛力的 Top-5 Residues。</p>
+                        <p class="text-sm text-slate-400">圖中 <span class="text-cyan-400 font-bold">青色節點</span> 即為結合 AI 先驗與量子連通性的最終 Top-5 預測。</p>
                     </div>
                 </div>
 
-                <!-- Step 5 內容 -->
-                <div class="step-content flex-col h-full" id="step-5">
-                    <div class="text-sm text-purple-400 font-bold mb-2">STAGE 5: EXECUTION (LAYER 2)</div>
-                    <h2 class="text-3xl font-bold mb-4">粗粒化與硬體展示</h2>
+                <!-- Step 6 內容 (Layer 2) -->
+                <div class="step-content flex-col h-full" id="step-6">
+                    <div class="text-sm text-blue-400 font-bold mb-2">STAGE 6: LAYER 2 (EXECUTION)</div>
+                    <h2 class="text-3xl font-bold mb-4">粗粒化與量子硬體展示</h2>
                     <p class="text-slate-300 leading-relaxed mb-4">
-                        為了展現 Scalability，這是我們的 <strong>Layer 2 模組</strong>。
+                        為了展現擴展性 (Scalability)，我們將 Active-site 到高分 Pocket 的次圖 (Subgraph) 進行<strong>粗粒化 (Coarse-grain)</strong>。
                     </p>
                     <p class="text-slate-300 leading-relaxed mb-6">
-                        將高分區域殘基<strong>粗粒化 (Coarse-grain)</strong> 為表面區塊 (Patch Graph)，壓縮至 6-12 Qubits，並在真實量子硬體上展示 $e^{-iHt}$ 的電路執行。
+                        將路徑壓縮至 6-12 Qubits，並在真實的硬體上執行電路，避免被競賽懲罰深層無效電路。
                     </p>
                     <div class="grid grid-cols-2 gap-4 mt-auto">
                         <div class="bg-slate-800 p-4 rounded-lg border border-slate-700 flex flex-col items-center justify-center text-center">
                             <i class="fa-brands fa-aws text-3xl text-orange-400 mb-2"></i>
-                            <span class="text-sm font-bold text-white">AWS Braket</span>
-                            <span class="text-xs text-slate-400">硬體執行 / 混合模擬</span>
+                            <span class="text-sm font-bold text-white mt-1">AWS Braket</span>
                         </div>
                         <div class="bg-slate-800 p-4 rounded-lg border border-slate-700 flex flex-col items-center justify-center text-center">
                             <i class="fa-solid fa-microchip text-3xl text-blue-400 mb-2"></i>
-                            <span class="text-sm font-bold text-white">Classiq</span>
-                            <span class="text-xs text-slate-400">深度受限電路合成</span>
+                            <span class="text-sm font-bold text-white mt-1">Classiq</span>
                         </div>
                     </div>
                 </div>
 
-                <!-- Step 6 內容 (全新新增) -->
-                <div class="step-content flex-col h-full" id="step-6">
-                    <div class="text-sm text-green-400 font-bold mb-2">STAGE 6: VALIDATION (LAYER 3)</div>
-                    <h2 class="text-3xl font-bold mb-4">生物學解釋與驗證</h2>
+                <!-- Step 7 內容 (Layer 3) -->
+                <div class="step-content flex-col h-full" id="step-7">
+                    <div class="text-sm text-green-400 font-bold mb-2">STAGE 7: LAYER 3 (VALIDATION)</div>
+                    <h2 class="text-3xl font-bold mb-4">生物解釋與 Holo 驗證</h2>
                     <p class="text-slate-300 leading-relaxed mb-4">
-                        這不是一場純數學遊戲。我們的 <strong>Layer 3</strong> 將提供極具說服力的生物物理解釋。
+                        最後，我們提供極具說服力的生物物理解釋：
                     </p>
                     <ul class="list-disc pl-5 text-slate-300 space-y-2 mb-6 text-sm">
-                        <li><strong>Holo Pocket Enrichment：</strong>將 Top-5 節點疊加至已知的藥物結合結構 (如 KRAS 6OIM)，驗證是否成功命中真實的 Allosteric 藥物口袋 (綠色框線)。</li>
-                        <li><strong>Classical Baselines 比較：</strong>利用 <strong>PRS (微擾響應掃描)</strong> 與 <strong>GNM</strong> 作為古典基準，證明量子漫步在訊號傳遞分數上超越傳統擴散模型。</li>
+                        <li><strong>Holo Pocket Enrichment：</strong>將 Top-5 節點疊加至已知藥物結合結構 (如 6OIM)，驗證是否成功命中真實的 Allosteric 藥物口袋 (綠色框)。</li>
+                        <li><strong>Classical Baselines：</strong>利用 <strong>PRS (微擾響應掃描)</strong> 與傳統 GNM 證明量子漫步分數具備統計學上的優勢。</li>
                     </ul>
                     <div class="bg-green-900/30 p-4 rounded-lg border border-green-500/50 mt-auto">
-                        <h4 class="text-sm font-bold text-green-300 mb-1"><i class="fa-solid fa-vial text-green-400 mr-2"></i>Interpretability</h4>
-                        <p class="text-xs text-green-200">透過 3D 視覺化與統計顯著性，為化學家提供直接 Actionable 的藥物設計依據。</p>
+                        <h4 class="text-sm font-bold text-green-300 mb-1"><i class="fa-solid fa-vial text-green-400 mr-2"></i>Actionable Output</h4>
+                        <p class="text-xs text-green-200">透過多層架構，向決策者與化學家證明這不僅是理論，而是可落地的靶點探測儀。</p>
                     </div>
                 </div>
 
@@ -308,39 +328,39 @@
     <script>
         // --- 狀態與資料定義 ---
         let currentStep = 1;
-        const totalSteps = 6; // 增加為 6 步
+        const totalSteps = 7; 
         
-        // 蛋白質網路資料 (簡化模型)
+        // 蛋白質網路資料
+        // 添加 aiHotspot 標記：哪些是 PocketMiner 找出來的候選點
         const nodesData = [
-            // Active Site (Seed) - 中間偏左
-            { id: 0, x: 250, y: 300, type: 'active', group: 1 },
-            { id: 1, x: 220, y: 330, type: 'active', group: 1 },
-            { id: 2, x: 280, y: 320, type: 'active', group: 1 },
+            // Active Site (Seed)
+            { id: 0, x: 250, y: 300, type: 'active', aiHotspot: false, group: 1 },
+            { id: 1, x: 220, y: 330, type: 'active', aiHotspot: false, group: 1 },
+            { id: 2, x: 280, y: 320, type: 'active', aiHotspot: false, group: 1 },
             
-            // Allosteric Site (Target) - 右上角，與 Holo ligand 對齊
-            { id: 3, x: 550, y: 150, type: 'allo', group: 2 },
-            { id: 4, x: 580, y: 180, type: 'allo', group: 2 },
-            { id: 5, x: 610, y: 140, type: 'allo', group: 2 },
-            { id: 6, x: 540, y: 190, type: 'allo', group: 2 },
+            // Allosteric Site (Target) - AI 找到了，量子也確認了連通性
+            { id: 3, x: 550, y: 150, type: 'allo', aiHotspot: true, group: 2 },
+            { id: 4, x: 580, y: 180, type: 'allo', aiHotspot: true, group: 2 },
+            { id: 5, x: 610, y: 140, type: 'allo', aiHotspot: true, group: 2 },
+            { id: 6, x: 540, y: 190, type: 'allo', aiHotspot: true, group: 2 },
 
-            // 中繼路徑 / 普通殘基
-            { id: 7, x: 320, y: 250, type: 'normal', group: 3 },
-            { id: 8, x: 380, y: 220, type: 'normal', group: 3 },
-            { id: 9, x: 450, y: 200, type: 'normal', group: 3 },
-            { id: 10, x: 480, y: 240, type: 'normal', group: 3 },
-            { id: 11, x: 420, y: 300, type: 'normal', group: 3 },
+            // 中繼路徑
+            { id: 7, x: 320, y: 250, type: 'normal', aiHotspot: false, group: 3 },
+            { id: 8, x: 380, y: 220, type: 'normal', aiHotspot: false, group: 3 },
+            { id: 9, x: 450, y: 200, type: 'normal', aiHotspot: false, group: 3 },
+            { id: 10, x: 480, y: 240, type: 'normal', aiHotspot: false, group: 3 },
+            { id: 11, x: 420, y: 300, type: 'normal', aiHotspot: false, group: 3 },
             
-            // 遠端 / 不相干殘基
-            { id: 12, x: 180, y: 180, type: 'normal', group: 4 },
-            { id: 13, x: 250, y: 150, type: 'normal', group: 4 },
-            { id: 14, x: 600, y: 400, type: 'normal', group: 5 },
-            { id: 15, x: 520, y: 450, type: 'normal', group: 5 },
-            { id: 16, x: 680, y: 350, type: 'normal', group: 5 },
-            { id: 17, x: 350, y: 450, type: 'normal', group: 6 },
-            { id: 18, x: 400, y: 500, type: 'normal', group: 6 }
+            // 遠端/假口袋 - AI 找到了 (Cryptic Pocket)，但量子證明沒有連通性 (非 Allosteric)
+            { id: 12, x: 180, y: 180, type: 'normal', aiHotspot: false, group: 4 },
+            { id: 13, x: 250, y: 150, type: 'normal', aiHotspot: false, group: 4 },
+            { id: 14, x: 600, y: 400, type: 'normal', aiHotspot: true, group: 5 }, // Fake pocket
+            { id: 15, x: 520, y: 450, type: 'normal', aiHotspot: true, group: 5 }, // Fake pocket
+            { id: 16, x: 680, y: 350, type: 'normal', aiHotspot: false, group: 5 },
+            { id: 17, x: 350, y: 450, type: 'normal', aiHotspot: false, group: 6 },
+            { id: 18, x: 400, y: 500, type: 'normal', aiHotspot: false, group: 6 }
         ];
 
-        // 邊界定義
         const edgesData = [
             { s: 0, t: 1 }, { s: 0, t: 2 }, { s: 1, t: 2 }, 
             { s: 3, t: 4 }, { s: 4, t: 5 }, { s: 3, t: 6 }, { s: 5, t: 6 }, 
@@ -351,7 +371,6 @@
             { s: 15, t: 14 }, { s: 14, t: 16 }, { s: 6, t: 14 }
         ];
 
-        // --- 初始化 UI ---
         function init() {
             renderSteps();
             renderNetwork();
@@ -364,7 +383,7 @@
             let html = '';
             for (let i = 1; i <= totalSteps; i++) {
                 html += `
-                    <div id="step-dot-${i}" class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300 ${i === 1 ? 'bg-purple-500 text-white shadow-[0_0_10px_#8b5cf6]' : 'bg-slate-800 text-slate-500 border border-slate-700'}">
+                    <div id="step-dot-${i}" class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 border border-slate-700 bg-slate-800 text-slate-500">
                         ${i}
                     </div>
                 `;
@@ -404,7 +423,7 @@
                 circle.setAttribute('cy', node.y);
                 circle.setAttribute('r', 8);
                 circle.setAttribute('id', `node-${node.id}`);
-                circle.setAttribute('class', `node base-type-${node.type} group-${node.group}`);
+                circle.setAttribute('class', `node base-type-${node.type} ${node.aiHotspot ? 'is-ai-hotspot' : ''}`);
                 nodesGroup.appendChild(circle);
             });
         }
@@ -418,44 +437,29 @@
             grid.innerHTML = html;
         }
 
-        // --- 狀態更新邏輯 ---
         function nextStep() {
-            if (currentStep < totalSteps) {
-                currentStep++;
-                updateState();
-            }
+            if (currentStep < totalSteps) { currentStep++; updateState(); }
         }
 
         function prevStep() {
-            if (currentStep > 1) {
-                currentStep--;
-                updateState();
-            }
+            if (currentStep > 1) { currentStep--; updateState(); }
         }
 
         function updateState() {
             document.getElementById('btn-prev').disabled = (currentStep === 1);
             document.getElementById('btn-next').disabled = (currentStep === totalSteps);
-            
-            if(currentStep === totalSteps) {
-                document.getElementById('btn-next').innerHTML = '完成 <i class="fa-solid fa-check ml-2"></i>';
-            } else {
-                document.getElementById('btn-next').innerHTML = '下一步 <i class="fa-solid fa-chevron-right ml-2"></i>';
-            }
+            document.getElementById('btn-next').innerHTML = currentStep === totalSteps ? '完成 <i class="fa-solid fa-check ml-2"></i>' : '下一步 <i class="fa-solid fa-chevron-right ml-2"></i>';
 
             for (let i = 1; i <= totalSteps; i++) {
                 const dot = document.getElementById(`step-dot-${i}`);
                 if (i === currentStep) {
-                    // 第6步給予特別的綠色標示
-                    if(i === 6) {
-                        dot.className = "w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300 bg-emerald-500 text-white shadow-[0_0_15px_#10b981]";
-                    } else {
-                        dot.className = "w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300 bg-purple-500 text-white shadow-[0_0_15px_#8b5cf6]";
-                    }
+                    if (i === 2) dot.className = "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 bg-yellow-500 text-white shadow-[0_0_15px_#f59e0b]";
+                    else if (i === 7) dot.className = "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 bg-emerald-500 text-white shadow-[0_0_15px_#10b981]";
+                    else dot.className = "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 bg-purple-500 text-white shadow-[0_0_15px_#8b5cf6]";
                 } else if (i < currentStep) {
-                    dot.className = "w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300 bg-purple-900 text-purple-200";
+                    dot.className = "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 bg-slate-700 text-slate-300";
                 } else {
-                    dot.className = "w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300 bg-slate-800 text-slate-500 border border-slate-700";
+                    dot.className = "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 bg-slate-800 text-slate-500 border border-slate-700";
                 }
             }
 
@@ -473,22 +477,25 @@
             const edges = document.querySelectorAll('.edge');
             const ligand = document.getElementById('holo-ligand');
             const valTag = document.getElementById('validation-tag');
+            const aiTag = document.getElementById('ai-tag');
 
-            // Reset classes
+            // Reset Default States
             nodes.forEach(n => {
-                n.classList.remove('active-site', 'allo-site', 'coarse-grained');
+                n.classList.remove('active-site', 'allo-site', 'ai-hotspot', 'coarse-grained');
                 n.setAttribute('r', 8);
-                n.style.opacity = 1;
+                n.style.opacity = 0; // default hide points unless step >=2
             });
             edges.forEach(e => {
-                e.classList.remove('quantum-path');
-                e.style.opacity = 1;
+                e.classList.remove('visible', 'quantum-path');
+                e.style.opacity = 0;
             });
-            math.classList.remove('opacity-100', 'translate-y-0');
-            math.classList.add('opacity-0', 'translate-y-10');
+            math.classList.replace('opacity-100', 'opacity-0');
+            math.classList.replace('translate-y-0', 'translate-y-10');
             ligand.classList.remove('validated');
-            valTag.classList.remove('opacity-100', 'translate-y-0');
-            valTag.classList.add('opacity-0', 'translate-y-5');
+            valTag.classList.replace('opacity-100', 'opacity-0');
+            valTag.classList.replace('translate-y-0', 'translate-y-5');
+            aiTag.classList.replace('opacity-100', 'opacity-0');
+            aiTag.classList.replace('translate-y-0', 'translate-y-5');
 
             switch(step) {
                 case 1: // Input
@@ -496,33 +503,59 @@
                     network.style.opacity = 0;
                     break;
 
-                case 2: // Graph
+                case 2: // AI Prior (Layer 0) - PocketMiner
+                    blob.style.opacity = 0.5;
+                    network.style.opacity = 1;
+                    aiTag.classList.replace('opacity-0', 'opacity-100');
+                    aiTag.classList.replace('translate-y-5', 'translate-y-0');
+                    // 顯示 AI 預測的 Hotspots，其他隱藏
+                    nodes.forEach(n => {
+                        if(n.classList.contains('is-ai-hotspot')) {
+                            n.style.opacity = 1;
+                            n.classList.add('ai-hotspot');
+                            n.setAttribute('r', 10);
+                        }
+                    });
+                    break;
+
+                case 3: // Abstraction (Graph)
                     blob.style.opacity = 0.1;
                     network.style.opacity = 1;
                     nodes.forEach(n => {
+                        n.style.opacity = 1;
                         if(n.classList.contains('base-type-active')) n.classList.add('active-site');
+                        if(n.classList.contains('is-ai-hotspot')) n.classList.add('ai-hotspot');
                     });
+                    edges.forEach(e => e.classList.add('visible'));
                     break;
 
-                case 3: // Quantum
+                case 4: // Quantum Core (Layer 1)
                     blob.style.opacity = 0;
                     network.style.opacity = 1;
-                    math.classList.remove('opacity-0', 'translate-y-10');
-                    math.classList.add('opacity-100', 'translate-y-0');
+                    math.classList.replace('opacity-0', 'opacity-100');
+                    math.classList.replace('translate-y-10', 'translate-y-0');
                     
                     nodes.forEach(n => {
+                        n.style.opacity = 1;
                         if(n.classList.contains('base-type-active')) n.classList.add('active-site');
+                        if(n.classList.contains('is-ai-hotspot')) n.classList.add('ai-hotspot');
                     });
-                    
+                    edges.forEach(e => e.classList.add('visible'));
                     document.querySelectorAll('.main-path').forEach(e => e.classList.add('quantum-path'));
                     break;
 
-                case 4: // Matrix & Top 5
+                case 5: // Matrix & Top 5
                     network.style.opacity = 1;
                     nodes.forEach(n => {
+                        n.style.opacity = 1;
                         if(n.classList.contains('base-type-active')) n.classList.add('active-site');
-                        if(n.classList.contains('base-type-allo')) n.classList.add('allo-site');
+                        // 重點：AI 熱點中，只有真正具備量子連通性的變成 Allo (青色)，其他退回普通
+                        if(n.classList.contains('base-type-allo')) {
+                            n.classList.remove('ai-hotspot');
+                            n.classList.add('allo-site');
+                        }
                     });
+                    edges.forEach(e => e.classList.add('visible'));
                     
                     setTimeout(() => {
                         for(let i=0; i<64; i++) {
@@ -530,6 +563,9 @@
                             cell.className = 'matrix-cell';
                             if(i === 12 || i === 13 || i === 20 || i === 21 || i === 29) {
                                 setTimeout(() => cell.classList.add('hot'), Math.random() * 500);
+                            } else if (i === 45 || i === 54) {
+                                // AI 的假熱點在矩陣中顯示較弱
+                                setTimeout(() => cell.classList.add('ai-prior'), Math.random() * 300);
                             } else if (Math.random() > 0.7) {
                                 setTimeout(() => cell.classList.add('warm'), Math.random() * 800);
                             }
@@ -537,14 +573,15 @@
                     }, 100);
                     break;
 
-                case 5: // Coarse-graining
+                case 6: // Execution (Layer 2)
                     network.style.opacity = 1;
-                    edges.forEach(e => e.style.opacity = 0.1);
+                    edges.forEach(e => { e.classList.add('visible'); e.style.opacity = 0.1; });
                     
                     const reprNodes = [1, 4, 8, 12, 15, 18];
                     nodes.forEach(n => {
                         const id = parseInt(n.id.split('-')[1]);
                         if(reprNodes.includes(id)) {
+                            n.style.opacity = 1;
                             n.classList.add('coarse-grained');
                             if(n.classList.contains('base-type-active')) n.style.fill = 'var(--active-red)';
                             if(n.classList.contains('base-type-allo')) n.style.fill = 'var(--allo-cyan)';
@@ -562,40 +599,38 @@
                         line.setAttribute('y1', s.y);
                         line.setAttribute('x2', t.x);
                         line.setAttribute('y2', t.y);
-                        line.setAttribute('class', 'edge quantum-path cg-temp-edge');
+                        line.setAttribute('class', 'edge quantum-path visible cg-temp-edge');
                         document.getElementById('edges').appendChild(line);
                     });
                     break;
 
-                case 6: // Validation (Layer 3)
-                    blob.style.opacity = 0.2; // 稍微顯示表面
+                case 7: // Validation (Layer 3)
+                    blob.style.opacity = 0.2; 
                     network.style.opacity = 1;
                     
-                    // 恢復所有節點可見，但只 Highlight Top-5 (Allo) 和 Active
                     nodes.forEach(n => {
+                        n.style.opacity = 1;
                         if(n.classList.contains('base-type-active')) n.classList.add('active-site');
                         if(n.classList.contains('base-type-allo')) n.classList.add('allo-site');
                     });
+                    edges.forEach(e => e.classList.add('visible'));
                     
-                    // 顯示 Holo 藥物結合框，展示我們找出的 Allo 節點完美落在裡面
                     setTimeout(() => {
                         ligand.classList.add('validated');
-                        valTag.classList.remove('opacity-0', 'translate-y-5');
-                        valTag.classList.add('opacity-100', 'translate-y-0');
+                        valTag.classList.replace('opacity-0', 'opacity-100');
+                        valTag.classList.replace('translate-y-5', 'translate-y-0');
                     }, 300);
                     
-                    // 從 Active 到 Ligand 畫一條虛擬的 PRS/GNM 訊號流做對比
                     document.querySelectorAll('.main-path').forEach(e => {
                         e.style.stroke = 'var(--ligand-green)';
                         e.style.strokeDasharray = '5';
+                        e.style.opacity = 1;
                     });
                     break;
             }
 
-            if(step !== 5) {
-                document.querySelectorAll('.cg-temp-edge').forEach(e => e.remove());
-            }
-            if(step !== 6) {
+            if(step !== 6) { document.querySelectorAll('.cg-temp-edge').forEach(e => e.remove()); }
+            if(step !== 7) {
                 document.querySelectorAll('.main-path').forEach(e => {
                     e.style.stroke = '';
                     e.style.strokeDasharray = '';
