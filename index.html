@@ -148,9 +148,18 @@ const D={
     ['','Zephyr RTOS · M5Stack Platforms Maintainer'],
     ['accent','109 merged upstream PRs  ·  47 projects  ·  5 foundations'],
     ['muted','National Yang Ming Chiao Tung University — Computer Science']],
+  /* contribTop 只記已合併的 PR。審查中的一律寫進 buildSeed 的 in-review.md,不要先加到這裡。
+     待合併(狀態擷取於 2026-07-20;任一項合併後才改這裡,並同步 5 處計數:
+     本檔第 107 / profile / timeline 2026 / README.md 種子 / Get-Contribution 標題):
+       kedacore/keda            #7918        -> ['kedacore/keda',2]
+       kedacore/keda-docs       #1811        -> ['kedacore/keda-docs',2]
+       zhu-xlab/DOFA            #31 #32 #33  -> 新列 ['zhu-xlab/DOFA',n]  (新 repo,專案數 +1)
+       nasa/EMIT-Data-Resources #72          -> 新列 ['nasa/EMIT-Data-Resources',1] (新 repo,專案數 +1)
+     基金會數維持 5:KEDA 屬 CNCF(已計入),NASA 與 TUM 都不是基金會。 */
   contribTop:[['open-telemetry/opentelemetry-cpp',20],['kubernetes/kubernetes',8],
     ['kubernetes-sigs/kueue',6],['jaegertracing/jaeger-ui',6],['llm-d/llm-d-router',6],
-    ['kubernetes-sigs/dranet',4],['kptdev/porch',4],['volcano-sh/volcano',2],['meshery/meshery',2]],
+    ['kubernetes-sigs/dranet',4],['kptdev/porch',4],['volcano-sh/volcano',2],['meshery/meshery',2],
+    ['kedacore/keda',1],['kedacore/keda-docs',1]],
   cncf:['CNCF',87,40],
   publications:[['IEEE SCC 2026','Ground-Side Mission Plan Compilation','Accepted'],
     ['IEEE WF-PST 2026','OOBWatch-S3: Zephyr Out-of-Bounds Signal','Accepted'],
@@ -163,6 +172,7 @@ const D={
     ['2023','臺灣海洋治理國際研討會 · 海洋工程組 第三名']],
   projects:[['Nephio (LFN)','TSC 治理 + Intent-based O-RAN 自動化'],
     ['DRA correctness audit','Kubernetes 動態資源配置的端到端正確性稽核'],
+    ['Upstream correctness audits','上游專案的靜默失效與重現性缺陷稽核 · CNCF / NASA / 學術'],
     ['O-RAN × NTN','LEO 衛星地面段 · 3GPP R17 NTN 參數驗證'],
     ['COSCUP 2026','體驗火箭導控 Balloon Popping Challenge workshop']],
   timeline:[['2023','總統教育獎 · 捷克進修 · 首次 COSCUP 講者'],
@@ -171,8 +181,36 @@ const D={
     ['2026','109 merged PRs · TASA 青年人才 · DRA 稽核']],
 };
 function line(cls,txt){return {cls:cls,txt:txt};}
+/* 主控台目前可容納幾個字元寬 —— 量一次快取,視窗改變時作廢 */
+let charW=0;
+function charWidth(){
+  if(charW) return charW;
+  const s=document.createElement('span');
+  s.style.cssText='position:absolute;visibility:hidden;white-space:pre;left:-9999px';
+  s.textContent=new Array(51).join('0');
+  out.appendChild(s);
+  charW=s.getBoundingClientRect().width/50;
+  s.remove();
+  return charW||8;
+}
+function availCols(){ return Math.max(24, Math.floor((con.clientWidth-32)/charWidth())); }
+/* 放不下就改用清單格式(等同 PowerShell 的 Format-List),欄位才不會因換行而錯位 */
+function listFormat(headers,rows){
+  const hw=Math.max.apply(null,headers.map(dw));
+  const o=[];
+  rows.forEach(function(r,idx){
+    if(idx) o.push(line(''));
+    headers.forEach(function(h,i){
+      const label=padw(h,hw), value=String(r[i]);
+      o.push({kv:[label,value], txt:label+' : '+value, indent:hw+3});   // 續行懸掛縮排到值的起點
+    });
+  });
+  return o;
+}
 function table(headers,rows){
   let w=headers.map(function(h,i){return Math.max.apply(null,[dw(h)].concat(rows.map(function(r){return dw(String(r[i]));})));});
+  const total=w.reduce(function(a,b){return a+b;},0)+2*(w.length-1);
+  if(total>availCols() && rows.length<=12) return listFormat(headers,rows);
   let H=headers.map(function(h,i){return padw(h,w[i]);}).join('  ');
   let R=w.map(function(x){return new Array(x+1).join('-');}).join('  ');
   let o=[{cls:'head',txt:H},{cls:'rule',txt:R}];
@@ -191,7 +229,9 @@ function setTheme(t){ if(THEMES.indexOf(t)<0) return false;
 /* ---------- 虛擬檔案系統(可讀寫 · localStorage 持久化)----------
    架構參考 ZenFS / BrowserFS 與 daedalOS 的 overlay 模型:
    唯讀「種子」作品集樹 + 使用者可寫層,序列化時種子檔只存標記,載入時再水合。 */
-const HOME='C:\\Users\\thc1006', FSKEY='thc1006.fs.v1';
+/* FSKEY 帶版本:fsLoad() 會整棵覆蓋 ROOT,舊訪客的存檔不會長出新的種子檔。
+   每次新增/更名種子內容就進版,讓回訪者拿到新的樹(代價是清掉他自己建的檔)。 */
+const HOME='C:\\Users\\thc1006', FSKEY='thc1006.fs.v2';
 let CWD=HOME;
 function slug(s){return String(s).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');}
 let SEEDROWS={}, ROOT=null;
@@ -270,6 +310,22 @@ function buildSeed(){
       line('head',r[0]),line(''),
       line('accent',r[1]+' merged pull requests'),
       line('muted','https://github.com/'+r[0])]); });
+  put(HOME+'\\contributions','in-review.md',[
+    line('head','# 審查中的上游 PR'),line(''),
+    line('muted','狀態擷取於 2026-07-20。下列全部尚未合併,不計入 Get-Contribution。'),line(''),
+    line('accent','kedacore/keda  ·  CNCF Graduated'),
+    line('','  issue #7917   liiklus scaler 在 lagThreshold 為 0 時整數除以零 panic'),
+    line('','  PR    #7918   改在 parse 階段擋掉非正的 lagThreshold'),
+    line('muted','  同樣的 code + docs 配對前作 #7106 / keda-docs #1637 已合併'),line(''),
+    line('accent','kedacore/keda-docs'),
+    line('','  PR    #1811   補上 liiklus 兩個 threshold 的有效範圍'),line(''),
+    line('accent','zhu-xlab/DOFA  ·  TUM 地球觀測基礎模型'),
+    line('','  PR    #31     hubconf 宣告 timm 相依,並把 model import 延後到函式內'),
+    line('','  PR    #32     移除殘留的 import pdb'),
+    line('','  PR    #33     權重 checkpoint 由可變路徑改釘到不可變 commit'),line(''),
+    line('accent','nasa/EMIT-Data-Resources'),
+    line('','  PR    #72     quality_mask 對 L2A Mask V002 產品會靜默產生錯誤遮罩'),line(''),
+    line('muted','合併後移入 Get-Contribution,並同步 profile / timeline / README 的計數。')]);
   D.publications.forEach(function(p){
     put(HOME+'\\publications', slug(p[0])+'.md', [
       line('head',p[1]),line(''),
@@ -289,8 +345,23 @@ function fsDeser(o,path){ if(o.t==='d'){ let n=dnode(),k; for(k in o.ch) n.ch[k]
   if(o.s) return fnode(SEEDROWS[path.toLowerCase()]||[line('muted','(seed content unavailable)')],true);
   return fnode(null,false,o.x||[]); }
 function fsSave(){ try{ localStorage.setItem(FSKEY,JSON.stringify(fsSer(ROOT))); }catch(e){} }
-function fsLoad(){ try{ let s=localStorage.getItem(FSKEY); if(!s) return false;
-  let o=JSON.parse(s); if(!o||o.t!=='d') return false; ROOT=fsDeser(o,'C:'); return true; }catch(e){ return false; } }
+/* 真正的 overlay:種子樹每次開機都重建成「這一版」的內容,localStorage 只回填
+   使用者自己建立或改過的節點。否則作品集更新後,曾經造訪過的人會永遠停在舊樹,
+   看不到新增的檔案(例如 in-review.md)。
+   取捨:使用者刪掉種子檔後重新載入會復原 —— 作品集內容以站上這一版為準,
+   使用者自己建立的檔案則完整保留。要全部歸零請用 Reset-FileSystem。 */
+function graftUser(stored,target){
+  if(!stored||stored.t!=='d'||!target||target.t!=='d') return;
+  Object.keys(stored.ch).forEach(function(k){
+    const s=stored.ch[k], ek=keyIn(target,k);
+    if(s.t==='f'){ if(!s.seed) target.ch[ek||k]=s; return; }   // 只回填非種子檔(含被改寫過的種子檔)
+    if(!ek) target.ch[k]=dnode();                              // 使用者建立的資料夾
+    graftUser(s, target.ch[ek||k]);
+  });
+}
+function fsLoad(){ try{ const s=localStorage.getItem(FSKEY); if(!s) return false;
+  const o=JSON.parse(s); if(!o||o.t!=='d') return false;
+  graftUser(fsDeser(o,'C:'), ROOT); return true; }catch(e){ return false; } }
 function fsReset(){ buildSeed(); try{ localStorage.removeItem(FSKEY); }catch(e){} CWD=HOME; updatePrompt(); }
 function fsInit(){ buildSeed(); fsLoad(); if(!fsGet(HOME)) buildSeed(); }
 
@@ -301,7 +372,7 @@ const CMDLETS={
     let o=[line('accent','109 merged pull requests · 47 projects · 5 foundations'),line('','')], rows=D.contribTop;
     if(String(argOf(a,'Foundation')||'').toLowerCase()==='cncf'){
       o=[line('accent','CNCF — '+D.cncf[1]+' merged · '+D.cncf[2]+' repos'),line('','')];
-      rows=D.contribTop.filter(function(r){return /kubernetes|kueue|dranet|porch|volcano|jaeger|telemetry|llm-d|meshery/.test(r[0]);});
+      rows=D.contribTop.filter(function(r){return /kubernetes|kueue|dranet|porch|volcano|jaeger|telemetry|llm-d|meshery|keda/.test(r[0]);});
     }
     return o.concat(table(['Repository','Merged'],rows.map(function(r){return [r[0],r[1]];})),[line('muted','  … Get-Command 看更多')]);
   }},
@@ -643,17 +714,37 @@ const EGGS={
     line('accent','         _'),
     line('accent','        | |'),
     line('accent','       _|_|__________'),
-    line('accent','      |  thc1006     |'),
+    line('accent','      |   thc1006    |'),
     line('accent','      |______________|'),
     line('accent','        (O)      (O)'),
     line('muted','   choo choo!  (你打對指令了)')
   ];},
   'classic':function(){return [{html:'<span class="accent">舊版 bash CLI(user@hctsai1006)還在 -&gt; </span><a href="classic.html" class="cmd" style="text-decoration:underline">classic.html</a>'}];},
   'bash':function(){return EGGS.classic();},
-  'coffee':function(){return [line('muted','      ( ('),line('muted','       ) )'),line('accent','    ........'),
-    line('accent','    |      |]'),line('accent','    \\      /'),line('accent','     `----\''),line('','   brewing... done. 給認真的你。')];},
-  'rocket':function(){return [line('accent','        /\\'),line('accent','       /  \\'),line('accent','      |thc |'),
-    line('accent','      |1006|'),line('err','     /|##|\\'),line('err','    ` |##| `'),line('err','       /\\'),
+  'coffee':function(){return [
+    line('muted', '     )  ('),
+    line('muted', '     (  )'),
+    line('muted', '     )  ('),
+    line('accent','    ______'),
+    line('accent','   |      |]'),
+    line('accent','   |      |'),
+    line('accent','    \\____/'),line(''),
+    line('','   brewing... done. 給認真的你。')];},
+  'rocket':function(){return [
+    line('accent','       /\\'),
+    line('accent','      /  \\'),
+    line('accent','     /    \\'),
+    line('accent','    /      \\'),
+    line('accent','   |        |'),
+    line('head',  '   |  thc   |'),
+    line('head',  '   |  1006  |'),
+    line('accent','   |        |'),
+    line('accent','  /|        |\\'),
+    line('accent',' / |        | \\'),
+    line('accent','/  |________|  \\'),
+    line('err',   '     \\    /'),
+    line('err',   '      \\  /'),
+    line('err',   '       \\/'),line(''),
     line('','   3... 2... 1... liftoff  (COSCUP 火箭導控 workshop, 2026)')];},
   'matrix':function(){let cs='01THC1006<>/{}[]|=+*01',R=[];
     for(let r=0;r<6;r++){let s='';for(let i=0;i<40;i++)s+=cs[(r*7+i*3)%cs.length];R.push(line('var',s));}
@@ -719,7 +810,10 @@ function print(rows){ if(!rows) return; if(!Array.isArray(rows)) rows=[rows];
   const frag=document.createDocumentFragment();
   for(let i=0;i<rows.length;i++){ const r=rows[i]; if(!r) continue;
     const d=document.createElement('div'); d.className='row';
-    if(r.code!=null){ highlightInto(d,r.code); }
+    if(r.kv){ const s=document.createElement('span'); s.className='head'; s.textContent=r.kv[0];
+      d.appendChild(s); d.appendChild(document.createTextNode(' : '+r.kv[1]));
+      if(r.indent){ d.style.paddingLeft=r.indent+'ch'; d.style.textIndent=(-r.indent)+'ch'; } }
+    else if(r.code!=null){ highlightInto(d,r.code); }
     else if(r.html!=null){ d.innerHTML=r.html; }   /* 僅限本檔內寫死的靜態片段,不含任何使用者資料 */
     else if(r.cls){ const s=document.createElement('span'); s.className=r.cls;
       s.textContent=(r.txt!=null?r.txt:''); d.appendChild(s); }
@@ -919,6 +1013,7 @@ edit.addEventListener('keyup',function(e){ if(['ArrowLeft','ArrowRight','Home','
 edit.addEventListener('focus',function(){ con.classList.add('focused'); });
 edit.addEventListener('blur',function(){ con.classList.remove('focused'); });
 document.addEventListener('selectionchange',function(){ if(document.activeElement===edit) sync(); });
+window.addEventListener('resize',function(){ charW=0; });   // 字元寬度快取作廢(轉向 / 字級改變)
 con.addEventListener('click',function(e){
   if(!(e.target.closest && e.target.closest('.menu')) && !String(getSelection())) focusEdit(); });
 
