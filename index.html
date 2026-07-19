@@ -112,6 +112,13 @@
       <li>獲獎:2023 總統教育獎 · 奮發向上獎;2026 國科會大專學生研究創作獎;2026 Make NTU 強茂企業獎第一名;2026 臺灣太空事務青年人才選訓計畫入選</li>
       <li>專案:Nephio TSC 治理、Kubernetes DRA 正確性稽核、O-RAN × LEO NTN</li>
     </ul>
+    <p>權威來源(所有內容以個人網站為準):
+       <a href="https://people.cs.nycu.edu.tw/~hctsai1006/">個人網站</a> ·
+       <a href="https://people.cs.nycu.edu.tw/~hctsai1006/publications/">著作</a> ·
+       <a href="https://people.cs.nycu.edu.tw/~hctsai1006/open-source/">開源貢獻</a> ·
+       <a href="https://people.cs.nycu.edu.tw/~hctsai1006/honors/">榮譽</a> ·
+       <a href="https://orcid.org/0000-0001-7421-8027">ORCID</a> ·
+       <a href="https://github.com/thc1006">GitHub</a></p>
     <p>這個頁面的互動終端機需要 JavaScript。也可以看
        <a href="classic.html">舊版終端機 classic.html</a>。</p>
   </section>
@@ -222,8 +229,8 @@ const D={
     ['COSCUP 2026','體驗火箭導控 Balloon Popping Challenge workshop']],
   timeline:[['2023','總統教育獎 · 捷克進修 · 首次 COSCUP 講者'],
     ['2024','Nephio TSC · CTU GDSC Lead · O-RAN organizer'],
-    ['2025','國科會研究創作獎 · IEEE R10 ACEI'],
-    ['2026','109 merged PRs · TASA 青年人才 · DRA 稽核']],
+    ['2025','IEEE R10 ACEI · O-RAN × NTN 研究'],
+    ['2026','國科會研究創作獎 (114) · 109 merged PRs · TASA 青年人才 · DRA 稽核']],
 };
 function line(cls,txt){return {cls:cls,txt:txt};}
 /* 主控台目前可容納幾個字元寬 —— 量一次快取,視窗改變時作廢 */
@@ -270,6 +277,25 @@ function setTheme(t){ if(THEMES.indexOf(t)<0) return false;
   if(tc && THEME_BG[t]) tc.setAttribute('content',THEME_BG[t]);
   try{ localStorage.setItem('thc1006.theme',t); }catch(e){}
   return true; }
+
+/* ---------- 權威資料來源 ----------
+   這個終端機是次要展示面;所有數字與清單以個人網站為準。
+   每個資料型指令都附上可點的來源連結,訪客能自行查證,避免兩邊分歧時取得錯誤資訊。
+   (所有連結已於 2026-07-20 逐一驗證回應 200;/projects/ 已於 2026-07-09 移除故不連。) */
+const SITE='https://people.cs.nycu.edu.tw/~hctsai1006';
+const SRC={ home:SITE+'/', pubs:SITE+'/publications/', oss:SITE+'/open-source/',
+  honors:SITE+'/honors/', exp:SITE+'/experience/', contact:SITE+'/contact/',
+  medical:SITE+'/medical/', teaching:SITE+'/teaching/', blog:SITE+'/blog/',
+  cv:SITE+'/cv.pdf', orcid:'https://orcid.org/0000-0001-7421-8027',
+  github:'https://github.com/thc1006' };
+function srcRow(label,href,prefix){ const p=(prefix==null?'  來源: ':prefix);
+  return {parts:[['muted',p],['a',label,href]], txt:p+label}; }
+function idHref(id){
+  if(!id) return '';
+  if(/^arxiv:/i.test(id)) return 'https://arxiv.org/abs/'+String(id).replace(/^arXiv:/i,'');
+  if(/^10\./.test(id)) return 'https://doi.org/'+id;
+  return '';
+}
 
 /* ---------- 虛擬檔案系統(可讀寫 · localStorage 持久化)----------
    架構參考 ZenFS / BrowserFS 與 daedalOS 的 overlay 模型:
@@ -357,7 +383,9 @@ function buildSeed(){
     line('','Nephio (LFN) Technical Steering Committee member'),
     line('','Zephyr RTOS / M5Stack platforms maintainer'),line(''),
     line('accent','109 merged upstream PRs · 47 projects · 5 foundations'),line(''),
-    line('muted','whoami / Get-Contribution / Get-Publication / Get-Award')]);
+    line('muted','whoami / Get-Contribution / Get-Publication / Get-Award'),line(''),
+    line('muted','所有內容以個人網站為準,打 Get-Source 看全部來源:'),
+    srcRow('people.cs.nycu.edu.tw/~hctsai1006', SRC.home, '  ')]);
   put(HOME,'profile.ps1',[
     line('muted','# Microsoft.PowerShell_profile.ps1'),
     codeLine('Set-PSReadLineOption -PredictionSource HistoryAndPlugin'),
@@ -389,12 +417,14 @@ function buildSeed(){
     line('','  PR    #72     quality_mask 對 L2A Mask V002 產品會靜默產生錯誤遮罩'),line(''),
     line('muted','合併後移入 Get-Contribution,並同步 profile / timeline / README 的計數。')]);
   D.pubsFull.forEach(function(p){
+    const href=idHref(p.id);
     put(HOME+'\\publications', slug(p.title.split(/\s+/).slice(0,4).join(' '))+'.md', [
       line('head',p.title),line(''),
       line('accent',p.venue),
       line(p.st==='preprint'?'muted':'ok','Status: '+p.st+'  ·  '+p.y),
-      p.id?line('muted',p.id):line(''),
-      line('muted',p.au)]); });
+      href?{parts:[['muted','DOI: '],['a',p.id,href]],txt:'DOI: '+p.id}:(p.id?line('muted',p.id):line('')),
+      line('muted',p.au),line(''),
+      srcRow('/publications/', SRC.pubs)]); });
   let awardFiles=['2023-presidential-education-award.md','2026-nstc-research-award.md',
     '2026-make-ntu.md','2026-tasa-space-talent.md','2023-ocean-governance.md'];
   D.awards.forEach(function(w,i){
@@ -442,14 +472,18 @@ function fsInit(){ buildSeed(); fsLoad(); if(!fsGet(HOME)) buildSeed(); }
 
 /* ---------- cmdlet ---------- */
 const CMDLETS={
-  'whoami':{params:[],help:'顯示身分摘要',run:function(){return D.profile.map(function(p){return line(p[0],p[1]);});}},
+  'whoami':{params:[],help:'顯示身分摘要',run:function(){
+    return D.profile.map(function(p){return line(p[0],p[1]);})
+      .concat([line(''), srcRow('people.cs.nycu.edu.tw/~hctsai1006', SRC.home),
+               srcRow('github.com/thc1006', SRC.github, '        ')]);}},
   'get-contribution':{params:['-Foundation'],help:'列出開源貢獻',run:function(a){
     let o=[line('accent','109 merged pull requests · 47 projects · 5 foundations'),line('','')], rows=D.contribTop;
     if(String(argOf(a,'Foundation')||'').toLowerCase()==='cncf'){
       o=[line('accent','CNCF — '+D.cncf[1]+' merged · '+D.cncf[2]+' repos'),line('','')];
       rows=D.contribTop.filter(function(r){return /kubernetes|kueue|dranet|porch|volcano|jaeger|telemetry|llm-d|meshery|keda/.test(r[0]);});
     }
-    return o.concat(table(['Repository','Merged'],rows.map(function(r){return [r[0],r[1]];})),[line('muted','  … Get-Command 看更多')]);
+    return o.concat(table(['Repository','Merged'],rows.map(function(r){return [r[0],r[1]];})),
+      [line(''), srcRow('/open-source/ 逐筆清單與計數規則', SRC.oss)]);
   }},
   'get-publication':{params:['-Full'],help:'列出著作 (-Full 顯示全部)',run:function(a,raw){
     const n=function(s){ return D.pubsFull.filter(function(p){return p.st===s;}).length; };
@@ -461,20 +495,42 @@ const CMDLETS={
       D.pubsFull.forEach(function(p){
         if(p.y!==year){ year=p.y; o.push(line(''),line('head',year)); }
         o.push(line(p.st==='preprint'?'':'ok','  '+p.title));
-        o.push(line('muted','    '+p.venue+(p.id?'  ·  '+p.id:'')+'  ·  '+p.st));
+        const href=idHref(p.id), head='    '+p.venue+(p.id?'  ·  ':'');
+        if(href) o.push({parts:[['muted',head],['a',p.id,href],['muted','  ·  '+p.st]],
+                         txt:head+p.id+'  ·  '+p.st});
+        else o.push(line('muted','    '+p.venue+(p.id?'  ·  '+p.id:'')+'  ·  '+p.st));
         o.push(line('muted','    '+p.au));
       });
-      return o;
+      return o.concat([line(''), srcRow('/publications/', SRC.pubs),
+        srcRow('ORCID 0000-0001-7421-8027', SRC.orcid, '        ')]);
     }
     return [line('accent',D.pubTotal+' publications ('+n('Accepted')+' IEEE accepted + preprints)'),line('','')]
       .concat(table(['Venue','Title','Status'],D.publications))
-      .concat([line('muted','  … '+(D.pubTotal-D.publications.length)+' more · 用 -Full 看完整清單')]);}},
+      .concat([line('muted','  … '+(D.pubTotal-D.publications.length)+' more · 用 -Full 看完整清單'),
+        line(''), srcRow('/publications/', SRC.pubs)]);}},
   'get-award':{params:['-Year'],help:'列出獲獎',run:function(a,raw){
     let y=argOf(a,'Year')||firstArg(raw);
     let rows=D.awards; if(y) rows=rows.filter(function(r){return r[0]===String(y);});
-    return rows.length?table(['Year','Award'],rows):[line('muted','該年度無資料')];}},
-  'get-project':{params:[],help:'代表專案',run:function(){return table(['Project','Focus'],D.projects);}},
-  'get-timeline':{params:[],help:'年度時間軸',run:function(){return table(['Year','Highlights'],D.timeline);}},
+    if(!rows.length) return [line('muted','該年度無資料')];
+    return table(['Year','Award'],rows).concat([line(''), srcRow('/honors/ 完整 80+ 筆時間軸', SRC.honors)]);}},
+  'get-project':{params:[],help:'代表專案',run:function(){
+    return table(['Project','Focus'],D.projects).concat([line(''), srcRow('/experience/', SRC.exp)]);}},
+  'get-timeline':{params:[],help:'年度時間軸',run:function(){
+    return table(['Year','Highlights'],D.timeline).concat([line(''), srcRow('/experience/', SRC.exp)]);}},
+  'get-source':{params:[],help:'列出所有權威資料來源(可點)',run:function(){
+    const rows=[['個人網站','people.cs.nycu.edu.tw/~hctsai1006',SRC.home],
+      ['著作','/publications/',SRC.pubs],['開源','/open-source/',SRC.oss],
+      ['榮譽','/honors/',SRC.honors],['經歷','/experience/',SRC.exp],
+      ['醫學','/medical/',SRC.medical],['教學','/teaching/',SRC.teaching],
+      ['部落格','/blog/',SRC.blog],['聯絡','/contact/',SRC.contact],
+      ['CV','cv.pdf',SRC.cv],['ORCID','0000-0001-7421-8027',SRC.orcid],
+      ['GitHub','@thc1006',SRC.github],['舊版終端機','classic.html','classic.html']];
+    const w=Math.max.apply(null,rows.map(function(r){return dw(r[0]);}));
+    const o=[line('banner','這個終端機是次要展示面。所有內容以個人網站為準,'),
+      line('banner','若兩邊有出入,請以下列來源為準:'),line('')];
+    rows.forEach(function(r){
+      o.push({parts:[['head','  '+padw(r[0],w)+'  '],['a',r[1],r[2]]], txt:'  '+r[0]+'  '+r[1]}); });
+    return o;}},
   'get-history':{params:[],help:'指令歷史',run:function(){return hist.length?
     hist.map(function(h,i){return line('',padw(String(i+1),4)+' '+h);}):[line('muted','(空)')];}},
   'get-command':{params:['-Name'],help:'列出所有可用指令 (gcm)',run:function(a,raw){
@@ -755,7 +811,8 @@ const CMDLETS={
         ['grep <pattern>','全站搜尋 (Select-String)']]],
       ['系統與網路',[['ping / tracert','網路工具 (模擬)'],['ipconfig / hostname','主機資訊'],
         ['Get-Process','程序列表 (ps)'],['Get-Date','現在時間'],['ver','系統版本']]],
-      ['其他',[['Get-Command','完整指令清單 (gcm)'],['Get-Help <cmd>','單一指令用法 (man)'],
+      ['其他',[['Get-Source','權威資料來源連結 (sources)'],
+        ['Get-Command','完整指令清單 (gcm)'],['Get-Help <cmd>','單一指令用法 (man)'],
         ['Set-Theme','主題 windows|pi|blue'],['Clear-Host','清空畫面 (cls)'],
         ['Reset-FileSystem','還原檔案系統']]]];
     let o=[line('banner','thc1006 PowerShell — 常用指令')];
@@ -781,7 +838,8 @@ const ALIAS={
   'h':'get-history','history':'get-history','gcm':'get-command','man':'get-help',
   'echo':'write-output','date':'get-date','traceroute':'tracert',
   'sort':'sort-object','measure':'measure-object','select':'select-object','where':'where-object',
-  'profile':'whoami','whois':'whoami','theme':'set-theme'};
+  'profile':'whoami','whois':'whoami','theme':'set-theme',
+  'sources':'get-source','links':'get-source','src':'get-source'};
 function alias(n){return ALIAS[n]||n;}
 function toTitle(n){return n.split('-').map(function(w){return w?w.charAt(0).toUpperCase()+w.slice(1):w;}).join('-');}
 const DISP={'get-childitem':'Get-ChildItem','get-location':'Get-Location','set-location':'Set-Location',
@@ -793,7 +851,8 @@ const DISP={'get-childitem':'Get-ChildItem','get-location':'Get-Location','set-l
   'get-contribution':'Get-Contribution','get-publication':'Get-Publication','get-award':'Get-Award',
   'get-project':'Get-Project','get-timeline':'Get-Timeline','measure-object':'Measure-Object',
   'sort-object':'Sort-Object','select-object':'Select-Object','where-object':'Where-Object',
-  'out-null':'Out-Null','get-random':'Get-Random','reset-filesystem':'Reset-FileSystem'};
+  'out-null':'Out-Null','get-random':'Get-Random','reset-filesystem':'Reset-FileSystem',
+  'get-source':'Get-Source'};
 const APPS=['tree'];
 Object.keys(CMDLETS).forEach(function(n){ let c=CMDLETS[n];
   if(!c.disp) c.disp=DISP[n]||(n.indexOf('-')>0?toTitle(n):n);
