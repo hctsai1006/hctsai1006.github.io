@@ -14,9 +14,9 @@
 <meta name="twitter:card" content="summary">
 <link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNiIgZmlsbD0iIzBDMEMwQyIvPjxwYXRoIGQ9Ik04IDExbDUgNS01IDUiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzNCNzhGRiIgc3Ryb2tlLXdpZHRoPSIzIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz48cGF0aCBkPSJNMTcgMjFoNyIgc3Ryb2tlPSIjM0I3OEZGIiBzdHJva2Utd2lkdGg9IjMiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPjwvc3ZnPg==">
 <meta name="description" content="蔡秀吉 (Hsiu-Chi Tsai / thc1006) 的互動式 PowerShell 終端機作品集 — 開源貢獻、著作、獲獎與隱藏彩蛋。">
-<title>PS C:\Users\thc1006 — Hsiu-Chi Tsai</title>
+<title>PS /home/thc1006 — Hsiu-Chi Tsai</title>
 <style>
-  :root, :root[data-theme="windows"]{
+  :root, :root[data-theme="campbell"]{
     --bg:#0C0C0C; --tab:#1a1a1a; --fg:#CCCCCC; --head:#F2F2F2;
     --cmd:#F9F1A5; --param:#3B78FF; --str:#61D6D6; --num:#C9A6FF; --op:#CCCCCC;
     --var:#16C60C; --err:#E74856; --ok:#16C60C; --accent:#3B78FF;
@@ -45,7 +45,7 @@
     clip:rect(0 0 0 0);white-space:nowrap;border:0}
   .noscript{max-width:70ch;margin:0 auto;padding:24px 20px;line-height:1.6}
   .noscript h2{color:var(--head)} .noscript a{color:var(--accent)}
-  /* 頂部 accent 線:保留 Windows Terminal 的分頁指示色,但不做假的視窗外框 */
+  /* 頂部 accent 線:沿用 Campbell 配色的藍,但不做假的視窗外框 */
   .win{display:flex;flex-direction:column;height:100vh;height:100dvh;
     border-top:2px solid var(--accent)}
 
@@ -128,7 +128,7 @@
        aria-label="PowerShell 主控台。輸入指令例如 help;輸出會被螢幕報讀器朗讀。">
     <div id="out" role="log" aria-live="polite" aria-atomic="false" aria-label="主控台輸出"></div>
     <div id="iw">
-      <span class="prompt" aria-hidden="true">PS <span class="path">C:\Users\thc1006</span>&gt;&nbsp;</span>
+      <span class="prompt" aria-hidden="true">PS <span class="path">/home/thc1006</span>&gt;&nbsp;</span>
       <span class="editzone" id="ez"><span class="mirror" id="mirror" aria-hidden="true"><span id="mk"></span></span><span class="ghost" id="ghost" aria-hidden="true"></span><textarea id="edit" rows="1" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="text" enterkeyhint="go" role="combobox" aria-autocomplete="both" aria-expanded="false" aria-controls="cmdmenu" aria-label="PowerShell 指令輸入" aria-describedby="eh"></textarea><div class="menu" id="cmdmenu" role="listbox" aria-label="指令補完候選" hidden></div></span>
     </div>
   </div>
@@ -269,9 +269,11 @@ function table(headers,rows){
   rows.forEach(function(r){o.push({cls:'',txt:r.map(function(c,i){return padw(c,w[i]);}).join('  ')});});
   return o;
 }
-const THEMES=['windows','pi','blue'];
-const THEME_BG={windows:'#0C0C0C',pi:'#2A1A16',blue:'#012456'};
-function setTheme(t){ if(THEMES.indexOf(t)<0) return false;
+/* campbell = 這組深色配色的正式名稱(終端機預設);windows/dark 當舊名相容 */
+const THEMES=['campbell','pi','blue'];
+const THEME_ALIAS={windows:'campbell',dark:'campbell',default:'campbell'};
+const THEME_BG={campbell:'#0C0C0C',pi:'#2A1A16',blue:'#012456'};
+function setTheme(t){ t=THEME_ALIAS[t]||t; if(THEMES.indexOf(t)<0) return false;
   document.documentElement.setAttribute('data-theme',t);
   const tc=document.querySelector('meta[name="theme-color"]');   // 手機瀏覽器工具列跟著換色
   if(tc && THEME_BG[t]) tc.setAttribute('content',THEME_BG[t]);
@@ -298,85 +300,94 @@ function idHref(id){
 }
 
 /* ---------- 虛擬檔案系統(可讀寫 · localStorage 持久化)----------
-   架構參考 ZenFS / BrowserFS 與 daedalOS 的 overlay 模型:
-   唯讀「種子」作品集樹 + 使用者可寫層,序列化時種子檔只存標記,載入時再水合。 */
-/* FSKEY 帶版本:fsLoad() 會整棵覆蓋 ROOT,舊訪客的存檔不會長出新的種子檔。
-   每次新增/更名種子內容就進版,讓回訪者拿到新的樹(代價是清掉他自己建的檔)。 */
-const HOME='C:\\Users\\thc1006', FSKEY='thc1006.fs.v2';
+   模擬 PowerShell 7 跑在 Linux(Ubuntu)上:POSIX 路徑、**大小寫敏感**、有 Unix 權限位與 mtime。
+   架構參考 ZenFS / BrowserFS 與 daedalOS 的 overlay 模型:唯讀「種子」作品集樹 + 使用者可寫層。
+   fsLoad() 只把「非種子」節點嫁接回一棵新鮮的種子樹(graftUser),所以作品集更新後
+   回訪者看得到新內容,他自己建立/改過的檔案也完整保留。 */
+const HOME='/home/thc1006', USERNAME='thc1006', GROUPNAME='thc1006', HOSTN='thc1006-dev';
+const FSKEY='thc1006.fs.v3';   /* v3:路徑改 POSIX、節點新增 mode/mtime,舊格式不相容 */
 let CWD=HOME;
 function slug(s){return String(s).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');}
 let SEEDROWS={}, ROOT=null;
+const SEEDTIME=Date.parse('2026-07-20T10:00:00Z');
 /* ch 用 null 原型的字典:檔名 __proto__ 才會變成正常的項目,
    而不是去改寫物件的原型(那會讓該目錄的結構整個壞掉)。 */
-function dnode(){return {t:'d',ch:Object.create(null)};}
+function dnode(mode){return {t:'d',ch:Object.create(null),mode:mode||'rwxr-xr-x',mt:SEEDTIME};}
 const FLAGRE=/^-{1,2}[A-Za-z]/;   /* 只有 -Name 這種才算參數;-1 是負數值,不是參數 */
-function joinPath(dir,name){ return String(dir).replace(/\\+$/,'')+'\\'+name; }
-function dirOf(p){ const s=segsOf(p); return 'C:\\'+s.slice(0,-1).join('\\'); }
-function normPath(p){ return String(p).replace(/\\+$/,'').toLowerCase(); }
+function lpad(s,n){ s=String(s); return new Array(Math.max(0,n-s.length)+1).join(' ')+s; }
+function joinPath(dir,name){ return String(dir).replace(/\/+$/,'')+'/'+name; }
+function dirOf(p){ const s=segsOf(p); return '/'+s.slice(0,-1).join('/'); }
+function normPath(p){ const s=String(p).replace(/\/+$/,''); return s===''?'/':s; }   /* Linux 大小寫敏感,不可 lowercase */
 function samePath(a,b){ return normPath(a)===normPath(b); }
-function isDescendant(child,ancestor){ return normPath(child).indexOf(normPath(ancestor)+'\\')===0; }
-/* 所有寫入都走這裡:大小寫不同的同名視為同一個項目,避免出現 README.md 與 readme.md 並存 */
-function setChild(parent,name,node){
-  const ex=keyIn(parent,name);
-  if(ex) delete parent.ch[ex];
-  parent.ch[name]=node;
-}
-function fnode(rows,seed,text){return {t:'f',rows:rows||null,seed:!!seed,text:text||null};}
-function segsOf(p){ let m=String(p).match(/^[A-Za-z]:\\?([\s\S]*)$/), s=m?m[1]:String(p);
-  return s.split('\\').filter(function(x){return x && x!=='.';}); }
-function keyIn(n,name){ if(!n||n.t!=='d') return null; let k=Object.keys(n.ch),i,l=String(name).toLowerCase();
-  for(i=0;i<k.length;i++){ if(k[i].toLowerCase()===l) return k[i]; } return null; }
-function fsGet(path){
-  const dm=String(path).match(/^([A-Za-z]):/);
-  if(dm && dm[1].toUpperCase()!=='C') return null;   // 只有 C: 存在,別的磁碟不可靜默對映到 C:
-  let segs=segsOf(path), n=ROOT,i;
-  for(i=0;i<segs.length;i++){ let k=keyIn(n,segs[i]); if(!k) return null; n=n.ch[k]; }
+function isDescendant(child,ancestor){ const a=normPath(ancestor);
+  return normPath(child).indexOf((a==='/'?'':a)+'/')===0; }
+function setChild(parent,name,node){ parent.ch[name]=node; }
+function fnode(rows,seed,text,mode){return {t:'f',rows:rows||null,seed:!!seed,text:text||null,
+  mode:mode||'rw-r--r--',mt:SEEDTIME};}
+function segsOf(p){ return String(p).split('/').filter(function(x){return x && x!=='.';}); }
+/* Linux 檔名大小寫敏感:README.md 與 readme.md 是**不同**檔案(Windows 版當初的合併邏輯在此不成立) */
+function keyIn(n,name){ if(!n||n.t!=='d') return null;
+  return Object.prototype.hasOwnProperty.call(n.ch,name)?name:null; }
+function fsGet(path){ const segs=segsOf(path); let n=ROOT;
+  for(let i=0;i<segs.length;i++){ const k=keyIn(n,segs[i]); if(!k) return null; n=n.ch[k]; }
   return n; }
-function fsCanon(path){ let segs=segsOf(path), n=ROOT, o=[],i;
-  for(i=0;i<segs.length;i++){ let k=keyIn(n,segs[i]); if(!k) return null; o.push(k); n=n.ch[k]; }
-  return 'C:\\'+o.join('\\'); }
-function fsParent(path){ let segs=segsOf(path); if(!segs.length) return null; return fsGet('C:\\'+segs.slice(0,-1).join('\\')); }
-function baseOf(path){ let s=segsOf(path); return s.length?s[s.length-1]:''; }
-function fsMkdirp(path){ let segs=segsOf(path), n=ROOT,i;
-  for(i=0;i<segs.length;i++){ let k=keyIn(n,segs[i]);
+function fsCanon(path){ const segs=segsOf(path); let n=ROOT; const o=[];
+  for(let i=0;i<segs.length;i++){ const k=keyIn(n,segs[i]); if(!k) return null; o.push(k); n=n.ch[k]; }
+  return '/'+o.join('/'); }
+function fsParent(path){ const segs=segsOf(path); if(!segs.length) return null;
+  return fsGet('/'+segs.slice(0,-1).join('/')); }
+function baseOf(path){ const s=segsOf(path); return s.length?s[s.length-1]:''; }
+function fsMkdirp(path){ const segs=segsOf(path); let n=ROOT;
+  for(let i=0;i<segs.length;i++){ let k=keyIn(n,segs[i]);
     if(!k){ n.ch[segs[i]]=dnode(); k=segs[i]; }
     n=n.ch[k]; if(n.t!=='d') return null; }
   return n; }
-function fsClone(n){ if(n.t==='d'){ const o=dnode(); Object.keys(n.ch).forEach(function(k){ o.ch[k]=fsClone(n.ch[k]); }); return o; }
-  return fnode(n.rows,n.seed,n.text?n.text.slice():null); }
+function fsClone(n){ if(n.t==='d'){ const o=dnode(n.mode); o.mt=n.mt;
+    Object.keys(n.ch).forEach(function(k){ o.ch[k]=fsClone(n.ch[k]); }); return o; }
+  const f=fnode(n.rows,n.seed,n.text?n.text.slice():null,n.mode); f.mt=n.mt; return f; }
 function fsText(n){ if(!n||n.t!=='f') return [];
   if(n.rows) return n.rows;
   return (n.text||[]).map(function(s){return line('',s);}); }
+/* 大小:使用者檔算實際字元數,種子檔用渲染文字估算,目錄固定 4096(同 ext4) */
+function fsSize(n){ if(!n) return 0;
+  if(n.t==='d') return 4096;
+  if(n.text) return n.text.reduce(function(a,s){return a+s.length+1;},0);
+  return (n.rows||[]).reduce(function(a,r){return a+String(r&&r.txt!=null?r.txt:'').length+1;},0); }
+function modeStr(n){ return (n.t==='d'?'d':'-')+(n.mode||'rw-r--r--'); }
+const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function lsTime(ms){ const d=new Date(ms||SEEDTIME);
+  return MON[d.getMonth()]+' '+lpad(d.getDate(),2)+' '
+    +('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2); }
+function psTime(ms){ const d=new Date(ms||SEEDTIME);
+  return (d.getMonth()+1)+'/'+d.getDate()+'/'+d.getFullYear()+' '
+    +('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2); }
 function resolvePath(p){
   if(p==null||p==='') return CWD;
-  p=String(p).replace(/^["']|["']$/g,'').replace(/\//g,'\\');
+  p=String(p).replace(/^["']|["']$/g,'');
   if(p==='~') return HOME;
   let abs;
-  if(p.indexOf('~\\')===0) abs=HOME+'\\'+p.slice(2);
-  else if(/^[A-Za-z]:/.test(p)) abs=p;
-  else if(p.charAt(0)==='\\') abs='C:'+p;
-  else abs=CWD+'\\'+p;
-  let m=abs.match(/^([A-Za-z]):\\?([\s\S]*)$/);
-  if(!m) return abs;
-  let segs=m[2].split('\\'), o=[], i;
-  for(i=0;i<segs.length;i++){ let s=segs[i];
+  if(p.indexOf('~/')===0) abs=HOME+'/'+p.slice(2);
+  else if(p.charAt(0)==='/') abs=p;
+  else abs=CWD+'/'+p;
+  const segs=abs.split('/'), o=[];
+  for(let i=0;i<segs.length;i++){ const s=segs[i];
     if(!s||s==='.') continue;
     if(s==='..'){ o.pop(); continue; }
     o.push(s); }
-  return m[1].toUpperCase()+':\\'+o.join('\\');
+  return '/'+o.join('/');
 }
-function pathCandidates(){ let n=fsGet(CWD); if(!n||n.t!=='d') return [];
-  return Object.keys(n.ch).concat(['..','~']); }
+function pathCandidates(){ const n=fsGet(CWD); if(!n||n.t!=='d') return [];
+  return Object.keys(n.ch).concat(['..','~','/']); }
 function argOf(a,n){ let k=Object.keys(a),i; for(i=0;i<k.length;i++){ if(k[i].toLowerCase()===String(n).toLowerCase()) return a[k[i]]; } return undefined; }
 function firstArg(raw){ for(let i=1;i<raw.length;i++){ if(!/^-/.test(raw[i])) return String(raw[i]).replace(/^["']|["']$/g,''); } return ''; }
 
 /* 種子樹:作品集內容 */
 function buildSeed(){
   ROOT=dnode(); SEEDROWS={};
-  function put(dir,name,rows){ let d=fsMkdirp(dir); d.ch[name]=fnode(rows,true);
-    SEEDROWS[(dir+'\\'+name).toLowerCase()]=rows; }
-  fsMkdirp(HOME+'\\contributions'); fsMkdirp(HOME+'\\publications');
-  fsMkdirp(HOME+'\\awards'); fsMkdirp(HOME+'\\projects');
+  function put(dir,name,rows,mode){ const d=fsMkdirp(dir); d.ch[name]=fnode(rows,true,null,mode);
+    SEEDROWS[dir+'/'+name]=rows; }   /* 大小寫敏感,不再 lowercase */
+  fsMkdirp(HOME+'/contributions'); fsMkdirp(HOME+'/publications');
+  fsMkdirp(HOME+'/awards'); fsMkdirp(HOME+'/projects');
   put(HOME,'README.md',[
     line('head','# thc1006 — Hsiu-Chi Tsai (蔡秀吉)'),line(''),
     line('','National Yang Ming Chiao Tung University — Computer Science'),
@@ -387,20 +398,33 @@ function buildSeed(){
     line('muted','所有內容以個人網站為準,打 Get-Source 看全部來源:'),
     srcRow('people.cs.nycu.edu.tw/~hctsai1006', SRC.home, '  ')]);
   put(HOME,'profile.ps1',[
-    line('muted','# Microsoft.PowerShell_profile.ps1'),
+    line('muted','# ~/.config/powershell/Microsoft.PowerShell_profile.ps1'),
     codeLine('Set-PSReadLineOption -PredictionSource HistoryAndPlugin'),
-    codeLine('Set-PSReadLineOption -EditMode Windows'),
+    codeLine('Set-PSReadLineOption -EditMode Emacs'),
     codeLine('Set-Alias k kubectl'),
     codeLine('Set-Alias g git'),line(''),
+    line('muted','# Linux 上 ls/cat/rm 這些別名被拿掉了,原生指令會直接跑'),
+    codeLine('Set-Alias ll "/bin/ls -l"'),line(''),
     line('muted','# 每天早上先看看有沒有 PR 被合併'),
     codeLine('function Get-MergedPRs { gh search prs --author thc1006 --merged }'),line(''),
     codeLine('Write-Host "Welcome back, thc1006." -ForegroundColor Cyan')]);
+  /* 幾個真實存在的系統檔,讓 cat /etc/os-release 這種操作是真的 */
+  put('/etc','os-release',[
+    line('','PRETTY_NAME="Ubuntu 24.04.4 LTS"'),
+    line('','NAME="Ubuntu"'),
+    line('','VERSION_ID="24.04"'),
+    line('','VERSION="24.04.4 LTS (Noble Numbat)"'),
+    line('','ID=ubuntu'),
+    line('','ID_LIKE=debian'),
+    line('','HOME_URL="https://www.ubuntu.com/"')]);
+  put('/etc','hostname',[line('',HOSTN)]);
+  put('/etc','shells',[line('','/bin/sh'),line('','/bin/bash'),line('','/usr/bin/pwsh')]);
   D.contribTop.forEach(function(r){
-    put(HOME+'\\contributions', r[0].split('/')[1]+'.md', [
+    put(HOME+'/contributions', r[0].split('/')[1]+'.md', [
       line('head',r[0]),line(''),
       line('accent',r[1]+' merged pull requests'),
       line('muted','https://github.com/'+r[0])]); });
-  put(HOME+'\\contributions','in-review.md',[
+  put(HOME+'/contributions','in-review.md',[
     line('head','# 審查中的上游 PR'),line(''),
     line('muted','狀態擷取於 2026-07-20。下列全部尚未合併,不計入 Get-Contribution。'),line(''),
     line('accent','kedacore/keda  ·  CNCF Graduated'),
@@ -418,7 +442,7 @@ function buildSeed(){
     line('muted','合併後移入 Get-Contribution,並同步 profile / timeline / README 的計數。')]);
   D.pubsFull.forEach(function(p){
     const href=idHref(p.id);
-    put(HOME+'\\publications', slug(p.title.split(/\s+/).slice(0,4).join(' '))+'.md', [
+    put(HOME+'/publications', slug(p.title.split(/\s+/).slice(0,4).join(' '))+'.md', [
       line('head',p.title),line(''),
       line('accent',p.venue),
       line(p.st==='preprint'?'muted':'ok','Status: '+p.st+'  ·  '+p.y),
@@ -428,10 +452,10 @@ function buildSeed(){
   let awardFiles=['2023-presidential-education-award.md','2026-nstc-research-award.md',
     '2026-make-ntu.md','2026-tasa-space-talent.md','2023-ocean-governance.md'];
   D.awards.forEach(function(w,i){
-    put(HOME+'\\awards', awardFiles[i]||('award-'+(i+1)+'.md'), [
+    put(HOME+'/awards', awardFiles[i]||('award-'+(i+1)+'.md'), [
       line('head',w[1]),line(''),line('accent',w[0])]); });
   D.projects.forEach(function(p){
-    put(HOME+'\\projects', slug(p[0])+'.md', [
+    put(HOME+'/projects', slug(p[0])+'.md', [
       line('head',p[0]),line(''),line('',p[1])]); });
 }
 function fsSer(n){ if(n.t==='d'){ const o={t:'d',ch:{}}; Object.keys(n.ch).forEach(function(k){ o.ch[k]=fsSer(n.ch[k]); }); return o; }
@@ -441,8 +465,8 @@ function isSerNode(v){ if(!v||typeof v!=='object') return false;
   if(v.t==='d') return !!v.ch && typeof v.ch==='object' && !Array.isArray(v.ch);
   return false; }
 function fsDeser(o,path){ if(o.t==='d'){ const n=dnode();
-    Object.keys(o.ch).forEach(function(k){ if(isSerNode(o.ch[k])) n.ch[k]=fsDeser(o.ch[k],path+'\\'+k); }); return n; }
-  if(o.s) return fnode(SEEDROWS[path.toLowerCase()]||[line('muted','(seed content unavailable)')],true);
+    Object.keys(o.ch).forEach(function(k){ if(isSerNode(o.ch[k])) n.ch[k]=fsDeser(o.ch[k],path+'/'+k); }); return n; }
+  if(o.s) return fnode(SEEDROWS[path]||[line('muted','(seed content unavailable)')],true);
   return fnode(null,false,o.x||[]); }
 /* 儲存失敗(配額用盡、隱私模式)不能悄悄吞掉 —— 使用者會以為存好了,重整後才發現不見。 */
 function fsSave(){
@@ -466,14 +490,15 @@ function graftUser(stored,target){
 }
 function fsLoad(){ try{ const s=localStorage.getItem(FSKEY); if(!s) return false;
   const o=JSON.parse(s); if(!o||o.t!=='d') return false;
-  graftUser(fsDeser(o,'C:'), ROOT); return true; }catch(e){ return false; } }
+  graftUser(fsDeser(o,''), ROOT); return true; }catch(e){ return false; } }
 function fsReset(){ buildSeed(); try{ localStorage.removeItem(FSKEY); }catch(e){} CWD=HOME; updatePrompt(); }
 function fsInit(){ buildSeed(); fsLoad(); if(!fsGet(HOME)) buildSeed(); }
 
 /* ---------- cmdlet ---------- */
 const CMDLETS={
-  'whoami':{params:[],help:'顯示身分摘要',run:function(){
-    return D.profile.map(function(p){return line(p[0],p[1]);})
+  'whoami':{type:'Application',params:[],help:'目前使用者(並附身分摘要)',run:function(){
+    return [line('',USERNAME),line('')]
+      .concat(D.profile.map(function(p){return line(p[0],p[1]);}))
       .concat([line(''), srcRow('people.cs.nycu.edu.tw/~hctsai1006', SRC.home),
                srcRow('github.com/thc1006', SRC.github, '        ')]);}},
   'get-contribution':{params:['-Foundation'],help:'列出開源貢獻',run:function(a){
@@ -550,20 +575,26 @@ const CMDLETS={
     let nm=c.disp||n;
     return [line('head','NAME'),line('','    '+nm),line('head','SYNOPSIS'),line('','    '+c.help),
       line('head','SYNTAX'),line('','    '+nm+(c.params.length?' '+c.params.map(function(p){return '['+p+' <String>]';}).join(' '):''))];}},
-  'set-theme':{params:['-Name'],help:'切換主題 windows|pi|blue',run:function(a,raw){
+  'set-theme':{params:['-Name'],help:'切換主題 campbell|pi|blue',run:function(a,raw){
     let t=String(argOf(a,'Name')||firstArg(raw)||'').toLowerCase();
     if(setTheme(t)) return [line('ok','主題已切換為 '+t)];
     return [line('muted','可用主題: '+THEMES.join(' · ')+'  (例: Set-Theme pi)')];}},
   'clear-host':{params:[],help:'清空畫面 (cls)',run:function(){ clearOut(); return null; }},
-  'get-childitem':{params:['-Path'],paths:true,help:'列出目錄內容 (ls/dir)',run:function(a,raw){
-    let t=argOf(a,'Path')||firstArg(raw), p=t?resolvePath(t):CWD, n=fsGet(p);
+  /* PowerShell 7 在 Unix 上的 Get-ChildItem 欄位是 UnixMode/User/Group/LastWriteTime/Size/Name */
+  'get-childitem':{params:['-Path'],paths:true,help:'列出目錄內容 (dir/gci)',run:function(a,raw){
+    const t=argOf(a,'Path')||firstArg(raw), p=t?resolvePath(t):CWD, n=fsGet(p);
     if(!n) return [line('err','Get-ChildItem: Cannot find path \''+p+'\' because it does not exist.')];
-    if(n.t==='f') return table(['Mode','Name'],[['-a---',baseOf(p)]]);
-    let ks=Object.keys(n.ch), rows=[];
-    ks.filter(function(k){return n.ch[k].t==='d';}).sort().forEach(function(k){ rows.push(['d----',k]); });
-    ks.filter(function(k){return n.ch[k].t==='f';}).sort().forEach(function(k){ rows.push(['-a---',k]); });
+    const row=function(name,node){ return [modeStr(node),USERNAME,GROUPNAME,psTime(node.mt),String(fsSize(node)),name]; };
+    if(n.t==='f') return table(['UnixMode','User','Group','LastWriteTime','Size','Name'],[row(baseOf(p),n)]);
+    const ks=Object.keys(n.ch).sort(), rows=[];
+    ks.filter(function(k){return n.ch[k].t==='d';}).forEach(function(k){ rows.push(row(k,n.ch[k])); });
+    ks.filter(function(k){return n.ch[k].t==='f';}).forEach(function(k){ rows.push(row(k,n.ch[k])); });
     if(!rows.length) return [line('muted','(空目錄)')];
-    return [line('muted','    Directory: '+fsCanon(p)),line('')].concat(table(['Mode','Name'],rows));}},
+    const head=[line('muted','    Directory: '+fsCanon(p)),line('')];
+    /* 窄螢幕收成三欄:六欄會撐爆手機,而 table() 的清單退化在檔案列表上完全不可讀 */
+    if(availCols()<100) return head.concat(table(['UnixMode','Size','Name'],
+      rows.map(function(r){return [r[0],r[4],r[5]];})));
+    return head.concat(table(['UnixMode','User','Group','LastWriteTime','Size','Name'],rows));}},
   'get-location':{params:[],help:'顯示目前路徑 (pwd)',run:function(){
     return [line('head','Path'),line('rule',new Array(dw(CWD)+1).join('-')),line('',CWD)];}},
   'set-location':{params:['-Path'],paths:true,help:'切換目錄 (cd)',run:function(a,raw){
@@ -620,13 +651,13 @@ const CMDLETS={
     if(fsGet(p)) return [line('err','New-Item: An item with the specified name \''+p+'\' already exists.')];
     let segs=segsOf(p);
     if(!segs.length) return [line('err','New-Item: 無效的路徑。')];
-    let parentPath='C:\\'+segs.slice(0,-1).join('\\'), par=fsGet(parentPath);
+    const parentPath='/'+segs.slice(0,-1).join('/'); let par=fsGet(parentPath);
     if(!par){ if(!wantDir && !argOf(a,'Force')) return [line('err','New-Item: Could not find part of the path \''+p+'\'.')];
       par=fsMkdirp(parentPath); }
     if(!par||par.t!=='d') return [line('err','New-Item: Could not find part of the path \''+p+'\'.')];
     let name=segs[segs.length-1];
     setChild(par,name, wantDir?dnode():fnode(null,false,[]));
-    return saved([line('muted','    Directory: '+(fsCanon(parentPath)||'C:\\')),line('')]
+    return saved([line('muted','    Directory: '+(fsCanon(parentPath)||'/')),line('')]
       .concat(table(['Mode','Name'],[[wantDir?'d----':'-a---',name]])));}},
   'remove-item':{params:['-Path','-Recurse','-Force'],paths:true,help:'刪除檔案或資料夾 (rm/del)',run:function(a,raw){
     let t=argOf(a,'Path')||firstArg(raw);
@@ -692,7 +723,7 @@ const CMDLETS={
     const hits=[];
     (function walk(n,path){ if(n.t==='d'){ Object.keys(n.ch).forEach(function(k){ walk(n.ch[k],path+'\\'+k); }); return; }
       fsText(n).forEach(function(r){ let t=r&&r.txt?r.txt:''; if(t && re.test(t))
-        hits.push([baseOf(path), t.length>40?t.slice(0,40)+'...':t]); }); })(ROOT,'C:');
+        hits.push([baseOf(path), t.length>40?t.slice(0,40)+'...':t]); }); })(ROOT,'');
     if(!hits.length) return [line('muted','(無相符結果)')];
     return table(['File','Match'],hits.slice(0,14));},
     pipe:function(rows,a,raw){ let pat=String(argOf(a,'Pattern')||firstArg(raw)||'');
@@ -713,10 +744,21 @@ const CMDLETS={
     return o;}},
   'reset-filesystem':{params:[],help:'還原檔案系統到初始狀態',run:function(){
     fsReset(); return [line('ok','檔案系統已還原為初始狀態。')];}},
-  'get-process':{params:[],help:'程序列表 (ps)',run:function(){
-    return table(['Id','CPU(s)','WS(M)','ProcessName'],
-      [['7404','12.83','182','pwsh'],['1006','48.21','1204','Code'],['2612','96.44','2048','chrome'],
-       ['8890','0.77','96','kubectl'],['3120','2.15','154','WindowsTerminal']]);}},
+  'get-process':{params:[],help:'程序列表 (cmdlet)',run:function(){
+    return table(['Id','CPU(s)','RSS(M)','ProcessName'],
+      [['1006','12.83','182','pwsh'],['1142','48.21','1204','code-server'],['2612','96.44','2048','chromium'],
+       ['8890','0.77','96','kubectl'],['3120','2.15','154','containerd'],['4471','0.31','42','sshd']]);}},
+  'ps':{type:'Application',params:[],help:'程序列表 (procps)',run:function(a,raw){
+    const wide=/aux|-e|-f/.test(raw.slice(1).join(' '));
+    if(!wide) return [line('head','    PID TTY          TIME CMD'),
+      line('','   1006 pts/0    00:00:12 pwsh'),
+      line('','   9021 pts/0    00:00:00 ps')];
+    return [line('head','USER         PID %CPU %MEM    RSS TTY      STAT START   TIME COMMAND'),
+      line('',USERNAME+'      1006  0.4  1.1 186320 pts/0    Ss   09:12   0:12 pwsh'),
+      line('',USERNAME+'      1142  2.1  7.6 1232400 ?       Sl   09:12   0:48 code-server'),
+      line('',USERNAME+'      2612  6.8 12.8 2097664 ?       Sl   09:13   1:36 chromium'),
+      line('','root         3120  0.2  0.9 157696 ?        Ssl  09:10   0:02 containerd'),
+      line('','root         4471  0.0  0.2  43008 ?        Ss   09:10   0:00 sshd')];}},
   'get-date':{params:[],help:'現在時間',run:function(){return [line('',new Date().toString())];}},
   'write-output':{params:[],help:'輸出文字 (echo)',run:function(a,raw){return [line('',raw.slice(1).join(' ').replace(/^["']|["']$/g,''))];}},
   'measure-object':{params:[],help:'計算數量 (pipeline)',run:function(){return [line('muted','用法: <command> | Measure-Object')];},
@@ -740,35 +782,28 @@ const CMDLETS={
     return [line('num',String(Math.floor(Math.random()*m)))];}},
   'test-connection':{params:['-TargetName'],asyncOut:true,help:'測試連線 (ping)',run:function(a,raw){return pingRun(a,raw);}},
   'ping':{type:'Application',params:[],asyncOut:true,help:'ICMP 測試(模擬)',run:function(a,raw){return pingRun(a,raw);}},
-  'tracert':{type:'Application',params:[],asyncOut:true,help:'路由追蹤(模擬)',run:function(a,raw){
-    let t=firstArg(raw)||'nycu.edu.tw';
-    let hops=[['1','1 ms','1 ms','1 ms','10.6.1.1'],
-      ['2','4 ms','3 ms','4 ms','140.113.1.254'],
-      ['3','9 ms','8 ms','9 ms','tpe-core.twaren.net [211.79.48.1]'],
-      ['4','12 ms','11 ms','12 ms',t+' [140.113.207.85]']];
-    let seq=[line('','Tracing route to '+t),line('','over a maximum of 30 hops:'),line('')];
-    hops.forEach(function(h){ seq.push(line('','  '+padw(h[0],2)+'  '+padw(h[1],6)+' '+padw(h[2],6)+' '+padw(h[3],6)+'  '+h[4])); });
-    seq.push(line(''),line('','Trace complete.'));
+  'traceroute':{type:'Application',params:[],asyncOut:true,help:'路由追蹤(模擬)',run:function(a,raw){
+    const t=firstArg(raw)||'nycu.edu.tw';
+    const hops=[['1','_gateway (10.6.1.1)','1.204','1.118','1.083'],
+      ['2','140.113.1.254','3.912','3.845','4.201'],
+      ['3','tpe-core.twaren.net (211.79.48.1)','8.774','9.012','8.660'],
+      ['4',t+' (140.113.207.85)','12.331','11.907','12.114']];
+    const seq=[line('','traceroute to '+t+' (140.113.207.85), 30 hops max, 60 byte packets')];
+    hops.forEach(function(h){ seq.push(line('',lpad(h[0],2)+'  '+h[1]+'  '+h[2]+' ms  '+h[3]+' ms  '+h[4]+' ms')); });
     asyncPrint(seq,240); return null;}},
-  'ipconfig':{type:'Application',params:[],help:'網路介面資訊',run:function(){return [line('head','Windows IP Configuration'),line(''),
-    line('','Ethernet adapter thc1006:'),
-    line('','   Connection-specific DNS Suffix  . : nycu.edu.tw'),
-    line('','   IPv4 Address. . . . . . . . . . . : 10.6.10.6'),
-    line('','   Subnet Mask . . . . . . . . . . . : 255.255.255.0'),
-    line('','   Default Gateway . . . . . . . . . : 10.6.1.1')];}},
-  'ifconfig':{type:'Application',params:[],help:'Unix 網路指令',run:function(){
+  /* ipconfig 是 Windows 的,Linux 上不存在 → 交給預設的 command not found;網路資訊走 ip addr */
+  'ifconfig':{type:'Application',params:[],help:'網路介面 (net-tools)',run:function(){
     if(netToolsInstalled){ ifconfigFail++;
       return ifconfigFail>=2
         ? [line('err','我只是個網頁,執行不了 ifconfig。你怎麼不找找自己的問題?')]
         : [line('err','ifconfig: command failed')]; }
     return [line('','Command \'ifconfig\' not found, but can be installed with:'),
       line('cmd','  sudo apt install net-tools')];}},
-  'hostname':{type:'Application',params:[],help:'主機名稱',run:function(){return [line('','thc1006-dev')];}},
-  'ver':{type:'Application',params:[],help:'系統版本',run:function(){return [line(''),
-    line('','Microsoft Windows [Version 10.0.26300.1806]'),line('')];}},
+  'hostname':{type:'Application',params:[],help:'主機名稱',run:function(){return [line('',HOSTN)];}},
   '$psversiontable':{disp:'$PSVersionTable',type:'Variable',params:[],help:'PowerShell 版本資訊',run:function(){
     return table(['Name','Value'],[['PSVersion','7.4.6'],['PSEdition','Core'],
-      ['OS','Microsoft Windows 10.0.26300'],['Platform','Win32NT'],['GitCommitId','7.4.6']]);}},
+      ['OS','Linux 6.8.0-51-generic #52-Ubuntu SMP PREEMPT_DYNAMIC'],
+      ['Platform','Unix'],['GitCommitId','7.4.6']]);}},
   'git':{type:'Application',params:[],help:'Git (模擬)',run:function(a,raw){
     let sub=String(raw[1]||'').toLowerCase();
     if(sub==='status') return [line('','On branch main'),line('','Your branch is up to date with \'origin/main\'.'),line(''),
@@ -777,45 +812,225 @@ const CMDLETS={
       return line('', (i===0?'* ':'* ')+t[0]+'  '+t[1]); });
     if(sub==='remote') return [line('','origin  https://github.com/thc1006 (fetch)'),line('','origin  https://github.com/thc1006 (push)')];
     return [line('muted','usage: git <status|log|remote>   (模擬,不會真的連網)')];}},
-  'vim':{type:'Application',params:[],help:'文字編輯器(未安裝)',run:function(){return [
-    line('err','vim: 這個終端機沒有安裝 vim。'),
-    line('muted','就算裝了,你也不見得出得來。Windows 上可用 notepad,或 code。')];}},
-  'vi':{type:'Application',params:[],help:'文字編輯器(未安裝)',run:function(){return CMDLETS['vim'].run();}},
-  'nano':{type:'Application',params:[],help:'文字編輯器(未安裝)',run:function(){return [
-    line('err','nano: 這個終端機沒有安裝 nano。'),
-    line('muted','至少它有把快捷鍵印在螢幕下面 — 這點 vim 該學學。')];}},
-  'notepad':{type:'Application',params:[],help:'記事本',run:function(){return [
-    line('muted','正在開啟 notepad ... 這是網頁,開不了視窗。'),
-    line('muted','想看內容請用 Get-Content <file>。')];}},
-  'chmod':{type:'Application',params:[],help:'Unix 權限(Windows 用 icacls)',run:function(){return [
-    line('err','chmod: Windows 沒有 chmod。'),
-    line('muted','對應做法: icacls <path> /grant <user>:(F)   或  Set-Acl')];}},
-  'chown':{type:'Application',params:[],help:'Unix 擁有者(Windows 用 icacls)',run:function(){return [
-    line('err','chown: Windows 沒有 chown。'),
-    line('muted','對應做法: icacls <path> /setowner <user>')];}},
+  /* vim / nano:Ubuntu 上確實裝得到,所以不能說「沒安裝」——誠實講是這個沙盒還沒實作互動式編輯器 */
+  'vim':{type:'Application',params:[],paths:true,help:'文字編輯器(互動式編輯尚未實作)',run:function(a,raw){
+    const t=firstArg(raw);
+    return [line('err','vim: 這個網頁沙盒還沒有實作互動式編輯器。'),
+      line('muted','目前可用:  Set-Content '+(t||'<file>')+' "內容"   ·   Add-Content 追加   ·   cat 檢視'),
+      line('muted','(離開 vim 的方法是 :q! —— 這裡不需要。)')];}},
+  'vi':{type:'Application',params:[],paths:true,help:'文字編輯器(互動式編輯尚未實作)',run:function(a,raw){return CMDLETS['vim'].run(a,raw);}},
+  'nano':{type:'Application',params:[],paths:true,help:'文字編輯器(互動式編輯尚未實作)',run:function(a,raw){
+    const t=firstArg(raw);
+    return [line('err','nano: 這個網頁沙盒還沒有實作互動式編輯器。'),
+      line('muted','目前可用:  Set-Content '+(t||'<file>')+' "內容"   ·   Add-Content 追加   ·   cat 檢視')];}},
   'touch':{type:'Application',params:[],paths:true,help:'建立空檔案',run:function(a,raw){
     let t=firstArg(raw); if(!t) return [line('err','touch: 缺少檔名。')];
     const p=resolvePath(t); if(fsGet(p)) return null;
     const par=fsParent(p);
     if(!par||par.t!=='d') return [line('err','touch: cannot touch \''+t+'\': No such file or directory')];
     setChild(par, baseOf(p), fnode(null,false,[])); return saved(null);}},
+  /* ===== 原生 Unix 指令 =====
+     PowerShell 在 Linux/macOS 上「刻意移除」ls/cp/mv/rm/cat/man/mount/ps 這幾個別名,
+     好讓原生執行檔直接跑。所以這些走 coreutils 的旗標與錯誤訊息,不是 cmdlet。 */
+  'ls':{type:'Application',params:[],paths:true,help:'列出目錄內容 (coreutils)',run:function(a,raw){
+    let long=false,all=false,human=false,one=false,target='';
+    for(let i=1;i<raw.length;i++){
+      const t=String(raw[i]).replace(/^["']|["']$/g,'');
+      if(/^--/.test(t)){ if(t==='--all')all=true; else if(t==='--human-readable')human=true; continue; }
+      if(t.charAt(0)==='-'&&t.length>1){
+        for(let j=1;j<t.length;j++){ const c=t.charAt(j);
+          if(c==='l')long=true; else if(c==='a'||c==='A')all=true;
+          else if(c==='h')human=true; else if(c==='1')one=true; }
+        continue; }
+      target=t; }
+    const p=target?resolvePath(target):CWD, n=fsGet(p);
+    if(!n) return [line('err',"ls: cannot access '"+(target||p)+"': No such file or directory")];
+    const humanSize=function(node){ const s=fsSize(node);
+      if(!human) return String(s);
+      if(s>=1048576) return (s/1048576).toFixed(1)+'M';
+      if(s>=1024) return (s/1024).toFixed(1)+'K';
+      return String(s); };
+    if(n.t==='f'){                       /* ls -l <file> 要給該檔的長格式,不是只印檔名 */
+      if(!long) return [line('',baseOf(p))];
+      return [line('', modeStr(n)+' 1 '+USERNAME+' '+GROUPNAME+' '
+        +humanSize(n)+' '+lsTime(n.mt)+' '+baseOf(p))]; }
+    let names=Object.keys(n.ch).sort();
+    if(!all) names=names.filter(function(k){return k.charAt(0)!=='.';});
+    else names=['.','..'].concat(names);
+    if(!names.length) return [];
+    const nodeOf=function(name){ return name==='.'?n:(name==='..'?(fsParent(p)||n):n.ch[name]); };
+    const nlink=function(node){ return node.t!=='d'?1:
+      2+Object.keys(node.ch).filter(function(k){return node.ch[k].t==='d';}).length; };
+    if(!long) return one?names.map(function(x){return line('',x);}):[line('',names.join('  '))];
+    const rows=names.map(function(name){ const node=nodeOf(name);
+      return [modeStr(node),String(nlink(node)),USERNAME,GROUPNAME,humanSize(node),lsTime(node.mt),name]; });
+    const wN=Math.max.apply(null,rows.map(function(r){return r[1].length;}));
+    const wU=Math.max.apply(null,rows.map(function(r){return dw(r[2]);}));
+    const wG=Math.max.apply(null,rows.map(function(r){return dw(r[3]);}));
+    const wS=Math.max.apply(null,rows.map(function(r){return r[4].length;}));
+    const blocks=names.reduce(function(acc,name){ return acc+Math.ceil(fsSize(nodeOf(name))/1024); },0);
+    return [line('','total '+blocks)].concat(rows.map(function(r){
+      return line('', r[0]+' '+lpad(r[1],wN)+' '+padw(r[2],wU)+' '+padw(r[3],wG)+' '
+        +lpad(r[4],wS)+' '+r[5]+' '+r[6]); }));}},
+  'cat':{type:'Application',params:[],paths:true,help:'串接並顯示檔案 (coreutils)',run:function(a,raw){
+    const t=firstArg(raw);
+    if(!t) return [line('muted','用法: cat <file>')];
+    const p=resolvePath(t), n=fsGet(p);
+    if(!n) return [line('err','cat: '+t+': No such file or directory')];
+    if(n.t==='d') return [line('err','cat: '+t+': Is a directory')];
+    const r=fsText(n); return r.length?r:[];}},
+  'rm':{type:'Application',params:[],paths:true,help:'刪除檔案或目錄 (coreutils)',run:function(a,raw){
+    let rec=false,force=false,target='';
+    for(let i=1;i<raw.length;i++){ const t=String(raw[i]);
+      if(t==='--recursive'){rec=true;continue;} if(t==='--force'){force=true;continue;}
+      if(t.charAt(0)==='-'&&t.length>1&&!/^--/.test(t)){
+        for(let j=1;j<t.length;j++){ const c=t.charAt(j); if(c==='r'||c==='R')rec=true; else if(c==='f')force=true; }
+        continue; }
+      if(!/^-/.test(t)) target=t.replace(/^["']|["']$/g,''); }
+    if(!target) return force?null:[line('err','rm: missing operand')];
+    const p=resolvePath(target), n=fsGet(p);
+    if(!n) return force?null:[line('err',"rm: cannot remove '"+target+"': No such file or directory")];
+    if(segsOf(p).length<2) return [line('err',"rm: cannot remove '"+target+"': Operation not permitted")];
+    if(n.t==='d'&&!rec) return [line('err',"rm: cannot remove '"+target+"': Is a directory")];
+    const par=fsParent(p), k=keyIn(par,baseOf(p)); if(k) delete par.ch[k];
+    if(samePath(CWD,p)||isDescendant(CWD,p)){ CWD=HOME; updatePrompt(); }
+    return saved(null);}},
+  'cp':{type:'Application',params:[],paths:true,help:'複製檔案 (coreutils)',run:function(a,raw){
+    const args=raw.slice(1).filter(function(x){return !/^-/.test(x);}).map(function(x){return String(x).replace(/^["']|["']$/g,'');});
+    const rec=raw.some(function(x){return /^-[a-zA-Z]*[rR]/.test(String(x));});
+    if(args.length<2) return [line('err','cp: missing destination file operand')];
+    const sp=resolvePath(args[0]), sn=fsGet(sp);
+    if(!sn) return [line('err',"cp: cannot stat '"+args[0]+"': No such file or directory")];
+    if(sn.t==='d'&&!rec) return [line('err',"cp: -r not specified; omitting directory '"+args[0]+"'")];
+    const dp=resolvePath(args[1]), dn=fsGet(dp);
+    const finalPath=(dn&&dn.t==='d'&&!samePath(dp,sp))?joinPath(fsCanon(dp)||dp,baseOf(sp)):dp;
+    if(samePath(sp,finalPath)) return [line('err',"cp: '"+args[0]+"' and '"+args[1]+"' are the same file")];
+    if(sn.t==='d'&&isDescendant(finalPath,sp)) return [line('err',"cp: cannot copy a directory into itself")];
+    const par=fsGet(dirOf(finalPath));
+    if(!par||par.t!=='d') return [line('err',"cp: cannot create regular file '"+args[1]+"': No such file or directory")];
+    const c=fsClone(sn); c.mt=Date.now(); setChild(par,baseOf(finalPath),c);
+    return saved(null);}},
+  'mv':{type:'Application',params:[],paths:true,help:'移動或改名 (coreutils)',run:function(a,raw){
+    const args=raw.slice(1).filter(function(x){return !/^-/.test(x);}).map(function(x){return String(x).replace(/^["']|["']$/g,'');});
+    if(args.length<2) return [line('err','mv: missing destination file operand')];
+    const sp=resolvePath(args[0]), sn=fsGet(sp);
+    if(!sn) return [line('err',"mv: cannot stat '"+args[0]+"': No such file or directory")];
+    if(segsOf(sp).length<2) return [line('err',"mv: cannot move '"+args[0]+"': Operation not permitted")];
+    const dp=resolvePath(args[1]), dn=fsGet(dp);
+    const finalPath=(dn&&dn.t==='d'&&!samePath(dp,sp))?joinPath(fsCanon(dp)||dp,baseOf(sp)):dp;
+    if(samePath(sp,finalPath)) return null;                       /* mv 檔案到自己:GNU mv 視為成功不動作 */
+    if(sn.t==='d'&&isDescendant(finalPath,sp))
+      return [line('err',"mv: cannot move '"+args[0]+"' to a subdirectory of itself")];
+    const par=fsGet(dirOf(finalPath));
+    if(!par||par.t!=='d') return [line('err',"mv: cannot move '"+args[0]+"': No such file or directory")];
+    const sPar=fsParent(sp), sk=keyIn(sPar,baseOf(sp)); if(sk) delete sPar.ch[sk];
+    sn.mt=Date.now(); setChild(par,baseOf(finalPath),sn);         /* GNU mv 預設就覆寫,不像 Move-Item 要 -Force */
+    if(samePath(CWD,sp)||isDescendant(CWD,sp)){ CWD=HOME; updatePrompt(); }
+    return saved(null);}},
+  'grep':{type:'Application',params:[],paths:true,help:'搜尋文字 (GNU grep)',run:function(a,raw){
+    const args=raw.slice(1).filter(function(x){return !/^-/.test(x);}).map(function(x){return String(x).replace(/^["']|["']$/g,'');});
+    const pat=args[0], fileArg=args[1];
+    if(!pat) return [line('muted','用法: grep PATTERN [FILE]')];
+    if(pat.length>200) return [line('err','grep: pattern too long')];
+    let re; try{ re=new RegExp(pat,'i'); }catch(e){ return [line('err','grep: invalid regular expression')]; }
+    const hits=[];
+    if(fileArg){ const p=resolvePath(fileArg), n=fsGet(p);
+      if(!n) return [line('err','grep: '+fileArg+': No such file or directory')];
+      if(n.t==='d') return [line('err','grep: '+fileArg+': Is a directory')];
+      fsText(n).forEach(function(r){ const t=r&&r.txt?r.txt:''; if(t&&re.test(t)) hits.push(line('',t)); });
+      return hits; }
+    (function walk(node,path){ if(node.t==='d'){ Object.keys(node.ch).forEach(function(k){ walk(node.ch[k],path+'/'+k); }); return; }
+      fsText(node).forEach(function(r){ const t=r&&r.txt?r.txt:''; if(t&&re.test(t))
+        hits.push({parts:[['accent',path+':'],['',' '+(t.length>56?t.slice(0,56)+'...':t)]],txt:path+': '+t}); }); })(ROOT,'');
+    return hits.length?hits.slice(0,20):[];}},
+  'chmod':{type:'Application',params:[],paths:true,help:'變更檔案權限 (coreutils)',run:function(a,raw){
+    const args=raw.slice(1).map(function(x){return String(x).replace(/^["']|["']$/g,'');});
+    const spec=args[0], target=args[1];
+    if(!spec||!target) return [line('err','chmod: missing operand'),
+      line('muted','用法: chmod 755 <path>   或   chmod +x <path>')];
+    const p=resolvePath(target), n=fsGet(p);
+    if(!n) return [line('err',"chmod: cannot access '"+target+"': No such file or directory")];
+    let mode=n.mode||'rw-r--r--';
+    if(/^[0-7]{3}$/.test(spec)){
+      const bits=['---','--x','-w-','-wx','r--','r-x','rw-','rwx'];
+      mode=bits[+spec.charAt(0)]+bits[+spec.charAt(1)]+bits[+spec.charAt(2)];
+    } else if(/^[ugoa]*[+-][rwx]+$/.test(spec)){
+      const add=spec.indexOf('+')>=0, who=spec.split(/[+-]/)[0]||'a', letters=spec.split(/[+-]/)[1];
+      const idx={u:0,g:1,o:2}, parts=[mode.slice(0,3),mode.slice(3,6),mode.slice(6,9)];
+      const tgt=(who==='a'||!who)?[0,1,2]:who.split('').map(function(c){return idx[c];}).filter(function(x){return x!=null;});
+      tgt.forEach(function(ti){ const s=parts[ti].split('');
+        letters.split('').forEach(function(L){ const pos={r:0,w:1,x:2}[L]; if(pos!=null) s[pos]=add?L:'-'; });
+        parts[ti]=s.join(''); });
+      mode=parts.join('');
+    } else return [line('err',"chmod: invalid mode: '"+spec+"'")];
+    n.mode=mode; n.mt=Date.now();
+    return saved(null);}},
+  'chown':{type:'Application',params:[],paths:true,help:'變更擁有者 (coreutils)',run:function(a,raw){
+    const target=raw.slice(2).filter(function(x){return !/^-/.test(x);})[0];
+    if(!target) return [line('err','chown: missing operand')];
+    return [line('err',"chown: changing ownership of '"+target+"': Operation not permitted"),
+      line('muted','(這個沙盒只有 '+USERNAME+' 一個使用者,改擁有者需要 root)')];}},
+  'uname':{type:'Application',params:[],help:'系統資訊 (coreutils)',run:function(a,raw){
+    const f=raw.slice(1).join(' ');
+    if(/-a|--all/.test(f)) return [line('','Linux '+HOSTN+' 6.8.0-51-generic #52-Ubuntu SMP PREEMPT_DYNAMIC x86_64 x86_64 x86_64 GNU/Linux')];
+    if(/-r/.test(f)) return [line('','6.8.0-51-generic')];
+    if(/-m/.test(f)) return [line('','x86_64')];
+    if(/-n/.test(f)) return [line('',HOSTN)];
+    return [line('','Linux')];}},
+  'lsb_release':{type:'Application',params:[],help:'發行版資訊',run:function(){return [
+    line('','Distributor ID:\tUbuntu'),
+    line('','Description:\tUbuntu 24.04.4 LTS'),
+    line('','Release:\t24.04'),
+    line('','Codename:\tnoble')];}},
+  'ip':{type:'Application',params:[],help:'網路介面 (iproute2)',run:function(a,raw){
+    const sub=String(raw[1]||'').toLowerCase();
+    if(sub&&sub!=='a'&&sub!=='addr'&&sub!=='address')
+      return [line('muted','用法: ip addr   (這個沙盒只實作 addr)')];
+    return [line('','1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN'),
+      line('','    inet 127.0.0.1/8 scope host lo'),
+      line('','2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP'),
+      line('','    inet 10.6.10.6/24 brd 10.6.10.255 scope global eth0'),
+      line('','    inet6 fe80::216:3eff:fe74:1006/64 scope link')];}},
+  'which':{type:'Application',params:[],help:'尋找執行檔路徑',run:function(a,raw){
+    const t=firstArg(raw);
+    if(!t) return [line('muted','用法: which <command>')];
+    const key=alias(String(t).toLowerCase()), c=CMDLETS[key];
+    if(!c) return null;                                   /* GNU which 找不到時安靜回非零 */
+    if(c.type==='Application') return [line('','/usr/bin/'+String(t).toLowerCase())];
+    return [line('',String(t)+': PowerShell cmdlet')];}},
+  'df':{type:'Application',params:[],help:'磁碟使用量',run:function(){return [
+    line('head','Filesystem      Size  Used Avail Use% Mounted on'),
+    line('','/dev/root        48G   19G   27G  42% /'),
+    line('','tmpfs           7.8G     0  7.8G   0% /dev/shm')];}},
+  'free':{type:'Application',params:[],help:'記憶體使用量',run:function(){return [
+    line('head','               total        used        free      shared  buff/cache   available'),
+    line('','Mem:            15Gi       4.2Gi       6.1Gi       220Mi       5.1Gi        10Gi'),
+    line('','Swap:          4.0Gi          0B       4.0Gi')];}},
+  'uptime':{type:'Application',params:[],help:'開機時間與負載',run:function(){
+    const d=new Date();
+    return [line('', ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2)
+      +':'+('0'+d.getSeconds()).slice(-2)+'  up 7 days,  3:24,  1 user,  load average: 0.18, 0.24, 0.21')];}},
   'help':{params:[],help:'快速指引',run:function(){
     let g=[
       ['作品集',[['whoami','身分摘要'],['Get-Contribution','開源貢獻 (-Foundation CNCF)'],
         ['Get-Publication','著作'],['Get-Award','獲獎 (-Year 2023)'],
         ['Get-Project','代表專案'],['Get-Timeline','年度時間軸']]],
-      ['檔案系統',[['ls / dir','列出目錄 (Get-ChildItem)'],['cd <dir>','切換目錄 (Set-Location)'],
-        ['pwd','目前路徑'],['cat <file>','讀檔 (Get-Content)'],['tree','目錄樹'],
-        ['mkdir <dir>','建資料夾 (New-Item)'],['rm <path>','刪除 (-Recurse)'],
-        ['cp / mv / ren','複製 / 移動 / 改名'],['Set-Content','寫入檔案內容'],
-        ['grep <pattern>','全站搜尋 (Select-String)']]],
-      ['系統與網路',[['ping / tracert','網路工具 (模擬)'],['ipconfig / hostname','主機資訊'],
-        ['Get-Process','程序列表 (ps)'],['Get-Date','現在時間'],['ver','系統版本']]],
+      ['檔案系統 (coreutils)',[['ls -la','列出目錄,含權限與大小'],['cd <dir>','切換目錄'],
+        ['cat <file>','讀檔'],['rm -r <path>','刪除'],['cp / mv','複製 / 移動'],
+        ['mkdir <dir>','建資料夾'],['chmod 755 <p>','改權限,會真的生效'],
+        ['grep <pat>','搜尋內容'],['tree','目錄樹']]],
+      ['PowerShell cmdlet',[['Get-ChildItem','列出目錄 (dir/gci)'],['Get-Content','讀檔 (gc)'],
+        ['Set-Content','寫入檔案內容 (sc)'],['Select-String','搜尋 (sls)'],
+        ['Get-Location','目前路徑 (pwd)'],['Get-Process','程序列表']]],
+      ['系統與網路',[['uname -a','核心資訊'],['ip addr','網路介面'],
+        ['ping / traceroute','網路工具 (模擬)'],['df / free / uptime','資源狀態'],
+        ['ps aux','程序列表'],['hostname','主機名稱']]],
       ['其他',[['Get-Source','權威資料來源連結 (sources)'],
-        ['Get-Command','完整指令清單 (gcm)'],['Get-Help <cmd>','單一指令用法 (man)'],
-        ['Set-Theme','主題 windows|pi|blue'],['Clear-Host','清空畫面 (cls)'],
+        ['Get-Command','完整指令清單 (gcm)'],['Get-Help <cmd>','單一指令用法'],
+        ['Set-Theme','主題 campbell|pi|blue'],['Clear-Host','清空畫面 (cls)'],
         ['Reset-FileSystem','還原檔案系統']]]];
-    let o=[line('banner','thc1006 PowerShell — 常用指令')];
+    let o=[line('banner','PowerShell 7 on Ubuntu — 常用指令'),
+      line('muted','Linux 上 PowerShell 移除了 ls/cat/rm/cp/mv/man/ps 別名,這些走原生 coreutils。')];
     g.forEach(function(sec){ o.push(line(''),line('head',sec[0]));
       sec[1].forEach(function(x){ o.push(line('','  '+padw(x[0],18)+'  '+x[1])); }); });
     o.push(line(''),line('muted','支援管線,例如:  Get-Command | Where-Object -Match get- | Measure-Object'));
@@ -824,19 +1039,21 @@ const CMDLETS={
 };
 const ALIAS={
   'cls':'clear-host','clear':'clear-host',
-  'ls':'get-childitem','dir':'get-childitem','gci':'get-childitem',
+  /* ⛔ ls / cat / rm / cp / mv / man / ps 在 Linux 版 PowerShell 被移除別名,
+     這裡也不可再對映到 cmdlet,否則原生指令會被遮蔽。 */
+  'dir':'get-childitem','gci':'get-childitem',
   'pwd':'get-location','gl':'get-location',
   'cd':'set-location','chdir':'set-location','sl':'set-location',
-  'cat':'get-content','type':'get-content','gc':'get-content',
+  'type':'get-content','gc':'get-content',
   'sc':'set-content','ac':'add-content',
   'mkdir':'new-item','md':'new-item','ni':'new-item',
-  'rm':'remove-item','del':'remove-item','erase':'remove-item','rd':'remove-item','rmdir':'remove-item','ri':'remove-item',
-  'cp':'copy-item','copy':'copy-item','ci':'copy-item',
-  'mv':'move-item','move':'move-item','mi':'move-item','ren':'rename-item','rni':'rename-item',
-  'grep':'select-string','sls':'select-string',
-  'ps':'get-process','gps':'get-process',
-  'h':'get-history','history':'get-history','gcm':'get-command','man':'get-help',
-  'echo':'write-output','date':'get-date','traceroute':'tracert',
+  'del':'remove-item','erase':'remove-item','rd':'remove-item','rmdir':'remove-item','ri':'remove-item',
+  'copy':'copy-item','ci':'copy-item',
+  'move':'move-item','mi':'move-item','ren':'rename-item','rni':'rename-item',
+  'sls':'select-string',
+  'gps':'get-process',
+  'h':'get-history','history':'get-history','gcm':'get-command',
+  'echo':'write-output','date':'get-date','tracepath':'traceroute',
   'sort':'sort-object','measure':'measure-object','select':'select-object','where':'where-object',
   'profile':'whoami','whois':'whoami','theme':'set-theme',
   'sources':'get-source','links':'get-source','src':'get-source'};
@@ -919,7 +1136,7 @@ const EGGS={
     return [line('var','Wake up… follow the merged PRs.'),line('','')].concat(R);},
   'fortune':function(){return [line('accent','「流淚撒種的,必歡呼收割。」'),line('muted','                    — 詩篇 126:5')];},
   'thc1006':function(){return [line('head','That is me. 打 whoami 看更多,或 Get-Contribution。')];},
-  'konami':function(){return [line('ok','Up Up Down Down Left Right Left Right B A — 你找到了。所有主題已解鎖:Set-Theme windows|pi|blue')];},
+  'konami':function(){return [line('ok','Up Up Down Down Left Right Left Right B A — 你找到了。所有主題已解鎖:Set-Theme campbell|pi|blue')];},
   'secret':function(){return [line('accent','這個終端機藏了不少彩蛋:'),
     line('muted','  coffee · rocket · matrix · fortune · konami · thc1006'),
     line('muted','  sudo rm -rf /   ·   sudo apt install net-tools   後再打 ifconfig'),
@@ -927,17 +1144,18 @@ const EGGS={
     line('muted','  classic — 回到舊版 bash 終端機 (user@hctsai1006)')];},
 };
 
+/* iputils ping 的輸出格式(Linux) */
 function pingRun(a,raw){
-  let t=String(argOf(a,'TargetName')||firstArg(raw)||'localhost');
-  let seq=[line('','Pinging '+t+' [10.6.10.6] with 32 bytes of data:')], i, ms=[];
-  for(i=0;i<4;i++){ let v=Math.round(Math.random()*8+3); ms.push(v);
-    seq.push(line('','Reply from 10.6.10.6: bytes=32 time='+v+'ms TTL=64')); }
+  const t=String(argOf(a,'TargetName')||firstArg(raw)||'localhost');
+  const seq=[line('','PING '+t+' (10.6.10.6) 56(84) bytes of data.')], ms=[];
+  for(let i=0;i<4;i++){ const v=(Math.random()*8+3); ms.push(v);
+    seq.push(line('','64 bytes from 10.6.10.6: icmp_seq='+(i+1)+' ttl=64 time='+v.toFixed(1)+' ms')); }
   const mn=Math.min.apply(null,ms), mx=Math.max.apply(null,ms);
-  const avg=Math.round(ms.reduce(function(s,v){return s+v;},0)/ms.length);   // 平均,不是中程值
-  seq.push(line(''),line('','Ping statistics for 10.6.10.6:'),
-    line('','    Packets: Sent = 4, Received = 4, Lost = 0 (0% loss),'),
-    line('','Approximate round trip times in milli-seconds:'),
-    line('','    Minimum = '+mn+'ms, Maximum = '+mx+'ms, Average = '+avg+'ms'));
+  const avg=ms.reduce(function(s,v){return s+v;},0)/ms.length;                     /* 平均,不是中程值 */
+  const mdev=Math.sqrt(ms.reduce(function(s,v){return s+(v-avg)*(v-avg);},0)/ms.length);
+  seq.push(line(''),line('','--- '+t+' ping statistics ---'),
+    line('','4 packets transmitted, 4 received, 0% packet loss, time 3005ms'),
+    line('','rtt min/avg/max/mdev = '+mn.toFixed(3)+'/'+avg.toFixed(3)+'/'+mx.toFixed(3)+'/'+mdev.toFixed(3)+' ms'));
   asyncPrint(seq,180); return null;
 }
 const CORPUS=(function(){ let o=[];
@@ -1174,7 +1392,7 @@ function run(){
   if(cmd){
     const segs=splitPipe(cmd);
     let rows=null, i;
-    /* 逐行串流輸出的指令(ping/tracert)是即時副作用,放進同步管線會讓下一段先拿到空集合。
+    /* 逐行串流輸出的指令(ping/traceroute)是即時副作用,放進同步管線會讓下一段先拿到空集合。
        與其假裝支援,不如明確拒絕。 */
     for(i=0;i<segs.length && segs.length>1;i++){
       const k=String((segs[i].match(/\S+/)||[''])[0]).toLowerCase(), cc=CMDLETS[alias(k)];
@@ -1240,7 +1458,7 @@ function boot(){
     line(''),
     {parts:[['banner','Type '],['yellow','help'],['banner',' to explore, or try '],
             ['yellow','whoami'],['banner',' / '],['yellow','Get-Contribution -Foundation CNCF']]},
-    {parts:[['banner','Themes: '],['yellow','Set-Theme pi'],['banner',' / windows / blue']]},
+    {parts:[['banner','Themes: '],['yellow','Set-Theme pi'],['banner',' / campbell / blue']]},
     line('')]);
   hist=['whoami','Get-Contribution -Foundation CNCF','Get-Publication -Full','Get-Award -Year 2023'];
   sync(); focusEdit();
