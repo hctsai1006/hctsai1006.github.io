@@ -164,12 +164,54 @@ const D={
     ['kubernetes-sigs/dranet',4],['kptdev/porch',4],['volcano-sh/volcano',2],['meshery/meshery',2],
     ['kedacore/keda',1],['kedacore/keda-docs',1]],
   cncf:['CNCF',87,40],
+  /* 資料來源:people.cs.nycu.edu.tw/~hctsai1006/publications/(ORCID 同步),13 篇。
+     摘要表只放前 5 筆,完整清單見 pubsFull(Get-Publication -Full)。 */
   publications:[['IEEE SCC 2026','Ground-Side Mission Plan Compilation','Accepted'],
-    ['IEEE WF-PST 2026','OOBWatch-S3: Zephyr Out-of-Bounds Signal','Accepted'],
-    ['ICAIMS 2026 (IEEE)','O-RAN Private Network for Medical Care','Accepted'],
-    ['engrXiv 7541','Physics-Grounded DRL for LEO NTN','preprint'],
-    ['arXiv:2607.09992','Trusted Floors Under Untrusted Learners','preprint']],
+    ['IEEE WF-PST 2026','OOBWatch-S3: Zephyr Cold-Boot Race','Accepted'],
+    ['ICAIMS 2026 (IEEE)','Band-as-Modality Learning','Accepted'],
+    ['arXiv:2607.09992','Trusted Floors Under Untrusted Learners','preprint'],
+    ['engrXiv 7541','Physics-Grounded DRL for LEO NTN','preprint']],
   pubTotal:13,
+  pubsFull:[
+    {y:'2026',st:'Accepted',venue:'IEEE SCC 2026 (Space Computing Conference)',
+     title:'Ground-Side Mission Plan Compilation with Policy-as-Code Guardrails for Cloud-Native Satellite Platforms',
+     id:'arXiv:2607.14798',au:'Hsiu-Chi Tsai, Chia-Tung Chung'},
+    {y:'2026',st:'Accepted',venue:'IEEE WF-PST 2026 (World Forum on Public Safety Technology)',
+     title:'OOBWatch-S3: Surfacing a Zephyr Wi-Fi Cold-Boot Race Family on ESP32-S3 via a Public-Safety Watchdog Deployment',
+     id:'',au:'Hsiu-Chi Tsai, Chia-Tung Chung'},
+    {y:'2026',st:'Accepted',venue:'IEEE ICAIMS 2026',
+     title:'Band-as-Modality Learning for Multispectral and Hyperspectral Segmentation: Spectral Group Masked Pretraining and Cross-Band Attention for Missing-Band Robustness',
+     id:'',au:'Chia-Tung Chung, Hsiu-Chi Tsai'},
+    {y:'2026',st:'preprint',venue:'arXiv (cs.DC)',
+     title:'Trusted Floors Under Untrusted Learners: A Runtime Assured-SLO Guard for ML Serving',
+     id:'arXiv:2607.09992',au:'Hsiu-Chi Tsai'},
+    {y:'2026',st:'preprint',venue:'engrXiv',
+     title:'Physics-Grounded Deep Reinforcement Learning for Power Control in LEO Non-Terrestrial O-RAN: A QoS-Power Pareto and Cross-Orbit Robustness Study',
+     id:'10.31224/7541',au:'Hsiu-Chi Tsai, Chia-Tung Chung'},
+    {y:'2026',st:'preprint',venue:'arXiv (physics.chem-ph / quant-ph)',
+     title:'An Iterative Dual-Channel Neural Quantum State Algorithm for Selected Configuration Interaction',
+     id:'arXiv:2606.26760',au:'Jen-Yu Chang, Yi-Chun Chang, Yu-Jui Lin, Ming-Chun Yang, Hsiu-Chi Tsai, Tai-Yue Li, Nan-Yow Chen, Tsung-Wei Huang, En-Jui Kuo'},
+    {y:'2026',st:'preprint',venue:'engrXiv',
+     title:'A Large-Scale Empirical Study of Deep Learning for MEMS Gyroscope Bias Estimation',
+     id:'10.31224/7144',au:'Hsiu-Chi Tsai, Chia-Tung Chung'},
+    {y:'2026',st:'preprint',venue:'engrXiv',
+     title:'Cross-Layer Diagnostics for Operator-Side Platform Porting of GPU-Accelerated 5G RAN: An Experience Report on Cable-on Validation of NVIDIA Aerial cuBB on DGX Spark',
+     id:'10.31224/7056',au:'Hsiu-Chi Tsai'},
+    {y:'2026',st:'preprint',venue:'Zenodo',
+     title:'Federated O-RAN Slice SLA Prediction: A Cross-Architecture Empirical Benchmark on Colosseum/ColO-RAN',
+     id:'10.5281/zenodo.20075433',au:'Hsiu-Chi Tsai'},
+    {y:'2026',st:'preprint',venue:'Research Square',
+     title:'ECD length and fold identity shape the calibration of AI-predicted immune-receptor interactions: lessons from 834 experimentally tested pairs',
+     id:'10.21203/rs.3.rs-9526911/v1',au:'Hsiu-Chi Tsai'},
+    {y:'2026',st:'preprint',venue:'Preprints.org (MDPI)',
+     title:'Sub-Millijoule Intrusion Detection on a Commodity MCU Neural Processing Unit: A Four-Dataset Deployment Study',
+     id:'10.20944/preprints202603.0817.v3',au:'Hsiu-Chi Tsai'},
+    {y:'2023',st:'published',venue:'NYCU Capstone',
+     title:'Intelligent Management System of O-RAN Private Network in Internal Medicine Environment',
+     id:'10.13140/RG.2.2.28996.30081',au:'Hsiu-Chi Tsai, Yu-Te Wu'},
+    {y:'2023',st:'published',venue:'NYCU Thesis',
+     title:'The Development and Prospect of O-RAN Integrated LEO Satellite Communication System for Marine Vessel',
+     id:'10.13140/RG.2.2.12387.02085',au:'Hsiu-Chi Tsai, Chi-Hsuan Wang, Yu-Tang You, An-Tai Yeh'}],
   awards:[['2023','總統教育獎 · 奮發向上獎 (教育部)'],['2026','國科會 大專學生研究創作獎 (NSTC)'],
     ['2026','Make NTU · 強茂企業獎 第一名'],['2026','臺灣太空事務青年人才選訓計畫 · 入選 (TASA)'],
     ['2023','臺灣海洋治理國際研討會 · 海洋工程組 第三名']],
@@ -346,10 +388,13 @@ function buildSeed(){
     line('accent','nasa/EMIT-Data-Resources'),
     line('','  PR    #72     quality_mask 對 L2A Mask V002 產品會靜默產生錯誤遮罩'),line(''),
     line('muted','合併後移入 Get-Contribution,並同步 profile / timeline / README 的計數。')]);
-  D.publications.forEach(function(p){
-    put(HOME+'\\publications', slug(p[0])+'.md', [
-      line('head',p[1]),line(''),
-      line('accent',p[0]),line(p[2]==='Accepted'?'ok':'muted','Status: '+p[2])]); });
+  D.pubsFull.forEach(function(p){
+    put(HOME+'\\publications', slug(p.title.split(/\s+/).slice(0,4).join(' '))+'.md', [
+      line('head',p.title),line(''),
+      line('accent',p.venue),
+      line(p.st==='preprint'?'muted':'ok','Status: '+p.st+'  ·  '+p.y),
+      p.id?line('muted',p.id):line(''),
+      line('muted',p.au)]); });
   let awardFiles=['2023-presidential-education-award.md','2026-nstc-research-award.md',
     '2026-make-ntu.md','2026-tasa-space-talent.md','2023-ocean-governance.md'];
   D.awards.forEach(function(w,i){
@@ -406,14 +451,24 @@ const CMDLETS={
     }
     return o.concat(table(['Repository','Merged'],rows.map(function(r){return [r[0],r[1]];})),[line('muted','  … Get-Command 看更多')]);
   }},
-  'get-publication':{params:['-Full'],help:'列出著作 (-Full 顯示完整索引)',run:function(a,raw){
-    const full=!!argOf(a,'Full');
-    const o=[line('accent',D.pubTotal+' publications (IEEE accepted + preprints)'),line('','')]
-      .concat(table(['Venue','Title','Status'],D.publications));
-    if(full) return o.concat([line(''),
-      line('muted','此處列出 '+D.publications.length+' 篇代表作;其餘 '+(D.pubTotal-D.publications.length)+' 篇的完整索引在 ORCID:'),
-      line('accent','  https://orcid.org/0000-0001-7421-8027')]);
-    return o.concat([line('muted','  … '+(D.pubTotal-D.publications.length)+' more · 用 -Full 看完整索引')]);}},
+  'get-publication':{params:['-Full'],help:'列出著作 (-Full 顯示全部)',run:function(a,raw){
+    const n=function(s){ return D.pubsFull.filter(function(p){return p.st===s;}).length; };
+    if(argOf(a,'Full')){
+      const o=[line('accent',D.pubsFull.length+' publications  ·  '+n('Accepted')+' IEEE accepted  ·  '
+        +n('preprint')+' preprints  ·  '+n('published')+' earlier'),
+        line('muted','ORCID 0000-0001-7421-8027')];
+      let year='';
+      D.pubsFull.forEach(function(p){
+        if(p.y!==year){ year=p.y; o.push(line(''),line('head',year)); }
+        o.push(line(p.st==='preprint'?'':'ok','  '+p.title));
+        o.push(line('muted','    '+p.venue+(p.id?'  ·  '+p.id:'')+'  ·  '+p.st));
+        o.push(line('muted','    '+p.au));
+      });
+      return o;
+    }
+    return [line('accent',D.pubTotal+' publications ('+n('Accepted')+' IEEE accepted + preprints)'),line('','')]
+      .concat(table(['Venue','Title','Status'],D.publications))
+      .concat([line('muted','  … '+(D.pubTotal-D.publications.length)+' more · 用 -Full 看完整清單')]);}},
   'get-award':{params:['-Year'],help:'列出獲獎',run:function(a,raw){
     let y=argOf(a,'Year')||firstArg(raw);
     let rows=D.awards; if(y) rows=rows.filter(function(r){return r[0]===String(y);});
