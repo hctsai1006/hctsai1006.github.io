@@ -40,7 +40,7 @@
     font-family:"Cascadia Mono",Consolas,"SFMono-Regular","Roboto Mono",ui-monospace,Menlo,monospace;
     font-size:15px;line-height:1.25;-webkit-font-smoothing:antialiased;
     font-variant-ligatures:none;font-feature-settings:"liga" 0,"calt" 0,"dlig" 0;
-    overscroll-behavior:none;touch-action:manipulation}
+    touch-action:manipulation}
   .sr-only{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
     clip:rect(0 0 0 0);white-space:nowrap;border:0}
   .noscript{max-width:70ch;margin:0 auto;padding:24px 20px;line-height:1.6}
@@ -52,11 +52,12 @@
   .console{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;outline:none;
     padding:12px 16px 16px;   /* 後備:不支援 env()/max() 的瀏覽器用這條,下一條會被丟棄 */
     padding:12px max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));
-    scrollbar-color:var(--line) transparent;
+    scrollbar-color:var(--ghost) transparent;   /* 捲軸滑塊沿用 ghost 色,對背景 ≥3:1(WCAG 1.4.11)*/
+    overscroll-behavior:contain;                /* 只阻斷捲動連鎖,不剝奪瀏覽器的下拉重整手勢 */
     contain:content}   /* 渲染隔離:大量輸出時限制 reflow/repaint 範圍(不含 size,避免壓垮 flex 高度)*/
   .console.focused{box-shadow:inset 0 0 0 2px var(--focus)}
   .console::-webkit-scrollbar{width:12px}
-  .console::-webkit-scrollbar-thumb{background:var(--line);border-radius:6px}
+  .console::-webkit-scrollbar-thumb{background:var(--ghost);border-radius:6px}
 
   .row{white-space:pre-wrap;word-break:break-word;min-height:1.25em}
   .banner{color:var(--fg)} .banner b{color:var(--head);font-weight:600}
@@ -86,7 +87,8 @@
 
   @media (max-width:560px){
     body{font-size:16px}                 /* ≥16px:iOS 聚焦不放大 + 可讀 */
-    .console{padding:10px 12px 14px}
+    .console{padding:10px 12px 14px}   /* 後備 */
+    .console{padding:10px max(12px,env(safe-area-inset-right)) max(14px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left))}
     #edit{font-size:16px}
     .menu .opt{padding:10px 14px}        /* 觸控目標放大 */
   }
@@ -120,7 +122,7 @@
     <div id="out" role="log" aria-live="polite" aria-atomic="false" aria-label="主控台輸出"></div>
     <div id="iw">
       <span class="prompt" aria-hidden="true">PS <span class="path">C:\Users\thc1006</span>&gt;&nbsp;</span>
-      <span class="editzone" id="ez"><span class="mirror" id="mirror" aria-hidden="true"><span id="mk"></span></span><span class="ghost" id="ghost" aria-hidden="true"></span><textarea id="edit" rows="1" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="text" enterkeyhint="go" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="cmdmenu" aria-label="PowerShell 指令輸入" aria-describedby="eh"></textarea></span>
+      <span class="editzone" id="ez"><span class="mirror" id="mirror" aria-hidden="true"><span id="mk"></span></span><span class="ghost" id="ghost" aria-hidden="true"></span><textarea id="edit" rows="1" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="text" enterkeyhint="go" role="combobox" aria-autocomplete="both" aria-expanded="false" aria-controls="cmdmenu" aria-label="PowerShell 指令輸入" aria-describedby="eh"></textarea><div class="menu" id="cmdmenu" role="listbox" aria-label="指令補完候選" hidden></div></span>
     </div>
   </div>
 </div>
@@ -130,7 +132,8 @@
 "use strict";
 const con=document.getElementById('con'), out=document.getElementById('out'),
     edit=document.getElementById('edit'), ghost=document.getElementById('ghost'), mirror=document.getElementById('mirror'),
-    ez=document.getElementById('ez'), mk=document.getElementById('mk');
+    ez=document.getElementById('ez'), mk=document.getElementById('mk'),
+    cmdmenu=document.getElementById('cmdmenu');
 /* mirror 內是「文字節點 + 零寬標記」,標記的位置就是游標所在的視覺座標 */
 const mirrorText=document.createTextNode('');
 mirror.insertBefore(mirrorText, mk);
@@ -235,13 +238,30 @@ const HOME='C:\\Users\\thc1006', FSKEY='thc1006.fs.v2';
 let CWD=HOME;
 function slug(s){return String(s).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');}
 let SEEDROWS={}, ROOT=null;
-function dnode(){return {t:'d',ch:{}};}
+/* ch 用 null 原型的字典:檔名 __proto__ 才會變成正常的項目,
+   而不是去改寫物件的原型(那會讓該目錄的結構整個壞掉)。 */
+function dnode(){return {t:'d',ch:Object.create(null)};}
+const FLAGRE=/^-{1,2}[A-Za-z]/;   /* 只有 -Name 這種才算參數;-1 是負數值,不是參數 */
+function joinPath(dir,name){ return String(dir).replace(/\\+$/,'')+'\\'+name; }
+function dirOf(p){ const s=segsOf(p); return 'C:\\'+s.slice(0,-1).join('\\'); }
+function normPath(p){ return String(p).replace(/\\+$/,'').toLowerCase(); }
+function samePath(a,b){ return normPath(a)===normPath(b); }
+function isDescendant(child,ancestor){ return normPath(child).indexOf(normPath(ancestor)+'\\')===0; }
+/* 所有寫入都走這裡:大小寫不同的同名視為同一個項目,避免出現 README.md 與 readme.md 並存 */
+function setChild(parent,name,node){
+  const ex=keyIn(parent,name);
+  if(ex) delete parent.ch[ex];
+  parent.ch[name]=node;
+}
 function fnode(rows,seed,text){return {t:'f',rows:rows||null,seed:!!seed,text:text||null};}
 function segsOf(p){ let m=String(p).match(/^[A-Za-z]:\\?([\s\S]*)$/), s=m?m[1]:String(p);
   return s.split('\\').filter(function(x){return x && x!=='.';}); }
 function keyIn(n,name){ if(!n||n.t!=='d') return null; let k=Object.keys(n.ch),i,l=String(name).toLowerCase();
   for(i=0;i<k.length;i++){ if(k[i].toLowerCase()===l) return k[i]; } return null; }
-function fsGet(path){ let segs=segsOf(path), n=ROOT,i;
+function fsGet(path){
+  const dm=String(path).match(/^([A-Za-z]):/);
+  if(dm && dm[1].toUpperCase()!=='C') return null;   // 只有 C: 存在,別的磁碟不可靜默對映到 C:
+  let segs=segsOf(path), n=ROOT,i;
   for(i=0;i<segs.length;i++){ let k=keyIn(n,segs[i]); if(!k) return null; n=n.ch[k]; }
   return n; }
 function fsCanon(path){ let segs=segsOf(path), n=ROOT, o=[],i;
@@ -254,7 +274,7 @@ function fsMkdirp(path){ let segs=segsOf(path), n=ROOT,i;
     if(!k){ n.ch[segs[i]]=dnode(); k=segs[i]; }
     n=n.ch[k]; if(n.t!=='d') return null; }
   return n; }
-function fsClone(n){ if(n.t==='d'){ let o=dnode(),k; for(k in n.ch) o.ch[k]=fsClone(n.ch[k]); return o; }
+function fsClone(n){ if(n.t==='d'){ const o=dnode(); Object.keys(n.ch).forEach(function(k){ o.ch[k]=fsClone(n.ch[k]); }); return o; }
   return fnode(n.rows,n.seed,n.text?n.text.slice():null); }
 function fsText(n){ if(!n||n.t!=='f') return [];
   if(n.rows) return n.rows;
@@ -339,12 +359,22 @@ function buildSeed(){
     put(HOME+'\\projects', slug(p[0])+'.md', [
       line('head',p[0]),line(''),line('',p[1])]); });
 }
-function fsSer(n){ if(n.t==='d'){ let o={t:'d',ch:{}},k; for(k in n.ch) o.ch[k]=fsSer(n.ch[k]); return o; }
+function fsSer(n){ if(n.t==='d'){ const o={t:'d',ch:{}}; Object.keys(n.ch).forEach(function(k){ o.ch[k]=fsSer(n.ch[k]); }); return o; }
   return n.seed?{t:'f',s:1}:{t:'f',x:n.text||[]}; }
-function fsDeser(o,path){ if(o.t==='d'){ let n=dnode(),k; for(k in o.ch) n.ch[k]=fsDeser(o.ch[k],path+'\\'+k); return n; }
+function isSerNode(v){ if(!v||typeof v!=='object') return false;
+  if(v.t==='f') return v.s===1 || Array.isArray(v.x);
+  if(v.t==='d') return !!v.ch && typeof v.ch==='object' && !Array.isArray(v.ch);
+  return false; }
+function fsDeser(o,path){ if(o.t==='d'){ const n=dnode();
+    Object.keys(o.ch).forEach(function(k){ if(isSerNode(o.ch[k])) n.ch[k]=fsDeser(o.ch[k],path+'\\'+k); }); return n; }
   if(o.s) return fnode(SEEDROWS[path.toLowerCase()]||[line('muted','(seed content unavailable)')],true);
   return fnode(null,false,o.x||[]); }
-function fsSave(){ try{ localStorage.setItem(FSKEY,JSON.stringify(fsSer(ROOT))); }catch(e){} }
+/* 儲存失敗(配額用盡、隱私模式)不能悄悄吞掉 —— 使用者會以為存好了,重整後才發現不見。 */
+function fsSave(){
+  try{ localStorage.setItem(FSKEY,JSON.stringify(fsSer(ROOT))); return null; }
+  catch(e){ return line('err','警告: 變更只存在於記憶體,無法寫入瀏覽器儲存空間 ('+((e&&e.name)||'StorageError')+')。重新整理後會消失。'); }
+}
+function saved(rows){ const w=fsSave(); if(!w) return rows; return (rows||[]).concat([w]); }
 /* 真正的 overlay:種子樹每次開機都重建成「這一版」的內容,localStorage 只回填
    使用者自己建立或改過的節點。否則作品集更新後,曾經造訪過的人會永遠停在舊樹,
    看不到新增的檔案(例如 in-review.md)。
@@ -376,10 +406,14 @@ const CMDLETS={
     }
     return o.concat(table(['Repository','Merged'],rows.map(function(r){return [r[0],r[1]];})),[line('muted','  … Get-Command 看更多')]);
   }},
-  'get-publication':{params:['-Full'],help:'列出著作',run:function(){
-    return [line('accent',D.pubTotal+' publications (IEEE accepted + preprints)'),line('','')]
-      .concat(table(['Venue','Title','Status'],D.publications))
-      .concat([line('muted','  … '+(D.pubTotal-D.publications.length)+' more · ORCID 0000-0001-7421-8027')]);}},
+  'get-publication':{params:['-Full'],help:'列出著作 (-Full 顯示完整索引)',run:function(a,raw){
+    const full=!!argOf(a,'Full');
+    const o=[line('accent',D.pubTotal+' publications (IEEE accepted + preprints)'),line('','')]
+      .concat(table(['Venue','Title','Status'],D.publications));
+    if(full) return o.concat([line(''),
+      line('muted','此處列出 '+D.publications.length+' 篇代表作;其餘 '+(D.pubTotal-D.publications.length)+' 篇的完整索引在 ORCID:'),
+      line('accent','  https://orcid.org/0000-0001-7421-8027')]);
+    return o.concat([line('muted','  … '+(D.pubTotal-D.publications.length)+' more · 用 -Full 看完整索引')]);}},
   'get-award':{params:['-Year'],help:'列出獲獎',run:function(a,raw){
     let y=argOf(a,'Year')||firstArg(raw);
     let rows=D.awards; if(y) rows=rows.filter(function(r){return r[0]===String(y);});
@@ -440,29 +474,31 @@ const CMDLETS={
     let t=argOf(a,'Path')||firstArg(raw);
     if(!t) return [line('err','Set-Content: 缺少 -Path。例: Set-Content notes.txt "hello"')];
     let v=argOf(a,'Value');
-    if(v===undefined||v===true){ let i=raw.indexOf(t); v=raw.slice(i+1).filter(function(x){return !/^-/.test(x);}).join(' '); }
+    if(v===undefined||v===true){ const i=raw.indexOf(t); v=raw.slice(i+1).filter(function(x){return !FLAGRE.test(x);}).join(' '); }
     v=String(v).replace(/^["']|["']$/g,'');
-    let p=resolvePath(t), par=fsParent(p);
+    const p=resolvePath(t), par=fsParent(p);
     if(!par||par.t!=='d') return [line('err','Set-Content: Could not find part of the path \''+p+'\'.')];
-    let ex=keyIn(par,baseOf(p));
+    const ex=keyIn(par,baseOf(p));
     if(ex && par.ch[ex].t==='d') return [line('err','Set-Content: \''+p+'\' is a directory.')];
-    par.ch[ex||baseOf(p)]=fnode(null,false,v?[v]:[]);
-    fsSave(); return null;}},
+    setChild(par, ex||baseOf(p), fnode(null,false,v?[v]:[]));
+    return saved(null);}},
   'add-content':{params:['-Path','-Value'],paths:true,help:'附加檔案內容 (ac)',run:function(a,raw){
     let t=argOf(a,'Path')||firstArg(raw);
     if(!t) return [line('err','Add-Content: 缺少 -Path。')];
     let v=argOf(a,'Value');
-    if(v===undefined||v===true){ let i=raw.indexOf(t); v=raw.slice(i+1).filter(function(x){return !/^-/.test(x);}).join(' '); }
+    if(v===undefined||v===true){ const i=raw.indexOf(t); v=raw.slice(i+1).filter(function(x){return !FLAGRE.test(x);}).join(' '); }
     v=String(v).replace(/^["']|["']$/g,'');
-    let p=resolvePath(t), n=fsGet(p);
-    if(!n){ let par=fsParent(p); if(!par||par.t!=='d') return [line('err','Add-Content: Could not find part of the path \''+p+'\'.')];
-      par.ch[baseOf(p)]=fnode(null,false,[v]); fsSave(); return null; }
+    const p=resolvePath(t), n=fsGet(p);
+    if(!n){ const par=fsParent(p); if(!par||par.t!=='d') return [line('err','Add-Content: Could not find part of the path \''+p+'\'.')];
+      setChild(par, baseOf(p), fnode(null,false,[v])); return saved(null); }
     if(n.t==='d') return [line('err','Add-Content: \''+p+'\' is a directory.')];
     if(n.seed){ n.seed=false; n.text=(n.rows||[]).map(function(r){return r.txt||'';}); n.rows=null; }
-    n.text=(n.text||[]).concat([v]); fsSave(); return null;}},
+    n.text=(n.text||[]).concat([v]); return saved(null);}},
   'test-path':{params:['-Path'],paths:true,help:'測試路徑是否存在',run:function(a,raw){
-    let t=argOf(a,'Path')||firstArg(raw);
-    return [line(fsGet(resolvePath(t))?'ok':'err', fsGet(resolvePath(t))?'True':'False')];}},
+    const t=argOf(a,'Path')||firstArg(raw);
+    if(!t) return [line('err','Test-Path: Cannot process command because of one or more missing mandatory parameters: Path.')];
+    const hit=!!fsGet(resolvePath(t));
+    return [line(hit?'ok':'muted', hit?'True':'False')];}},
   'new-item':{params:['-Path','-ItemType','-Force'],paths:true,help:'建立檔案或資料夾 (mkdir/ni)',run:function(a,raw){
     let t=argOf(a,'Path')||firstArg(raw);
     let head=String(raw[0]).toLowerCase();
@@ -478,10 +514,9 @@ const CMDLETS={
       par=fsMkdirp(parentPath); }
     if(!par||par.t!=='d') return [line('err','New-Item: Could not find part of the path \''+p+'\'.')];
     let name=segs[segs.length-1];
-    par.ch[name]= wantDir?dnode():fnode(null,false,[]);
-    fsSave();
-    return [line('muted','    Directory: '+(fsCanon(parentPath)||'C:\\')),line('')]
-      .concat(table(['Mode','Name'],[[wantDir?'d----':'-a---',name]]));}},
+    setChild(par,name, wantDir?dnode():fnode(null,false,[]));
+    return saved([line('muted','    Directory: '+(fsCanon(parentPath)||'C:\\')),line('')]
+      .concat(table(['Mode','Name'],[[wantDir?'d----':'-a---',name]])));}},
   'remove-item':{params:['-Path','-Recurse','-Force'],paths:true,help:'刪除檔案或資料夾 (rm/del)',run:function(a,raw){
     let t=argOf(a,'Path')||firstArg(raw);
     if(!t) return [line('err','Remove-Item: 缺少 -Path。')];
@@ -493,40 +528,57 @@ const CMDLETS={
               line('muted','加 -Recurse 可以連同內容一起刪除。')];
     let par=fsParent(p), k=keyIn(par,baseOf(p));
     if(k) delete par.ch[k];
-    const pl=p.toLowerCase(), cl=CWD.toLowerCase();          // 刪到自己所在的目錄就退回 HOME
-    if(cl===pl || cl.indexOf(pl+'\\')===0){ CWD=HOME; updatePrompt(); }
-    fsSave(); return null;}},
+    if(samePath(CWD,p) || isDescendant(CWD,p)){ CWD=HOME; updatePrompt(); }   // 刪到自己所在的目錄就退回 HOME
+    return saved(null);}},
+  /* 目的地是既有資料夾時,真正的落點是「資料夾 + 來源名稱」;所有檢查都要針對這個落點。 */
   'copy-item':{params:['-Path','-Destination','-Recurse'],paths:true,help:'複製項目 (cp)',run:function(a,raw){
-    let s=argOf(a,'Path')||raw[1], d=argOf(a,'Destination')||raw[2];
+    const s=argOf(a,'Path')||raw[1], d=argOf(a,'Destination')||raw[2];
     if(!s||!d) return [line('err','Copy-Item: 用法 Copy-Item <來源> <目的地>')];
-    let sp=resolvePath(String(s).replace(/^["']|["']$/g,'')), sn=fsGet(sp);
+    const sp=resolvePath(String(s).replace(/^["']|["']$/g,'')), sn=fsGet(sp);
     if(!sn) return [line('err','Copy-Item: Cannot find path \''+sp+'\' because it does not exist.')];
-    let dp=resolvePath(String(d).replace(/^["']|["']$/g,'')), dn=fsGet(dp), par, name;
-    if(dn && dn.t==='d'){ par=dn; name=baseOf(sp); } else { par=fsParent(dp); name=baseOf(dp); }
-    if(!par||par.t!=='d') return [line('err','Copy-Item: Could not find part of the path \''+dp+'\'.')];
-    par.ch[name]=fsClone(sn); fsSave(); return null;}},
-  'move-item':{params:['-Path','-Destination'],paths:true,help:'移動或改名 (mv)',run:function(a,raw){
-    let s=argOf(a,'Path')||raw[1], d=argOf(a,'Destination')||raw[2];
+    const dp=resolvePath(String(d).replace(/^["']|["']$/g,'')), dn=fsGet(dp);
+    const finalPath=(dn && dn.t==='d' && !samePath(dp,sp)) ? joinPath(fsCanon(dp)||dp, baseOf(sp)) : dp;
+    if(samePath(sp,finalPath)) return [line('err','Copy-Item: The source and destination path must be different.')];
+    if(sn.t==='d' && isDescendant(finalPath,sp))
+      return [line('err','Copy-Item: Cannot copy a directory into itself or one of its descendants.')];
+    const par=fsGet(dirOf(finalPath));
+    if(!par||par.t!=='d') return [line('err','Copy-Item: Could not find part of the path \''+finalPath+'\'.')];
+    setChild(par, baseOf(finalPath), fsClone(sn));   // Copy-Item 覆寫既有目的地(與真實 PowerShell 一致)
+    return saved(null);}},
+  'move-item':{params:['-Path','-Destination','-Force'],paths:true,help:'移動或改名 (mv)',run:function(a,raw){
+    const s=argOf(a,'Path')||raw[1], d=argOf(a,'Destination')||raw[2];
     if(!s||!d) return [line('err','Move-Item: 用法 Move-Item <來源> <目的地>')];
-    let sp=resolvePath(String(s).replace(/^["']|["']$/g,'')), sn=fsGet(sp);
+    const sp=resolvePath(String(s).replace(/^["']|["']$/g,'')), sn=fsGet(sp);
     if(!sn) return [line('err','Move-Item: Cannot find path \''+sp+'\' because it does not exist.')];
     if(segsOf(sp).length<2) return [line('err','Move-Item: Access to the path \''+sp+'\' is denied.')];
-    let dp=resolvePath(String(d).replace(/^["']|["']$/g,'')), dn=fsGet(dp), par, name;
-    if(dn && dn.t==='d'){ par=dn; name=baseOf(sp); } else { par=fsParent(dp); name=baseOf(dp); }
-    if(!par||par.t!=='d') return [line('err','Move-Item: Could not find part of the path \''+dp+'\'.')];
-    par.ch[name]=sn;
-    let sPar=fsParent(sp), sk=keyIn(sPar,baseOf(sp)); if(sk) delete sPar.ch[sk];
-    if(CWD.toLowerCase().indexOf(sp.toLowerCase())===0){ CWD=HOME; updatePrompt(); }
-    fsSave(); return null;}},
+    const dp=resolvePath(String(d).replace(/^["']|["']$/g,'')), dn=fsGet(dp);
+    const finalPath=(dn && dn.t==='d' && !samePath(dp,sp)) ? joinPath(fsCanon(dp)||dp, baseOf(sp)) : dp;
+    if(samePath(sp,finalPath)) return null;                    // 移到自己:PowerShell 視為成功且不動作
+    if(sn.t==='d' && isDescendant(finalPath,sp))               // 移進自己的子孫會產生環,整棵子樹會消失
+      return [line('err','Move-Item: Cannot move a directory into itself or one of its descendants.')];
+    const par=fsGet(dirOf(finalPath));
+    if(!par||par.t!=='d') return [line('err','Move-Item: Could not find part of the path \''+finalPath+'\'.')];
+    if(fsGet(finalPath) && !argOf(a,'Force'))
+      return [line('err','Move-Item: Cannot create a file when that file already exists.'),
+              line('muted','加 -Force 可以覆寫。')];
+    const sPar=fsParent(sp), sk=keyIn(sPar,baseOf(sp));
+    if(sk) delete sPar.ch[sk];                                 // 先摘除來源,再放到目的地(避免大小寫改名時自我抵銷)
+    setChild(par, baseOf(finalPath), sn);
+    if(samePath(CWD,sp) || isDescendant(CWD,sp)){ CWD=HOME; updatePrompt(); }
+    return saved(null);}},
   'rename-item':{params:['-Path','-NewName'],paths:true,help:'重新命名 (ren)',run:function(a,raw){
-    let s=argOf(a,'Path')||raw[1], d=argOf(a,'NewName')||raw[2];
+    const s=argOf(a,'Path')||raw[1], d=argOf(a,'NewName')||raw[2];
     if(!s||!d) return [line('err','Rename-Item: 用法 Rename-Item <路徑> <新名稱>')];
-    return CMDLETS['move-item'].run({Path:s,Destination:String(d).replace(/^["']|["']$/g,'')},['move-item']);}},
+    const nn=String(d).replace(/^["']|["']$/g,'');
+    if(/[\\/:]/.test(nn)) return [line('err','Rename-Item: -NewName 只能是名稱,不能是路徑。')];
+    const sp=resolvePath(String(s).replace(/^["']|["']$/g,''));   // 新名稱相對「來源所在目錄」,不是目前目錄
+    return CMDLETS['move-item'].run({Path:sp,Destination:joinPath(dirOf(sp),nn)},['move-item']);}},
   'select-string':{params:['-Pattern'],help:'搜尋檔案內容 (grep)',run:function(a,raw){
-    let pat=String(argOf(a,'Pattern')||firstArg(raw)||'');
+    const pat=String(argOf(a,'Pattern')||firstArg(raw)||'');
     if(!pat) return [line('err','Select-String: 需要 -Pattern。例: Select-String kubernetes')];
+    if(pat.length>200) return [line('err','Select-String: -Pattern 過長(上限 200 字元)。')];
     let re; try{ re=new RegExp(pat,'i'); }catch(e){ return [line('err','Select-String: 無效的規則運算式。')]; }
-    let hits=[];
+    const hits=[];
     (function walk(n,path){ if(n.t==='d'){ Object.keys(n.ch).forEach(function(k){ walk(n.ch[k],path+'\\'+k); }); return; }
       fsText(n).forEach(function(r){ let t=r&&r.txt?r.txt:''; if(t && re.test(t))
         hits.push([baseOf(path), t.length>40?t.slice(0,40)+'...':t]); }); })(ROOT,'C:');
@@ -560,12 +612,13 @@ const CMDLETS={
     pipe:function(rows){ let n=rows.filter(function(r){return r && r.txt!==undefined && String(r.txt).replace(/\s/g,'').length;}).length;
       return table(['Property','Value'],[['Count',String(n)],['Lines',String(rows.length)]]);}},
   'sort-object':{params:['-Descending'],help:'排序 (pipeline)',run:function(){return [line('muted','用法: <command> | Sort-Object')];},
-    pipe:function(rows,a){ let o=rows.slice().sort(function(x,y){ let xs=(x&&x.txt)||'', ys=(y&&y.txt)||'';
-      return xs.toLowerCase()<ys.toLowerCase()?-1:1; }); if(argOf(a,'Descending')) o.reverse(); return o;}},
+    pipe:function(rows,a){ const o=rows.slice().sort(function(x,y){   // 相等必須回 0,否則排序不穩定
+        return String((x&&x.txt)||'').localeCompare(String((y&&y.txt)||''),undefined,{sensitivity:'base',numeric:true}); });
+      if(argOf(a,'Descending')) o.reverse(); return o;}},
   'select-object':{params:['-First','-Last'],help:'取前/後 N 筆 (pipeline)',run:function(){return [line('muted','用法: <command> | Select-Object -First 5')];},
     pipe:function(rows,a){ let f=parseInt(argOf(a,'First'),10), l=parseInt(argOf(a,'Last'),10);
       if(f>0) return rows.slice(0,f); if(l>0) return rows.slice(-l); return rows;}},
-  'where-object':{params:['-Match'],help:'篩選 (pipeline)',run:function(){return [line('muted','用法: <command> | Where-Object -Match kube')];},
+  'where-object':{params:['-Match','-Like'],help:'篩選 (pipeline)',run:function(){return [line('muted','用法: <command> | Where-Object -Match kube')];},
     pipe:function(rows,a,raw){ let p=String(argOf(a,'Match')||argOf(a,'Like')||firstArg(raw)||'');
       if(!p) return rows; let re; try{ re=new RegExp(p.replace(/\*/g,'.*'),'i'); }catch(e){ return rows; }
       let o=rows.filter(function(r){ return r && r.txt && re.test(r.txt); });
@@ -574,9 +627,9 @@ const CMDLETS={
   'get-random':{params:['-Maximum'],help:'隨機數',run:function(a,raw){
     let m=parseInt(argOf(a,'Maximum')||firstArg(raw)||100,10); if(!(m>0)) m=100;
     return [line('num',String(Math.floor(Math.random()*m)))];}},
-  'test-connection':{params:['-TargetName'],help:'測試連線 (ping)',run:function(a,raw){return pingRun(a,raw);}},
-  'ping':{type:'Application',params:[],help:'ICMP 測試(模擬)',run:function(a,raw){return pingRun(a,raw);}},
-  'tracert':{type:'Application',params:[],help:'路由追蹤(模擬)',run:function(a,raw){
+  'test-connection':{params:['-TargetName'],asyncOut:true,help:'測試連線 (ping)',run:function(a,raw){return pingRun(a,raw);}},
+  'ping':{type:'Application',params:[],asyncOut:true,help:'ICMP 測試(模擬)',run:function(a,raw){return pingRun(a,raw);}},
+  'tracert':{type:'Application',params:[],asyncOut:true,help:'路由追蹤(模擬)',run:function(a,raw){
     let t=firstArg(raw)||'nycu.edu.tw';
     let hops=[['1','1 ms','1 ms','1 ms','10.6.1.1'],
       ['2','4 ms','3 ms','4 ms','140.113.1.254'],
@@ -631,10 +684,10 @@ const CMDLETS={
     line('muted','對應做法: icacls <path> /setowner <user>')];}},
   'touch':{type:'Application',params:[],paths:true,help:'建立空檔案',run:function(a,raw){
     let t=firstArg(raw); if(!t) return [line('err','touch: 缺少檔名。')];
-    let p=resolvePath(t); if(fsGet(p)) return null;
-    let par=fsParent(p);
+    const p=resolvePath(t); if(fsGet(p)) return null;
+    const par=fsParent(p);
     if(!par||par.t!=='d') return [line('err','touch: cannot touch \''+t+'\': No such file or directory')];
-    par.ch[baseOf(p)]=fnode(null,false,[]); fsSave(); return null;}},
+    setChild(par, baseOf(p), fnode(null,false,[])); return saved(null);}},
   'help':{params:[],help:'快速指引',run:function(){
     let g=[
       ['作品集',[['whoami','身分摘要'],['Get-Contribution','開源貢獻 (-Foundation CNCF)'],
@@ -719,7 +772,8 @@ const EGGS={
     line('accent','        (O)      (O)'),
     line('muted','   choo choo!  (你打對指令了)')
   ];},
-  'classic':function(){return [{html:'<span class="accent">舊版 bash CLI(user@hctsai1006)還在 -&gt; </span><a href="classic.html" class="cmd" style="text-decoration:underline">classic.html</a>'}];},
+  'classic':function(){return [{parts:[['accent','舊版 bash CLI(user@hctsai1006)還在 -> '],['a','classic.html','classic.html']],
+    txt:'舊版 bash CLI(user@hctsai1006)還在 -> classic.html'}];},
   'bash':function(){return EGGS.classic();},
   'coffee':function(){return [
     line('muted', '     )  ('),
@@ -764,11 +818,12 @@ function pingRun(a,raw){
   let seq=[line('','Pinging '+t+' [10.6.10.6] with 32 bytes of data:')], i, ms=[];
   for(i=0;i<4;i++){ let v=Math.round(Math.random()*8+3); ms.push(v);
     seq.push(line('','Reply from 10.6.10.6: bytes=32 time='+v+'ms TTL=64')); }
-  let mn=Math.min.apply(null,ms), mx=Math.max.apply(null,ms);
+  const mn=Math.min.apply(null,ms), mx=Math.max.apply(null,ms);
+  const avg=Math.round(ms.reduce(function(s,v){return s+v;},0)/ms.length);   // 平均,不是中程值
   seq.push(line(''),line('','Ping statistics for 10.6.10.6:'),
     line('','    Packets: Sent = 4, Received = 4, Lost = 0 (0% loss),'),
     line('','Approximate round trip times in milli-seconds:'),
-    line('','    Minimum = '+mn+'ms, Maximum = '+mx+'ms, Average = '+Math.round((mn+mx)/2)+'ms'));
+    line('','    Minimum = '+mn+'ms, Maximum = '+mx+'ms, Average = '+avg+'ms'));
   asyncPrint(seq,180); return null;
 }
 const CORPUS=(function(){ let o=[];
@@ -803,9 +858,11 @@ function highlightInto(parent,s){
 function codeLine(s){ return {code:s, txt:s}; }
 
 /* ---------- 輸出(進 role=log)---------- */
+/* 所有輸出都必須經過這裡才會受上限保護 */
+function trimOutput(){ while(out.childElementCount>MAXROWS) out.removeChild(out.firstChild); }
 /* 批次插入:整批 rows 在記憶體組裝,只觸發一次 reflow。
-   純文字走 textContent(不進 HTML parser:更快,且沒有 XSS 面),
-   只有內部產生的高亮片段(r.html)才用 innerHTML。 */
+   整份檔案沒有任何 innerHTML —— 全部以 textContent / DOM 節點建立,不存在 injection sink。
+   row 的形態:{cls,txt} 純文字 · {code} 語法高亮 · {kv} 清單欄位 · {parts} 多段樣式(可含連結)。 */
 function print(rows){ if(!rows) return; if(!Array.isArray(rows)) rows=[rows];
   const frag=document.createDocumentFragment();
   for(let i=0;i<rows.length;i++){ const r=rows[i]; if(!r) continue;
@@ -814,13 +871,18 @@ function print(rows){ if(!rows) return; if(!Array.isArray(rows)) rows=[rows];
       d.appendChild(s); d.appendChild(document.createTextNode(' : '+r.kv[1]));
       if(r.indent){ d.style.paddingLeft=r.indent+'ch'; d.style.textIndent=(-r.indent)+'ch'; } }
     else if(r.code!=null){ highlightInto(d,r.code); }
-    else if(r.html!=null){ d.innerHTML=r.html; }   /* 僅限本檔內寫死的靜態片段,不含任何使用者資料 */
+    else if(r.parts){ r.parts.forEach(function(p){
+        if(p[0]==='a'){ const a=document.createElement('a'); a.setAttribute('href',p[2]);
+          a.setAttribute('target','_blank'); a.setAttribute('rel','noopener');
+          a.className='cmd'; a.style.textDecoration='underline'; a.textContent=p[1]; d.appendChild(a); }
+        else if(p[0]){ const s=document.createElement('span'); s.className=p[0]; s.textContent=p[1]; d.appendChild(s); }
+        else d.appendChild(document.createTextNode(p[1])); }); }
     else if(r.cls){ const s=document.createElement('span'); s.className=r.cls;
       s.textContent=(r.txt!=null?r.txt:''); d.appendChild(s); }
     else { d.textContent=(r.txt!=null?r.txt:''); }
     frag.appendChild(d); }
   out.appendChild(frag);
-  while(out.childElementCount>MAXROWS) out.removeChild(out.firstChild); }  /* 上限:長時間使用不會無限膨脹 */
+  trimOutput(); }
 function updatePrompt(){ const el=document.querySelector('#iw .prompt .path'); if(el) el.textContent=CWD; }
 function printPrompt(cmd){
   const d=document.createElement('div'); d.className='row';
@@ -830,14 +892,15 @@ function printPrompt(cmd){
   p.appendChild(pa); p.appendChild(document.createTextNode('> '));
   d.appendChild(p);
   highlightInto(d,cmd);                       // 使用者輸入:純節點,不進 parser
-  out.appendChild(d); }
+  out.appendChild(d); trimOutput(); }         // 提示行也要計入上限,否則空 Enter 可以繞過
 function scrollBottom(){ con.scrollTop=con.scrollHeight; }
 /* 清屏會遞增 outGen;正在串流的非同步輸出發現世代已變就整批放棄,
    否則清屏後殘留的 setTimeout 會把舊輸出「復活」印回畫面。 */
 let outGen=0;
 const reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 function clearOut(){ outGen++; busy=false;
-  if(out.replaceChildren) out.replaceChildren(); else out.innerHTML=''; }
+  if(out.replaceChildren) out.replaceChildren();
+  else while(out.firstChild) out.removeChild(out.firstChild); }
 function asyncPrint(rows,gap,done){
   busy=true; const gen=outGen;
   if(reduceMotion){                       // 偏好減少動態:不做逐行動畫,一次印完
@@ -894,24 +957,39 @@ function currentToken(){ let v=val(),c=caretPos(); let sp=v.slice(0,c).lastIndex
 function replaceWord(start,pick,c){ let v=val(); setVal(v.slice(0,start)+pick+v.slice(c), start+pick.length); }
 /* WAI-ARIA APG 的 combobox + listbox 模式:焦點永遠留在 textarea,
    目前選項透過 aria-activedescendant 告知輔助科技。 */
+/* listbox 常駐於 DOM,只切換 hidden —— aria-controls 才不會指向不存在的元素,
+   而且移動選取時不必重建整份清單。 */
+function ensureOptionVisible(el){
+  if(!el) return;
+  const top=el.offsetTop, bottom=top+el.offsetHeight;
+  if(top<cmdmenu.scrollTop) cmdmenu.scrollTop=top;
+  else if(bottom>cmdmenu.scrollTop+cmdmenu.clientHeight) cmdmenu.scrollTop=bottom-cmdmenu.clientHeight;
+}
 function renderMenu(){
-  const old=document.getElementById('cmdmenu'); if(old) old.remove();
   edit.setAttribute('aria-expanded', menu.open?'true':'false');
-  if(!menu.open){ edit.removeAttribute('aria-activedescendant'); return; }
-  const m=document.createElement('div');
-  m.className='menu'; m.id='cmdmenu'; m.setAttribute('role','listbox');
-  m.setAttribute('aria-label','指令補完候選');
-  menu.items.forEach(function(it,i){
-    const b=document.createElement('div');
-    b.className='opt'+(i===menu.idx?' sel':'');
-    b.id='opt'+i; b.setAttribute('role','option');
-    b.setAttribute('aria-selected', i===menu.idx?'true':'false');
-    b.textContent=it;
-    b.addEventListener('mousedown',function(ev){ ev.preventDefault();
-      menu.idx=i; applyMenuPick(); closeMenu(); focusEdit(); });
-    m.appendChild(b); });
-  ez.appendChild(m);
+  if(!menu.open){
+    cmdmenu.hidden=true; cmdmenu.replaceChildren(); cmdmenu.removeAttribute('data-sig');
+    edit.removeAttribute('aria-activedescendant'); return; }
+  cmdmenu.hidden=false;
+  const sig=menu.items.join(' ');
+  if(cmdmenu.getAttribute('data-sig')!==sig){       // 候選集合改變才重建
+    cmdmenu.replaceChildren();
+    menu.items.forEach(function(it,i){
+      const b=document.createElement('div');
+      b.className='opt'; b.id='opt'+i;
+      b.setAttribute('role','option'); b.textContent=it;
+      b.addEventListener('mousedown',function(ev){ ev.preventDefault();
+        menu.idx=i; applyMenuPick(); closeMenu(); focusEdit(); });
+      cmdmenu.appendChild(b); });
+    cmdmenu.setAttribute('data-sig',sig);
+  }
+  for(let i=0;i<cmdmenu.children.length;i++){       // 只更新選取狀態
+    const b=cmdmenu.children[i], sel=(i===menu.idx);
+    b.classList.toggle('sel',sel);
+    b.setAttribute('aria-selected',sel?'true':'false');
+  }
   edit.setAttribute('aria-activedescendant','opt'+menu.idx);
+  ensureOptionVisible(cmdmenu.children[menu.idx]);  // 瀏覽器不會自動捲動 activedescendant
 }
 function applyMenuPick(){ let tk=currentToken(); replaceWord(menu.start,menu.items[menu.idx],tk.c); }
 function closeMenu(){ menu.open=false; renderMenu(); }
@@ -946,17 +1024,28 @@ function splitPipe(cmd){ let o=[],cur='',q=null,i,ch;
     cur+=ch; }
   o.push(cur);
   return o.map(function(s){return s.replace(/^\s+|\s+$/g,'');}).filter(function(s){return s.length;}); }
-function parseArgsOf(parts){ let args={},i,pk;
-  for(i=1;i<parts.length;i++){ if(/^-{1,2}[A-Za-z]/.test(parts[i])){
+function parseArgsOf(parts){ const args=Object.create(null); let i,pk;
+  for(i=1;i<parts.length;i++){ if(FLAGRE.test(parts[i])){
     pk=parts[i].replace(/^-+/,'');
-    args[pk]=(parts[i+1]&&!/^-{1,2}[A-Za-z]/.test(parts[i+1]))?String(parts[++i]).replace(/^["']|["']$/g,''):true; } }
+    args[pk]=(parts[i+1]&&!FLAGRE.test(parts[i+1]))?String(parts[++i]).replace(/^["']|["']$/g,''):true; } }
   return args; }
+/* 打錯的參數名不能被當成位置參數吞掉 —— Get-Award -Yera 2026 必須報錯,而不是默默篩 2026 */
+function unknownParam(c,args){
+  if(!c.params||!c.params.length) return null;
+  const allowed=c.params.map(function(p){return String(p).replace(/^-+/,'').toLowerCase();});
+  const keys=Object.keys(args);
+  for(let i=0;i<keys.length;i++){ if(allowed.indexOf(keys[i].toLowerCase())<0) return keys[i]; }
+  return null;
+}
 function execOne(seg,input,piped){
   let parts=seg.match(/"[^"]*"|'[^']*'|\S+/g)||[];
   if(!parts.length) return input;
   let key=parts[0].toLowerCase(), c=CMDLETS[alias(key)], args=parseArgsOf(parts);
-  if(c){ try{ return (piped&&c.pipe)?c.pipe(input||[],args,parts):c.run(args,parts,input); }
-         catch(e){ return [line('err',(c.disp||key)+': '+e.message)]; } }
+  if(c){
+    const bad=unknownParam(c,args);
+    if(bad) return [line('err',(c.disp||key)+': A parameter cannot be found that matches parameter name \''+bad+'\'.')];
+    try{ return (piped&&c.pipe)?c.pipe(input||[],args,parts):c.run(args,parts,input); }
+    catch(e){ return [line('err',(c.disp||key)+': '+e.message)]; } }
   if(EGGS[key]){ try{ return EGGS[key](parts); }catch(e){ return [line('err',e.message)]; } }
   return [line('err',`${parts[0]}: The term '${parts[0]}' is not recognized as a name of a cmdlet, function, script file, or executable program.`),
     line('err','Check the spelling of the name, or if a path was included, verify that the path is correct and try again.'),
@@ -969,7 +1058,17 @@ function run(){
   if(hist.length>MAXHIST) hist=hist.slice(-MAXHIST);
   hIdx=null; draft='';
   if(cmd){
-    let segs=splitPipe(cmd), rows=null, i;
+    const segs=splitPipe(cmd);
+    let rows=null, i;
+    /* 逐行串流輸出的指令(ping/tracert)是即時副作用,放進同步管線會讓下一段先拿到空集合。
+       與其假裝支援,不如明確拒絕。 */
+    for(i=0;i<segs.length && segs.length>1;i++){
+      const k=String((segs[i].match(/\S+/)||[''])[0]).toLowerCase(), cc=CMDLETS[alias(k)];
+      if(cc && cc.asyncOut){
+        print([line('err',(cc.disp||k)+': 這個指令是逐行串流輸出,不能用在管線中。')]);
+        print(line('','')); closeMenu(); setVal(''); scrollBottom(); return;
+      }
+    }
     for(i=0;i<segs.length;i++) rows=execOne(segs[i],rows,i>0);
     if(rows && rows.length){ print(rows); print(line('','')); }
   }
@@ -1022,12 +1121,13 @@ function boot(){
   try{ document.documentElement.lang='zh-Hant'; }catch(e){}
   fsInit(); updatePrompt();
   try{ const t=localStorage.getItem('thc1006.theme'); if(t) setTheme(t); }catch(e){}   // 記住上次的主題
-  function raw(html){ let d=document.createElement('div'); d.className='row'; d.innerHTML=html; out.appendChild(d); }
-  raw('<span class="banner">PowerShell 7.4 &nbsp;·&nbsp; <b>thc1006 edition</b></span>');
-  raw('&nbsp;');
-  raw('<span class="banner">Type <span class="yellow">help</span> to explore, or try <span class="yellow">whoami</span> / <span class="yellow">Get-Contribution -Foundation CNCF</span></span>');
-  raw('<span class="banner">Themes: <span class="yellow">Set-Theme pi</span> / windows / blue</span>');
-  raw('&nbsp;');
+  print([
+    {parts:[['banner','PowerShell 7.4  ·  '],['head','thc1006 edition']]},
+    line(''),
+    {parts:[['banner','Type '],['yellow','help'],['banner',' to explore, or try '],
+            ['yellow','whoami'],['banner',' / '],['yellow','Get-Contribution -Foundation CNCF']]},
+    {parts:[['banner','Themes: '],['yellow','Set-Theme pi'],['banner',' / windows / blue']]},
+    line('')]);
   hist=['whoami','Get-Contribution -Foundation CNCF','Get-Publication -Full','Get-Award -Year 2023'];
   sync(); focusEdit();
 }
