@@ -4,6 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0C0C0C">
+<meta name="robots" content="index,follow">
+<link rel="canonical" href="https://hctsai1006.github.io/">
+<meta property="og:type" content="profile">
+<meta property="og:url" content="https://hctsai1006.github.io/">
+<meta property="og:title" content="Hsiu-Chi Tsai (thc1006) — Open Source Portfolio">
+<meta property="og:description" content="互動式 PowerShell 網頁終端機:開源貢獻、著作與獲獎紀錄。純前端、單一檔案、零外部相依。">
+<meta name="twitter:card" content="summary">
 <link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNiIgZmlsbD0iIzBDMEMwQyIvPjxwYXRoIGQ9Ik04IDExbDUgNS01IDUiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzNCNzhGRiIgc3Ryb2tlLXdpZHRoPSIzIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz48cGF0aCBkPSJNMTcgMjFoNyIgc3Ryb2tlPSIjM0I3OEZGIiBzdHJva2Utd2lkdGg9IjMiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPjwvc3ZnPg==">
 <meta name="description" content="蔡秀吉 (Hsiu-Chi Tsai / thc1006) 的互動式 PowerShell 終端機作品集 — 開源貢獻、著作、獲獎與隱藏彩蛋。">
 <title>PS C:\Users\thc1006 — Hsiu-Chi Tsai</title>
@@ -29,11 +37,14 @@
   *{box-sizing:border-box}
   html{height:100%; -webkit-text-size-adjust:100%; text-size-adjust:100%}
   body{margin:0;min-height:100%;background:var(--bg);color:var(--fg);
-    font-family:"Cascadia Code","Cascadia Mono",Consolas,"SFMono-Regular","Roboto Mono",ui-monospace,Menlo,monospace;
+    font-family:"Cascadia Mono",Consolas,"SFMono-Regular","Roboto Mono",ui-monospace,Menlo,monospace;
     font-size:15px;line-height:1.25;-webkit-font-smoothing:antialiased;
+    font-variant-ligatures:none;font-feature-settings:"liga" 0,"calt" 0,"dlig" 0;
     overscroll-behavior:none;touch-action:manipulation}
   .sr-only{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
     clip:rect(0 0 0 0);white-space:nowrap;border:0}
+  .noscript{max-width:70ch;margin:0 auto;padding:24px 20px;line-height:1.6}
+  .noscript h2{color:var(--head)} .noscript a{color:var(--accent)}
   .win{display:flex;flex-direction:column;height:100vh;height:100dvh}
 
   .tabbar{display:flex;align-items:stretch;background:var(--tab);border-bottom:1px solid #000;
@@ -42,18 +53,17 @@
     color:var(--fg);font-size:12.5px;border-top:2px solid var(--accent);min-width:150px}
   .tab .ico{width:16px;height:16px;border:1.5px solid var(--accent);border-radius:3px;
     display:grid;place-items:center;font-size:8.5px;color:var(--accent);font-weight:700;letter-spacing:-1px}
-  .tab .x{margin-left:auto;opacity:.5;font-size:13px}
-  .newtab{display:grid;place-items:center;width:34px;color:var(--ghost);font-size:16px}
-  .wctl{margin-left:auto;display:flex}
-  .wctl span{display:grid;place-items:center;width:46px;color:var(--ghost);font-size:11px}
 
-  .console{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 16px 16px;outline:none;
-    scrollbar-color:var(--line) transparent}
+  .console{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;outline:none;
+    padding:12px 16px 16px;   /* 後備:不支援 env()/max() 的瀏覽器用這條,下一條會被丟棄 */
+    padding:12px max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));
+    scrollbar-color:var(--line) transparent;
+    contain:content}   /* 渲染隔離:大量輸出時限制 reflow/repaint 範圍(不含 size,避免壓垮 flex 高度)*/
   .console.focused{box-shadow:inset 0 0 0 2px var(--focus)}
   .console::-webkit-scrollbar{width:12px}
   .console::-webkit-scrollbar-thumb{background:var(--line);border-radius:6px}
 
-  .row{white-space:pre-wrap;word-break:break-word}
+  .row{white-space:pre-wrap;word-break:break-word;min-height:1.25em}
   .banner{color:var(--fg)} .banner b{color:var(--head);font-weight:600}
   .ok{color:var(--ok)} .err{color:var(--err)} .muted{color:var(--ghost)}
   .head{color:var(--head);font-weight:600} .rule{color:var(--ghost)}
@@ -69,32 +79,48 @@
     caret-color:var(--caret);white-space:pre-wrap;word-break:break-word;min-height:1.25em}
   .ghost{position:absolute;left:0;top:0;right:0;color:var(--ghost);pointer-events:none;
     white-space:pre;overflow:hidden}
-  .mirror{position:absolute;left:0;top:0;visibility:hidden;white-space:pre-wrap;
-    word-break:break-word;pointer-events:none;max-width:100%}
+  .mirror{position:absolute;left:0;top:0;width:100%;visibility:hidden;white-space:pre-wrap;
+    word-break:break-word;pointer-events:none}
 
   .menu{position:absolute;top:1.7em;left:0;z-index:5;background:var(--tab);
     border:1px solid var(--line);box-shadow:0 8px 30px rgba(0,0,0,.55);max-height:44vh;
     overflow:auto;-webkit-overflow-scrolling:touch;min-width:190px;font-size:.95em;padding:2px 0}
-  .menu button{display:block;width:100%;text-align:left;font:inherit;background:transparent;
+  .menu .opt{display:block;width:100%;text-align:left;font:inherit;background:transparent;
     border:0;padding:6px 14px;white-space:pre;color:var(--fg);cursor:pointer}
-  .menu button.sel,.menu button:hover{background:var(--sel);color:#fff}
+  .menu .opt.sel,.menu .opt:hover{background:var(--sel);color:#fff}
 
   @media (max-width:560px){
     body{font-size:16px}                 /* ≥16px:iOS 聚焦不放大 + 可讀 */
-    .tab{min-width:0;padding:0 10px} .wctl{display:none}
+    .tab{min-width:0;padding:0 10px}
     .console{padding:10px 12px 14px}
     #edit{font-size:16px}
-    .menu button{padding:10px 14px}      /* 觸控目標放大 */
+    .menu .opt{padding:10px 14px}        /* 觸控目標放大 */
   }
   @media (prefers-reduced-motion:reduce){ #edit{caret-color:var(--caret)} }
   @media (forced-colors:active){
-    .menu button.sel{background:Highlight;color:HighlightText}
+    .menu .opt.sel{background:Highlight;color:HighlightText}
     .console.focused{box-shadow:inset 0 0 0 2px CanvasText}
   }
 </style>
 </head>
 <body>
-<div class="win">
+<h1 class="sr-only">蔡秀吉 Hsiu-Chi Tsai (thc1006) — 開源貢獻作品集,互動式 PowerShell 網頁終端機</h1>
+<noscript>
+  <section class="noscript">
+    <h2>蔡秀吉 Hsiu-Chi Tsai (thc1006)</h2>
+    <p>國立陽明交通大學 資訊工程。Nephio (Linux Foundation Networking) Technical Steering Committee member;
+       Zephyr RTOS 與 M5Stack platforms maintainer。</p>
+    <p>109 個已合併的上游 pull request,橫跨 47 個專案與 5 個基金會。</p>
+    <ul>
+      <li>著作:IEEE SCC 2026、IEEE WF-PST 2026、ICAIMS 2026 (IEEE) 已接受,另有預印本。ORCID 0000-0001-7421-8027</li>
+      <li>獲獎:2023 總統教育獎 · 奮發向上獎;2026 國科會大專學生研究創作獎;2026 Make NTU 強茂企業獎第一名;2026 臺灣太空事務青年人才選訓計畫入選</li>
+      <li>專案:Nephio TSC 治理、Kubernetes DRA 正確性稽核、O-RAN × LEO NTN</li>
+    </ul>
+    <p>這個頁面的互動終端機需要 JavaScript。也可以看
+       <a href="classic.html">舊版終端機 classic.html</a>。</p>
+  </section>
+</noscript>
+<div class="win" role="main">
   <div class="tabbar" aria-hidden="true">
     <div class="tab"><span class="ico">&gt;_</span><span>PowerShell</span></div>
   </div>
@@ -103,7 +129,7 @@
     <div id="out" role="log" aria-live="polite" aria-atomic="false" aria-label="主控台輸出"></div>
     <div id="iw">
       <span class="prompt" aria-hidden="true">PS <span class="path">C:\Users\thc1006</span>&gt;&nbsp;</span>
-      <span class="editzone"><span class="mirror" id="mirror" aria-hidden="true"></span><span class="ghost" id="ghost" aria-hidden="true"></span><textarea id="edit" rows="1" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="text" enterkeyhint="go" aria-label="PowerShell 指令輸入" aria-describedby="eh"></textarea></span>
+      <span class="editzone" id="ez"><span class="mirror" id="mirror" aria-hidden="true"><span id="mk"></span></span><span class="ghost" id="ghost" aria-hidden="true"></span><textarea id="edit" rows="1" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="text" enterkeyhint="go" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="cmdmenu" aria-label="PowerShell 指令輸入" aria-describedby="eh"></textarea></span>
     </div>
   </div>
 </div>
@@ -111,10 +137,13 @@
 
 <script>
 "use strict";
-var con=document.getElementById('con'), out=document.getElementById('out'),
-    edit=document.getElementById('edit'), ghost=document.getElementById('ghost'), mirror=document.getElementById('mirror');
-function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-function dw(s){var n=0,a=String(s);for(var i=0;i<a.length;i++){var c=a.codePointAt(i);
+const con=document.getElementById('con'), out=document.getElementById('out'),
+    edit=document.getElementById('edit'), ghost=document.getElementById('ghost'), mirror=document.getElementById('mirror'),
+    ez=document.getElementById('ez'), mk=document.getElementById('mk');
+/* mirror 內是「文字節點 + 零寬標記」,標記的位置就是游標所在的視覺座標 */
+const mirrorText=document.createTextNode('');
+mirror.insertBefore(mirrorText, mk);
+function dw(s){let n=0,a=String(s);for(let i=0;i<a.length;i++){let c=a.codePointAt(i);
   n+=(c>=0x1100&&(c<=0x115f||(c>=0x2e80&&c<=0xa4cf)||(c>=0xac00&&c<=0xd7a3)||(c>=0xf900&&c<=0xfaff)||
      (c>=0xfe30&&c<=0xfe4f)||(c>=0xff00&&c<=0xff60)||(c>=0xffe0&&c<=0xffe6)||(c>=0x20000&&c<=0x3fffd)))?2:1;
   if(c>0xffff)i++;}
@@ -122,7 +151,7 @@ function dw(s){var n=0,a=String(s);for(var i=0;i<a.length;i++){var c=a.codePoint
 function padw(s,n){s=String(s);return s+new Array(Math.max(0,n-dw(s))+1).join(' ');}
 
 /* ---------- 真實資料 ---------- */
-var D={
+const D={
   profile:[['head','thc1006  (蔡秀吉 · Hsiu-Chi Tsai)'],
     ['','Nephio (Linux Foundation Networking) Technical Steering Committee Member'],
     ['','Zephyr RTOS · M5Stack Platforms Maintainer'],
@@ -152,22 +181,134 @@ var D={
 };
 function line(cls,txt){return {cls:cls,txt:txt};}
 function table(headers,rows){
-  var w=headers.map(function(h,i){return Math.max.apply(null,[dw(h)].concat(rows.map(function(r){return dw(String(r[i]));})));});
-  var H=headers.map(function(h,i){return padw(h,w[i]);}).join('  ');
-  var R=w.map(function(x){return new Array(x+1).join('-');}).join('  ');
-  var o=[{cls:'head',txt:H},{cls:'rule',txt:R}];
+  let w=headers.map(function(h,i){return Math.max.apply(null,[dw(h)].concat(rows.map(function(r){return dw(String(r[i]));})));});
+  let H=headers.map(function(h,i){return padw(h,w[i]);}).join('  ');
+  let R=w.map(function(x){return new Array(x+1).join('-');}).join('  ');
+  let o=[{cls:'head',txt:H},{cls:'rule',txt:R}];
   rows.forEach(function(r){o.push({cls:'',txt:r.map(function(c,i){return padw(c,w[i]);}).join('  ')});});
   return o;
 }
-var THEMES=['windows','pi','blue'];
-function setTheme(t){ if(THEMES.indexOf(t)<0) return false; document.documentElement.setAttribute('data-theme',t); return true; }
+const THEMES=['windows','pi','blue'];
+const THEME_BG={windows:'#0C0C0C',pi:'#2A1A16',blue:'#012456'};
+function setTheme(t){ if(THEMES.indexOf(t)<0) return false;
+  document.documentElement.setAttribute('data-theme',t);
+  const tc=document.querySelector('meta[name="theme-color"]');   // 手機瀏覽器工具列跟著換色
+  if(tc && THEME_BG[t]) tc.setAttribute('content',THEME_BG[t]);
+  try{ localStorage.setItem('thc1006.theme',t); }catch(e){}
+  return true; }
+
+/* ---------- 虛擬檔案系統(可讀寫 · localStorage 持久化)----------
+   架構參考 ZenFS / BrowserFS 與 daedalOS 的 overlay 模型:
+   唯讀「種子」作品集樹 + 使用者可寫層,序列化時種子檔只存標記,載入時再水合。 */
+const HOME='C:\\Users\\thc1006', FSKEY='thc1006.fs.v1';
+let CWD=HOME;
+function slug(s){return String(s).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');}
+let SEEDROWS={}, ROOT=null;
+function dnode(){return {t:'d',ch:{}};}
+function fnode(rows,seed,text){return {t:'f',rows:rows||null,seed:!!seed,text:text||null};}
+function segsOf(p){ let m=String(p).match(/^[A-Za-z]:\\?([\s\S]*)$/), s=m?m[1]:String(p);
+  return s.split('\\').filter(function(x){return x && x!=='.';}); }
+function keyIn(n,name){ if(!n||n.t!=='d') return null; let k=Object.keys(n.ch),i,l=String(name).toLowerCase();
+  for(i=0;i<k.length;i++){ if(k[i].toLowerCase()===l) return k[i]; } return null; }
+function fsGet(path){ let segs=segsOf(path), n=ROOT,i;
+  for(i=0;i<segs.length;i++){ let k=keyIn(n,segs[i]); if(!k) return null; n=n.ch[k]; }
+  return n; }
+function fsCanon(path){ let segs=segsOf(path), n=ROOT, o=[],i;
+  for(i=0;i<segs.length;i++){ let k=keyIn(n,segs[i]); if(!k) return null; o.push(k); n=n.ch[k]; }
+  return 'C:\\'+o.join('\\'); }
+function fsParent(path){ let segs=segsOf(path); if(!segs.length) return null; return fsGet('C:\\'+segs.slice(0,-1).join('\\')); }
+function baseOf(path){ let s=segsOf(path); return s.length?s[s.length-1]:''; }
+function fsMkdirp(path){ let segs=segsOf(path), n=ROOT,i;
+  for(i=0;i<segs.length;i++){ let k=keyIn(n,segs[i]);
+    if(!k){ n.ch[segs[i]]=dnode(); k=segs[i]; }
+    n=n.ch[k]; if(n.t!=='d') return null; }
+  return n; }
+function fsClone(n){ if(n.t==='d'){ let o=dnode(),k; for(k in n.ch) o.ch[k]=fsClone(n.ch[k]); return o; }
+  return fnode(n.rows,n.seed,n.text?n.text.slice():null); }
+function fsText(n){ if(!n||n.t!=='f') return [];
+  if(n.rows) return n.rows;
+  return (n.text||[]).map(function(s){return line('',s);}); }
+function resolvePath(p){
+  if(p==null||p==='') return CWD;
+  p=String(p).replace(/^["']|["']$/g,'').replace(/\//g,'\\');
+  if(p==='~') return HOME;
+  let abs;
+  if(p.indexOf('~\\')===0) abs=HOME+'\\'+p.slice(2);
+  else if(/^[A-Za-z]:/.test(p)) abs=p;
+  else if(p.charAt(0)==='\\') abs='C:'+p;
+  else abs=CWD+'\\'+p;
+  let m=abs.match(/^([A-Za-z]):\\?([\s\S]*)$/);
+  if(!m) return abs;
+  let segs=m[2].split('\\'), o=[], i;
+  for(i=0;i<segs.length;i++){ let s=segs[i];
+    if(!s||s==='.') continue;
+    if(s==='..'){ o.pop(); continue; }
+    o.push(s); }
+  return m[1].toUpperCase()+':\\'+o.join('\\');
+}
+function pathCandidates(){ let n=fsGet(CWD); if(!n||n.t!=='d') return [];
+  return Object.keys(n.ch).concat(['..','~']); }
+function argOf(a,n){ let k=Object.keys(a),i; for(i=0;i<k.length;i++){ if(k[i].toLowerCase()===String(n).toLowerCase()) return a[k[i]]; } return undefined; }
+function firstArg(raw){ for(let i=1;i<raw.length;i++){ if(!/^-/.test(raw[i])) return String(raw[i]).replace(/^["']|["']$/g,''); } return ''; }
+
+/* 種子樹:作品集內容 */
+function buildSeed(){
+  ROOT=dnode(); SEEDROWS={};
+  function put(dir,name,rows){ let d=fsMkdirp(dir); d.ch[name]=fnode(rows,true);
+    SEEDROWS[(dir+'\\'+name).toLowerCase()]=rows; }
+  fsMkdirp(HOME+'\\contributions'); fsMkdirp(HOME+'\\publications');
+  fsMkdirp(HOME+'\\awards'); fsMkdirp(HOME+'\\projects');
+  put(HOME,'README.md',[
+    line('head','# thc1006 — Hsiu-Chi Tsai (蔡秀吉)'),line(''),
+    line('','National Yang Ming Chiao Tung University — Computer Science'),
+    line('','Nephio (LFN) Technical Steering Committee member'),
+    line('','Zephyr RTOS / M5Stack platforms maintainer'),line(''),
+    line('accent','109 merged upstream PRs · 47 projects · 5 foundations'),line(''),
+    line('muted','whoami / Get-Contribution / Get-Publication / Get-Award')]);
+  put(HOME,'profile.ps1',[
+    line('muted','# Microsoft.PowerShell_profile.ps1'),
+    codeLine('Set-PSReadLineOption -PredictionSource HistoryAndPlugin'),
+    codeLine('Set-PSReadLineOption -EditMode Windows'),
+    codeLine('Set-Alias k kubectl'),
+    codeLine('Set-Alias g git'),line(''),
+    line('muted','# 每天早上先看看有沒有 PR 被合併'),
+    codeLine('function Get-MergedPRs { gh search prs --author thc1006 --merged }'),line(''),
+    codeLine('Write-Host "Welcome back, thc1006." -ForegroundColor Cyan')]);
+  D.contribTop.forEach(function(r){
+    put(HOME+'\\contributions', r[0].split('/')[1]+'.md', [
+      line('head',r[0]),line(''),
+      line('accent',r[1]+' merged pull requests'),
+      line('muted','https://github.com/'+r[0])]); });
+  D.publications.forEach(function(p){
+    put(HOME+'\\publications', slug(p[0])+'.md', [
+      line('head',p[1]),line(''),
+      line('accent',p[0]),line(p[2]==='Accepted'?'ok':'muted','Status: '+p[2])]); });
+  let awardFiles=['2023-presidential-education-award.md','2026-nstc-research-award.md',
+    '2026-make-ntu.md','2026-tasa-space-talent.md','2023-ocean-governance.md'];
+  D.awards.forEach(function(w,i){
+    put(HOME+'\\awards', awardFiles[i]||('award-'+(i+1)+'.md'), [
+      line('head',w[1]),line(''),line('accent',w[0])]); });
+  D.projects.forEach(function(p){
+    put(HOME+'\\projects', slug(p[0])+'.md', [
+      line('head',p[0]),line(''),line('',p[1])]); });
+}
+function fsSer(n){ if(n.t==='d'){ let o={t:'d',ch:{}},k; for(k in n.ch) o.ch[k]=fsSer(n.ch[k]); return o; }
+  return n.seed?{t:'f',s:1}:{t:'f',x:n.text||[]}; }
+function fsDeser(o,path){ if(o.t==='d'){ let n=dnode(),k; for(k in o.ch) n.ch[k]=fsDeser(o.ch[k],path+'\\'+k); return n; }
+  if(o.s) return fnode(SEEDROWS[path.toLowerCase()]||[line('muted','(seed content unavailable)')],true);
+  return fnode(null,false,o.x||[]); }
+function fsSave(){ try{ localStorage.setItem(FSKEY,JSON.stringify(fsSer(ROOT))); }catch(e){} }
+function fsLoad(){ try{ let s=localStorage.getItem(FSKEY); if(!s) return false;
+  let o=JSON.parse(s); if(!o||o.t!=='d') return false; ROOT=fsDeser(o,'C:'); return true; }catch(e){ return false; } }
+function fsReset(){ buildSeed(); try{ localStorage.removeItem(FSKEY); }catch(e){} CWD=HOME; updatePrompt(); }
+function fsInit(){ buildSeed(); fsLoad(); if(!fsGet(HOME)) buildSeed(); }
 
 /* ---------- cmdlet ---------- */
-var CMDLETS={
+const CMDLETS={
   'whoami':{params:[],help:'顯示身分摘要',run:function(){return D.profile.map(function(p){return line(p[0],p[1]);});}},
   'get-contribution':{params:['-Foundation'],help:'列出開源貢獻',run:function(a){
-    var o=[line('accent','109 merged pull requests · 47 projects · 5 foundations'),line('','')], rows=D.contribTop;
-    if((a.Foundation||'').toLowerCase()==='cncf'){
+    let o=[line('accent','109 merged pull requests · 47 projects · 5 foundations'),line('','')], rows=D.contribTop;
+    if(String(argOf(a,'Foundation')||'').toLowerCase()==='cncf'){
       o=[line('accent','CNCF — '+D.cncf[1]+' merged · '+D.cncf[2]+' repos'),line('','')];
       rows=D.contribTop.filter(function(r){return /kubernetes|kueue|dranet|porch|volcano|jaeger|telemetry|llm-d|meshery/.test(r[0]);});
     }
@@ -177,54 +318,321 @@ var CMDLETS={
     return [line('accent',D.pubTotal+' publications (IEEE accepted + preprints)'),line('','')]
       .concat(table(['Venue','Title','Status'],D.publications))
       .concat([line('muted','  … '+(D.pubTotal-D.publications.length)+' more · ORCID 0000-0001-7421-8027')]);}},
-  'get-award':{params:['-Year'],help:'列出獲獎',run:function(a){
-    var rows=D.awards; if(a.Year) rows=rows.filter(function(r){return r[0]===String(a.Year);});
+  'get-award':{params:['-Year'],help:'列出獲獎',run:function(a,raw){
+    let y=argOf(a,'Year')||firstArg(raw);
+    let rows=D.awards; if(y) rows=rows.filter(function(r){return r[0]===String(y);});
     return rows.length?table(['Year','Award'],rows):[line('muted','該年度無資料')];}},
   'get-project':{params:[],help:'代表專案',run:function(){return table(['Project','Focus'],D.projects);}},
   'get-timeline':{params:[],help:'年度時間軸',run:function(){return table(['Year','Highlights'],D.timeline);}},
   'get-history':{params:[],help:'指令歷史',run:function(){return hist.length?
     hist.map(function(h,i){return line('',padw(String(i+1),4)+' '+h);}):[line('muted','(空)')];}},
-  'get-command':{params:[],help:'列出可用 cmdlet',run:function(){
-    return [line('accent','CommandType: Cmdlet'),line('','')].concat(
-      table(['Name','Description'],Object.keys(CMDLETS).sort().map(function(n){return [toTitle(n),CMDLETS[n].help];})));}},
-  'get-help':{params:[],help:'顯示用法',run:function(a,raw){
-    var t=(raw[1]||'').toLowerCase(), c=CMDLETS[t]||CMDLETS[alias(t)];
-    if(!c) return [line('muted','用法: Get-Help <cmdlet> · 試 Get-Command 看清單')];
-    return [line('head','NAME'),line('','    '+toTitle(t)),line('head','SYNOPSIS'),
-      line('','    '+c.help),line('head','SYNTAX'),
-      line('','    '+toTitle(t)+' '+c.params.map(function(p){return '['+p+' <String>]';}).join(' '))];}},
+  'get-command':{params:['-Name'],help:'列出所有可用指令 (gcm)',run:function(a,raw){
+    let f=String(argOf(a,'Name')||firstArg(raw)||'').toLowerCase().replace(/\*/g,''), rows=[];
+    Object.keys(CMDLETS).forEach(function(n){ let c=CMDLETS[n]; if(c.hidden) return;
+      let nm=c.disp||n; if(f && nm.toLowerCase().indexOf(f)<0) return;
+      rows.push([c.type||'Cmdlet',nm]); });
+    Object.keys(ALIAS).forEach(function(al){ let t=CMDLETS[ALIAS[al]]; if(!t||t.hidden) return;
+      if(f && al.indexOf(f)<0) return; rows.push(['Alias',al+' -> '+(t.disp||ALIAS[al])]); });
+    rows.sort(function(x,y){ return x[0]===y[0] ? (x[1].toLowerCase()<y[1].toLowerCase()?-1:1) : (x[0]<y[0]?-1:1); });
+    if(!rows.length) return [line('err','Get-Command: 找不到符合 \''+f+'\' 的指令。')];
+    return table(['CommandType','Name'],rows);}},
+  'get-help':{params:['-Name'],help:'顯示指令用法 (man)',run:function(a,raw){
+    let t=String(argOf(a,'Name')||firstArg(raw)||'').toLowerCase();
+    let n=alias(t), c=CMDLETS[n];
+    if(!c) return [line('muted','用法: Get-Help <command>  ·  試 Get-Command 看完整清單')];
+    let nm=c.disp||n;
+    return [line('head','NAME'),line('','    '+nm),line('head','SYNOPSIS'),line('','    '+c.help),
+      line('head','SYNTAX'),line('','    '+nm+(c.params.length?' '+c.params.map(function(p){return '['+p+' <String>]';}).join(' '):''))];}},
   'set-theme':{params:['-Name'],help:'切換主題 windows|pi|blue',run:function(a,raw){
-    var t=(a.Name||raw[1]||'').toLowerCase();
+    let t=String(argOf(a,'Name')||firstArg(raw)||'').toLowerCase();
     if(setTheme(t)) return [line('ok','主題已切換為 '+t)];
     return [line('muted','可用主題: '+THEMES.join(' · ')+'  (例: Set-Theme pi)')];}},
-  'clear-host':{params:[],help:'清空畫面 (cls)',run:function(){out.innerHTML='';return null;}},
-  'get-childitem':{params:[],help:'列出目錄 (ls)',run:function(){return [
-    line('muted','    Directory: C:\\Users\\thc1006'),line('',''),
-    line('head','Mode    Name'),line('rule','----    ----'),
-    line('','d----   contributions'),line('','d----   publications'),
-    line('','d----   awards'),line('','d----   projects'),line('','-a---   README.md')];}},
+  'clear-host':{params:[],help:'清空畫面 (cls)',run:function(){ clearOut(); return null; }},
+  'get-childitem':{params:['-Path'],paths:true,help:'列出目錄內容 (ls/dir)',run:function(a,raw){
+    let t=argOf(a,'Path')||firstArg(raw), p=t?resolvePath(t):CWD, n=fsGet(p);
+    if(!n) return [line('err','Get-ChildItem: Cannot find path \''+p+'\' because it does not exist.')];
+    if(n.t==='f') return table(['Mode','Name'],[['-a---',baseOf(p)]]);
+    let ks=Object.keys(n.ch), rows=[];
+    ks.filter(function(k){return n.ch[k].t==='d';}).sort().forEach(function(k){ rows.push(['d----',k]); });
+    ks.filter(function(k){return n.ch[k].t==='f';}).sort().forEach(function(k){ rows.push(['-a---',k]); });
+    if(!rows.length) return [line('muted','(空目錄)')];
+    return [line('muted','    Directory: '+fsCanon(p)),line('')].concat(table(['Mode','Name'],rows));}},
+  'get-location':{params:[],help:'顯示目前路徑 (pwd)',run:function(){
+    return [line('head','Path'),line('rule',new Array(dw(CWD)+1).join('-')),line('',CWD)];}},
+  'set-location':{params:['-Path'],paths:true,help:'切換目錄 (cd)',run:function(a,raw){
+    if(String(raw[0]).toLowerCase()==='sl' && raw.length===1) return EGGS.sl();
+    let t=argOf(a,'Path')||firstArg(raw);
+    if(!t){ CWD=HOME; updatePrompt(); return null; }
+    let p=resolvePath(t), n=fsGet(p);
+    if(!n) return [line('err','Set-Location: Cannot find path \''+p+'\' because it does not exist.')];
+    if(n.t!=='d') return [line('err','Set-Location: \''+p+'\' is not a directory.')];
+    CWD=fsCanon(p); updatePrompt(); return null;}},
+  'get-content':{params:['-Path'],paths:true,help:'讀取檔案內容 (cat/type)',run:function(a,raw){
+    let t=argOf(a,'Path')||firstArg(raw);
+    if(!t) return [line('err','Get-Content: 缺少 -Path。例: Get-Content README.md')];
+    let p=resolvePath(t), n=fsGet(p);
+    if(!n) return [line('err','Get-Content: Cannot find path \''+p+'\' because it does not exist.')];
+    if(n.t==='d') return [line('err','Get-Content: Cannot read \''+p+'\' because it is a directory.')];
+    let r=fsText(n); return r.length?r:[line('muted','(空檔案)')];}},
+  'set-content':{params:['-Path','-Value'],paths:true,help:'寫入檔案內容 (sc)',run:function(a,raw){
+    let t=argOf(a,'Path')||firstArg(raw);
+    if(!t) return [line('err','Set-Content: 缺少 -Path。例: Set-Content notes.txt "hello"')];
+    let v=argOf(a,'Value');
+    if(v===undefined||v===true){ let i=raw.indexOf(t); v=raw.slice(i+1).filter(function(x){return !/^-/.test(x);}).join(' '); }
+    v=String(v).replace(/^["']|["']$/g,'');
+    let p=resolvePath(t), par=fsParent(p);
+    if(!par||par.t!=='d') return [line('err','Set-Content: Could not find part of the path \''+p+'\'.')];
+    let ex=keyIn(par,baseOf(p));
+    if(ex && par.ch[ex].t==='d') return [line('err','Set-Content: \''+p+'\' is a directory.')];
+    par.ch[ex||baseOf(p)]=fnode(null,false,v?[v]:[]);
+    fsSave(); return null;}},
+  'add-content':{params:['-Path','-Value'],paths:true,help:'附加檔案內容 (ac)',run:function(a,raw){
+    let t=argOf(a,'Path')||firstArg(raw);
+    if(!t) return [line('err','Add-Content: 缺少 -Path。')];
+    let v=argOf(a,'Value');
+    if(v===undefined||v===true){ let i=raw.indexOf(t); v=raw.slice(i+1).filter(function(x){return !/^-/.test(x);}).join(' '); }
+    v=String(v).replace(/^["']|["']$/g,'');
+    let p=resolvePath(t), n=fsGet(p);
+    if(!n){ let par=fsParent(p); if(!par||par.t!=='d') return [line('err','Add-Content: Could not find part of the path \''+p+'\'.')];
+      par.ch[baseOf(p)]=fnode(null,false,[v]); fsSave(); return null; }
+    if(n.t==='d') return [line('err','Add-Content: \''+p+'\' is a directory.')];
+    if(n.seed){ n.seed=false; n.text=(n.rows||[]).map(function(r){return r.txt||'';}); n.rows=null; }
+    n.text=(n.text||[]).concat([v]); fsSave(); return null;}},
+  'test-path':{params:['-Path'],paths:true,help:'測試路徑是否存在',run:function(a,raw){
+    let t=argOf(a,'Path')||firstArg(raw);
+    return [line(fsGet(resolvePath(t))?'ok':'err', fsGet(resolvePath(t))?'True':'False')];}},
+  'new-item':{params:['-Path','-ItemType','-Force'],paths:true,help:'建立檔案或資料夾 (mkdir/ni)',run:function(a,raw){
+    let t=argOf(a,'Path')||firstArg(raw);
+    let head=String(raw[0]).toLowerCase();
+    if(!t) return [line('err','New-Item: 缺少 -Path。例: New-Item demo -ItemType Directory')];
+    let it=String(argOf(a,'ItemType')||'').toLowerCase();
+    let wantDir = it.indexOf('dir')===0 || head==='mkdir' || head==='md';
+    let p=resolvePath(t);
+    if(fsGet(p)) return [line('err','New-Item: An item with the specified name \''+p+'\' already exists.')];
+    let segs=segsOf(p);
+    if(!segs.length) return [line('err','New-Item: 無效的路徑。')];
+    let parentPath='C:\\'+segs.slice(0,-1).join('\\'), par=fsGet(parentPath);
+    if(!par){ if(!wantDir && !argOf(a,'Force')) return [line('err','New-Item: Could not find part of the path \''+p+'\'.')];
+      par=fsMkdirp(parentPath); }
+    if(!par||par.t!=='d') return [line('err','New-Item: Could not find part of the path \''+p+'\'.')];
+    let name=segs[segs.length-1];
+    par.ch[name]= wantDir?dnode():fnode(null,false,[]);
+    fsSave();
+    return [line('muted','    Directory: '+(fsCanon(parentPath)||'C:\\')),line('')]
+      .concat(table(['Mode','Name'],[[wantDir?'d----':'-a---',name]]));}},
+  'remove-item':{params:['-Path','-Recurse','-Force'],paths:true,help:'刪除檔案或資料夾 (rm/del)',run:function(a,raw){
+    let t=argOf(a,'Path')||firstArg(raw);
+    if(!t) return [line('err','Remove-Item: 缺少 -Path。')];
+    let p=resolvePath(t), n=fsGet(p);
+    if(!n) return [line('err','Remove-Item: Cannot find path \''+p+'\' because it does not exist.')];
+    if(segsOf(p).length<2) return [line('err','Remove-Item: Access to the path \''+p+'\' is denied.')];
+    if(n.t==='d' && Object.keys(n.ch).length && !(argOf(a,'Recurse')||argOf(a,'Force')))
+      return [line('err','Remove-Item: The directory \''+baseOf(p)+'\' is not empty.'),
+              line('muted','加 -Recurse 可以連同內容一起刪除。')];
+    let par=fsParent(p), k=keyIn(par,baseOf(p));
+    if(k) delete par.ch[k];
+    const pl=p.toLowerCase(), cl=CWD.toLowerCase();          // 刪到自己所在的目錄就退回 HOME
+    if(cl===pl || cl.indexOf(pl+'\\')===0){ CWD=HOME; updatePrompt(); }
+    fsSave(); return null;}},
+  'copy-item':{params:['-Path','-Destination','-Recurse'],paths:true,help:'複製項目 (cp)',run:function(a,raw){
+    let s=argOf(a,'Path')||raw[1], d=argOf(a,'Destination')||raw[2];
+    if(!s||!d) return [line('err','Copy-Item: 用法 Copy-Item <來源> <目的地>')];
+    let sp=resolvePath(String(s).replace(/^["']|["']$/g,'')), sn=fsGet(sp);
+    if(!sn) return [line('err','Copy-Item: Cannot find path \''+sp+'\' because it does not exist.')];
+    let dp=resolvePath(String(d).replace(/^["']|["']$/g,'')), dn=fsGet(dp), par, name;
+    if(dn && dn.t==='d'){ par=dn; name=baseOf(sp); } else { par=fsParent(dp); name=baseOf(dp); }
+    if(!par||par.t!=='d') return [line('err','Copy-Item: Could not find part of the path \''+dp+'\'.')];
+    par.ch[name]=fsClone(sn); fsSave(); return null;}},
+  'move-item':{params:['-Path','-Destination'],paths:true,help:'移動或改名 (mv)',run:function(a,raw){
+    let s=argOf(a,'Path')||raw[1], d=argOf(a,'Destination')||raw[2];
+    if(!s||!d) return [line('err','Move-Item: 用法 Move-Item <來源> <目的地>')];
+    let sp=resolvePath(String(s).replace(/^["']|["']$/g,'')), sn=fsGet(sp);
+    if(!sn) return [line('err','Move-Item: Cannot find path \''+sp+'\' because it does not exist.')];
+    if(segsOf(sp).length<2) return [line('err','Move-Item: Access to the path \''+sp+'\' is denied.')];
+    let dp=resolvePath(String(d).replace(/^["']|["']$/g,'')), dn=fsGet(dp), par, name;
+    if(dn && dn.t==='d'){ par=dn; name=baseOf(sp); } else { par=fsParent(dp); name=baseOf(dp); }
+    if(!par||par.t!=='d') return [line('err','Move-Item: Could not find part of the path \''+dp+'\'.')];
+    par.ch[name]=sn;
+    let sPar=fsParent(sp), sk=keyIn(sPar,baseOf(sp)); if(sk) delete sPar.ch[sk];
+    if(CWD.toLowerCase().indexOf(sp.toLowerCase())===0){ CWD=HOME; updatePrompt(); }
+    fsSave(); return null;}},
+  'rename-item':{params:['-Path','-NewName'],paths:true,help:'重新命名 (ren)',run:function(a,raw){
+    let s=argOf(a,'Path')||raw[1], d=argOf(a,'NewName')||raw[2];
+    if(!s||!d) return [line('err','Rename-Item: 用法 Rename-Item <路徑> <新名稱>')];
+    return CMDLETS['move-item'].run({Path:s,Destination:String(d).replace(/^["']|["']$/g,'')},['move-item']);}},
+  'select-string':{params:['-Pattern'],help:'搜尋檔案內容 (grep)',run:function(a,raw){
+    let pat=String(argOf(a,'Pattern')||firstArg(raw)||'');
+    if(!pat) return [line('err','Select-String: 需要 -Pattern。例: Select-String kubernetes')];
+    let re; try{ re=new RegExp(pat,'i'); }catch(e){ return [line('err','Select-String: 無效的規則運算式。')]; }
+    let hits=[];
+    (function walk(n,path){ if(n.t==='d'){ Object.keys(n.ch).forEach(function(k){ walk(n.ch[k],path+'\\'+k); }); return; }
+      fsText(n).forEach(function(r){ let t=r&&r.txt?r.txt:''; if(t && re.test(t))
+        hits.push([baseOf(path), t.length>40?t.slice(0,40)+'...':t]); }); })(ROOT,'C:');
+    if(!hits.length) return [line('muted','(無相符結果)')];
+    return table(['File','Match'],hits.slice(0,14));},
+    pipe:function(rows,a,raw){ let pat=String(argOf(a,'Pattern')||firstArg(raw)||'');
+      let re; try{ re=new RegExp(pat,'i'); }catch(e){ return [line('err','Select-String: 無效的規則運算式。')]; }
+      let o=rows.filter(function(r){ return r && r.txt && re.test(r.txt); });
+      return o.length?o:[line('muted','(無相符結果)')];}},
+  'tree':{params:[],help:'目錄樹',run:function(){
+    let o=[line('',CWD)];
+    (function walk(n,prefix){
+      let ks=Object.keys(n.ch).sort(function(x,y){
+        let dx=n.ch[x].t==='d'?0:1, dy=n.ch[y].t==='d'?0:1; return dx!==dy?dx-dy:(x.toLowerCase()<y.toLowerCase()?-1:1); });
+      ks.forEach(function(k,i){
+        let last=(i===ks.length-1), c=n.ch[k];
+        o.push(line(c.t==='d'?'':'muted', prefix+(last?'\\---':'+---')+k));
+        if(c.t==='d' && prefix.length<8) walk(c, prefix+(last?'    ':'|   '));
+      });
+    })(fsGet(CWD)||dnode(),'');
+    return o;}},
+  'reset-filesystem':{params:[],help:'還原檔案系統到初始狀態',run:function(){
+    fsReset(); return [line('ok','檔案系統已還原為初始狀態。')];}},
+  'get-process':{params:[],help:'程序列表 (ps)',run:function(){
+    return table(['Id','CPU(s)','WS(M)','ProcessName'],
+      [['7404','12.83','182','pwsh'],['1006','48.21','1204','Code'],['2612','96.44','2048','chrome'],
+       ['8890','0.77','96','kubectl'],['3120','2.15','154','WindowsTerminal']]);}},
   'get-date':{params:[],help:'現在時間',run:function(){return [line('',new Date().toString())];}},
-  'echo':{params:[],help:'輸出文字',run:function(a,raw){return [line('',raw.slice(1).join(' ').replace(/^["']|["']$/g,''))];}},
-  'help':{params:[],help:'探索指引',run:function(){
-    var items=[['whoami','身分摘要'],['Get-Contribution','開源貢獻 (試 -Foundation CNCF)'],
-      ['Get-Publication','著作'],['Get-Award','獲獎 (-Year 2023)'],['Get-Project','代表專案'],
-      ['Get-Timeline','年度時間軸'],['Get-Command','所有 cmdlet'],['Get-History','指令歷史'],
-      ['Set-Theme','切換主題 windows|pi|blue'],['Clear-Host','清空 (cls)']];
-    return [line('banner','探索 thc1006 — 可用指令:'),line('','')]
-      .concat(items.map(function(x){return line('','  '+padw(x[0],18)+'  '+x[1]);}))
-      .concat([line(''),line('muted','  (還藏了幾顆彩蛋,打 secret 看看 :)')]);}},
+  'write-output':{params:[],help:'輸出文字 (echo)',run:function(a,raw){return [line('',raw.slice(1).join(' ').replace(/^["']|["']$/g,''))];}},
+  'measure-object':{params:[],help:'計算數量 (pipeline)',run:function(){return [line('muted','用法: <command> | Measure-Object')];},
+    pipe:function(rows){ let n=rows.filter(function(r){return r && r.txt!==undefined && String(r.txt).replace(/\s/g,'').length;}).length;
+      return table(['Property','Value'],[['Count',String(n)],['Lines',String(rows.length)]]);}},
+  'sort-object':{params:['-Descending'],help:'排序 (pipeline)',run:function(){return [line('muted','用法: <command> | Sort-Object')];},
+    pipe:function(rows,a){ let o=rows.slice().sort(function(x,y){ let xs=(x&&x.txt)||'', ys=(y&&y.txt)||'';
+      return xs.toLowerCase()<ys.toLowerCase()?-1:1; }); if(argOf(a,'Descending')) o.reverse(); return o;}},
+  'select-object':{params:['-First','-Last'],help:'取前/後 N 筆 (pipeline)',run:function(){return [line('muted','用法: <command> | Select-Object -First 5')];},
+    pipe:function(rows,a){ let f=parseInt(argOf(a,'First'),10), l=parseInt(argOf(a,'Last'),10);
+      if(f>0) return rows.slice(0,f); if(l>0) return rows.slice(-l); return rows;}},
+  'where-object':{params:['-Match'],help:'篩選 (pipeline)',run:function(){return [line('muted','用法: <command> | Where-Object -Match kube')];},
+    pipe:function(rows,a,raw){ let p=String(argOf(a,'Match')||argOf(a,'Like')||firstArg(raw)||'');
+      if(!p) return rows; let re; try{ re=new RegExp(p.replace(/\*/g,'.*'),'i'); }catch(e){ return rows; }
+      let o=rows.filter(function(r){ return r && r.txt && re.test(r.txt); });
+      return o.length?o:[line('muted','(無相符結果)')];}},
+  'out-null':{params:[],help:'丟棄輸出 (pipeline)',run:function(){return null;},pipe:function(){return null;}},
+  'get-random':{params:['-Maximum'],help:'隨機數',run:function(a,raw){
+    let m=parseInt(argOf(a,'Maximum')||firstArg(raw)||100,10); if(!(m>0)) m=100;
+    return [line('num',String(Math.floor(Math.random()*m)))];}},
+  'test-connection':{params:['-TargetName'],help:'測試連線 (ping)',run:function(a,raw){return pingRun(a,raw);}},
+  'ping':{type:'Application',params:[],help:'ICMP 測試(模擬)',run:function(a,raw){return pingRun(a,raw);}},
+  'tracert':{type:'Application',params:[],help:'路由追蹤(模擬)',run:function(a,raw){
+    let t=firstArg(raw)||'nycu.edu.tw';
+    let hops=[['1','1 ms','1 ms','1 ms','10.6.1.1'],
+      ['2','4 ms','3 ms','4 ms','140.113.1.254'],
+      ['3','9 ms','8 ms','9 ms','tpe-core.twaren.net [211.79.48.1]'],
+      ['4','12 ms','11 ms','12 ms',t+' [140.113.207.85]']];
+    let seq=[line('','Tracing route to '+t),line('','over a maximum of 30 hops:'),line('')];
+    hops.forEach(function(h){ seq.push(line('','  '+padw(h[0],2)+'  '+padw(h[1],6)+' '+padw(h[2],6)+' '+padw(h[3],6)+'  '+h[4])); });
+    seq.push(line(''),line('','Trace complete.'));
+    asyncPrint(seq,240); return null;}},
+  'ipconfig':{type:'Application',params:[],help:'網路介面資訊',run:function(){return [line('head','Windows IP Configuration'),line(''),
+    line('','Ethernet adapter thc1006:'),
+    line('','   Connection-specific DNS Suffix  . : nycu.edu.tw'),
+    line('','   IPv4 Address. . . . . . . . . . . : 10.6.10.6'),
+    line('','   Subnet Mask . . . . . . . . . . . : 255.255.255.0'),
+    line('','   Default Gateway . . . . . . . . . : 10.6.1.1')];}},
+  'ifconfig':{type:'Application',params:[],help:'Unix 網路指令',run:function(){
+    if(netToolsInstalled){ ifconfigFail++;
+      return ifconfigFail>=2
+        ? [line('err','我只是個網頁,執行不了 ifconfig。你怎麼不找找自己的問題?')]
+        : [line('err','ifconfig: command failed')]; }
+    return [line('','Command \'ifconfig\' not found, but can be installed with:'),
+      line('cmd','  sudo apt install net-tools')];}},
+  'hostname':{type:'Application',params:[],help:'主機名稱',run:function(){return [line('','thc1006-dev')];}},
+  'ver':{type:'Application',params:[],help:'系統版本',run:function(){return [line(''),
+    line('','Microsoft Windows [Version 10.0.26300.1806]'),line('')];}},
+  '$psversiontable':{disp:'$PSVersionTable',type:'Variable',params:[],help:'PowerShell 版本資訊',run:function(){
+    return table(['Name','Value'],[['PSVersion','7.4.6'],['PSEdition','Core'],
+      ['OS','Microsoft Windows 10.0.26300'],['Platform','Win32NT'],['GitCommitId','7.4.6']]);}},
+  'git':{type:'Application',params:[],help:'Git (模擬)',run:function(a,raw){
+    let sub=String(raw[1]||'').toLowerCase();
+    if(sub==='status') return [line('','On branch main'),line('','Your branch is up to date with \'origin/main\'.'),line(''),
+      line('ok','nothing to commit, working tree clean')];
+    if(sub==='log') return D.timeline.slice().reverse().map(function(t,i){
+      return line('', (i===0?'* ':'* ')+t[0]+'  '+t[1]); });
+    if(sub==='remote') return [line('','origin  https://github.com/thc1006 (fetch)'),line('','origin  https://github.com/thc1006 (push)')];
+    return [line('muted','usage: git <status|log|remote>   (模擬,不會真的連網)')];}},
+  'vim':{type:'Application',params:[],help:'文字編輯器(未安裝)',run:function(){return [
+    line('err','vim: 這個終端機沒有安裝 vim。'),
+    line('muted','就算裝了,你也不見得出得來。Windows 上可用 notepad,或 code。')];}},
+  'vi':{type:'Application',params:[],help:'文字編輯器(未安裝)',run:function(){return CMDLETS['vim'].run();}},
+  'nano':{type:'Application',params:[],help:'文字編輯器(未安裝)',run:function(){return [
+    line('err','nano: 這個終端機沒有安裝 nano。'),
+    line('muted','至少它有把快捷鍵印在螢幕下面 — 這點 vim 該學學。')];}},
+  'notepad':{type:'Application',params:[],help:'記事本',run:function(){return [
+    line('muted','正在開啟 notepad ... 這是網頁,開不了視窗。'),
+    line('muted','想看內容請用 Get-Content <file>。')];}},
+  'chmod':{type:'Application',params:[],help:'Unix 權限(Windows 用 icacls)',run:function(){return [
+    line('err','chmod: Windows 沒有 chmod。'),
+    line('muted','對應做法: icacls <path> /grant <user>:(F)   或  Set-Acl')];}},
+  'chown':{type:'Application',params:[],help:'Unix 擁有者(Windows 用 icacls)',run:function(){return [
+    line('err','chown: Windows 沒有 chown。'),
+    line('muted','對應做法: icacls <path> /setowner <user>')];}},
+  'touch':{type:'Application',params:[],paths:true,help:'建立空檔案',run:function(a,raw){
+    let t=firstArg(raw); if(!t) return [line('err','touch: 缺少檔名。')];
+    let p=resolvePath(t); if(fsGet(p)) return null;
+    let par=fsParent(p);
+    if(!par||par.t!=='d') return [line('err','touch: cannot touch \''+t+'\': No such file or directory')];
+    par.ch[baseOf(p)]=fnode(null,false,[]); fsSave(); return null;}},
+  'help':{params:[],help:'快速指引',run:function(){
+    let g=[
+      ['作品集',[['whoami','身分摘要'],['Get-Contribution','開源貢獻 (-Foundation CNCF)'],
+        ['Get-Publication','著作'],['Get-Award','獲獎 (-Year 2023)'],
+        ['Get-Project','代表專案'],['Get-Timeline','年度時間軸']]],
+      ['檔案系統',[['ls / dir','列出目錄 (Get-ChildItem)'],['cd <dir>','切換目錄 (Set-Location)'],
+        ['pwd','目前路徑'],['cat <file>','讀檔 (Get-Content)'],['tree','目錄樹'],
+        ['mkdir <dir>','建資料夾 (New-Item)'],['rm <path>','刪除 (-Recurse)'],
+        ['cp / mv / ren','複製 / 移動 / 改名'],['Set-Content','寫入檔案內容'],
+        ['grep <pattern>','全站搜尋 (Select-String)']]],
+      ['系統與網路',[['ping / tracert','網路工具 (模擬)'],['ipconfig / hostname','主機資訊'],
+        ['Get-Process','程序列表 (ps)'],['Get-Date','現在時間'],['ver','系統版本']]],
+      ['其他',[['Get-Command','完整指令清單 (gcm)'],['Get-Help <cmd>','單一指令用法 (man)'],
+        ['Set-Theme','主題 windows|pi|blue'],['Clear-Host','清空畫面 (cls)'],
+        ['Reset-FileSystem','還原檔案系統']]]];
+    let o=[line('banner','thc1006 PowerShell — 常用指令')];
+    g.forEach(function(sec){ o.push(line(''),line('head',sec[0]));
+      sec[1].forEach(function(x){ o.push(line('','  '+padw(x[0],18)+'  '+x[1])); }); });
+    o.push(line(''),line('muted','支援管線,例如:  Get-Command | Where-Object -Match get- | Measure-Object'));
+    return o;}},
   'exit':{params:[],help:'結束訊息',run:function(){return [line('muted','這是網頁版 PowerShell — 關分頁即可。感謝造訪 :)')];}},
 };
-var ALIAS={'cls':'clear-host','clear':'clear-host','ls':'get-childitem','dir':'get-childitem',
-  'gci':'get-childitem','h':'get-history','history':'get-history','gcm':'get-command',
-  'man':'get-help','write-output':'echo','profile':'whoami','whois':'whoami','theme':'set-theme'};
+const ALIAS={
+  'cls':'clear-host','clear':'clear-host',
+  'ls':'get-childitem','dir':'get-childitem','gci':'get-childitem',
+  'pwd':'get-location','gl':'get-location',
+  'cd':'set-location','chdir':'set-location','sl':'set-location',
+  'cat':'get-content','type':'get-content','gc':'get-content',
+  'sc':'set-content','ac':'add-content',
+  'mkdir':'new-item','md':'new-item','ni':'new-item',
+  'rm':'remove-item','del':'remove-item','erase':'remove-item','rd':'remove-item','rmdir':'remove-item','ri':'remove-item',
+  'cp':'copy-item','copy':'copy-item','ci':'copy-item',
+  'mv':'move-item','move':'move-item','mi':'move-item','ren':'rename-item','rni':'rename-item',
+  'grep':'select-string','sls':'select-string',
+  'ps':'get-process','gps':'get-process',
+  'h':'get-history','history':'get-history','gcm':'get-command','man':'get-help',
+  'echo':'write-output','date':'get-date','traceroute':'tracert',
+  'sort':'sort-object','measure':'measure-object','select':'select-object','where':'where-object',
+  'profile':'whoami','whois':'whoami','theme':'set-theme'};
 function alias(n){return ALIAS[n]||n;}
 function toTitle(n){return n.split('-').map(function(w){return w?w.charAt(0).toUpperCase()+w.slice(1):w;}).join('-');}
+const DISP={'get-childitem':'Get-ChildItem','get-location':'Get-Location','set-location':'Set-Location',
+  'get-content':'Get-Content','set-content':'Set-Content','add-content':'Add-Content','test-path':'Test-Path',
+  'new-item':'New-Item','remove-item':'Remove-Item','copy-item':'Copy-Item','move-item':'Move-Item',
+  'rename-item':'Rename-Item','select-string':'Select-String','get-command':'Get-Command','get-help':'Get-Help',
+  'get-history':'Get-History','get-date':'Get-Date','get-process':'Get-Process','clear-host':'Clear-Host',
+  'write-output':'Write-Output','test-connection':'Test-Connection','set-theme':'Set-Theme',
+  'get-contribution':'Get-Contribution','get-publication':'Get-Publication','get-award':'Get-Award',
+  'get-project':'Get-Project','get-timeline':'Get-Timeline','measure-object':'Measure-Object',
+  'sort-object':'Sort-Object','select-object':'Select-Object','where-object':'Where-Object',
+  'out-null':'Out-Null','get-random':'Get-Random','reset-filesystem':'Reset-FileSystem'};
+const APPS=['tree'];
+Object.keys(CMDLETS).forEach(function(n){ let c=CMDLETS[n];
+  if(!c.disp) c.disp=DISP[n]||(n.indexOf('-')>0?toTitle(n):n);
+  if(!c.type) c.type=(APPS.indexOf(n)>=0?'Application':'Cmdlet'); });
 
 /* ---------- 彩蛋(隱藏)---------- */
-var EGGS={
+const EGGS={
   'sudo':function(parts){
-    var full=parts.join(' ').toLowerCase().replace(/\s+/g,' ');
+    let full=parts.join(' ').toLowerCase().replace(/\s+/g,' ');
     if(full==='sudo rm -rf /'||full==='sudo rm -rf /*'){
       return [line('muted','[sudo] password for thc1006: '),line(''),
         line('ok','Whew! That was a close one.'),
@@ -240,16 +648,6 @@ var EGGS={
     }
     return [line('err','sudo: 找不到指令。PowerShell 用 Start-Process -Verb RunAs 提權。(nice try)')];
   },
-  'ping':function(parts){
-    var target=(parts[1]||'127.0.0.1').replace(/^["']|["']$/g,'');
-    var seq=[line('','PING '+target+' (::1) 56 data bytes')];
-    for(var i=0;i<4;i++) seq.push(line('','64 bytes from ::1: icmp_seq='+(i+1)+' ttl=64 time='+(Math.random()*8+4).toFixed(3)+' ms'));
-    seq.push(line(''),line('','--- '+target+' ping statistics ---'),
-      line('','4 packets transmitted, 4 received, 0% packet loss'),
-      line('err','Ping request timed out. Maybe the server is just shy.'));
-    asyncPrint(seq,320);
-    return null;
-  },
   'sl':function(){return [
     line('accent','         _'),
     line('accent','        | |'),
@@ -259,21 +657,6 @@ var EGGS={
     line('accent','        (O)      (O)'),
     line('muted','   choo choo!  (你打對指令了)')
   ];},
-  'ifconfig':function(){
-    if(netToolsInstalled){ ifconfigFail++;
-      return ifconfigFail>=2
-        ? [line('err','我只是個網頁,執行不了 ifconfig。你怎麼不找找自己的問題?')]
-        : [line('err','ifconfig: command failed')]; }
-    return [line('','Command \'ifconfig\' not found, but can be installed with:'),
-      line('cmd','  sudo apt install net-tools')];
-  },
-  'ipconfig':function(){return [line('head','Windows IP Configuration'),line(''),
-    line('','Ethernet adapter thc1006:'),
-    line('','   Connection-specific DNS Suffix  . : nycu.edu.tw'),
-    line('','   IPv4 Address. . . . . . . . . . . : 10.6.10.06'),
-    line('','   Subnet Mask . . . . . . . . . . . : 255.255.255.0'),
-    line('','   Default Gateway . . . . . . . . . : 10.6.1.1'),
-    line('muted','   (在 Linux 上是 ifconfig,試試看)')];},
   'classic':function(){return [{html:'<span class="accent">舊版 bash CLI(user@hctsai1006)還在 -&gt; </span><a href="classic.html" class="cmd" style="text-decoration:underline">classic.html</a>'}];},
   'bash':function(){return EGGS.classic();},
   'coffee':function(){return [line('muted','      ( ('),line('muted','       ) )'),line('accent','    ........'),
@@ -281,165 +664,279 @@ var EGGS={
   'rocket':function(){return [line('accent','        /\\'),line('accent','       /  \\'),line('accent','      |thc |'),
     line('accent','      |1006|'),line('err','     /|##|\\'),line('err','    ` |##| `'),line('err','       /\\'),
     line('','   3... 2... 1... liftoff  (COSCUP 火箭導控 workshop, 2026)')];},
-  'matrix':function(){var cs='01THC1006<>/{}[]|=+*01',R=[];
-    for(var r=0;r<6;r++){var s='';for(var i=0;i<40;i++)s+=cs[(r*7+i*3)%cs.length];R.push(line('var',s));}
+  'matrix':function(){let cs='01THC1006<>/{}[]|=+*01',R=[];
+    for(let r=0;r<6;r++){let s='';for(let i=0;i<40;i++)s+=cs[(r*7+i*3)%cs.length];R.push(line('var',s));}
     return [line('var','Wake up… follow the merged PRs.'),line('','')].concat(R);},
   'fortune':function(){return [line('accent','「流淚撒種的,必歡呼收割。」'),line('muted','                    — 詩篇 126:5')];},
   'thc1006':function(){return [line('head','That is me. 打 whoami 看更多,或 Get-Contribution。')];},
   'konami':function(){return [line('ok','Up Up Down Down Left Right Left Right B A — 你找到了。所有主題已解鎖:Set-Theme windows|pi|blue')];},
-  'secret':function(){return [line('accent','這個 CLI 藏了不少彩蛋:'),
-    line('muted','  sudo · coffee · rocket · matrix · fortune · konami · thc1006'),
-    line('muted','  ping · sl · ifconfig · ipconfig · sudo apt install net-tools'),
-    line('muted','  classic — 回到舊版 bash 終端機 (user@hctsai1006)'),
-    line('muted','  (別名也算隱藏: cls ls dir h man whois profile gcm gci theme)')];},
+  'secret':function(){return [line('accent','這個終端機藏了不少彩蛋:'),
+    line('muted','  coffee · rocket · matrix · fortune · konami · thc1006'),
+    line('muted','  sudo rm -rf /   ·   sudo apt install net-tools   後再打 ifconfig'),
+    line('muted','  sl (不帶參數)  ·  vim / nano  ·  chmod'),
+    line('muted','  classic — 回到舊版 bash 終端機 (user@hctsai1006)')];},
 };
 
-var CORPUS=Object.keys(CMDLETS).map(toTitle).concat(Object.keys(ALIAS))
-  .filter(function(v,i,a){return a.indexOf(v)===i;}).sort();
-function PARAMS(n){return (CMDLETS[alias(String(n).toLowerCase())]||{params:[]}).params;}
+function pingRun(a,raw){
+  let t=String(argOf(a,'TargetName')||firstArg(raw)||'localhost');
+  let seq=[line('','Pinging '+t+' [10.6.10.6] with 32 bytes of data:')], i, ms=[];
+  for(i=0;i<4;i++){ let v=Math.round(Math.random()*8+3); ms.push(v);
+    seq.push(line('','Reply from 10.6.10.6: bytes=32 time='+v+'ms TTL=64')); }
+  let mn=Math.min.apply(null,ms), mx=Math.max.apply(null,ms);
+  seq.push(line(''),line('','Ping statistics for 10.6.10.6:'),
+    line('','    Packets: Sent = 4, Received = 4, Lost = 0 (0% loss),'),
+    line('','Approximate round trip times in milli-seconds:'),
+    line('','    Minimum = '+mn+'ms, Maximum = '+mx+'ms, Average = '+Math.round((mn+mx)/2)+'ms'));
+  asyncPrint(seq,180); return null;
+}
+const CORPUS=(function(){ let o=[];
+  Object.keys(CMDLETS).forEach(function(n){ let c=CMDLETS[n]; if(c.hidden) return; o.push(c.disp||n); });
+  Object.keys(ALIAS).forEach(function(al){ let t=CMDLETS[ALIAS[al]]; if(t&&!t.hidden) o.push(al); });
+  return o.filter(function(v,i,a){return a.indexOf(v)===i;})
+          .sort(function(x,y){ return x.toLowerCase()<y.toLowerCase()?-1:1; }); })();
 
 /* ---------- 語法高亮(僅用於 echo)---------- */
-function highlight(s){
-  var toks=s.match(/(\s+|"[^"]*"?|'[^']*'?|--?[A-Za-z]\w*|\||>>|>|<|=|\$[\w:]+|[^\s|><=]+)/g)||[];
-  var o='',first=true;
-  toks.forEach(function(t){
-    if(/^\s+$/.test(t)){o+=esc(t);return;}
-    if(/^["']/.test(t)) o+='<span class="str">'+esc(t)+'</span>';
-    else if(/^-/.test(t)) o+='<span class="param">'+esc(t)+'</span>';
-    else if(/^([|><=]|>>)$/.test(t)) o+='<span class="op">'+esc(t)+'</span>';
-    else if(/^\$/.test(t)) o+='<span class="var">'+esc(t)+'</span>';
-    else if(/^\d+$/.test(t)) o+='<span class="num">'+esc(t)+'</span>';
-    else if(first) o+='<span class="cmd">'+esc(t)+'</span>';
-    else o+=esc(t);
-    first=false;
-  });
-  return o;
+/* 語法高亮改為直接建立 DOM 節點(textContent),
+   使用者輸入完全不經過 HTML parser —— 沒有 innerHTML sink 可言。 */
+function tokClass(t,first){
+  if(/^\s+$/.test(t)) return null;
+  if(/^["']/.test(t)) return 'str';
+  if(/^-/.test(t)) return 'param';
+  if(/^([|><=]|>>)$/.test(t)) return 'op';
+  if(/^\$/.test(t)) return 'var';
+  if(/^\d+$/.test(t)) return 'num';
+  return first?'cmd':null;
 }
+function highlightInto(parent,s){
+  const toks=String(s).match(/(\s+|"[^"]*"?|'[^']*'?|--?[A-Za-z]\w*|\||>>|>|<|=|\$[\w:]+|[^\s|><=]+)/g)||[];
+  let first=true;
+  for(let i=0;i<toks.length;i++){
+    const t=toks[i], cls=tokClass(t,first);
+    if(cls){ const sp=document.createElement('span'); sp.className=cls; sp.textContent=t; parent.appendChild(sp); }
+    else parent.appendChild(document.createTextNode(t));
+    if(!/^\s+$/.test(t)) first=false;
+  }
+  return parent;
+}
+function codeLine(s){ return {code:s, txt:s}; }
 
 /* ---------- 輸出(進 role=log)---------- */
-function print(rows){ if(!rows)return; if(!Array.isArray(rows))rows=[rows];
-  rows.forEach(function(r){ var d=document.createElement('div'); d.className='row';
-    if(r.html!=null) d.innerHTML=r.html;
-    else{ var c=r.cls||'',t=r.txt!=null?r.txt:''; d.innerHTML=c?'<span class="'+c+'">'+esc(t)+'</span>':esc(t); }
-    out.appendChild(d); }); }
-function promptHTML(){return '<span class="prompt">PS <span class="path">C:\\Users\\thc1006</span>&gt;&nbsp;</span>';}
-function printPrompt(cmd){ var d=document.createElement('div'); d.className='row';
-  d.innerHTML=promptHTML()+highlight(cmd); out.appendChild(d); }
+/* 批次插入:整批 rows 在記憶體組裝,只觸發一次 reflow。
+   純文字走 textContent(不進 HTML parser:更快,且沒有 XSS 面),
+   只有內部產生的高亮片段(r.html)才用 innerHTML。 */
+function print(rows){ if(!rows) return; if(!Array.isArray(rows)) rows=[rows];
+  const frag=document.createDocumentFragment();
+  for(let i=0;i<rows.length;i++){ const r=rows[i]; if(!r) continue;
+    const d=document.createElement('div'); d.className='row';
+    if(r.code!=null){ highlightInto(d,r.code); }
+    else if(r.html!=null){ d.innerHTML=r.html; }   /* 僅限本檔內寫死的靜態片段,不含任何使用者資料 */
+    else if(r.cls){ const s=document.createElement('span'); s.className=r.cls;
+      s.textContent=(r.txt!=null?r.txt:''); d.appendChild(s); }
+    else { d.textContent=(r.txt!=null?r.txt:''); }
+    frag.appendChild(d); }
+  out.appendChild(frag);
+  while(out.childElementCount>MAXROWS) out.removeChild(out.firstChild); }  /* 上限:長時間使用不會無限膨脹 */
+function updatePrompt(){ const el=document.querySelector('#iw .prompt .path'); if(el) el.textContent=CWD; }
+function printPrompt(cmd){
+  const d=document.createElement('div'); d.className='row';
+  const p=document.createElement('span'); p.className='prompt';
+  p.appendChild(document.createTextNode('PS '));
+  const pa=document.createElement('span'); pa.className='path'; pa.textContent=CWD;
+  p.appendChild(pa); p.appendChild(document.createTextNode('> '));
+  d.appendChild(p);
+  highlightInto(d,cmd);                       // 使用者輸入:純節點,不進 parser
+  out.appendChild(d); }
 function scrollBottom(){ con.scrollTop=con.scrollHeight; }
-function asyncPrint(rows,gap,done){ var i=0; (function step(){ if(i<rows.length){ print(rows[i]); scrollBottom(); i++; setTimeout(step,gap); } else if(done) done(); })(); }
+/* 清屏會遞增 outGen;正在串流的非同步輸出發現世代已變就整批放棄,
+   否則清屏後殘留的 setTimeout 會把舊輸出「復活」印回畫面。 */
+let outGen=0;
+const reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+function clearOut(){ outGen++; busy=false;
+  if(out.replaceChildren) out.replaceChildren(); else out.innerHTML=''; }
+function asyncPrint(rows,gap,done){
+  busy=true; const gen=outGen;
+  if(reduceMotion){                       // 偏好減少動態:不做逐行動畫,一次印完
+    print(rows); print(line('','')); scrollBottom(); busy=false; if(done) done(); return; }
+  let i=0;
+  (function step(){
+    if(gen!==outGen) return;              // 已清屏,放棄
+    if(i<rows.length){ print(rows[i]); scrollBottom(); i++; setTimeout(step,gap); return; }
+    print(line('','')); scrollBottom(); busy=false; if(done) done();
+  })(); }
 
 /* ---------- 狀態 ---------- */
-var hist=[], hIdx=null, draft='';
-var netToolsInstalled=false, ifconfigFail=0;   /* net-tools 彩蛋鏈狀態 */
-var menu={open:false,items:[],idx:0,start:0};
+let hist=[], hIdx=null, draft='', busy=false, composing=false;
+const MAXROWS=1500, MAXHIST=300;   /* 輸出/歷史上限,避免長時間使用後記憶體與捲動退化 */
+let netToolsInstalled=false, ifconfigFail=0;   /* net-tools 彩蛋鏈狀態 */
+let menu={open:false,items:[],idx:0,start:0};
 function val(){return edit.value;}
 function caretPos(){return edit.selectionStart||0;}
 function atEnd(){return edit.selectionStart===edit.value.length && edit.selectionEnd===edit.value.length;}
 function setVal(s,c){ edit.value=s; c=(c==null)?s.length:c; try{edit.setSelectionRange(c,c);}catch(e){} sync(); }
 
 /* ---------- 預測 + ghost ---------- */
-function predict(v){ if(!v)return''; var low=v.toLowerCase(),i,h;
+function predict(v){ if(!v)return''; let low=v.toLowerCase(),i,h;
   for(i=hist.length-1;i>=0;i--){ h=hist[i]; if(h.length>v.length && h.toLowerCase().indexOf(low)===0) return h; }
   for(i=0;i<CORPUS.length;i++){ if(CORPUS[i].length>v.length && CORPUS[i].toLowerCase().indexOf(low)===0) return CORPUS[i]; }
   return ''; }
-function sync(){
-  var v=val();
-  mirror.textContent=v;
-  edit.style.height='auto'; edit.style.height=edit.scrollHeight+'px';   // 長指令換行時自動長高,不裁切
-  var p=(atEnd()&&!menu.open)?predict(v):'';
-  ghost.textContent=p?p.slice(v.length):'';
-  ghost.style.left=mirror.offsetWidth+'px';
+/* sync 拆成兩段:文字更新同步做(輸入不能延遲),
+   會強制重排的幾何量測(scrollHeight / offsetWidth)交給 rAF 批次,
+   同一影格內多次 sync 只量測一次,避免 layout thrashing。 */
+const raf = window.requestAnimationFrame ? window.requestAnimationFrame.bind(window)
+                                         : function(fn){ return setTimeout(fn,16); };
+let syncPending=false;
+function syncGeometry(){
+  syncPending=false;
+  edit.style.height='auto';
+  edit.style.height=edit.scrollHeight+'px';   // 長指令換行時自動長高,不裁切
+  /* 用標記的實際座標定位 ghost:指令換行後,游標 X 是「最後一行的位置」,
+     不是整個 mirror 的寬度(那會等於整區寬,把灰字推到右邊)。 */
+  const zr=ez.getBoundingClientRect(), mr=mk.getBoundingClientRect();
+  ghost.style.left=Math.round(mr.left-zr.left)+'px';
+  ghost.style.top =Math.round(mr.top -zr.top )+'px';
   scrollBottom();
+}
+function sync(){
+  const v=val();
+  mirrorText.nodeValue=v;
+  const p=(!composing && atEnd() && !menu.open)?predict(v):'';   // 組字中不顯示灰字建議
+  ghost.textContent=p?p.slice(v.length):'';
+  if(!syncPending){ syncPending=true; raf(syncGeometry); }
 }
 
 /* ---------- 補完選單 ---------- */
-function currentToken(){ var v=val(),c=caretPos(); var sp=v.slice(0,c).lastIndexOf(' '); return {start:sp+1,word:v.slice(sp+1,c),c:c}; }
-function replaceWord(start,pick,c){ var v=val(); setVal(v.slice(0,start)+pick+v.slice(c), start+pick.length); }
+function currentToken(){ let v=val(),c=caretPos(); let sp=v.slice(0,c).lastIndexOf(' '); return {start:sp+1,word:v.slice(sp+1,c),c:c}; }
+function replaceWord(start,pick,c){ let v=val(); setVal(v.slice(0,start)+pick+v.slice(c), start+pick.length); }
+/* WAI-ARIA APG 的 combobox + listbox 模式:焦點永遠留在 textarea,
+   目前選項透過 aria-activedescendant 告知輔助科技。 */
 function renderMenu(){
-  var old=document.querySelector('.menu'); if(old) old.remove();
-  if(!menu.open) return;
-  var m=document.createElement('div'); m.className='menu';
-  menu.items.forEach(function(it,i){ var b=document.createElement('button'); b.type='button'; b.textContent=it;
-    if(i===menu.idx)b.className='sel';
-    b.addEventListener('click',function(){ menu.idx=i; applyMenuPick(); closeMenu(); focusEdit(); });
+  const old=document.getElementById('cmdmenu'); if(old) old.remove();
+  edit.setAttribute('aria-expanded', menu.open?'true':'false');
+  if(!menu.open){ edit.removeAttribute('aria-activedescendant'); return; }
+  const m=document.createElement('div');
+  m.className='menu'; m.id='cmdmenu'; m.setAttribute('role','listbox');
+  m.setAttribute('aria-label','指令補完候選');
+  menu.items.forEach(function(it,i){
+    const b=document.createElement('div');
+    b.className='opt'+(i===menu.idx?' sel':'');
+    b.id='opt'+i; b.setAttribute('role','option');
+    b.setAttribute('aria-selected', i===menu.idx?'true':'false');
+    b.textContent=it;
+    b.addEventListener('mousedown',function(ev){ ev.preventDefault();
+      menu.idx=i; applyMenuPick(); closeMenu(); focusEdit(); });
     m.appendChild(b); });
-  document.querySelector('.editzone').appendChild(m);
+  ez.appendChild(m);
+  edit.setAttribute('aria-activedescendant','opt'+menu.idx);
 }
-function applyMenuPick(){ var tk=currentToken(); replaceWord(menu.start,menu.items[menu.idx],tk.c); }
+function applyMenuPick(){ let tk=currentToken(); replaceWord(menu.start,menu.items[menu.idx],tk.c); }
 function closeMenu(){ menu.open=false; renderMenu(); }
 function openOrCycle(){
   if(menu.open){ menu.idx=(menu.idx+1)%menu.items.length; applyMenuPick(); renderMenu(); return; }
-  var tk=currentToken();
-  var cands=tk.start===0?CORPUS.slice():PARAMS(val().replace(/^\s+/,'').split(/\s+/)[0]).slice();
-  cands=cands.filter(function(c){return c.toLowerCase().indexOf(tk.word.toLowerCase())===0;});
+  let tk=currentToken(), v=val(), before=v.slice(0,tk.start), cands;
+  if(/^\s*$/.test(before) || /\|\s*$/.test(before)) cands=CORPUS.slice();
+  else{
+    let head=(before.split('|').pop()||'').replace(/^\s+/,'').split(/\s+/)[0]||'';
+    let c=CMDLETS[alias(head.toLowerCase())];
+    cands=(c&&c.params)?c.params.slice():[];
+    if(c&&c.paths) cands=cands.concat(pathCandidates());
+    if(!cands.length) cands=CORPUS.slice();
+  }
+  cands=cands.filter(function(x){return String(x).toLowerCase().indexOf(tk.word.toLowerCase())===0;});
   if(!cands.length) return;
   if(cands.length===1){ replaceWord(tk.start,cands[0],tk.c); return; }
-  menu={open:true,items:cands,idx:0,start:tk.start}; applyMenuPick(); renderMenu();
+  menu={open:true,items:cands,idx:0,start:tk.start,orig:val(),origCaret:tk.c};
+  applyMenuPick(); renderMenu();
 }
-function acceptPrediction(){ var v=val(),p=predict(v); if(p&&atEnd()){ setVal(p,p.length); return true; } return false; }
+function acceptPrediction(){ let v=val(),p=predict(v); if(p&&atEnd()){ setVal(p,p.length); return true; } return false; }
 function histNav(dir){ if(!hist.length)return;
   if(dir<0){ if(hIdx===null){draft=val();hIdx=hist.length-1;} else if(hIdx>0)hIdx--; }
   else{ if(hIdx===null)return; hIdx++; if(hIdx>hist.length-1){hIdx=null;setVal(draft);return;} }
   setVal(hist[hIdx]);
 }
+function splitPipe(cmd){ let o=[],cur='',q=null,i,ch;
+  for(i=0;i<cmd.length;i++){ ch=cmd.charAt(i);
+    if(q){ cur+=ch; if(ch===q) q=null; continue; }
+    if(ch==='"'||ch==="'"){ q=ch; cur+=ch; continue; }
+    if(ch==='|'){ o.push(cur); cur=''; continue; }
+    cur+=ch; }
+  o.push(cur);
+  return o.map(function(s){return s.replace(/^\s+|\s+$/g,'');}).filter(function(s){return s.length;}); }
+function parseArgsOf(parts){ let args={},i,pk;
+  for(i=1;i<parts.length;i++){ if(/^-{1,2}[A-Za-z]/.test(parts[i])){
+    pk=parts[i].replace(/^-+/,'');
+    args[pk]=(parts[i+1]&&!/^-{1,2}[A-Za-z]/.test(parts[i+1]))?String(parts[++i]).replace(/^["']|["']$/g,''):true; } }
+  return args; }
+function execOne(seg,input,piped){
+  let parts=seg.match(/"[^"]*"|'[^']*'|\S+/g)||[];
+  if(!parts.length) return input;
+  let key=parts[0].toLowerCase(), c=CMDLETS[alias(key)], args=parseArgsOf(parts);
+  if(c){ try{ return (piped&&c.pipe)?c.pipe(input||[],args,parts):c.run(args,parts,input); }
+         catch(e){ return [line('err',(c.disp||key)+': '+e.message)]; } }
+  if(EGGS[key]){ try{ return EGGS[key](parts); }catch(e){ return [line('err',e.message)]; } }
+  return [line('err',`${parts[0]}: The term '${parts[0]}' is not recognized as a name of a cmdlet, function, script file, or executable program.`),
+    line('err','Check the spelling of the name, or if a path was included, verify that the path is correct and try again.'),
+    line('muted','試 help 或 Get-Command 看可用指令。')];
+}
 function run(){
-  var raw=val(), cmd=raw.replace(/^\s+|\s+$/g,'');
+  let raw=val(), cmd=raw.replace(/^\s+|\s+$/g,'');
   printPrompt(raw);
   if(cmd) hist.push(cmd);
+  if(hist.length>MAXHIST) hist=hist.slice(-MAXHIST);
   hIdx=null; draft='';
   if(cmd){
-    var parts=cmd.match(/"[^"]*"|'[^']*'|\S+/g)||[];
-    var key=parts[0].toLowerCase(), name=alias(key), c=CMDLETS[name];
-    if(c){
-      var args={};
-      for(var i=1;i<parts.length;i++){ if(/^-/.test(parts[i])){
-        args[parts[i].slice(1)]=(parts[i+1]&&!/^-/.test(parts[i+1]))?parts[++i].replace(/^["']|["']$/g,''):true; } }
-      try{ print(c.run(args,parts)); }catch(e){ print(line('err','執行錯誤: '+e.message)); }
-    } else if(EGGS[key]){
-      try{ print(EGGS[key](parts)); }catch(e){ print(line('err',e.message)); }
-    } else {
-      var d=document.createElement('div'); d.className='row';
-      d.innerHTML='<span class="err">'+esc(toTitle(parts[0]))+' : 無法辨識的指令。試試 </span>'+
-        '<span class="cmd">help</span><span class="err"> 或 </span><span class="cmd">Get-Command</span><span class="err">。</span>';
-      out.appendChild(d);
-    }
+    let segs=splitPipe(cmd), rows=null, i;
+    for(i=0;i<segs.length;i++) rows=execOne(segs[i],rows,i>0);
+    if(rows && rows.length){ print(rows); print(line('','')); }
   }
   closeMenu(); setVal(''); scrollBottom();
 }
 
 /* ---------- 事件 ---------- */
 function onKey(e){
-  var k=e.key;
+  /* IME 組字中(注音/倉頡/日文/韓文):所有按鍵都交還給輸入法。
+     Enter 是選字確認、↑↓ 與 Tab 是候選字操作,一律不可攔截。
+     三重判斷:標準 isComposing、composition 事件旗標(舊 Safari/部分 Android IME 不可靠)、
+     以及 IME 組字期間的哨兵 keyCode 229。 */
+  if(e.isComposing || composing || e.keyCode===229) return;
+  let k=e.key;
   if(menu.open){
     if(k==='Tab'||k==='ArrowDown'){ e.preventDefault(); menu.idx=(menu.idx+1)%menu.items.length; applyMenuPick(); renderMenu(); return; }
     if(k==='ArrowUp'){ e.preventDefault(); menu.idx=(menu.idx-1+menu.items.length)%menu.items.length; applyMenuPick(); renderMenu(); return; }
-    if(k==='Enter'||k==='Escape'){ e.preventDefault(); closeMenu(); return; }
+    if(k==='Enter'){ e.preventDefault(); closeMenu(); return; }            // 接受目前候選
+    if(k==='Escape'){ e.preventDefault();                                   // 取消並還原開啟前的輸入
+      const o=menu.orig, c=menu.origCaret; closeMenu();
+      if(o!=null) setVal(o,c); return; }
     closeMenu();
   }
-  if(k==='Enter'){ e.preventDefault(); run(); return; }
+  if(k==='Enter'){ e.preventDefault(); if(busy) return; run(); return; }
   if(k==='Tab'){ if(!val()){ return; } e.preventDefault(); openOrCycle(); return; }
   if(k==='ArrowRight'||k==='End'){ if(atEnd()&&acceptPrediction()){ e.preventDefault(); } return; }
   if(k==='ArrowUp'){ e.preventDefault(); histNav(-1); return; }
   if(k==='ArrowDown'){ e.preventDefault(); histNav(1); return; }
-  if((e.ctrlKey||e.metaKey)&&(k==='l'||k==='L')){ e.preventDefault(); out.innerHTML=''; scrollBottom(); return; }
+  if((e.ctrlKey||e.metaKey)&&(k==='l'||k==='L')){ e.preventDefault(); clearOut(); scrollBottom(); return; }
   if((e.ctrlKey||e.metaKey)&&(k==='c'||k==='C')){ if(String(getSelection())) return; e.preventDefault(); printPrompt(val()); setVal(''); return; }
   if(k==='Escape'){ if(val()){ e.preventDefault(); setVal(''); } else { edit.blur(); } return; }
   /* 其餘按鍵交給原生 textarea 處理(手機軟鍵盤/貼上皆走 input 事件)*/
 }
 function focusEdit(){ try{ edit.focus({preventScroll:true}); }catch(e){ try{edit.focus();}catch(_){} } }
 edit.addEventListener('keydown',onKey);
+edit.addEventListener('compositionstart',function(){ composing=true; if(menu.open) closeMenu(); sync(); });
+edit.addEventListener('compositionend',function(){ composing=false; sync(); });
 edit.addEventListener('input',function(){ if(menu.open) closeMenu(); hIdx=null; sync(); });
 edit.addEventListener('click',sync);
 edit.addEventListener('keyup',function(e){ if(['ArrowLeft','ArrowRight','Home','End'].indexOf(e.key)>=0) sync(); });
 edit.addEventListener('focus',function(){ con.classList.add('focused'); });
 edit.addEventListener('blur',function(){ con.classList.remove('focused'); });
 document.addEventListener('selectionchange',function(){ if(document.activeElement===edit) sync(); });
-con.addEventListener('click',function(e){ if(e.target.tagName!=='BUTTON' && !String(getSelection())) focusEdit(); });
+con.addEventListener('click',function(e){
+  if(!(e.target.closest && e.target.closest('.menu')) && !String(getSelection())) focusEdit(); });
 
 /* ---------- 開場 ---------- */
 function boot(){
   try{ document.documentElement.lang='zh-Hant'; }catch(e){}
-  function raw(html){ var d=document.createElement('div'); d.className='row'; d.innerHTML=html; out.appendChild(d); }
+  fsInit(); updatePrompt();
+  try{ const t=localStorage.getItem('thc1006.theme'); if(t) setTheme(t); }catch(e){}   // 記住上次的主題
+  function raw(html){ let d=document.createElement('div'); d.className='row'; d.innerHTML=html; out.appendChild(d); }
   raw('<span class="banner">PowerShell 7.4 &nbsp;·&nbsp; <b>thc1006 edition</b></span>');
   raw('&nbsp;');
   raw('<span class="banner">Type <span class="yellow">help</span> to explore, or try <span class="yellow">whoami</span> / <span class="yellow">Get-Contribution -Foundation CNCF</span></span>');
