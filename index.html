@@ -515,6 +515,12 @@ function buildSeed(){
     line('','  PR    #33     權重 checkpoint 由可變路徑改釘到不可變 commit'),line(''),
     line('accent','nasa/EMIT-Data-Resources'),
     line('','  PR    #72     quality_mask 對 L2A Mask V002 產品會靜默產生錯誤遮罩'),line(''),
+    line('accent','apache/yunikorn-k8shim  ·  Apache 頂級專案'),
+    line('','  JIRA  YUNIKORN-3329  未經驗證的 task-groups annotation 會讓 placeholder 資源溢位成負值'),
+    line('','  PR    #1053   在 parse 邊界直接拒絕溢位或負值的 placeholder 資源'),
+    line('muted','  JIRA 由 YuniKorn PMC 成員 Wilfred Spiegelenburg 分類並指派'),line(''),
+    line('accent','u-root/uio'),
+    line('','  PR    #28     Buffer.Has 對負的長度回傳 true,後續切片因而可能越界'),line(''),
     line('muted','合併後移入 Get-Contribution,並同步 profile / timeline / README 的計數。')]);
   D.pubsFull.forEach(function(p){
     const href=idHref(p.id);
