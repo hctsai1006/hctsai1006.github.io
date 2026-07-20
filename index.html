@@ -106,7 +106,7 @@
     <h2>蔡秀吉 Hsiu-Chi Tsai (thc1006)</h2>
     <p>國立陽明交通大學 資訊工程。Nephio (Linux Foundation Networking) Technical Steering Committee member;
        Zephyr RTOS 與 M5Stack platforms maintainer。</p>
-    <p>109 個已合併的上游 pull request,橫跨 47 個專案與 5 個基金會。</p>
+    <p>110 個已合併的上游 pull request,橫跨 48 個專案與 5 個基金會。</p>
     <ul>
       <li>著作:IEEE SCC 2026、IEEE WF-PST 2026、ICAIMS 2026 (IEEE) 已接受,另有預印本。ORCID 0000-0001-7421-8027</li>
       <li>獲獎:2023 總統教育獎 · 奮發向上獎;2026 國科會大專學生研究創作獎;2026 Make NTU 強茂企業獎第一名;2026 臺灣太空事務青年人才選訓計畫入選</li>
@@ -156,20 +156,22 @@ const D={
   profile:[['head','thc1006  (蔡秀吉 · Hsiu-Chi Tsai)'],
     ['','Nephio (Linux Foundation Networking) Technical Steering Committee Member'],
     ['','Zephyr RTOS · M5Stack Platforms Maintainer'],
-    ['accent','109 merged upstream PRs  ·  47 projects  ·  5 foundations'],
+    ['accent','110 merged upstream PRs  ·  48 projects  ·  5 foundations'],
     ['muted','National Yang Ming Chiao Tung University — Computer Science']],
   /* contribTop 只記已合併的 PR。審查中的一律寫進 buildSeed 的 in-review.md,不要先加到這裡。
-     待合併(狀態擷取於 2026-07-20;任一項合併後才改這裡,並同步 5 處計數:
-     本檔第 107 / profile / timeline 2026 / README.md 種子 / Get-Contribution 標題):
+     任一項合併後才改這裡,並同步這 5 處計數(grep 目前的總數就找得到):
+     頁首 <p> / profile accent / timeline 2026 / README.md 種子 / Get-Contribution 標題。
+     待合併(狀態擷取於 2026-07-20):
        kedacore/keda            #7918        -> ['kedacore/keda',2]
        kedacore/keda-docs       #1811        -> ['kedacore/keda-docs',2]
+       u-root/uio               #28          -> 新列 ['u-root/uio',1]  (新 repo,專案數 +1)
        zhu-xlab/DOFA            #31 #32 #33  -> 新列 ['zhu-xlab/DOFA',n]  (新 repo,專案數 +1)
        nasa/EMIT-Data-Resources #72          -> 新列 ['nasa/EMIT-Data-Resources',1] (新 repo,專案數 +1)
      基金會數維持 5:KEDA 屬 CNCF(已計入),NASA 與 TUM 都不是基金會。 */
   contribTop:[['open-telemetry/opentelemetry-cpp',20],['kubernetes/kubernetes',8],
     ['kubernetes-sigs/kueue',6],['jaegertracing/jaeger-ui',6],['llm-d/llm-d-router',6],
     ['kubernetes-sigs/dranet',4],['kptdev/porch',4],['volcano-sh/volcano',2],['meshery/meshery',2],
-    ['kedacore/keda',1],['kedacore/keda-docs',1]],
+    ['kedacore/keda',1],['kedacore/keda-docs',1],['insomniacslk/dhcp',1]],
   cncf:['CNCF',87,40],
   /* 資料來源:people.cs.nycu.edu.tw/~hctsai1006/publications/(ORCID 同步),13 篇。
      摘要表只放前 5 筆,完整清單見 pubsFull(Get-Publication -Full)。 */
@@ -230,7 +232,7 @@ const D={
   timeline:[['2023','總統教育獎 · 捷克進修 · 首次 COSCUP 講者'],
     ['2024','Nephio TSC · CTU GDSC Lead · O-RAN organizer'],
     ['2025','IEEE R10 ACEI · O-RAN × NTN 研究'],
-    ['2026','國科會研究創作獎 (114) · 109 merged PRs · TASA 青年人才 · DRA 稽核']],
+    ['2026','國科會研究創作獎 (114) · 110 merged PRs · TASA 青年人才 · DRA 稽核']],
 };
 function line(cls,txt){return {cls:cls,txt:txt};}
 /* 主控台目前可容納幾個字元寬 —— 量一次快取,視窗改變時作廢 */
@@ -410,7 +412,7 @@ function buildSeed(){
     line('','National Yang Ming Chiao Tung University — Computer Science'),
     line('','Nephio (LFN) Technical Steering Committee member'),
     line('','Zephyr RTOS / M5Stack platforms maintainer'),line(''),
-    line('accent','109 merged upstream PRs · 47 projects · 5 foundations'),line(''),
+    line('accent','110 merged upstream PRs · 48 projects · 5 foundations'),line(''),
     line('muted','whoami / Get-Contribution / Get-Publication / Get-Award'),line(''),
     line('muted','所有內容以個人網站為準,打 Get-Source 看全部來源:'),
     srcRow('people.cs.nycu.edu.tw/~hctsai1006', SRC.home, '  ')]);
@@ -559,7 +561,7 @@ const CMDLETS={
       .concat([line(''), srcRow('people.cs.nycu.edu.tw/~hctsai1006', SRC.home),
                srcRow('github.com/thc1006', SRC.github, '        ')]);}},
   'get-contribution':{params:['-Foundation'],help:'列出開源貢獻',run:function(a){
-    let o=[line('accent','109 merged pull requests · 47 projects · 5 foundations'),line('','')], rows=D.contribTop;
+    let o=[line('accent','110 merged pull requests · 48 projects · 5 foundations'),line('','')], rows=D.contribTop;
     if(String(argOf(a,'Foundation')||'').toLowerCase()==='cncf'){
       o=[line('accent','CNCF — '+D.cncf[1]+' merged · '+D.cncf[2]+' repos'),line('','')];
       rows=D.contribTop.filter(function(r){return /kubernetes|kueue|dranet|porch|volcano|jaeger|telemetry|llm-d|meshery|keda/.test(r[0]);});
