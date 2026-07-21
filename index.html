@@ -170,7 +170,7 @@
     <div id="out" role="log" aria-live="polite" aria-atomic="false" aria-label="主控台輸出"></div>
     <div id="iw">
       <span class="prompt" aria-hidden="true">PS <span class="path">/home/thc1006</span>&gt;&nbsp;</span>
-      <span class="editzone" id="ez"><span class="mirror" id="mirror" aria-hidden="true"><span id="mk"></span></span><span class="ghost" id="ghost" aria-hidden="true"></span><textarea id="edit" rows="1" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="text" enterkeyhint="go" role="combobox" aria-autocomplete="both" aria-expanded="false" aria-controls="cmdmenu" aria-label="PowerShell 指令輸入" aria-describedby="eh"></textarea><div class="menu" id="cmdmenu" role="listbox" aria-label="指令補完候選" hidden></div></span>
+      <span class="editzone" id="ez"><span class="mirror" id="mirror" aria-hidden="true"><span id="mk"></span></span><span class="ghost" id="ghost" aria-hidden="true"></span><textarea id="edit" rows="1" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="text" enterkeyhint="go" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="cmdmenu" aria-label="PowerShell 指令輸入" aria-describedby="eh"></textarea><div class="menu" id="cmdmenu" role="listbox" aria-label="指令補完候選" hidden></div></span>
     </div>
   </div>
 </div>
@@ -391,9 +391,25 @@ function fnode(rows,seed,text,mode,own){return {t:'f',rows:rows||null,seed:!!see
    真機對照(Ubuntu 24.04):非 root 只能改自己擁有的目錄,所以連 `rm -rf ~` 都會被擋 ——
    家目錄的父層 /home 屬 root、不可寫。這一條 predicate 取代了原本用路徑深度的土法判斷。 */
 function ownerOf(n){ return (n&&n.own)||USERNAME; }
-function writable(dir){ if(!dir||dir.t!=='d') return false;
-  if(ownerOf(dir)===USERNAME) return true;
-  return (dir.mode||DEFMODE.d).charAt(7)==='w'; }   /* /tmp 這種 world-writable 目錄誰都能寫 */
+/* Unix 權限位:擁有者看 owner 三元組[0-2],其他人看 other 三元組[6-8]
+   (此單使用者模型省略 group)。x 位可能是 x/s/t —— setuid/setgid/sticky 都含執行權。 */
+function permBit(node,idx){ const m=node.mode||(node&&node.t==='d'?DEFMODE.d:DEFMODE.f);
+  return ownerOf(node)===USERNAME?m.charAt(idx):m.charAt(idx+6); }
+function canWriteNode(node){ return !!node && permBit(node,1)==='w'; }   /* 覆寫檔案內容要有 w */
+function canSearch(dir){ if(!dir||dir.t!=='d') return false;
+  const c=permBit(dir,2); return c==='x'||c==='s'||c==='t'; }            /* 進入/穿越目錄要有 x(t/s 也算) */
+/* cd 要能穿越路徑每一層目錄(含目標);回傳第一個沒有 search 權限的目錄,否則 null */
+function firstUnsearchable(path){ const segs=segsOf(path); let n=ROOT;
+  for(let i=0;i<segs.length;i++){ const k=keyIn(n,segs[i]); if(!k) return null; n=n.ch[k];
+    if(n.t==='d' && !canSearch(n)) return '/'+segs.slice(0,i+1).join('/'); }
+  return null; }
+/* mkdir -p 之前找最深的現存祖先:權限要在那裡驗,不能靠 fsMkdirp 偷偷把中間層建完再驗新層 */
+function deepestExisting(path){ const segs=segsOf(path); let n=ROOT;
+  for(let i=0;i<segs.length;i++){ const k=keyIn(n,segs[i]); if(!k) break; n=n.ch[k]; }
+  return n; }
+/* 目錄能否新增/移除子項:owner 看自己的 w 位,其他人看 other 的 w 位。
+   這樣使用者 chmod 掉自己目錄的 w 之後就真的寫不進去了(修掉「chmod 對 owner 無效」)。 */
+function writable(dir){ if(!dir||dir.t!=='d') return false; return permBit(dir,1)==='w'; }
 function markOwn(n,who){ n.own=who;
   if(n.t==='d') Object.keys(n.ch).forEach(function(k){ markOwn(n.ch[k],who); }); }
 function segsOf(p){ return String(p).split('/').filter(function(x){return x && x!=='.';}); }
@@ -420,11 +436,15 @@ function fsClone(n){ if(n.t==='d'){ const o=dnode(n.mode,n.own); o.mt=n.mt;
 function fsText(n){ if(!n||n.t!=='f') return [];
   if(n.rows) return n.rows;
   return (n.text||[]).map(function(s){return line('',s);}); }
-/* 大小:使用者檔算實際字元數,種子檔用渲染文字估算,目錄固定 4096(同 ext4) */
+/* 檔案大小要算 UTF-8 位元組數,不是 UTF-16 code unit —— 「蔡」在 ls 該顯示 3 bytes 不是 1 */
+const _utf8enc=(typeof TextEncoder!=='undefined')?new TextEncoder():null;
+function utf8len(s){ s=String(s);
+  return _utf8enc?_utf8enc.encode(s).length:unescape(encodeURIComponent(s)).length; }
+/* 大小:使用者檔算實際位元組數,種子檔用渲染文字估算,目錄固定 4096(同 ext4) */
 function fsSize(n){ if(!n) return 0;
   if(n.t==='d') return 4096;
-  if(n.text) return n.text.reduce(function(a,s){return a+s.length+1;},0);
-  return (n.rows||[]).reduce(function(a,r){return a+String(r&&r.txt!=null?r.txt:'').length+1;},0); }
+  if(n.text) return n.text.reduce(function(a,s){return a+utf8len(s)+1;},0);
+  return (n.rows||[]).reduce(function(a,r){return a+utf8len(String(r&&r.txt!=null?r.txt:''))+1;},0); }
 function modeStr(n){ return (n.t==='d'?'d':'-')+(n.mode||DEFMODE.f); }
 const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 function lsTime(ms){ const d=new Date(ms||SEEDTIME);
@@ -451,7 +471,11 @@ function resolvePath(p){
 function pathCandidates(){ const n=fsGet(CWD); if(!n||n.t!=='d') return [];
   return Object.keys(n.ch).concat(['..','~','/']); }
 function argOf(a,n){ let k=Object.keys(a),i; for(i=0;i<k.length;i++){ if(k[i].toLowerCase()===String(n).toLowerCase()) return a[k[i]]; } return undefined; }
-function firstArg(raw){ for(let i=1;i<raw.length;i++){ if(!/^-/.test(raw[i])) return String(raw[i]).replace(/^["']|["']$/g,''); } return ''; }
+function stripQ(s){ return String(s).replace(/^["']|["']$/g,''); }
+function firstArg(raw){ for(let i=1;i<raw.length;i++){ if(!/^-/.test(raw[i])) return stripQ(raw[i]); } return ''; }
+/* 位置參數的原始 token 位置:引號檔名(如 "my file")在 raw 裡帶著引號,
+   直接 raw.indexOf(去引號後的值) 會 miss,害 Set-Content 把整條指令當內容寫進檔。 */
+function rawIndexOf(raw,val){ for(let i=1;i<raw.length;i++){ if(stripQ(raw[i])===val) return i; } return -1; }
 
 /* 種子樹:作品集內容 */
 function buildSeed(){
@@ -560,7 +584,9 @@ function buildSeed(){
 /* mode 與 mtime 只在偏離預設時序列化。少了這段,chmod 過的種子檔在重整後會悄悄變回原權限,
    而 saved() 又回報成功 —— 正是本專案修過一次的「靜默失效」類別。 */
 function fsSer(n){ let o;
-  if(n.t==='d'){ o={t:'d',ch:{}}; Object.keys(n.ch).forEach(function(k){ o.ch[k]=fsSer(n.ch[k]); }); }
+  /* ch 必須是 null 原型:否則檔名 __proto__ 會觸發 setter 改寫原型,
+     序列化成 JSON 時整個 key 消失 —— 重整後那個檔案靜默不見。 */
+  if(n.t==='d'){ o={t:'d',ch:Object.create(null)}; Object.keys(n.ch).forEach(function(k){ o.ch[k]=fsSer(n.ch[k]); }); }
   else o=n.seed?{t:'f',s:1}:{t:'f',x:n.text||[]};
   if(n.mode!==DEFMODE[n.t]) o.m=n.mode;
   if(n.mt!==SEEDTIME) o.mt=n.mt;
@@ -724,6 +750,8 @@ const CMDLETS={
     let p=resolvePath(t), n=fsGet(p);
     if(!n) return [line('err','Set-Location: Cannot find path \''+p+'\' because it does not exist.')];
     if(n.t!=='d') return [line('err','Set-Location: \''+p+'\' is not a directory.')];
+    const blk=firstUnsearchable(p);   /* 路徑上任一層沒有 search 權限就進不去(例如 root 的 /root 700) */
+    if(blk) return [line('err','Set-Location: Access to the path \''+blk+'\' is denied.')];
     CWD=fsCanon(p); updatePrompt(); return null;}},
   'get-content':{params:['-Path'],paths:true,help:'Get the contents of a file (cat/type)',run:function(a,raw){
     let t=argOf(a,'Path')||firstArg(raw);
@@ -736,14 +764,15 @@ const CMDLETS={
     let t=argOf(a,'Path')||firstArg(raw);
     if(!t) return [line('err','Set-Content: Cannot process command because of one or more missing mandatory parameters: Path.')];
     let v=argOf(a,'Value');
-    if(v===undefined||v===true){ const i=raw.indexOf(t); v=raw.slice(i+1).filter(function(x){return !FLAGRE.test(x);}).join(' '); }
-    v=String(v).replace(/^["']|["']$/g,'');
+    if(v===undefined||v===true){ const i=rawIndexOf(raw,t);
+      v=(i<0?[]:raw.slice(i+1)).filter(function(x){return !FLAGRE.test(x);}).map(stripQ).join(' '); }
+    v=stripQ(v);
     const p=resolvePath(t), par=fsParent(p);
     if(!par||par.t!=='d') return [line('err','Set-Content: Could not find part of the path \''+p+'\'.')];
     const ex=keyIn(par,baseOf(p));
     if(ex && par.ch[ex].t==='d') return [line('err','Set-Content: \''+p+'\' is a directory.')];
-    /* 覆寫看檔案本身的擁有者,新建看父目錄的 —— /etc/hostname 這種 root 檔案兩條都擋得住 */
-    if(ex ? ownerOf(par.ch[ex])!==USERNAME : !writable(par))
+    /* 覆寫看檔案本身的 w 權限,新建看父目錄的 w —— root 檔案、或自己 chmod 唯讀過的檔都擋得住 */
+    if(ex ? !canWriteNode(par.ch[ex]) : !writable(par))
       return [line('err','Set-Content: Access to the path \''+p+'\' is denied.')];
     setChild(par, ex||baseOf(p), stamp(fnode(null,false,v?[v]:[])));
     return saved(null);}},
@@ -751,14 +780,15 @@ const CMDLETS={
     let t=argOf(a,'Path')||firstArg(raw);
     if(!t) return [line('err','Add-Content: Cannot process command because of one or more missing mandatory parameters: Path.')];
     let v=argOf(a,'Value');
-    if(v===undefined||v===true){ const i=raw.indexOf(t); v=raw.slice(i+1).filter(function(x){return !FLAGRE.test(x);}).join(' '); }
-    v=String(v).replace(/^["']|["']$/g,'');
+    if(v===undefined||v===true){ const i=rawIndexOf(raw,t);
+      v=(i<0?[]:raw.slice(i+1)).filter(function(x){return !FLAGRE.test(x);}).map(stripQ).join(' '); }
+    v=stripQ(v);
     const p=resolvePath(t), n=fsGet(p);
     if(!n){ const par=fsParent(p); if(!par||par.t!=='d') return [line('err','Add-Content: Could not find part of the path \''+p+'\'.')];
       if(!writable(par)) return [line('err','Add-Content: Access to the path \''+p+'\' is denied.')];
       setChild(par, baseOf(p), stamp(fnode(null,false,[v]))); return saved(null); }
     if(n.t==='d') return [line('err','Add-Content: \''+p+'\' is a directory.')];
-    if(ownerOf(n)!==USERNAME) return [line('err','Add-Content: Access to the path \''+p+'\' is denied.')];
+    if(!canWriteNode(n)) return [line('err','Add-Content: Access to the path \''+p+'\' is denied.')];
     if(n.seed){ n.seed=false; n.text=(n.rows||[]).map(function(r){return r.txt||'';}); n.rows=null; }
     n.text=(n.text||[]).concat([v]); stamp(n); return saved(null);}},
   'test-path':{params:['-Path'],paths:true,help:'Determine whether a path exists',run:function(a,raw){
@@ -778,6 +808,9 @@ const CMDLETS={
     if(!segs.length) return [line('err','New-Item: Cannot bind argument to parameter \'Path\' because it is an empty string.')];
     const parentPath='/'+segs.slice(0,-1).join('/'); let par=fsGet(parentPath);
     if(!par){ if(!wantDir && !argOf(a,'Force')) return [line('err','New-Item: Could not find part of the path \''+p+'\'.')];
+      /* mkdir -p 要建中間層:先在「最深的現存祖先」驗權限,否則會在 root 的 /etc 底下憑空長出目錄鏈 */
+      const anc=deepestExisting(parentPath);
+      if(!writable(anc)) return [line('err','New-Item: Access to the path \''+parentPath+'\' is denied.')];
       par=fsMkdirp(parentPath); }
     if(!par||par.t!=='d') return [line('err','New-Item: Could not find part of the path \''+p+'\'.')];
     if(!writable(par)) return [line('err','New-Item: Access to the path \''+p+'\' is denied.')];
@@ -816,7 +849,10 @@ const CMDLETS={
     const par=fsGet(dirOf(finalPath));
     if(!par||par.t!=='d') return [line('err','Copy-Item: Could not find part of the path \''+finalPath+'\'.')];
     if(!writable(par)) return [line('err','Copy-Item: Access to the path \''+finalPath+'\' is denied.')];
-    const cc=stamp(fsClone(sn)); cc.own=null;         // 複製出來的東西屬於執行的人,不是原擁有者
+    /* 目錄沒有 -Recurse 只複製空目錄(與真實 PowerShell 一致);複製品整棵改歸執行者所有,
+       不能保留原 root 擁有權 —— 否則把 /etc 複製到家目錄後,子節點還顯示 root。 */
+    const cc=(sn.t==='d'&&!argOf(a,'Recurse'))?stamp(dnode(sn.mode)):stamp(fsClone(sn));
+    markOwn(cc,USERNAME);
     setChild(par, baseOf(finalPath), cc);             // Copy-Item 覆寫既有目的地(與真實 PowerShell 一致)
     return saved(null);}},
   'move-item':{params:['-Path','-Destination','-Force'],paths:true,help:'Move an item to another location (mv)',run:function(a,raw){
@@ -854,7 +890,7 @@ const CMDLETS={
     if(pat.length>200) return [line('err','Select-String: Pattern exceeds the 200 character limit.')];
     let re; try{ re=new RegExp(pat,'i'); }catch(e){ return [line('err','Select-String: Invalid regular expression pattern.')]; }
     const hits=[];
-    (function walk(n,path){ if(n.t==='d'){ Object.keys(n.ch).forEach(function(k){ walk(n.ch[k],path+'\\'+k); }); return; }
+    (function walk(n,path){ if(n.t==='d'){ Object.keys(n.ch).forEach(function(k){ walk(n.ch[k],path+'/'+k); }); return; }
       fsText(n).forEach(function(r){ let t=r&&r.txt?r.txt:''; if(t && re.test(t))
         hits.push([baseOf(path), t.length>40?t.slice(0,40)+'...':t]); }); })(ROOT,'');
     if(!hits.length) return [line('muted','(no matches)')];
@@ -870,8 +906,8 @@ const CMDLETS={
         let dx=n.ch[x].t==='d'?0:1, dy=n.ch[y].t==='d'?0:1; return dx!==dy?dx-dy:(x.toLowerCase()<y.toLowerCase()?-1:1); });
       ks.forEach(function(k,i){
         let last=(i===ks.length-1), c=n.ch[k];
-        o.push(line(c.t==='d'?'':'muted', prefix+(last?'\\---':'+---')+k));
-        if(c.t==='d' && prefix.length<8) walk(c, prefix+(last?'    ':'|   '));
+        o.push(line(c.t==='d'?'':'muted', prefix+(last?'└── ':'├── ')+k));
+        if(c.t==='d' && prefix.length<8) walk(c, prefix+(last?'    ':'│   '));
       });
     })(fsGet(CWD)||dnode(),'');
     return o;}},
@@ -911,7 +947,10 @@ const CMDLETS={
       return o.length?o:[line('muted','(no matches)')];}},
   'out-null':{params:[],help:'Discard pipeline output',run:function(){return null;},pipe:function(){return null;}},
   'get-random':{params:['-Maximum'],help:'Get a random number',run:function(a,raw){
-    let m=parseInt(argOf(a,'Maximum')||firstArg(raw)||100,10); if(!(m>0)) m=100;
+    const rawMax=argOf(a,'Maximum')||firstArg(raw);
+    if(rawMax===''||rawMax==null) return [line('num',String(Math.floor(Math.random()*2147483647)))];
+    const m=parseInt(rawMax,10);   /* 無效上限不再靜默改成 100 —— 真 PowerShell 會報範圍錯誤 */
+    if(!(m>0)) return [line('err','Get-Random: The Maximum value ('+rawMax+') must be greater than the Minimum value (0).')];
     return [line('num',String(Math.floor(Math.random()*m)))];}},
   'test-connection':{params:['-TargetName'],asyncOut:true,help:'Send ICMP echo requests (ping)',run:function(a,raw){return pingRun(a,raw);}},
   'ping':{type:'Application',params:[],asyncOut:true,help:'send ICMP ECHO_REQUEST to network hosts',run:function(a,raw){return pingRun(a,raw);}},
@@ -965,13 +1004,14 @@ const CMDLETS={
      PowerShell 在 Linux/macOS 上「刻意移除」ls/cp/mv/rm/cat/man/mount/ps 這幾個別名,
      好讓原生執行檔直接跑。所以這些走 coreutils 的旗標與錯誤訊息,不是 cmdlet。 */
   'ls':{type:'Application',params:[],paths:true,help:'list directory contents',run:function(a,raw){
-    let long=false,all=false,human=false,one=false,target='';
+    let long=false,all=false,almostAll=false,human=false,one=false,target='';
     for(let i=1;i<raw.length;i++){
-      const t=String(raw[i]).replace(/^["']|["']$/g,'');
-      if(/^--/.test(t)){ if(t==='--all')all=true; else if(t==='--human-readable')human=true; continue; }
+      const t=stripQ(raw[i]);
+      if(/^--/.test(t)){ if(t==='--all')all=true; else if(t==='--almost-all'){all=true;almostAll=true;}
+        else if(t==='--human-readable')human=true; continue; }
       if(t.charAt(0)==='-'&&t.length>1){
         for(let j=1;j<t.length;j++){ const c=t.charAt(j);
-          if(c==='l')long=true; else if(c==='a'||c==='A')all=true;
+          if(c==='l')long=true; else if(c==='a')all=true; else if(c==='A'){all=true;almostAll=true;}
           else if(c==='h')human=true; else if(c==='1')one=true; }
         continue; }
       target=t; }
@@ -988,7 +1028,7 @@ const CMDLETS={
         +humanSize(n)+' '+lsTime(n.mt)+' '+baseOf(p))]; }
     let names=Object.keys(n.ch).sort();
     if(!all) names=names.filter(function(k){return k.charAt(0)!=='.';});
-    else names=['.','..'].concat(names);
+    else if(!almostAll) names=['.','..'].concat(names);   /* -A 保留隱藏檔,但不列出 . 與 .. */
     if(!names.length) return [];
     const nodeOf=function(name){ return name==='.'?n:(name==='..'?(fsParent(p)||n):n.ch[name]); };
     const nlink=function(node){ return node.t!=='d'?1:
@@ -1005,12 +1045,14 @@ const CMDLETS={
       return line('', r[0]+' '+lpad(r[1],wN)+' '+padw(r[2],wU)+' '+padw(r[3],wG)+' '
         +lpad(r[4],wS)+' '+r[5]+' '+r[6]); }));}},
   'cat':{type:'Application',params:[],paths:true,help:'concatenate files and print on the standard output',run:function(a,raw){
-    const t=firstArg(raw);
-    if(!t) return [line('muted','Usage: cat [FILE]...')];
-    const p=resolvePath(t), n=fsGet(p);
-    if(!n) return [line('err','cat: '+t+': No such file or directory')];
-    if(n.t==='d') return [line('err','cat: '+t+': Is a directory')];
-    const r=fsText(n); return r.length?r:[];}},
+    const files=raw.slice(1).filter(function(x){return !/^-/.test(x);}).map(stripQ);
+    if(!files.length) return [line('muted','Usage: cat [FILE]...')];
+    let o=[];   /* cat 會串接所有指定的檔案;讀不到的檔印錯誤後繼續下一個 */
+    for(let i=0;i<files.length;i++){ const t=files[i], p=resolvePath(t), n=fsGet(p);
+      if(!n){ o.push(line('err','cat: '+t+': No such file or directory')); continue; }
+      if(n.t==='d'){ o.push(line('err','cat: '+t+': Is a directory')); continue; }
+      o=o.concat(fsText(n)); }
+    return o;}},
   'rm':{type:'Application',params:[],paths:true,help:'remove files or directories',run:function(a,raw){
     let rec=false,force=false,target='';
     for(let i=1;i<raw.length;i++){ const t=String(raw[i]);
@@ -1044,7 +1086,7 @@ const CMDLETS={
     const par=fsGet(dirOf(finalPath));
     if(!par||par.t!=='d') return [line('err',"cp: cannot create regular file '"+args[1]+"': No such file or directory")];
     if(!writable(par)) return [line('err',"cp: cannot create regular file '"+args[1]+"': Permission denied")];
-    const c=stamp(fsClone(sn)); c.own=null;   /* 複製品屬於執行的人 */
+    const c=stamp(fsClone(sn)); markOwn(c,USERNAME);   /* 複製品整棵都屬於執行的人 */
     setChild(par,baseOf(finalPath),c);
     return saved(null);}},
   'mv':{type:'Application',params:[],paths:true,help:'move (rename) files',run:function(a,raw){
@@ -1071,7 +1113,9 @@ const CMDLETS={
     const pat=args[0], fileArg=args[1];
     if(!pat) return [line('err','Usage: grep [OPTION]... PATTERNS [FILE]...'),line('muted',"Try 'grep --help' for more information.")];
     if(pat.length>200) return [line('err','grep: pattern too long')];
-    let re; try{ re=new RegExp(pat,'i'); }catch(e){ return [line('err','grep: invalid regular expression')]; }
+    /* GNU grep 預設大小寫敏感,只有 -i / --ignore-case 才忽略 */
+    const ci=raw.some(function(x){ x=String(x); return x==='--ignore-case'||(/^-[A-Za-z]*i/.test(x)&&!/^--/.test(x)); });
+    let re; try{ re=new RegExp(pat,ci?'i':''); }catch(e){ return [line('err','grep: invalid regular expression')]; }
     const hits=[];
     if(fileArg){ const p=resolvePath(fileArg), n=fsGet(p);
       if(!n) return [line('err','grep: '+fileArg+': No such file or directory')];
@@ -1459,7 +1503,7 @@ function renderMenu(){
     cmdmenu.hidden=true; cmdmenu.replaceChildren(); cmdmenu.removeAttribute('data-sig');
     edit.removeAttribute('aria-activedescendant'); return; }
   cmdmenu.hidden=false;
-  const sig=menu.items.join(' ');
+  const sig=menu.items.join('\u0000');
   if(cmdmenu.getAttribute('data-sig')!==sig){       // 候選集合改變才重建
     cmdmenu.replaceChildren();
     menu.items.forEach(function(it,i){
@@ -1625,7 +1669,7 @@ function edRenderBar(){
   if(ED.app==='nano'){
     edBar.className='ed-bar'; edBar.hidden=false;   /* vim 在桌機會把它藏起來,切回 nano 一定要復原 */
     NANOKEYS.forEach(function(it){
-      const b=document.createElement('button'); b.type='button';
+      const b=document.createElement('button'); b.type='button'; b.tabIndex=-1;   /* footer 是 ^O/^X 的視覺提示+觸控替代,不佔鍵盤 Tab 序 */
       const k=document.createElement('span'); k.className='k'; k.textContent=it[0];
       b.appendChild(k); b.appendChild(document.createTextNode(' '+it[1]));
       b.addEventListener('mousedown',function(ev){ ev.preventDefault(); });
@@ -1643,7 +1687,7 @@ function edRenderBar(){
    [':w',function(){ edVimEx('w'); }],
    [':wq',function(){ edVimEx('wq'); }],
    [':q!',function(){ edVimEx('q!'); }]].forEach(function(it){
-    const b=document.createElement('button'); b.type='button'; b.textContent=it[0];
+    const b=document.createElement('button'); b.type='button'; b.tabIndex=-1; b.textContent=it[0];
     b.addEventListener('mousedown',function(ev){ ev.preventDefault(); });
     b.addEventListener('click',function(){ if(ED.onPrompt) return; it[1](); edFocusBuf(); });
     edBar.appendChild(b);
