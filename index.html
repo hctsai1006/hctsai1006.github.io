@@ -59,7 +59,11 @@
   .console::-webkit-scrollbar{width:12px}
   .console::-webkit-scrollbar-thumb{background:var(--ghost);border-radius:6px}
 
-  .row{white-space:pre-wrap;word-break:break-word;min-height:1.25em}
+  /* content-visibility:auto —— 累積上千行後,螢幕外的舊行跳過 layout/paint,
+     大量輸出與捲動在行動裝置上才不會隨歷史長度變慢;contain-intrinsic-size 提供
+     未渲染時的高度估計(auto 前綴會記住實際渲染過的尺寸),避免捲動條跳動。 */
+  .row{white-space:pre-wrap;word-break:break-word;min-height:1.25em;
+    content-visibility:auto;contain-intrinsic-size:auto 1.25em}
   .banner{color:var(--fg)} .banner b{color:var(--head);font-weight:600}
   .ok{color:var(--ok)} .err{color:var(--err)} .muted{color:var(--ghost)}
   .head{color:var(--head);font-weight:600} .rule{color:var(--ghost)}
