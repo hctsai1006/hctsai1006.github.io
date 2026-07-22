@@ -218,7 +218,8 @@ const D={
   /* contribTop 只記已合併的 PR。審查中的一律寫進 buildSeed 的 in-review.md,不要先加到這裡。
      任一項合併後才改這裡,並同步這 5 處計數(grep 目前的總數就找得到):
      頁首 <p> / profile accent / timeline 2026 / README.md 種子 / Get-Contribution 標題。
-     待合併(狀態擷取於 2026-07-20):
+     待合併(狀態擷取於 2026-07-22):
+       kubernetes/kubernetes    #140806      -> ['kubernetes/kubernetes',12]  (k8s core 11->12,總數 116)
        kedacore/keda            #7918        -> ['kedacore/keda',2]
        kedacore/keda-docs       #1811        -> ['kedacore/keda-docs',2]
        u-root/uio               #28          -> 新列 ['u-root/uio',1]  (新 repo,專案數 +1)
@@ -532,7 +533,9 @@ function buildSeed(){
       line('muted','https://github.com/'+r[0])]); });
   put(HOME+'/contributions','in-review.md',[
     line('head','# 審查中的上游 PR'),line(''),
-    line('muted','狀態擷取於 2026-07-20。下列全部尚未合併,不計入 Get-Contribution。'),line(''),
+    line('muted','狀態擷取於 2026-07-22。下列全部尚未合併,不計入 Get-Contribution。'),line(''),
+    line('accent','kubernetes/kubernetes  ·  CNCF Graduated'),
+    line('','  PR    #140806 DRA:裝置被移出 slice 後,不應重複佔用(over-commit)它的 counter'),line(''),
     line('accent','kedacore/keda  ·  CNCF Graduated'),
     line('','  issue #7917   liiklus scaler 在 lagThreshold 為 0 時整數除以零 panic'),
     line('','  PR    #7918   改在 parse 階段擋掉非正的 lagThreshold'),
