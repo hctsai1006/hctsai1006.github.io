@@ -1014,9 +1014,9 @@ const CMDLETS={
       line('cmd','  sudo apt install net-tools')];}},
   'hostname':{type:'Application',params:[],help:'show the system\'s host name',run:function(){return [line('',HOSTN)];}},
   '$psversiontable':{disp:'$PSVersionTable',type:'Variable',params:[],help:'PowerShell version information',run:function(){
-    return table(['Name','Value'],[['PSVersion','7.6.4'],['PSEdition','Core'],
+    return table(['Name','Value'],[['PSVersion','7.6.5'],['PSEdition','Core'],
       ['OS','Linux 6.8.0-51-generic #52-Ubuntu SMP PREEMPT_DYNAMIC'],
-      ['Platform','Unix'],['GitCommitId','7.6.4']]);}},
+      ['Platform','Unix'],['GitCommitId','7.6.5']]);}},
   'git':{type:'Application',params:[],help:'the stupid content tracker',run:function(a,raw){
     let sub=String(raw[1]||'').toLowerCase();
     if(sub==='status') return [line('','On branch main'),line('','Your branch is up to date with \'origin/main\'.'),line(''),
@@ -2097,7 +2097,7 @@ function boot(){
   fsInit(); updatePrompt();
   try{ const t=localStorage.getItem('thc1006.theme'); if(t) setTheme(t); }catch(e){}   // 記住上次的主題
   print([
-    {parts:[['banner','PowerShell 7.6.4']]},
+    {parts:[['banner','PowerShell 7.6.5']]},
     line(''),
     {parts:[['banner','Type '],['yellow','help'],['banner',' to explore, or try '],
             ['yellow','whoami'],['banner',' / '],['yellow','Get-Contribution -Foundation CNCF']]},
