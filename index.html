@@ -153,7 +153,7 @@
        Technical Steering Committee member;Zephyr RTOS 與 M5Stack platforms maintainer。</p>
     <!-- ⚠️ 下面這行是 SEO/無 JS 用的靜態文字,不能由 JS 產生,所以是唯一還要手動同步的計數。
          改 D.stats 時記得一起改,tools/check-numbers.js 會比對兩邊。 -->
-    <p>265 個已合併的上游 pull request,橫跨 76 個專案與 7 個基金會。</p>
+    <p>268 個已合併的上游 pull request,橫跨 76 個專案與 7 個基金會。</p>
     <ul>
       <li>著作:IEEE SCC 2026、IEEE WF-PST 2026、ICAIMS 2026 (IEEE) 已接受,另有預印本。ORCID 0000-0001-7421-8027</li>
       <li>獲獎:2023 總統教育獎 · 奮發向上獎;2026 國科會大專學生研究創作獎;2026 Make NTU 強茂企業獎第一名;2026 臺灣太空事務青年人才選訓計畫入選</li>
@@ -217,7 +217,7 @@ const D={
      現在 profile / README 種子 / timeline / Get-Contribution 全部從這裡算,改一次就好。
      唯一還要手動改的是 <noscript> 那段(SEO 用、不能靠 JS 產生)——tools/check-numbers.js 會盯著它。
      權威來源:people.cs.nycu.edu.tw/~hctsai1006/open-source/ 的 os-metrics。 */
-  stats:{merged:265, projects:76, foundations:7, asOf:'2026-08-28'},
+  stats:{merged:268, projects:76, foundations:7, asOf:'2026-08-30'},
   profile:[['head','thc1006  (蔡秀吉 · Hsiu-Chi Tsai)'],
     ['','CNCF Ambassador'],
     ['','Nephio (Linux Foundation Networking) Technical Steering Committee Member'],
@@ -231,14 +231,14 @@ const D={
      以前這裡靠一條寫死的關鍵字 regex 判斷，換 repo 就會判錯 —— 2026-08-27 實測 argo-workflows
      與 community-operators 明明是 CNCF 卻被漏掉。分桶以 /open-source/ 的 Ledger 為準，
      tools/check-numbers.js 會拿權威頁的 CNCF section 逐列核對這個旗標。 */
-  contribTop:[['kubernetes-sigs/kueue',46,1],['open-telemetry/opentelemetry-cpp',37,1],
+  contribTop:[['kubernetes-sigs/kueue',49,1],['open-telemetry/opentelemetry-cpp',37,1],
     ['RocketPy-Team/RocketPy',18,0],['kubernetes/kubernetes',18,1],['zephyrproject-rtos/zephyr',10,0],
     ['ocudu/ocudu',10,0],['kubernetes-sigs/dra-driver-cpu',8,1],['kubernetes-sigs/dranet',6,1],
     ['sysprog21/muxleq',6,0],['llm-d/llm-d-router',6,1],['jaegertracing/jaeger-ui',6,1],
     ['ROCm/k8s-gpu-dra-driver',4,0],['kptdev/porch',4,1],['volcano-sh/volcano',3,1],
     ['argoproj/argo-workflows',3,1],['k8s-operatorhub/community-operators',3,1],
     ['nephio-project/test-infra',3,0],['AverageMarcus/devstats-viewer',3,0]],
-  cncf:['CNCF',183,46],
+  cncf:['CNCF',186,46],
   /* 已發佈且在 credits 欄具名的安全 advisory。⚠️ 兩則都還沒有 CVE、也都還沒進 GitHub 全域
      advisory DB 與 OSV(repo 已發佈 != 全域收錄)——Get-Advisory 會照實講,別擅自拿掉那兩句。
      狀態查法:gh api repos/<repo>/security-advisories,或跑 personal-homepage/tools/security-watch.sh。 */
@@ -249,7 +249,7 @@ const D={
      href:'https://github.com/istio/istio/security/advisories/GHSA-qm8v-g4f9-qhjx',
      bul:'https://istio.io/latest/news/security/istio-security-2026-006/'},
     {id:'GHSA-j38h-7pfq-cxmw', repo:'volcano-sh/volcano', sev:'medium', role:'finder', pub:'2026-08-26',
-     fdn:'CNCF Incubating', fix:'v1.15.2 (尚未發布)',
+     fdn:'CNCF Incubating', fix:'v1.15.2 (2026-08-29 已發布)',
      what:'DRA 容量會計的迭代量隨租戶可控的數字成長,已驗證的租戶可用可控的 device count 吃光 scheduler CPU,癱瘓整個叢集的排程(CWE-400 經由 CWE-834)。',
      href:'https://github.com/volcano-sh/volcano/security/advisories/GHSA-j38h-7pfq-cxmw', bul:''}],
   /* 資料來源:people.cs.nycu.edu.tw/~hctsai1006/publications/(ORCID 同步),13 篇。
@@ -557,20 +557,21 @@ function buildSeed(){
       line('muted','https://github.com/'+r[0])]); });
   /* ⚠️ 這份是「代表性」清單,不是全集——長清單一定會爛(2026-07-22 那版到 8 月已有三分之二失效:
      keda #7918、keda-docs #1811、yunikorn #1053、u-root/uio #28 都 closed 未合併,DOFA #31/#32 早已合併)。
-     所以只留 6 筆、把日期戳寫在最上面,完整且即時的清單一律指向 /open-source/ 的進行中區。 */
+     所以只留 7 筆、把日期戳寫在最上面,完整且即時的清單一律指向 /open-source/ 的進行中區。 */
   put(HOME+'/contributions','in-review.md',[
     line('head','# 審查中的上游 PR(代表性,非全集)'),line(''),
     line('muted','狀態擷取於 '+D.stats.asOf+'。下列全部尚未合併,不計入 Get-Contribution。'),line(''),
     line('accent','kubernetes/kubernetes  ·  CNCF Graduated'),
-    line('','  PR    #141106  DRA converting client 對 v1beta2 UpdateStatus 誤用 v1beta1 client,觸發型別斷言 panic'),
-    line('','  PR    #141107  device taint 的 copyTaintTimeAdded 逐 taint 重複 clone,丟失前一個 taint 的 TimeAdded'),line(''),
-    line('accent','ocudu/ocudu  ·  LF 中立治理的 O-RAN DU/CU'),
-    line('','  MR    !1296    OFH U-plane 解碼器遇不支援的壓縮型別會讓整個 gNB process 退出(修自報的 #726)'),
-    line('','  MR    !1298    BFP 解壓的 exponent 未遮蔽保留位元'),line(''),
-    line('accent','kubernetes-sigs/dra-driver-nvidia-gpu  ·  CNCF'),
-    line('','  PR    #1371    只把自己 serve 的 allocation result 寫進 checkpoint,避免別家 driver 的結果污染狀態'),line(''),
-    line('accent','kubernetes-sigs/kueue  ·  CNCF'),
-    line('','  PR    #13995   讓 validatePodSet 的 non-negative 驗證涵蓋 spec.overhead(修自報的 #13991)'),line(''),
+    line('','  PR    #141626  新增 image_exclude_regex,精確排除 -cgroupsv1 image 而不誤傷正常名稱'),line(''),
+    line('accent','kubernetes-sigs/external-dns  ·  CNCF Sandbox'),
+    line('','  PR    #6679    明確空 parentRef.group 必須代表 core API group,不得誤對同名 Gateway'),
+    line('','  PR    #6640    Route 53 stub + 完整 registry/provider reconcile-loop regression tests'),line(''),
+    line('accent','kubernetes/test-infra  ·  CNCF'),
+    line('','  PR    #37777   KRTE cgroup contract probe,量 outer wrapper、nested Docker 與 kind node'),line(''),
+    line('accent','insomniacslk/dhcp  ·  Go networking · 非 CNCF'),
+    line('','  PR    #588     BroadcastRawUDPConn.ReadFrom fuzz target + 獨立 reference model'),
+    line('','  PR    #589     回傳 DHCP payload 前驗 UDP length'),
+    line('','  PR    #591     raw receive path 拒絕 IPv4 fragments'),line(''),
     srcRow('完整且即時的進行中清單見 /open-source/', SRC.oss, '  '),
     line('muted','  合併後移入 Get-Contribution,並更新 D.stats 這一個地方就好。')]);
   D.pubsFull.forEach(function(p){
