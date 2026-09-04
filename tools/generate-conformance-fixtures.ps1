@@ -752,7 +752,14 @@ $document = [ordered]@{
 # past its default depth of 2, which would produce a file that looks complete and
 # is not. Same reason as capture-pwsh-metadata.ps1.
 $json = $document | ConvertTo-Json -Depth 12
-Set-Content -Path $OutFile -Value $json -Encoding utf8NoBOM
+
+# LF, written directly, rather than Set-Content's platform default. .gitattributes
+# in this repo says why: generated files are compared against committed ones byte
+# for byte, so a fixture captured on Windows must not differ from the same fixture
+# captured on Linux by 341 invisible carriage returns. This is the same rule the
+# line-endings normalisation applies to the captured DATA, applied to the file
+# that holds it.
+[IO.File]::WriteAllText($OutFile, ($json -replace "`r`n", "`n") + "`n", [Text.UTF8Encoding]::new($false))
 
 $fired = @($NormalisationRules | Where-Object { $script:RuleFireCount[$_.name] -gt 0 })
 Write-Host "  PowerShell $psVersion on $([System.Runtime.InteropServices.RuntimeInformation]::FrameworkDescription) ($($PSVersionTable.Platform))"

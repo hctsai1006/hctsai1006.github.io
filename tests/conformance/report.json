@@ -16,7 +16,7 @@
     "outputRendering": "PlainText",
     "strictMode": "Latest"
   },
-  "fixtureCapturedAt": "2026-09-04T17:00:36.7376798Z",
+  "fixtureCapturedAt": "2026-09-04T17:01:33.1819133Z",
   "platformCaveat": "Captured on Win32NT while the published compatibility profiles target PowerShell on Linux. The corpus is deliberately platform-neutral (no filesystem or path semantics), and the capture fails on any case where a drive letter survives normalisation, but path and provider behaviour remains untested.",
   "totals": {
     "cases": 89,
