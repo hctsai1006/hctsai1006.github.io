@@ -1,0 +1,48 @@
+name: verify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # Pinned to the current major of GitHub's own first-party actions,
+      # verified against the releases API rather than assumed. Third-party
+      # actions would be pinned to a commit sha instead; this repo's package
+      # model applies the same distinction between a trusted first-party source
+      # and everything else.
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          # The tools are .mts run directly by Node's type stripping, which needs
+          # a modern runtime. package.json pins engines to >=24.
+          node-version: '24'
+          cache: npm
+
+      - run: npm ci
+
+      # ONE step, calling the same script a developer runs. Listing the gates
+      # again here created two copies of one list, and the copy in this file had
+      # already rotted — it ran five of the seven gates while its own comment
+      # claimed to run every gate the repo has. That is the exact failure the
+      # rest of this repository is built to prevent, so the list lives in
+      # package.json and nowhere else.
+      - name: verify
+        env:
+          # Not optional. The anonymous GitHub budget is 60/hr per IP and is
+          # shared across every runner on the host, so it is routinely exhausted.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run verify

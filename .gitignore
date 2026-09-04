@@ -1,0 +1,8 @@
+node_modules/
+# for the planned vite build; nothing writes these yet
+dist/
+.vite/
+*.tsbuildinfo
+.DS_Store
+# playwright-mcp scratch (screenshots, snapshots) from design review passes
+.playwright-mcp/

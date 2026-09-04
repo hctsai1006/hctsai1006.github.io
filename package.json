@@ -1,0 +1,31 @@
+{
+  "name": "hctsai-browser-workstation",
+  "version": "2.0.0-dev.0",
+  "private": true,
+  "type": "module",
+  "description": "Browser-hosted PowerShell-compatible workstation. Versioned compatibility profiles over a semantic execution engine.",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "truth:check": "node tools/verify-release-truth.mts --check",
+    "truth:write": "node tools/verify-release-truth.mts --write",
+    "roadmap": "node tools/generate-roadmap.mts",
+    "check:numbers": "node tools/check-numbers.js",
+    "verify": "npm run typecheck",
+    "typecheck": "tsc --noEmit",
+    "test": "node tools/run-tests.mts",
+    "capture:metadata": "pwsh -NoProfile -File tools/capture-pwsh-metadata.ps1",
+    "profiles": "node tools/generate-compatibility-profile.mts",
+    "explorer": "node tools/generate-compat-explorer.mts",
+    "data": "node tools/extract-portfolio-data.mts",
+    "inventory": "node tools/extract-command-inventory.mts",
+    "manifests": "node tools/generate-command-manifests.mts"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
+    "typescript": "^5.9.2"
+  }
+}

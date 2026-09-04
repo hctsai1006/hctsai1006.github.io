@@ -6,9 +6,14 @@
 
    另可帶第二個參數指向 NYCU CS 的 open-source/index.html，一併比對是否與權威頁一致。
    用法：node tools/check-numbers.js [index.html] [權威 open-source/index.html] */
-const fs = require('fs');
-const path = require('path');
-const FILE = process.argv[2] || path.join(__dirname, '..', 'index.html');
+/* ESM: package.json declares "type":"module" as of this commit, so this file
+   is an ES module too. import.meta.dirname replaces the CommonJS directory
+   global (Node 20.11+). Converting it here rather than later is not tidiness:
+   "type":"module" makes require() a ReferenceError, so a version of this file
+   that still used it would be broken from the moment the field landed. */
+import fs from 'node:fs';
+import path from 'node:path';
+const FILE = process.argv[2] || path.join(import.meta.dirname, '..', 'index.html');
 const AUTH = process.argv[3] || 'C:/Users/thc1006/Desktop/MAY/personal-homepage/open-source/index.html';
 let fails = 0;
 const bad = m => { console.log('  x ' + m); fails++; };

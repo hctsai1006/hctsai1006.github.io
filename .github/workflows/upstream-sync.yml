@@ -1,0 +1,150 @@
+name: upstream-sync
+
+# Watch upstream for movement and RAISE IT, never act on it.
+#
+# The deliberate non-goals matter as much as the goal:
+#   - it does not auto-merge
+#   - it does not switch the production compatibility profile
+#   - it does not "fix" a discrepancy by regenerating and pushing to main
+#
+# A new PowerShell preview is not an emergency, and a job that silently retargets
+# the site the moment upstream ships is the same failure as the hardcoded version
+# string it replaced — only faster. So this opens a pull request describing what
+# changed, and stops. A human decides.
+on:
+  schedule:
+    # 06:15 UTC daily. Off the hour: scheduled jobs cluster there and get delayed.
+    - cron: '15 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: upstream-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+
+      - run: npm ci
+
+      - name: check whether upstream still matches the lockfile
+        id: check
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set +e
+          npm run truth:check > truth-check.log 2>&1
+          echo "exit=$?" >> "$GITHUB_OUTPUT"
+          cat truth-check.log
+
+      # Exit codes are distinct on purpose:
+      #   0 clean · 1 drift or an error-severity discrepancy · 2 could not run
+      #   3 a bug in the tool itself
+      # Only 1 can mean "upstream moved". 2 and 3 are our problem — a rate limit,
+      # a changed upstream payload shape, a defect — and must fail loudly instead
+      # of opening a pull request that misdescribes them.
+      - name: fail on tool error
+        if: steps.check.outputs.exit == '2' || steps.check.outputs.exit == '3'
+        run: |
+          echo "::error::verify-release-truth could not complete (exit ${{ steps.check.outputs.exit }}). This is not upstream drift."
+          exit 1
+
+      - name: regenerate the lockfile
+        if: steps.check.outputs.exit == '1'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # `|| true` would swallow a genuine failure here. Exit 1 is expected
+          # (the run records an error-severity discrepancy and still writes);
+          # anything else is not.
+          set +e
+          npm run truth:write
+          code=$?
+          set -e
+          if [ "$code" -gt 1 ]; then
+            echo "::error::truth:write failed with exit $code"
+            exit "$code"
+          fi
+
+      - name: open a pull request
+        if: steps.check.outputs.exit == '1'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          # Reachable now that truth:write is idempotent. Previously the write
+          # always refreshed generatedAt and every fetchedAt, so this could never
+          # be true and a discrepancy with no actual drift opened a PR headed
+          # "Upstream moved." every single day.
+          if git diff --quiet -- compat/upstream/releases.lock.json; then
+            echo "truth:check reported a problem but the lockfile is unchanged."
+            echo "That means a discrepancy, not drift — see the log above. Nothing to propose."
+            exit 0
+          fi
+
+          # The run id keeps a same-day re-run from colliding with the branch the
+          # scheduled run already pushed. checkout fetches only the target ref, so
+          # there is no local tracking ref for --force-with-lease to compare
+          # against and the second push is rejected as stale.
+          BRANCH="upstream-sync/$(date -u +%Y-%m-%d)-${{ github.run_id }}"
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add compat/upstream/releases.lock.json
+          git commit -m "Sync upstream release truth"
+          git push origin "$BRANCH"
+
+          LTS=$(node -p "require('./compat/upstream/releases.lock.json').channels.lts")
+          PRE=$(node -p "require('./compat/upstream/releases.lock.json').channels.preview")
+
+          {
+            echo "Upstream moved. This pull request only updates the recorded truth; it does **not**"
+            echo "change which profile the site boots into."
+            echo
+            echo "| channel | tag |"
+            echo "| --- | --- |"
+            echo "| LTS | \`$LTS\` |"
+            echo "| preview | \`$PRE\` |"
+            echo
+            echo "<details><summary>verifier output</summary>"
+            echo
+            echo '```'
+            cat truth-check.log
+            echo '```'
+            echo
+            echo "</details>"
+            echo
+            echo "Before merging: check that no discrepancy above is an \`error\`, and that any"
+            echo "behaviour change implied by a new release has a compatibility-profile entry and"
+            echo "a conformance fixture."
+            echo
+            echo "> Pull requests opened with \`GITHUB_TOKEN\` do not trigger \`on: pull_request\`,"
+            echo "> so this one arrives with no CI signal. Run \`npm run verify\` locally, or close"
+            echo "> and reopen the PR to trigger the checks."
+          } > pr-body.md
+
+          # The label has to exist before it can be applied, and a missing label
+          # would otherwise fail the create on a repository that never had one.
+          gh label create upstream-sync \
+            --description "Automated upstream release-truth sync" \
+            --color 0E8A16 >/dev/null 2>&1 || true
+
+          gh pr create \
+            --title "Sync upstream release truth ($LTS / $PRE)" \
+            --body-file pr-body.md \
+            --base main \
+            --head "$BRANCH" \
+            --label upstream-sync
