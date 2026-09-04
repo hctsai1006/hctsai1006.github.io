@@ -28,7 +28,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createContext, runInContext } from 'node:vm';
 
-import { readNamedLiteral } from './js-literal.mts';
+import { readNamedLiteralFromHtml } from './js-literal.mts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..');
@@ -69,7 +69,7 @@ interface RawCommand {
  * called.
  */
 function evaluateLiteral<T>(html: string, name: string): T {
-  const literal = readNamedLiteral(html, name).text;
+  const literal = readNamedLiteralFromHtml(html, name).text;
   const context = createContext(Object.create(null) as Record<string, never>);
   try {
     return runInContext(`(${literal})`, context, { timeout: 2000 }) as T;

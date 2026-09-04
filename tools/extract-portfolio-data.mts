@@ -37,7 +37,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createContext, runInContext } from 'node:vm';
 
-import { readNamedLiteral } from './js-literal.mts';
+import { readNamedLiteralFromHtml } from './js-literal.mts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..');
@@ -71,12 +71,13 @@ interface RawData {
 function extractRawData(): RawData {
   const html = readFileSync(SOURCE, 'utf8');
 
-  // Brace-matched, not delimiter-searched. Searching for a closing "};" happens
-  // to work for D because D is followed by one, but it is exactly the technique
-  // js-literal.mts exists to replace: measured against a real parser, the same
-  // search overshoots ALIAS by 5x and DISP by 4.6x. Depending on D's neighbour
-  // never changing is not a property worth relying on.
-  const literal = readNamedLiteral(html, 'D').text;
+  // Parsed, not searched. Looking for a closing "};" happens to work for D
+  // because D is followed by one, but the same search overshoots ALIAS by 5x and
+  // DISP by 4.6x — depending on D's neighbour never changing is not a property
+  // worth relying on. js-literal.mts asks TypeScript's parser instead, so the
+  // span is the one the language says it is, and a script that does not parse
+  // stops the extraction rather than yielding a plausible-looking slice.
+  const literal = readNamedLiteralFromHtml(html, 'D').text;
 
   // An isolated context with no globals: no require, no process, no fetch, no
   // prototype to reach through. The literal cannot call anything because there
