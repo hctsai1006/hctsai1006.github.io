@@ -1,0 +1,1417 @@
+{
+  "engine": {
+    "psVersion": "7.6.5",
+    "psEdition": "Core",
+    "gitCommitId": "7.6.5",
+    "os": "Microsoft Windows 10.0.26340",
+    "platform": "Win32NT",
+    "framework": ".NET 10.0.11"
+  },
+  "capture": {
+    "renderWidth": 120,
+    "pinnedCulture": "en-US",
+    "stressCulture": "de-DE",
+    "hostCulture": "zh-TW",
+    "hostUICulture": "zh-TW",
+    "outputRendering": "PlainText",
+    "strictMode": "Latest"
+  },
+  "fixtureCapturedAt": "2026-09-04T17:00:36.7376798Z",
+  "platformCaveat": "Captured on Win32NT while the published compatibility profiles target PowerShell on Linux. The corpus is deliberately platform-neutral (no filesystem or path semantics), and the capture fails on any case where a drive letter survives normalisation, but path and provider behaviour remains untested.",
+  "totals": {
+    "cases": 89,
+    "compared": 69,
+    "matched": 67,
+    "differencesExplained": 2,
+    "differencesUnexplained": 0,
+    "unimplemented": 20
+  },
+  "coverage": {
+    "nativeSemanticCommands": 24,
+    "commandsWithBehaviouralEvidence": 7,
+    "behaviouralCoveragePercent": 29.2,
+    "commandsWithMetadataEvidence": 12,
+    "metadataCoveragePercent": 50
+  },
+  "perCommand": [
+    {
+      "command": "$psversiontable",
+      "behavioural": 0,
+      "metadata": 0,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "clear-host",
+      "behavioural": 0,
+      "metadata": 0,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "get-advisory",
+      "behavioural": 0,
+      "metadata": 0,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "get-award",
+      "behavioural": 0,
+      "metadata": 0,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "get-command",
+      "behavioural": 2,
+      "metadata": 2,
+      "unimplemented": 1,
+      "differences": 0
+    },
+    {
+      "command": "get-contribution",
+      "behavioural": 0,
+      "metadata": 0,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "get-date",
+      "behavioural": 1,
+      "metadata": 2,
+      "unimplemented": 1,
+      "differences": 0
+    },
+    {
+      "command": "get-help",
+      "behavioural": 0,
+      "metadata": 2,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "get-history",
+      "behavioural": 0,
+      "metadata": 2,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "get-location",
+      "behavioural": 0,
+      "metadata": 2,
+      "unimplemented": 1,
+      "differences": 0
+    },
+    {
+      "command": "get-project",
+      "behavioural": 0,
+      "metadata": 0,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "get-publication",
+      "behavioural": 0,
+      "metadata": 0,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "get-random",
+      "behavioural": 0,
+      "metadata": 2,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "get-source",
+      "behavioural": 0,
+      "metadata": 0,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "get-timeline",
+      "behavioural": 0,
+      "metadata": 0,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "help",
+      "behavioural": 0,
+      "metadata": 0,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "measure-object",
+      "behavioural": 2,
+      "metadata": 2,
+      "unimplemented": 1,
+      "differences": 0
+    },
+    {
+      "command": "out-null",
+      "behavioural": 0,
+      "metadata": 1,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "select-object",
+      "behavioural": 1,
+      "metadata": 2,
+      "unimplemented": 1,
+      "differences": 0
+    },
+    {
+      "command": "set-location",
+      "behavioural": 0,
+      "metadata": 0,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "sort-object",
+      "behavioural": 5,
+      "metadata": 2,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "where-object",
+      "behavioural": 14,
+      "metadata": 2,
+      "unimplemented": 1,
+      "differences": 1
+    },
+    {
+      "command": "whoami",
+      "behavioural": 0,
+      "metadata": 0,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "write-output",
+      "behavioural": 6,
+      "metadata": 2,
+      "unimplemented": 0,
+      "differences": 0
+    }
+  ],
+  "cultureSensitiveCases": [
+    "culture.format-operator-follows-culture",
+    "culture.tostring-follows-culture"
+  ],
+  "knownDifferences": [
+    {
+      "id": "string-collation-pinned-to-en",
+      "kind": "deliberate",
+      "expect": "matches",
+      "cases": [
+        "collation.b-lt-a",
+        "collation.a-lt-b-upper",
+        "collation.sort-mixed-case",
+        "comparison.eq-is-case-insensitive",
+        "comparison.ceq-is-case-sensitive",
+        "comparison.strings-compare-as-strings"
+      ]
+    },
+    {
+      "id": "right-operand-not-coerced-to-left-type",
+      "kind": "known-gap",
+      "expect": "differs",
+      "cases": [
+        "comparison.left-operand-decides-type"
+      ]
+    },
+    {
+      "id": "no-int32-int64-boundary",
+      "kind": "known-gap",
+      "expect": "differs",
+      "cases": [
+        "type.int64-boundary"
+      ]
+    },
+    {
+      "id": "typename-of-null-is-total",
+      "kind": "deliberate",
+      "expect": "unimplemented",
+      "cases": [
+        "type.null-has-no-type"
+      ]
+    }
+  ],
+  "problems": [],
+  "cases": [
+    {
+      "id": "pipeline.measure-nested-array",
+      "command": "measure-object",
+      "area": "pipeline",
+      "outcome": "match",
+      "expected": [
+        2
+      ],
+      "actual": 2,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "pipeline.nested-array-arrives-intact",
+      "command": "write-output",
+      "area": "pipeline",
+      "outcome": "match",
+      "expected": [
+        "System.Int32",
+        "System.Object[]"
+      ],
+      "actual": [
+        "System.Int32",
+        "System.Object[]"
+      ],
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "pipeline.deep-nesting-still-one-level",
+      "command": "measure-object",
+      "area": "pipeline",
+      "outcome": "match",
+      "expected": [
+        2
+      ],
+      "actual": 2,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "pipeline.foreach-runs-for-null",
+      "command": "write-output",
+      "area": "pipeline",
+      "outcome": "match",
+      "expected": [
+        2
+      ],
+      "actual": 2,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "pipeline.measure-object-skips-null",
+      "command": "measure-object",
+      "area": "pipeline",
+      "outcome": "unimplemented",
+      "expected": [
+        1
+      ],
+      "actual": null,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": "Measure-Object is declared native-semantic in the manifest but has no implementation yet, so there is nothing to compare. The pipeline half of this pair IS compared, by pipeline.foreach-runs-for-null."
+    },
+    {
+      "id": "pipeline.empty-array-emits-nothing",
+      "command": "write-output",
+      "area": "pipeline",
+      "outcome": "match",
+      "expected": [
+        0
+      ],
+      "actual": 0,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "pipeline.string-is-not-enumerated",
+      "command": "write-output",
+      "area": "pipeline",
+      "outcome": "match",
+      "expected": [
+        1
+      ],
+      "actual": 1,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "pipeline.hashtable-is-not-enumerated",
+      "command": "write-output",
+      "area": "pipeline",
+      "outcome": "match",
+      "expected": [
+        1
+      ],
+      "actual": 1,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "pipeline.scalar-is-one-object",
+      "command": "write-output",
+      "area": "pipeline",
+      "outcome": "match",
+      "expected": [
+        1
+      ],
+      "actual": 1,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "collation.b-lt-a",
+      "command": "sort-object",
+      "area": "comparison",
+      "outcome": "match",
+      "expected": [
+        false
+      ],
+      "actual": false,
+      "explainedBy": "string-collation-pinned-to-en",
+      "explanationKind": "deliberate",
+      "detail": null
+    },
+    {
+      "id": "collation.a-lt-b-upper",
+      "command": "sort-object",
+      "area": "comparison",
+      "outcome": "match",
+      "expected": [
+        true
+      ],
+      "actual": true,
+      "explainedBy": "string-collation-pinned-to-en",
+      "explanationKind": "deliberate",
+      "detail": null
+    },
+    {
+      "id": "collation.sort-mixed-case",
+      "command": "sort-object",
+      "area": "comparison",
+      "outcome": "match",
+      "expected": [
+        "A",
+        "a",
+        "b",
+        "B"
+      ],
+      "actual": [
+        "A",
+        "a",
+        "b",
+        "B"
+      ],
+      "explainedBy": "string-collation-pinned-to-en",
+      "explanationKind": "deliberate",
+      "detail": null
+    },
+    {
+      "id": "collation.sort-numeric-not-lexicographic",
+      "command": "sort-object",
+      "area": "comparison",
+      "outcome": "match",
+      "expected": [
+        1,
+        9,
+        10
+      ],
+      "actual": [
+        1,
+        9,
+        10
+      ],
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "comparison.eq-is-case-insensitive",
+      "command": "where-object",
+      "area": "comparison",
+      "outcome": "match",
+      "expected": [
+        true
+      ],
+      "actual": true,
+      "explainedBy": "string-collation-pinned-to-en",
+      "explanationKind": "deliberate",
+      "detail": null
+    },
+    {
+      "id": "comparison.ceq-is-case-sensitive",
+      "command": "where-object",
+      "area": "comparison",
+      "outcome": "match",
+      "expected": [
+        false
+      ],
+      "actual": false,
+      "explainedBy": "string-collation-pinned-to-en",
+      "explanationKind": "deliberate",
+      "detail": null
+    },
+    {
+      "id": "comparison.strings-compare-as-strings",
+      "command": "where-object",
+      "area": "comparison",
+      "outcome": "match",
+      "expected": [
+        true
+      ],
+      "actual": true,
+      "explainedBy": "string-collation-pinned-to-en",
+      "explanationKind": "deliberate",
+      "detail": null
+    },
+    {
+      "id": "comparison.left-operand-decides-type",
+      "command": "where-object",
+      "area": "comparison",
+      "outcome": "difference",
+      "expected": [
+        false
+      ],
+      "actual": true,
+      "explainedBy": "right-operand-not-coerced-to-left-type",
+      "explanationKind": "known-gap",
+      "detail": null
+    },
+    {
+      "id": "comparison.null-sorts-first",
+      "command": "sort-object",
+      "area": "comparison",
+      "outcome": "match",
+      "expected": [
+        true
+      ],
+      "actual": true,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "comparison.array-eq-filters",
+      "command": "where-object",
+      "area": "comparison",
+      "outcome": "unimplemented",
+      "expected": [
+        "System.Object[]=2"
+      ],
+      "actual": null,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": "Array-valued left operands (the filtering form of -eq) are not modelled; compareValues answers a scalar comparison only."
+    },
+    {
+      "id": "truthy.empty-array",
+      "command": "where-object",
+      "area": "truthiness",
+      "outcome": "match",
+      "expected": [
+        false
+      ],
+      "actual": false,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "truthy.single-element-takes-element",
+      "command": "where-object",
+      "area": "truthiness",
+      "outcome": "match",
+      "expected": [
+        false
+      ],
+      "actual": false,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "truthy.single-element-true",
+      "command": "where-object",
+      "area": "truthiness",
+      "outcome": "match",
+      "expected": [
+        true
+      ],
+      "actual": true,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "truthy.multi-element-array-is-true",
+      "command": "where-object",
+      "area": "truthiness",
+      "outcome": "match",
+      "expected": [
+        true
+      ],
+      "actual": true,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "truthy.string-zero",
+      "command": "where-object",
+      "area": "truthiness",
+      "outcome": "match",
+      "expected": [
+        true
+      ],
+      "actual": true,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "truthy.number-zero",
+      "command": "where-object",
+      "area": "truthiness",
+      "outcome": "match",
+      "expected": [
+        false
+      ],
+      "actual": false,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "truthy.empty-string",
+      "command": "where-object",
+      "area": "truthiness",
+      "outcome": "match",
+      "expected": [
+        false
+      ],
+      "actual": false,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "truthy.whitespace-string",
+      "command": "where-object",
+      "area": "truthiness",
+      "outcome": "match",
+      "expected": [
+        true
+      ],
+      "actual": true,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "truthy.null",
+      "command": "where-object",
+      "area": "truthiness",
+      "outcome": "match",
+      "expected": [
+        false
+      ],
+      "actual": false,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "truthy.negative-number",
+      "command": "where-object",
+      "area": "truthiness",
+      "outcome": "match",
+      "expected": [
+        true
+      ],
+      "actual": true,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "truthy.empty-hashtable",
+      "command": "where-object",
+      "area": "truthiness",
+      "outcome": "match",
+      "expected": [
+        true
+      ],
+      "actual": true,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "type.int-literal",
+      "command": null,
+      "area": "types",
+      "outcome": "match",
+      "expected": [
+        "System.Int32"
+      ],
+      "actual": "System.Int32",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "type.double-literal",
+      "command": null,
+      "area": "types",
+      "outcome": "match",
+      "expected": [
+        "System.Double"
+      ],
+      "actual": "System.Double",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "type.exact-division-stays-int",
+      "command": null,
+      "area": "types",
+      "outcome": "match",
+      "expected": [
+        "System.Int32"
+      ],
+      "actual": "System.Int32",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "type.inexact-division-promotes",
+      "command": null,
+      "area": "types",
+      "outcome": "match",
+      "expected": [
+        "System.Double"
+      ],
+      "actual": "System.Double",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "type.int64-boundary",
+      "command": null,
+      "area": "types",
+      "outcome": "difference",
+      "expected": [
+        "System.Int64"
+      ],
+      "actual": "System.Int32",
+      "explainedBy": "no-int32-int64-boundary",
+      "explanationKind": "known-gap",
+      "detail": null
+    },
+    {
+      "id": "type.string",
+      "command": null,
+      "area": "types",
+      "outcome": "match",
+      "expected": [
+        "System.String"
+      ],
+      "actual": "System.String",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "type.boolean",
+      "command": null,
+      "area": "types",
+      "outcome": "match",
+      "expected": [
+        "System.Boolean"
+      ],
+      "actual": "System.Boolean",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "type.array",
+      "command": null,
+      "area": "types",
+      "outcome": "match",
+      "expected": [
+        "System.Object[]"
+      ],
+      "actual": "System.Object[]",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "type.byte-array",
+      "command": null,
+      "area": "types",
+      "outcome": "match",
+      "expected": [
+        "System.Byte[]"
+      ],
+      "actual": "System.Byte[]",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "type.datetime",
+      "command": "get-date",
+      "area": "types",
+      "outcome": "match",
+      "expected": [
+        "System.DateTime"
+      ],
+      "actual": "System.DateTime",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "type.pscustomobject-typename",
+      "command": null,
+      "area": "types",
+      "outcome": "match",
+      "expected": [
+        "System.Management.Automation.PSCustomObject"
+      ],
+      "actual": "System.Management.Automation.PSCustomObject",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "type.datetime-hierarchy",
+      "command": null,
+      "area": "types",
+      "outcome": "unimplemented",
+      "expected": [
+        "System.DateTime,System.ValueType,System.Object"
+      ],
+      "actual": null,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": "The project has no DateTime PSObject wrapper, so it has no hierarchy of its own to compare. isOfType is exercised instead by type.is-matches-short-name, using the chain this case records."
+    },
+    {
+      "id": "type.is-matches-short-name",
+      "command": null,
+      "area": "types",
+      "outcome": "match",
+      "expected": [
+        true
+      ],
+      "actual": true,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "type.null-has-no-type",
+      "command": null,
+      "area": "types",
+      "outcome": "unimplemented",
+      "expected": [
+        "InvokeMethodOnNull"
+      ],
+      "actual": null,
+      "explainedBy": "typename-of-null-is-total",
+      "explanationKind": "deliberate",
+      "detail": "typeNameOf(null) returns 'System.Object' as a total-function convenience, and the reference implementation throws instead, so there is no honest scalar to compare. Recorded in known-differences.yml as typename-of-null-is-total."
+    },
+    {
+      "id": "property.access-is-case-insensitive",
+      "command": null,
+      "area": "properties",
+      "outcome": "match",
+      "expected": [
+        "x"
+      ],
+      "actual": "x",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "property.missing-property-is-absent",
+      "command": null,
+      "area": "properties",
+      "outcome": "match",
+      "expected": [
+        true
+      ],
+      "actual": true,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "property.declaration-order-is-kept",
+      "command": "select-object",
+      "area": "properties",
+      "outcome": "match",
+      "expected": [
+        "B",
+        "A",
+        "C"
+      ],
+      "actual": [
+        "B",
+        "A",
+        "C"
+      ],
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "property.has-property-case-insensitive",
+      "command": null,
+      "area": "properties",
+      "outcome": "match",
+      "expected": [
+        true
+      ],
+      "actual": true,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "strings.regex-replace-is-case-insensitive",
+      "command": null,
+      "area": "strings",
+      "outcome": "unimplemented",
+      "expected": [
+        "AxC"
+      ],
+      "actual": null,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": "String operators are not implemented; the project models the object pipeline, not the expression language. Recorded so the gap is measurable rather than forgotten."
+    },
+    {
+      "id": "strings.like-is-case-insensitive",
+      "command": null,
+      "area": "strings",
+      "outcome": "unimplemented",
+      "expected": [
+        true
+      ],
+      "actual": null,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": "String operators are not implemented."
+    },
+    {
+      "id": "strings.split-returns-array",
+      "command": null,
+      "area": "strings",
+      "outcome": "unimplemented",
+      "expected": [
+        3
+      ],
+      "actual": null,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": "String operators are not implemented."
+    },
+    {
+      "id": "culture.interpolation-is-invariant",
+      "command": null,
+      "area": "culture",
+      "outcome": "unimplemented",
+      "expected": [
+        "1.5"
+      ],
+      "actual": null,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": "The project has no value-to-string conversion layer yet. Captured now so the invariant is on record before that layer is written."
+    },
+    {
+      "id": "culture.tostring-follows-culture",
+      "command": null,
+      "area": "culture",
+      "outcome": "unimplemented",
+      "expected": [
+        "1234.5"
+      ],
+      "actual": null,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": "No value-to-string conversion layer yet."
+    },
+    {
+      "id": "culture.format-operator-follows-culture",
+      "command": null,
+      "area": "culture",
+      "outcome": "unimplemented",
+      "expected": [
+        "1,234.50"
+      ],
+      "actual": null,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": "No formatting layer yet."
+    },
+    {
+      "id": "status.dollar-hook-true-on-success",
+      "command": null,
+      "area": "status",
+      "outcome": "unimplemented",
+      "expected": true,
+      "actual": null,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": "The kernel that would set $? is not built; streams.ts defines the ErrorRecord it will carry. Captured now so the harness is ready for it."
+    },
+    {
+      "id": "status.dollar-hook-false-after-error",
+      "command": "get-command",
+      "area": "status",
+      "outcome": "unimplemented",
+      "expected": false,
+      "actual": null,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": "No kernel to set $? yet."
+    },
+    {
+      "id": "status.lastexitcode-from-native-command",
+      "command": null,
+      "area": "status",
+      "outcome": "unimplemented",
+      "expected": [
+        3
+      ],
+      "actual": null,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": "No native process channel in the browser build; NativeStreams is declared but nothing drives it."
+    },
+    {
+      "id": "error.command-not-found-id",
+      "command": "get-command",
+      "area": "errors",
+      "outcome": "match",
+      "expected": "CommandNotFoundException,Microsoft.PowerShell.Commands.GetCommandCommand",
+      "actual": "CommandNotFoundException,Microsoft.PowerShell.Commands.GetCommandCommand",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "error.command-not-found-category",
+      "command": "get-command",
+      "area": "errors",
+      "outcome": "match",
+      "expected": "ObjectNotFound",
+      "actual": "ObjectNotFound",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "error.select-object-first-negative",
+      "command": "select-object",
+      "area": "errors",
+      "outcome": "unimplemented",
+      "expected": "ParameterArgumentValidationError,Microsoft.PowerShell.Commands.SelectObjectCommand",
+      "actual": null,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": "No binder yet. invocation.ts declares the BindingResult a binder will return; nothing produces one."
+    },
+    {
+      "id": "error.method-on-null",
+      "command": null,
+      "area": "errors",
+      "outcome": "unimplemented",
+      "expected": "InvokeMethodOnNull",
+      "actual": null,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": "No expression evaluator yet."
+    },
+    {
+      "id": "error.divide-by-zero",
+      "command": null,
+      "area": "errors",
+      "outcome": "unimplemented",
+      "expected": "RuntimeException",
+      "actual": null,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": "No expression evaluator yet."
+    },
+    {
+      "id": "error.no-error-on-success",
+      "command": null,
+      "area": "errors",
+      "outcome": "unimplemented",
+      "expected": 0,
+      "actual": null,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": "No error-stream driver yet; this case exists to check the capture, not the project."
+    },
+    {
+      "id": "meta.measure-object-sum-type",
+      "command": "measure-object",
+      "area": "metadata",
+      "outcome": "match",
+      "expected": [
+        "System.Management.Automation.SwitchParameter"
+      ],
+      "actual": "System.Management.Automation.SwitchParameter",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "meta.measure-object-inputobject-pipeline",
+      "command": "measure-object",
+      "area": "metadata",
+      "outcome": "match",
+      "expected": [
+        true
+      ],
+      "actual": true,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "meta.sort-object-property-position",
+      "command": "sort-object",
+      "area": "metadata",
+      "outcome": "match",
+      "expected": [
+        0
+      ],
+      "actual": 0,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "meta.sort-object-property-type",
+      "command": "sort-object",
+      "area": "metadata",
+      "outcome": "match",
+      "expected": [
+        "System.Object[]"
+      ],
+      "actual": "System.Object[]",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "meta.select-object-first-type",
+      "command": "select-object",
+      "area": "metadata",
+      "outcome": "match",
+      "expected": [
+        "System.Int32"
+      ],
+      "actual": "System.Int32",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "meta.select-object-parameter-sets",
+      "command": "select-object",
+      "area": "metadata",
+      "outcome": "match",
+      "expected": [
+        "DefaultParameter,SkipLastParameter"
+      ],
+      "actual": "DefaultParameter,SkipLastParameter",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "meta.where-object-filterscript-position",
+      "command": "where-object",
+      "area": "metadata",
+      "outcome": "match",
+      "expected": [
+        0
+      ],
+      "actual": 0,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "meta.where-object-eq-aliases",
+      "command": "where-object",
+      "area": "metadata",
+      "outcome": "match",
+      "expected": [
+        "IEQ"
+      ],
+      "actual": "IEQ",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "meta.write-output-noenumerate-switch",
+      "command": "write-output",
+      "area": "metadata",
+      "outcome": "match",
+      "expected": [
+        true
+      ],
+      "actual": true,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "meta.write-output-inputobject-position",
+      "command": "write-output",
+      "area": "metadata",
+      "outcome": "match",
+      "expected": [
+        0
+      ],
+      "actual": 0,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "meta.out-null-inputobject-pipeline",
+      "command": "out-null",
+      "area": "metadata",
+      "outcome": "match",
+      "expected": [
+        true
+      ],
+      "actual": true,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "meta.get-random-count-type",
+      "command": "get-random",
+      "area": "metadata",
+      "outcome": "match",
+      "expected": [
+        "System.Int32"
+      ],
+      "actual": "System.Int32",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "meta.get-random-maximum-type",
+      "command": "get-random",
+      "area": "metadata",
+      "outcome": "match",
+      "expected": [
+        "System.Object"
+      ],
+      "actual": "System.Object",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "meta.get-date-format-type",
+      "command": "get-date",
+      "area": "metadata",
+      "outcome": "match",
+      "expected": [
+        "System.String"
+      ],
+      "actual": "System.String",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "meta.get-date-asutc-switch",
+      "command": "get-date",
+      "area": "metadata",
+      "outcome": "match",
+      "expected": [
+        true
+      ],
+      "actual": true,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "meta.get-command-name-position",
+      "command": "get-command",
+      "area": "metadata",
+      "outcome": "match",
+      "expected": [
+        0
+      ],
+      "actual": 0,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "meta.get-command-syntax-switch",
+      "command": "get-command",
+      "area": "metadata",
+      "outcome": "match",
+      "expected": [
+        true
+      ],
+      "actual": true,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "meta.get-help-name-position",
+      "command": "get-help",
+      "area": "metadata",
+      "outcome": "match",
+      "expected": [
+        0
+      ],
+      "actual": 0,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "meta.get-help-full-switch",
+      "command": "get-help",
+      "area": "metadata",
+      "outcome": "match",
+      "expected": [
+        true
+      ],
+      "actual": true,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "meta.get-history-count-type",
+      "command": "get-history",
+      "area": "metadata",
+      "outcome": "match",
+      "expected": [
+        "System.Int32"
+      ],
+      "actual": "System.Int32",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "meta.get-history-id-type",
+      "command": "get-history",
+      "area": "metadata",
+      "outcome": "match",
+      "expected": [
+        "System.Int64[]"
+      ],
+      "actual": "System.Int64[]",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "meta.get-location-stack-switch",
+      "command": "get-location",
+      "area": "metadata",
+      "outcome": "match",
+      "expected": [
+        true
+      ],
+      "actual": true,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "meta.get-location-psdrive-type",
+      "command": "get-location",
+      "area": "metadata",
+      "outcome": "match",
+      "expected": [
+        "System.String[]"
+      ],
+      "actual": "System.String[]",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "normalisation.guid-is-canonicalised",
+      "command": null,
+      "area": "normalisation",
+      "outcome": "unimplemented",
+      "expected": [
+        "<GUID>"
+      ],
+      "actual": null,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": "New-Guid is not implemented. The case is here for the normaliser, not for the command."
+    },
+    {
+      "id": "normalisation.cwd-is-canonicalised",
+      "command": "get-location",
+      "area": "normalisation",
+      "outcome": "unimplemented",
+      "expected": [
+        "<REPO>"
+      ],
+      "actual": null,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": "Get-Location has no implementation; the browser build's virtual cwd shape is not settled."
+    },
+    {
+      "id": "normalisation.declared-volatile-clock",
+      "command": "get-date",
+      "area": "normalisation",
+      "outcome": "unimplemented",
+      "expected": [
+        2026
+      ],
+      "actual": null,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": "No clock abstraction yet."
+    }
+  ]
+}

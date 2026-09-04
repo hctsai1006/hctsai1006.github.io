@@ -1,0 +1,74 @@
+/**
+ * The conformance harness, wired into the ordinary test gate.
+ *
+ * tools/conformance.mts is a CLI, and a CLI that nobody runs proves nothing.
+ * This makes the comparison part of `npm test`, so a change to the object model
+ * that disagrees with the recorded pwsh 7.6.5 behaviour fails the suite rather
+ * than waiting for someone to remember the tool exists.
+ *
+ * It does NOT need pwsh: it compares against the committed fixture. Capturing a
+ * new fixture is a separate, deliberate act that requires a real PowerShell.
+ */
+
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+
+import { runConformance } from '../../tools/conformance.mts';
+
+const report = runConformance();
+
+describe('differential conformance against pwsh 7.6.5', () => {
+  it('has no unexplained problems', () => {
+    // The message is the report itself: a failure here should say which case
+    // diverged, not just that something did.
+    assert.deepEqual(report.problems, [], `\n  ${report.problems.join('\n  ')}\n`);
+  });
+
+  it('compared against a fixture from the version the corpus targets', () => {
+    assert.equal(report.engine['psVersion'], '7.6.5');
+    assert.equal(report.engine['psEdition'], 'Core');
+    assert.equal(report.capture['pinnedCulture'], 'en-US');
+    // Rendering must have been pinned, or the fixture could contain ANSI escapes
+    // that happen to match today and not tomorrow.
+    assert.equal(report.capture['outputRendering'], 'PlainText');
+  });
+
+  it('actually compared something', () => {
+    // Guards the failure mode this repo cares most about: a check that reports
+    // success because it never ran. If every case became unimplemented, the
+    // problems list would still be empty and coverage would still be a number.
+    assert.ok(report.totals.compared >= 60, `only ${report.totals.compared} cases were compared`);
+    assert.ok(report.totals.matched >= 60, `only ${report.totals.matched} cases matched`);
+    assert.ok(
+      report.coverage.commandsWithBehaviouralEvidence >= 7,
+      `behavioural evidence for only ${report.coverage.commandsWithBehaviouralEvidence} commands`,
+    );
+  });
+
+  it('pins the three semantics that were wrong before they were measured', () => {
+    // These are the cases the object model's own comments cite. If any of them
+    // stops being compared -- not just stops passing -- the citation is stale.
+    const byId = new Map(report.cases.map((c) => [c.id, c]));
+    for (const id of [
+      'pipeline.measure-nested-array',
+      'collation.b-lt-a',
+      'pipeline.foreach-runs-for-null',
+    ]) {
+      const found = byId.get(id);
+      assert.ok(found !== undefined, `${id} is missing from the corpus`);
+      assert.equal(found.outcome, 'match', `${id} is '${found.outcome}', not a compared match`);
+    }
+  });
+
+  it('does not count a known gap as evidence of fidelity', () => {
+    // A known-gap entry explains a difference so the run can be green; it must
+    // never make a command look verified.
+    const gapCases = new Set(
+      report.knownDifferences.filter((k) => k.kind === 'known-gap').flatMap((k) => k.cases),
+    );
+    assert.ok(gapCases.size > 0, 'expected at least one known gap to be recorded');
+    for (const c of report.cases) {
+      if (gapCases.has(c.id)) assert.notEqual(c.outcome, 'match', `${c.id} is explained as a gap but matched`);
+    }
+  });
+});

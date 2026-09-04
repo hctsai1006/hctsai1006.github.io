@@ -1,0 +1,846 @@
+{
+  "$comment": "Differential conformance corpus. Hand-written INPUT, not generated. tools/generate-conformance-fixtures.ps1 runs every `source` against a real pwsh and records the result under fixtures/; tools/conformance.mts runs every `probe` against this project and compares the two. A case whose probe kind is `none` is an honest admission that the project has nothing to compare yet -- it is counted and reported as unimplemented, never silently passed.",
+  "schemaVersion": 1,
+  "targetVersion": "7.6.5",
+  "cases": [
+    {
+      "id": "pipeline.measure-nested-array",
+      "area": "pipeline",
+      "command": "measure-object",
+      "why": "The pipeline unrolls ONE level. A recursive flatten reports 3 here; the reference implementation reports 2. This is the case that most often gets implemented wrong.",
+      "source": "(@(1,@(2,3)) | Measure-Object).Count",
+      "observe": "values",
+      "probe": { "kind": "enumerate-count", "args": { "value": [1, [2, 3]] } }
+    },
+    {
+      "id": "pipeline.nested-array-arrives-intact",
+      "area": "pipeline",
+      "command": "write-output",
+      "why": "Counting 2 is not enough: the SECOND item must still be an Object[]. A count of 2 would also be produced by an implementation that turned the inner array into a string.",
+      "source": "@(1,@(2,3)) | ForEach-Object { $_.GetType().FullName }",
+      "observe": "values",
+      "probe": { "kind": "enumerate-typenames", "args": { "value": [1, [2, 3]] } }
+    },
+    {
+      "id": "pipeline.deep-nesting-still-one-level",
+      "area": "pipeline",
+      "command": "measure-object",
+      "why": "Unrolling is one level regardless of depth, so a three-deep literal still measures 2.",
+      "source": "(@(1,@(2,@(3,4))) | Measure-Object).Count",
+      "observe": "values",
+      "probe": { "kind": "enumerate-count", "args": { "value": [1, [2, [3, 4]]] } }
+    },
+    {
+      "id": "pipeline.foreach-runs-for-null",
+      "area": "pipeline",
+      "command": "write-output",
+      "why": "$null FLOWS through the pipeline: ForEach-Object runs twice for @($null,1). An enumerator that drops nulls stays invisible until a script counts iterations.",
+      "source": "$n = 0; @($null,1) | ForEach-Object { $n++ }; $n",
+      "observe": "values",
+      "probe": { "kind": "enumerate-count", "args": { "value": [null, 1] } }
+    },
+    {
+      "id": "pipeline.measure-object-skips-null",
+      "area": "pipeline",
+      "command": "measure-object",
+      "why": "Measure-Object reports 1 for the same input ForEach-Object visits twice. That is Measure-Object skipping nulls, NOT the pipeline dropping them -- conflating the two is exactly how the enumerator gets broken.",
+      "source": "(@($null,1) | Measure-Object).Count",
+      "observe": "values",
+      "probe": { "kind": "none" },
+      "pending": "Measure-Object is declared native-semantic in the manifest but has no implementation yet, so there is nothing to compare. The pipeline half of this pair IS compared, by pipeline.foreach-runs-for-null."
+    },
+    {
+      "id": "pipeline.empty-array-emits-nothing",
+      "area": "pipeline",
+      "command": "write-output",
+      "why": "An empty array unrolls to zero objects, not to one empty array.",
+      "source": "@(@() | Write-Output).Count",
+      "observe": "values",
+      "probe": { "kind": "enumerate-count", "args": { "value": [] } }
+    },
+    {
+      "id": "pipeline.string-is-not-enumerated",
+      "area": "pipeline",
+      "command": "write-output",
+      "why": "A string is one object, not a sequence of characters. A JS habit -- spreading the string -- gets this wrong.",
+      "source": "@('abc' | Write-Output).Count",
+      "observe": "values",
+      "probe": { "kind": "enumerate-count", "args": { "value": "abc" } }
+    },
+    {
+      "id": "pipeline.hashtable-is-not-enumerated",
+      "area": "pipeline",
+      "command": "write-output",
+      "why": "A hashtable travels as ONE object; it does not unroll into entries. The naive guess is 2.",
+      "source": "@(@{ a = 1; b = 2 } | Write-Output).Count",
+      "observe": "values",
+      "probe": { "kind": "enumerate-count", "args": { "value": { "$object": { "a": 1, "b": 2 } } } }
+    },
+    {
+      "id": "pipeline.scalar-is-one-object",
+      "area": "pipeline",
+      "command": "write-output",
+      "why": "A non-array value enumerates as itself, exactly once.",
+      "source": "@('one' | Write-Output).Count",
+      "observe": "values",
+      "probe": { "kind": "enumerate-count", "args": { "value": "one" } }
+    },
+
+    {
+      "id": "collation.b-lt-a",
+      "area": "comparison",
+      "command": "sort-object",
+      "why": "By code point 'B' (0x42) is less than 'a' (0x61), so an ordinal implementation answers True. The reference implementation answers False: string comparison is culture-aware. This case caught the original implementation.",
+      "source": "'B' -lt 'a'",
+      "observe": "values",
+      "probe": { "kind": "compare", "args": { "left": "B", "right": "a", "op": "lt" } }
+    },
+    {
+      "id": "collation.a-lt-b-upper",
+      "area": "comparison",
+      "command": "sort-object",
+      "why": "The mirror of the above: lowercase 'a' DOES sort before uppercase 'B', which an ordinal comparison denies.",
+      "source": "'a' -lt 'B'",
+      "observe": "values",
+      "probe": { "kind": "compare", "args": { "left": "a", "right": "B", "op": "lt" } }
+    },
+    {
+      "id": "collation.sort-mixed-case",
+      "area": "comparison",
+      "command": "sort-object",
+      "why": "The full ordering, not one pair. Sort-Object is stable, so A/a and b/B keep their input order while grouping by base letter.",
+      "source": "@('b','A','a','B') | Sort-Object",
+      "observe": "values",
+      "probe": { "kind": "sort", "args": { "values": ["b", "A", "a", "B"] } }
+    },
+    {
+      "id": "collation.sort-numeric-not-lexicographic",
+      "area": "comparison",
+      "command": "sort-object",
+      "why": "Numbers sort numerically. A string-coercing sort puts 10 before 9.",
+      "source": "@(9,10,1) | Sort-Object",
+      "observe": "values",
+      "probe": { "kind": "sort", "args": { "values": [9, 10, 1] } }
+    },
+    {
+      "id": "comparison.eq-is-case-insensitive",
+      "area": "comparison",
+      "command": "where-object",
+      "why": "-eq is case-INSENSITIVE. Making the case-sensitive comparison the default disagrees with the reference implementation on the most common operator in the language.",
+      "source": "'a' -eq 'A'",
+      "observe": "values",
+      "probe": { "kind": "compare", "args": { "left": "a", "right": "A", "op": "eq" } }
+    },
+    {
+      "id": "comparison.ceq-is-case-sensitive",
+      "area": "comparison",
+      "command": "where-object",
+      "why": "-ceq is the explicit case-sensitive form. Both must exist and must differ.",
+      "source": "'a' -ceq 'A'",
+      "observe": "values",
+      "probe": { "kind": "compare", "args": { "left": "a", "right": "A", "op": "eq", "caseSensitive": true } }
+    },
+    {
+      "id": "comparison.strings-compare-as-strings",
+      "area": "comparison",
+      "command": "where-object",
+      "why": "'10' -lt '9' is True because both sides are strings. A comparator that sniffs numbers out of strings answers False.",
+      "source": "'10' -lt '9'",
+      "observe": "values",
+      "probe": { "kind": "compare", "args": { "left": "10", "right": "9", "op": "lt" } }
+    },
+    {
+      "id": "comparison.left-operand-decides-type",
+      "area": "comparison",
+      "command": "where-object",
+      "why": "PowerShell coerces the RIGHT operand to the LEFT operand's type, so 10 -lt '9' is a NUMERIC comparison and is False. Comparing them as strings answers True.",
+      "source": "10 -lt '9'",
+      "observe": "values",
+      "probe": { "kind": "compare", "args": { "left": 10, "right": "9", "op": "lt" } }
+    },
+    {
+      "id": "comparison.null-sorts-first",
+      "area": "comparison",
+      "command": "sort-object",
+      "why": "$null compares less than any string, which is what makes Sort-Object put nulls first.",
+      "source": "$null -lt 'a'",
+      "observe": "values",
+      "probe": { "kind": "compare", "args": { "left": null, "right": "a", "op": "lt" } }
+    },
+    {
+      "id": "comparison.array-eq-filters",
+      "area": "comparison",
+      "command": "where-object",
+      "why": "@(1,2,3) -eq 2 does not return a boolean -- it FILTERS and returns 2. An operator that always returns a boolean is wrong about the whole left-hand-array family.",
+      "source": "$r = @(1,2,3) -eq 2; \"$($r.GetType().FullName)=$r\"",
+      "observe": "values",
+      "probe": { "kind": "none" },
+      "pending": "Array-valued left operands (the filtering form of -eq) are not modelled; compareValues answers a scalar comparison only."
+    },
+
+    {
+      "id": "truthy.empty-array",
+      "area": "truthiness",
+      "command": "where-object",
+      "why": "[bool]@() is False. JavaScript says [] is truthy, so this is the likeliest place for a JS habit to leak in.",
+      "source": "[bool]@()",
+      "observe": "values",
+      "probe": { "kind": "truthy", "args": { "value": [] } }
+    },
+    {
+      "id": "truthy.single-element-takes-element",
+      "area": "truthiness",
+      "command": "where-object",
+      "why": "A one-element array takes the truthiness of its element, so @(0) is False.",
+      "source": "[bool]@(0)",
+      "observe": "values",
+      "probe": { "kind": "truthy", "args": { "value": [0] } }
+    },
+    {
+      "id": "truthy.single-element-true",
+      "area": "truthiness",
+      "command": "where-object",
+      "why": "The other half of the single-element rule.",
+      "source": "[bool]@(1)",
+      "observe": "values",
+      "probe": { "kind": "truthy", "args": { "value": [1] } }
+    },
+    {
+      "id": "truthy.multi-element-array-is-true",
+      "area": "truthiness",
+      "command": "where-object",
+      "why": "@(0,0) is True: length greater than 1 wins over the elements. The single-element rule does NOT generalise.",
+      "source": "[bool]@(0,0)",
+      "observe": "values",
+      "probe": { "kind": "truthy", "args": { "value": [0, 0] } }
+    },
+    {
+      "id": "truthy.string-zero",
+      "area": "truthiness",
+      "command": "where-object",
+      "why": "The string \"0\" is True (non-empty) while the number 0 is False. Coercing the string to a number inverts this.",
+      "source": "[bool]'0'",
+      "observe": "values",
+      "probe": { "kind": "truthy", "args": { "value": "0" } }
+    },
+    {
+      "id": "truthy.number-zero",
+      "area": "truthiness",
+      "command": "where-object",
+      "why": "Pairs with truthy.string-zero; together they pin that the TYPE is consulted, not the text.",
+      "source": "[bool]0",
+      "observe": "values",
+      "probe": { "kind": "truthy", "args": { "value": 0 } }
+    },
+    {
+      "id": "truthy.empty-string",
+      "area": "truthiness",
+      "command": "where-object",
+      "why": "An empty string is False; a whitespace string is not.",
+      "source": "[bool]''",
+      "observe": "values",
+      "probe": { "kind": "truthy", "args": { "value": "" } }
+    },
+    {
+      "id": "truthy.whitespace-string",
+      "area": "truthiness",
+      "command": "where-object",
+      "why": "' ' is True. Trimming before testing emptiness would be wrong.",
+      "source": "[bool]' '",
+      "observe": "values",
+      "probe": { "kind": "truthy", "args": { "value": " " } }
+    },
+    {
+      "id": "truthy.null",
+      "area": "truthiness",
+      "command": "where-object",
+      "why": "$null is False.",
+      "source": "[bool]$null",
+      "observe": "values",
+      "probe": { "kind": "truthy", "args": { "value": null } }
+    },
+    {
+      "id": "truthy.negative-number",
+      "area": "truthiness",
+      "command": "where-object",
+      "why": "-1 is True: the rule is 'not zero', not 'positive'.",
+      "source": "[bool](-1)",
+      "observe": "values",
+      "probe": { "kind": "truthy", "args": { "value": -1 } }
+    },
+    {
+      "id": "truthy.empty-hashtable",
+      "area": "truthiness",
+      "command": "where-object",
+      "why": "An EMPTY hashtable is True even though an empty array is False. Treating 'empty container' as one rule breaks one of the two.",
+      "source": "[bool]@{}",
+      "observe": "values",
+      "probe": { "kind": "truthy", "args": { "value": { "$object": {} } } }
+    },
+
+    {
+      "id": "type.int-literal",
+      "area": "types",
+      "command": null,
+      "why": "A whole-number literal is Int32, not Double. Get-Member reporting Double for 1 would disagree with the reference implementation everywhere.",
+      "source": "(1).GetType().FullName",
+      "observe": "values",
+      "probe": { "kind": "type-name", "args": { "value": 1 } }
+    },
+    {
+      "id": "type.double-literal",
+      "area": "types",
+      "command": null,
+      "why": "A fractional literal is Double.",
+      "source": "(1.5).GetType().FullName",
+      "observe": "values",
+      "probe": { "kind": "type-name", "args": { "value": 1.5 } }
+    },
+    {
+      "id": "type.exact-division-stays-int",
+      "area": "types",
+      "command": null,
+      "why": "4/2 is Int32, not Double: PowerShell narrows an exact quotient back to an integer type.",
+      "source": "(4/2).GetType().FullName",
+      "observe": "values",
+      "probe": { "kind": "type-name", "args": { "value": 2 } }
+    },
+    {
+      "id": "type.inexact-division-promotes",
+      "area": "types",
+      "command": null,
+      "why": "1/2 is Double 0.5, not integer 0. C-style integer division would give 0.",
+      "source": "(1/2).GetType().FullName",
+      "observe": "values",
+      "probe": { "kind": "type-name", "args": { "value": 0.5 } }
+    },
+    {
+      "id": "type.int64-boundary",
+      "area": "types",
+      "command": null,
+      "why": "A literal past Int32.MaxValue is Int64. A single JS number type cannot see this boundary, so this case exists to make the gap measurable rather than assume it away.",
+      "source": "(2147483648).GetType().FullName",
+      "observe": "values",
+      "probe": { "kind": "type-name", "args": { "value": 2147483648 } }
+    },
+    {
+      "id": "type.string",
+      "area": "types",
+      "command": null,
+      "why": "Baseline.",
+      "source": "('s').GetType().FullName",
+      "observe": "values",
+      "probe": { "kind": "type-name", "args": { "value": "s" } }
+    },
+    {
+      "id": "type.boolean",
+      "area": "types",
+      "command": null,
+      "why": "Baseline.",
+      "source": "($true).GetType().FullName",
+      "observe": "values",
+      "probe": { "kind": "type-name", "args": { "value": true } }
+    },
+    {
+      "id": "type.array",
+      "area": "types",
+      "command": null,
+      "why": "An array literal is Object[], not a typed array, even when every element is an Int32.",
+      "source": "(@(1,2)).GetType().FullName",
+      "observe": "values",
+      "probe": { "kind": "type-name", "args": { "value": [1, 2] } }
+    },
+    {
+      "id": "type.byte-array",
+      "area": "types",
+      "command": null,
+      "why": "Byte[] must stay Byte[]: the native byte channel depends on bytes never being decoded to text.",
+      "source": "([byte[]]@(1,2)).GetType().FullName",
+      "observe": "values",
+      "probe": { "kind": "type-name", "args": { "value": { "$bytes": [1, 2] } } }
+    },
+    {
+      "id": "type.datetime",
+      "area": "types",
+      "command": "get-date",
+      "why": "Get-Date emits a DateTime object, not a formatted string. The value is time-dependent; the TYPE is not.",
+      "source": "(Get-Date).GetType().FullName",
+      "observe": "values",
+      "probe": { "kind": "type-name", "args": { "value": { "$date": "2026-01-02T03:04:05Z" } } }
+    },
+    {
+      "id": "type.pscustomobject-typename",
+      "area": "types",
+      "command": null,
+      "why": "A property bag reports PSCustomObject as its most-derived type name. Get-Member and the formatter both key on this.",
+      "source": "([pscustomobject]@{ a = 1 }).PSObject.TypeNames[0]",
+      "observe": "values",
+      "probe": { "kind": "type-name", "args": { "value": { "$object": { "a": 1 } } } }
+    },
+    {
+      "id": "type.datetime-hierarchy",
+      "area": "types",
+      "command": null,
+      "why": "TypeNames is a HIERARCHY, not a label. -is and the formatter both walk it, so the whole chain is part of the contract.",
+      "source": "(Get-Date).PSObject.TypeNames -join ','",
+      "observe": "values",
+      "probe": { "kind": "none" },
+      "pending": "The project has no DateTime PSObject wrapper, so it has no hierarchy of its own to compare. isOfType is exercised instead by type.is-matches-short-name, using the chain this case records."
+    },
+    {
+      "id": "type.is-matches-short-name",
+      "area": "types",
+      "command": null,
+      "why": "-is accepts the SHORT type name. The formatter's type lookup uses the same rule, so a full-name-only match would silently stop finding format definitions.",
+      "source": "(Get-Date) -is [datetime]",
+      "observe": "values",
+      "probe": {
+        "kind": "is-of-type",
+        "args": { "typeNames": ["System.DateTime", "System.ValueType", "System.Object"], "query": "datetime" }
+      }
+    },
+    {
+      "id": "type.null-has-no-type",
+      "area": "types",
+      "command": null,
+      "why": "$null.GetType() throws InvokeMethodOnNull -- $null is not an object with a type. Reporting System.Object for it is a convenient fiction, and this records it rather than hiding it.",
+      "source": "try { $null.GetType().FullName } catch { $_.FullyQualifiedErrorId }",
+      "observe": "values",
+      "probe": { "kind": "none" },
+      "pending": "typeNameOf(null) returns 'System.Object' as a total-function convenience, and the reference implementation throws instead, so there is no honest scalar to compare. Recorded in known-differences.yml as typename-of-null-is-total."
+    },
+
+    {
+      "id": "property.access-is-case-insensitive",
+      "area": "properties",
+      "command": null,
+      "why": "$o.name and $o.Name are the same property. A Map keyed by the exact string silently misses.",
+      "source": "([pscustomobject]@{ Name = 'x' }).name",
+      "observe": "values",
+      "probe": { "kind": "property-get", "args": { "properties": { "Name": "x" }, "name": "name" } }
+    },
+    {
+      "id": "property.missing-property-is-absent",
+      "area": "properties",
+      "command": null,
+      "why": "A missing property and a property HOLDING null both read as $null, but they must stay distinguishable or Where-Object { $_.X -eq $null } matches objects that have no X at all. The reference implementation is asked whether the member exists, not what it reads as.",
+      "source": "$null -eq ([pscustomobject]@{ Name = 'x' }).PSObject.Properties['NoSuchThing']",
+      "observe": "values",
+      "probe": { "kind": "property-missing", "args": { "properties": { "Name": "x" }, "name": "NoSuchThing" } }
+    },
+    {
+      "id": "property.declaration-order-is-kept",
+      "area": "properties",
+      "command": "select-object",
+      "why": "Property order is the order Format-Table renders columns in. Alphabetising it would change every table.",
+      "source": "([pscustomobject][ordered]@{ B = 1; A = 2; C = 3 }).PSObject.Properties.Name",
+      "observe": "values",
+      "probe": { "kind": "property-names", "args": { "properties": { "B": 1, "A": 2, "C": 3 } } }
+    },
+    {
+      "id": "property.has-property-case-insensitive",
+      "area": "properties",
+      "command": null,
+      "why": "Existence checks follow the same case rule as reads.",
+      "source": "$null -ne ([pscustomobject]@{ Length = 42 }).PSObject.Properties['lEnGtH']",
+      "observe": "values",
+      "probe": { "kind": "has-property", "args": { "properties": { "Length": 42 }, "name": "lEnGtH" } }
+    },
+
+    {
+      "id": "strings.regex-replace-is-case-insensitive",
+      "area": "strings",
+      "command": null,
+      "why": "-replace is case-INSENSITIVE by default, so 'ABC' -replace 'b','x' is 'AxC'. Every regex engine defaults the other way.",
+      "source": "'ABC' -replace 'b','x'",
+      "observe": "values",
+      "probe": { "kind": "none" },
+      "pending": "String operators are not implemented; the project models the object pipeline, not the expression language. Recorded so the gap is measurable rather than forgotten."
+    },
+    {
+      "id": "strings.like-is-case-insensitive",
+      "area": "strings",
+      "command": null,
+      "why": "-like is case-insensitive and uses wildcards, not regex.",
+      "source": "'abc' -like 'A*'",
+      "observe": "values",
+      "probe": { "kind": "none" },
+      "pending": "String operators are not implemented."
+    },
+    {
+      "id": "strings.split-returns-array",
+      "area": "strings",
+      "command": null,
+      "why": "-split returns an array whose Count is observable.",
+      "source": "('a,b,c' -split ',').Count",
+      "observe": "values",
+      "probe": { "kind": "none" },
+      "pending": "String operators are not implemented."
+    },
+    {
+      "id": "culture.interpolation-is-invariant",
+      "area": "culture",
+      "command": null,
+      "why": "PowerShell's OWN number-to-string conversion is culture-INVARIANT: \"$(1.5)\" is '1.5' even under a culture whose decimal separator is a comma. Assuming it follows the culture is a classic error, and the capture's culture passes settle it empirically.",
+      "source": "\"$(1.5)\"",
+      "observe": "values",
+      "probe": { "kind": "none" },
+      "pending": "The project has no value-to-string conversion layer yet. Captured now so the invariant is on record before that layer is written."
+    },
+    {
+      "id": "culture.tostring-follows-culture",
+      "area": "culture",
+      "command": null,
+      "why": "The .NET .ToString() call DOES follow the culture, unlike interpolation. Pairing it with culture.interpolation-is-invariant is what makes the distinction visible instead of theoretical.",
+      "source": "(1234.5).ToString()",
+      "observe": "values",
+      "probe": { "kind": "none" },
+      "pending": "No value-to-string conversion layer yet."
+    },
+    {
+      "id": "culture.format-operator-follows-culture",
+      "area": "culture",
+      "command": null,
+      "why": "-f formatting is culture-dependent in both the group and the decimal separator. Captured under the pinned culture; the culture passes record what a differently-configured host produces.",
+      "source": "'{0:N2}' -f 1234.5",
+      "observe": "values",
+      "probe": { "kind": "none" },
+      "pending": "No formatting layer yet."
+    },
+
+    {
+      "id": "status.dollar-hook-true-on-success",
+      "area": "status",
+      "command": null,
+      "why": "$? is True after a command that succeeded. Capturing it at all is delicate: invoking through `& $scriptblock` MASKS the inner failure and always reports True, so the capture has to read $? inside the evaluated source.",
+      "source": "1 + 1",
+      "observe": "ok",
+      "probe": { "kind": "none" },
+      "pending": "The kernel that would set $? is not built; streams.ts defines the ErrorRecord it will carry. Captured now so the harness is ready for it."
+    },
+    {
+      "id": "status.dollar-hook-false-after-error",
+      "area": "status",
+      "command": "get-command",
+      "why": "$? is False after a NON-TERMINATING error, even though nothing threw. A harness that reports True here is measuring its own wrapper rather than PowerShell.",
+      "source": "Get-Command NoSuchCommandXyz",
+      "observe": "ok",
+      "probe": { "kind": "none" },
+      "pending": "No kernel to set $? yet."
+    },
+    {
+      "id": "status.lastexitcode-from-native-command",
+      "area": "status",
+      "command": null,
+      "why": "$LASTEXITCODE carries a NATIVE process's exit code, which is a different channel from $?. Spawning the running pwsh keeps the case platform-neutral.",
+      "source": "& ([System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName) -NoProfile -Command 'exit 3' | Out-Null; $LASTEXITCODE",
+      "observe": "values",
+      "passes": "single",
+      "passesReason": "Spawns a child pwsh. Deterministic by construction -- a literal exit code -- so the repeat and culture passes would only buy three more process launches.",
+      "probe": { "kind": "none" },
+      "pending": "No native process channel in the browser build; NativeStreams is declared but nothing drives it."
+    },
+
+    {
+      "id": "error.command-not-found-id",
+      "area": "errors",
+      "command": "get-command",
+      "why": "Scripts branch on FullyQualifiedErrorId, so it is part of the observable contract. This checks the project's composition rule -- `<ErrorId>,<CommandName>` -- against what the reference implementation actually produces.",
+      "source": "Get-Command NoSuchCommandXyz",
+      "observe": "errorId",
+      "probe": {
+        "kind": "error-id",
+        "args": { "errorId": "CommandNotFoundException", "command": "Microsoft.PowerShell.Commands.GetCommandCommand" }
+      }
+    },
+    {
+      "id": "error.command-not-found-category",
+      "area": "errors",
+      "command": "get-command",
+      "why": "CategoryInfo.Category is a CLOSED enum that streams.ts reproduces by name. A category invented by hand would not survive this check.",
+      "source": "Get-Command NoSuchCommandXyz",
+      "observe": "errorCategory",
+      "probe": { "kind": "error-category-known", "args": {} }
+    },
+    {
+      "id": "error.select-object-first-negative",
+      "area": "errors",
+      "command": "select-object",
+      "why": "Parameter-validation failures have their own error-id shape, distinct from a command's runtime errors. Binding is where most version-to-version breakage lives, so its error shape matters.",
+      "source": "1..3 | Select-Object -First -1",
+      "observe": "errorId",
+      "probe": { "kind": "none" },
+      "pending": "No binder yet. invocation.ts declares the BindingResult a binder will return; nothing produces one."
+    },
+    {
+      "id": "error.method-on-null",
+      "area": "errors",
+      "command": null,
+      "why": "Calling a method on $null is an engine-level error with a stable id, not a command error.",
+      "source": "$null.Foo()",
+      "observe": "errorId",
+      "probe": { "kind": "none" },
+      "pending": "No expression evaluator yet."
+    },
+    {
+      "id": "error.divide-by-zero",
+      "area": "errors",
+      "command": null,
+      "why": "Arithmetic errors are TERMINATING in PowerShell, a different control-flow shape from a cmdlet's non-terminating error.",
+      "source": "1 / 0",
+      "observe": "errorId",
+      "probe": { "kind": "none" },
+      "pending": "No expression evaluator yet."
+    },
+    {
+      "id": "error.no-error-on-success",
+      "area": "errors",
+      "command": null,
+      "why": "A successful command must add NOTHING to $Error. This guards the CAPTURE: a harness that leaked its own errors into the record would make every case look as if it had failed.",
+      "source": "1 + 1",
+      "observe": "errorCount",
+      "probe": { "kind": "none" },
+      "pending": "No error-stream driver yet; this case exists to check the capture, not the project."
+    },
+
+    {
+      "id": "meta.measure-object-sum-type",
+      "area": "metadata",
+      "command": "measure-object",
+      "why": "-Sum is a switch, not a boolean. -Sum and -Sum:$false differ, and a family of 7.7 fixes is exactly that distinction.",
+      "source": "(Get-Command Measure-Object).Parameters['Sum'].ParameterType.FullName",
+      "observe": "values",
+      "probe": { "kind": "manifest-parameter", "args": { "command": "measure-object", "parameter": "Sum", "field": "type" } }
+    },
+    {
+      "id": "meta.measure-object-inputobject-pipeline",
+      "area": "metadata",
+      "command": "measure-object",
+      "why": "Whether -InputObject binds from the pipeline decides whether `x | Measure-Object` works at all.",
+      "source": "(Get-Command Measure-Object).Parameters['InputObject'].ParameterSets['__AllParameterSets'].ValueFromPipeline",
+      "observe": "values",
+      "probe": { "kind": "manifest-parameter", "args": { "command": "measure-object", "parameter": "InputObject", "field": "valueFromPipelineInAnySet" } }
+    },
+    {
+      "id": "meta.sort-object-property-position",
+      "area": "metadata",
+      "command": "sort-object",
+      "why": "-Property is positional at 0, which is what makes `Sort-Object Length` bind without a parameter name.",
+      "source": "(Get-Command Sort-Object).Parameters['Property'].ParameterSets['__AllParameterSets'].Position",
+      "observe": "values",
+      "probe": { "kind": "manifest-parameter", "args": { "command": "sort-object", "parameter": "Property", "field": "firstPosition" } }
+    },
+    {
+      "id": "meta.sort-object-property-type",
+      "area": "metadata",
+      "command": "sort-object",
+      "why": "-Property is Object[], not String[]: it also accepts calculated-property hashtables and script blocks.",
+      "source": "(Get-Command Sort-Object).Parameters['Property'].ParameterType.FullName",
+      "observe": "values",
+      "probe": { "kind": "manifest-parameter", "args": { "command": "sort-object", "parameter": "Property", "field": "type" } }
+    },
+    {
+      "id": "meta.select-object-first-type",
+      "area": "metadata",
+      "command": "select-object",
+      "why": "-First is Int32, so -First 'abc' must fail at BINDING rather than inside the command body.",
+      "source": "(Get-Command Select-Object).Parameters['First'].ParameterType.FullName",
+      "observe": "values",
+      "probe": { "kind": "manifest-parameter", "args": { "command": "select-object", "parameter": "First", "field": "type" } }
+    },
+    {
+      "id": "meta.select-object-parameter-sets",
+      "area": "metadata",
+      "command": "select-object",
+      "why": "Parameter SETS are what a naive capture loses. Which sets -ExpandProperty belongs to is a fact about the command that the binder cannot be correct without.",
+      "source": "((Get-Command Select-Object).Parameters['ExpandProperty'].ParameterSets.Keys | Sort-Object) -join ','",
+      "observe": "values",
+      "probe": { "kind": "manifest-parameter", "args": { "command": "select-object", "parameter": "ExpandProperty", "field": "setNames" } }
+    },
+    {
+      "id": "meta.where-object-filterscript-position",
+      "area": "metadata",
+      "command": "where-object",
+      "why": "-FilterScript is positional at 0, which is why `Where-Object { $_ }` binds the block without a name.",
+      "source": "(Get-Command Where-Object).Parameters['FilterScript'].ParameterSets['ScriptBlockSet'].Position",
+      "observe": "values",
+      "probe": { "kind": "manifest-parameter", "args": { "command": "where-object", "parameter": "FilterScript", "field": "firstPosition" } }
+    },
+    {
+      "id": "meta.where-object-eq-aliases",
+      "area": "metadata",
+      "command": "where-object",
+      "why": "-EQ carries an alias. Losing aliases makes a command reject scripts the reference implementation accepts.",
+      "source": "((Get-Command Where-Object).Parameters['EQ'].Aliases | Sort-Object) -join ','",
+      "observe": "values",
+      "probe": { "kind": "manifest-parameter", "args": { "command": "where-object", "parameter": "EQ", "field": "aliases" } }
+    },
+    {
+      "id": "meta.write-output-noenumerate-switch",
+      "area": "metadata",
+      "command": "write-output",
+      "why": "-NoEnumerate is the switch that turns OFF the one-level unroll, so its switch-ness is load-bearing for the pipeline cases above.",
+      "source": "(Get-Command Write-Output).Parameters['NoEnumerate'].SwitchParameter",
+      "observe": "values",
+      "probe": { "kind": "manifest-parameter", "args": { "command": "write-output", "parameter": "NoEnumerate", "field": "isSwitch" } }
+    },
+    {
+      "id": "meta.write-output-inputobject-position",
+      "area": "metadata",
+      "command": "write-output",
+      "why": "-InputObject is positional at 0.",
+      "source": "(Get-Command Write-Output).Parameters['InputObject'].ParameterSets['__AllParameterSets'].Position",
+      "observe": "values",
+      "probe": { "kind": "manifest-parameter", "args": { "command": "write-output", "parameter": "InputObject", "field": "firstPosition" } }
+    },
+    {
+      "id": "meta.out-null-inputobject-pipeline",
+      "area": "metadata",
+      "command": "out-null",
+      "why": "Out-Null's only parameter binds from the pipeline; that is the whole command.",
+      "source": "(Get-Command Out-Null).Parameters['InputObject'].ParameterSets['__AllParameterSets'].ValueFromPipeline",
+      "observe": "values",
+      "probe": { "kind": "manifest-parameter", "args": { "command": "out-null", "parameter": "InputObject", "field": "valueFromPipelineInAnySet" } }
+    },
+    {
+      "id": "meta.get-random-count-type",
+      "area": "metadata",
+      "command": "get-random",
+      "why": "-Count is Int32.",
+      "source": "(Get-Command Get-Random).Parameters['Count'].ParameterType.FullName",
+      "observe": "values",
+      "probe": { "kind": "manifest-parameter", "args": { "command": "get-random", "parameter": "Count", "field": "type" } }
+    },
+    {
+      "id": "meta.get-random-maximum-type",
+      "area": "metadata",
+      "command": "get-random",
+      "why": "-Maximum is Object, not Int32 -- it accepts doubles, and the argument's type decides whether the result is integral. Declaring it Int32 would silently change the output type.",
+      "source": "(Get-Command Get-Random).Parameters['Maximum'].ParameterType.FullName",
+      "observe": "values",
+      "probe": { "kind": "manifest-parameter", "args": { "command": "get-random", "parameter": "Maximum", "field": "type" } }
+    },
+    {
+      "id": "meta.get-date-format-type",
+      "area": "metadata",
+      "command": "get-date",
+      "why": "-Format is String.",
+      "source": "(Get-Command Get-Date).Parameters['Format'].ParameterType.FullName",
+      "observe": "values",
+      "probe": { "kind": "manifest-parameter", "args": { "command": "get-date", "parameter": "Format", "field": "type" } }
+    },
+    {
+      "id": "meta.get-date-asutc-switch",
+      "area": "metadata",
+      "command": "get-date",
+      "why": "-AsUTC is a switch.",
+      "source": "(Get-Command Get-Date).Parameters['AsUTC'].SwitchParameter",
+      "observe": "values",
+      "probe": { "kind": "manifest-parameter", "args": { "command": "get-date", "parameter": "AsUTC", "field": "isSwitch" } }
+    },
+    {
+      "id": "meta.get-command-name-position",
+      "area": "metadata",
+      "command": "get-command",
+      "why": "-Name is positional at 0 in the all-commands set.",
+      "source": "(Get-Command Get-Command).Parameters['Name'].ParameterSets['AllCommandSet'].Position",
+      "observe": "values",
+      "probe": { "kind": "manifest-parameter", "args": { "command": "get-command", "parameter": "Name", "field": "firstPosition" } }
+    },
+    {
+      "id": "meta.get-command-syntax-switch",
+      "area": "metadata",
+      "command": "get-command",
+      "why": "-Syntax is a switch.",
+      "source": "(Get-Command Get-Command).Parameters['Syntax'].SwitchParameter",
+      "observe": "values",
+      "probe": { "kind": "manifest-parameter", "args": { "command": "get-command", "parameter": "Syntax", "field": "isSwitch" } }
+    },
+    {
+      "id": "meta.get-help-name-position",
+      "area": "metadata",
+      "command": "get-help",
+      "why": "-Name is positional at 0, which is why `Get-Help Sort-Object` works.",
+      "source": "(Get-Command Get-Help).Parameters['Name'].ParameterSets['__AllParameterSets'].Position",
+      "observe": "values",
+      "probe": { "kind": "manifest-parameter", "args": { "command": "get-help", "parameter": "Name", "field": "firstPosition" } }
+    },
+    {
+      "id": "meta.get-help-full-switch",
+      "area": "metadata",
+      "command": "get-help",
+      "why": "-Full is a switch.",
+      "source": "(Get-Command Get-Help).Parameters['Full'].SwitchParameter",
+      "observe": "values",
+      "probe": { "kind": "manifest-parameter", "args": { "command": "get-help", "parameter": "Full", "field": "isSwitch" } }
+    },
+    {
+      "id": "meta.get-history-count-type",
+      "area": "metadata",
+      "command": "get-history",
+      "why": "-Count is Int32.",
+      "source": "(Get-Command Get-History).Parameters['Count'].ParameterType.FullName",
+      "observe": "values",
+      "probe": { "kind": "manifest-parameter", "args": { "command": "get-history", "parameter": "Count", "field": "type" } }
+    },
+    {
+      "id": "meta.get-history-id-type",
+      "area": "metadata",
+      "command": "get-history",
+      "why": "-Id is Int64[], not Int32 -- history ids are longs, and an array.",
+      "source": "(Get-Command Get-History).Parameters['Id'].ParameterType.FullName",
+      "observe": "values",
+      "probe": { "kind": "manifest-parameter", "args": { "command": "get-history", "parameter": "Id", "field": "type" } }
+    },
+    {
+      "id": "meta.get-location-stack-switch",
+      "area": "metadata",
+      "command": "get-location",
+      "why": "-Stack is a switch.",
+      "source": "(Get-Command Get-Location).Parameters['Stack'].SwitchParameter",
+      "observe": "values",
+      "probe": { "kind": "manifest-parameter", "args": { "command": "get-location", "parameter": "Stack", "field": "isSwitch" } }
+    },
+    {
+      "id": "meta.get-location-psdrive-type",
+      "area": "metadata",
+      "command": "get-location",
+      "why": "-PSDrive is String[].",
+      "source": "(Get-Command Get-Location).Parameters['PSDrive'].ParameterType.FullName",
+      "observe": "values",
+      "probe": { "kind": "manifest-parameter", "args": { "command": "get-location", "parameter": "PSDrive", "field": "type" } }
+    },
+
+    {
+      "id": "normalisation.guid-is-canonicalised",
+      "area": "normalisation",
+      "command": null,
+      "why": "A GUID differs on every run. This case PROVES the normaliser earns its keep: without the guid rule the two determinism passes disagree and the capture fails.",
+      "source": "(New-Guid).ToString()",
+      "observe": "values",
+      "probe": { "kind": "none" },
+      "pending": "New-Guid is not implemented. The case is here for the normaliser, not for the command."
+    },
+    {
+      "id": "normalisation.cwd-is-canonicalised",
+      "area": "normalisation",
+      "command": "get-location",
+      "why": "The working directory is machine-specific and leaks into output. Canonicalising it to <CWD> is what lets a fixture captured here reproduce anywhere.",
+      "source": "(Get-Location).Path",
+      "observe": "values",
+      "probe": { "kind": "none" },
+      "pending": "Get-Location has no implementation; the browser build's virtual cwd shape is not settled."
+    },
+    {
+      "id": "normalisation.declared-volatile-clock",
+      "area": "normalisation",
+      "command": "get-date",
+      "why": "The wall clock is genuinely unstable. Declaring the case volatile WITH A REASON is the only way past the residue check, which proves the check cannot be bypassed by accident.",
+      "source": "(Get-Date).Year",
+      "observe": "values",
+      "volatile": "Reads the wall clock, so the value is a bare year that the residue scanner is right to flag. Declared here so the scanner's refusal is exercised by a case that is expected to survive it.",
+      "probe": { "kind": "none" },
+      "pending": "No clock abstraction yet."
+    }
+  ]
+}

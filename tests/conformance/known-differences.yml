@@ -1,0 +1,107 @@
+# known-differences.yml -- every place this project knowingly does not match the
+# reference implementation, and WHY.
+#
+# An entry without a reason fails the runner. So does an entry that no longer
+# describes reality: `expect` is checked in BOTH directions, so a divergence that
+# gets fixed leaves a stale entry that fails, and a case that starts diverging
+# without an entry fails too. A suppression file that only ever grows is a file
+# that stops meaning anything.
+#
+# ---------------------------------------------------------------------------
+# THE YAML SUBSET THIS FILE USES
+# ---------------------------------------------------------------------------
+# No YAML parser is installed, and adding a dependency to read forty lines of
+# configuration is a poor trade. tools/conformance.mts contains a strict reader
+# for exactly the subset below; anything else is a hard error with a line number,
+# never a silent misparse.
+#
+#   * comments are whole lines beginning with #
+#   * top-level `key: value` scalars
+#   * one top-level `key:` introducing a block sequence indented by 2
+#   * each `- ` item is a mapping; its keys line up under the first one
+#   * values are plain scalars, "double-quoted strings", [flow, sequences],
+#     or folded block scalars introduced by > or >-
+#   * tabs are rejected, as YAML itself rejects them for indentation
+#
+# ---------------------------------------------------------------------------
+# FIELDS
+# ---------------------------------------------------------------------------
+#   id      unique, kebab-case
+#   kind    deliberate | known-gap
+#           deliberate = we chose this and would choose it again
+#           known-gap  = we would rather match, and do not yet. Counted and
+#                        reported separately; a known-gap case never counts as
+#                        evidence of fidelity.
+#   expect  differs | matches | unimplemented
+#           differs       the project computes a different answer, on purpose or
+#                         not, and the runner requires that it still does
+#           matches       a documented design decision that is NOT currently
+#                         observable as a difference. Recorded so the decision is
+#                         auditable, and checked so that if it ever DOES start
+#                         producing a difference, the runner says so.
+#           unimplemented the project has no answer to compare at all, and the
+#                         absence is itself the deliberate divergence
+#   cases   corpus case ids this entry explains; each must exist, and no case may
+#           be claimed by two entries
+#   reason  required, non-blank
+
+schemaVersion: 1
+
+differences:
+  - id: string-collation-pinned-to-en
+    kind: deliberate
+    expect: matches
+    cases: [collation.b-lt-a, collation.a-lt-b-upper, collation.sort-mixed-case, comparison.eq-is-case-insensitive, comparison.ceq-is-case-sensitive, comparison.strings-compare-as-strings]
+    reason: >-
+      Comparison uses Intl.Collator pinned to the 'en' locale rather than
+      following the host culture, because a differential test must not depend on
+      the machine that runs it. The reference implementation follows
+      CurrentCulture, so this is a real design divergence even where the answers
+      agree. It is recorded as `matches` rather than `differs` because it has
+      been MEASURED not to change any answer in the corpus: the capture evaluates
+      every case under en-US, under this host's real culture (zh-TW) and under a
+      stress culture with different separators (de-DE), and the only cases whose
+      results move are culture.tostring-follows-culture and
+      culture.format-operator-follows-culture -- neither of which is a
+      comparison. Collation outside the Latin script has not been probed and is
+      not claimed.
+
+  - id: right-operand-not-coerced-to-left-type
+    kind: known-gap
+    expect: differs
+    cases: [comparison.left-operand-decides-type]
+    reason: >-
+      PowerShell converts the RIGHT operand to the LEFT operand's type before
+      comparing, so `10 -lt '9'` is a numeric comparison and is False. This
+      project's compareValues falls back to string collation whenever the two
+      operands are not the same JavaScript type, and therefore answers True. This
+      is a gap, not a choice: the fix belongs in the conversion layer that does
+      not exist yet, and until it does, any comparison mixing a number with a
+      numeric string is wrong. Found by this harness rather than by reasoning.
+
+  - id: no-int32-int64-boundary
+    kind: known-gap
+    expect: differs
+    cases: [type.int64-boundary]
+    reason: >-
+      PowerShell types an integer literal past Int32.MaxValue as Int64;
+      typeNameOf reports System.Int32 for every whole JavaScript number. A single
+      float64 cannot see the boundary, so representing it needs bigint to reach
+      the object model -- PSPrimitive already admits bigint, and typeNameOf maps
+      it to System.Int64, but a literal parsed from JSON arrives as a number and
+      loses the distinction before it gets there. Get-Member would report the
+      wrong type for any value above 2147483647.
+
+  - id: typename-of-null-is-total
+    kind: deliberate
+    expect: unimplemented
+    cases: [type.null-has-no-type]
+    reason: >-
+      typeNameOf($null) returns 'System.Object'. The reference implementation has
+      no answer at all -- $null.GetType() throws InvokeMethodOnNull, because
+      $null is not an object with a type. Keeping typeNameOf total means callers
+      never have to guard it, which is worth more than reproducing a throw that
+      no part of this project can currently raise. Recorded as unimplemented
+      rather than as a match because there is nothing honest to compare: the two
+      sides do not disagree about a value, they disagree about whether the
+      question has an answer.
