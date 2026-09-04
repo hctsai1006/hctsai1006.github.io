@@ -444,8 +444,30 @@ function collect(): Artifact[] {
   ];
 }
 
+/**
+ * A closed set, for the same reason generate-roadmap.mts has one — and this
+ * tool was the one that never got it.
+ *
+ * The default action here is to WRITE. So a mistyped `--chek` did not verify
+ * anything: it regenerated the files, REPAIRED the corruption it was supposed
+ * to detect, and exited 0. Demonstrated on a deliberately corrupted profile,
+ * where `npm run profiles -- --chek` printed "wrote 3 files" and left a clean
+ * tree. In CI that is the gate rewriting the thing it was meant to be checking,
+ * which is the failure this repository exists to prevent, inside the safety net.
+ */
+const KNOWN_FLAGS = new Set(['--check']);
+
 function main(): void {
-  const check = process.argv.slice(2).includes('--check');
+  const argv = process.argv.slice(2);
+  const unknown = argv.filter((a) => !KNOWN_FLAGS.has(a));
+  if (unknown.length > 0) {
+    process.stderr.write(
+      `\n  unknown option(s): ${unknown.join(', ')}\n  known: ${[...KNOWN_FLAGS].join(', ')}\n\n`,
+    );
+    process.exitCode = 2;
+    return;
+  }
+  const check = argv.includes('--check');
   const artifacts = collect();
 
   if (check) {
