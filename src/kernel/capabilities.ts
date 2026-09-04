@@ -445,7 +445,17 @@ export class CapabilityBroker {
         target,
         // The one place `real` is computed. A granted virtual capability is
         // still not real, which is the whole claim `sudo` has to keep.
-        real: isGranted(decision) && CAPABILITY_REALITY[capability],
+        //
+        // The command's fidelity is the second half of that, and leaving it out
+        // was a bug the simulated-command work found: `process.read` is a real
+        // capability, so a granted `ps` was audited `real: true` for a command
+        // that reads nothing and never will. This field's own doc comment says
+        // it is "the field a reviewer scans" — so it has to be true of the
+        // command, not only of the capability's category.
+        real:
+          isGranted(decision) &&
+          CAPABILITY_REALITY[capability] &&
+          manifest.fidelity !== 'simulated',
         disclosure,
       });
     };

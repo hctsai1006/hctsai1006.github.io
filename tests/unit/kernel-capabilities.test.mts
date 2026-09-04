@@ -368,3 +368,62 @@ describe('the audit log', () => {
     assert.equal(Object.isFrozen(audit.records[0]), true);
   });
 });
+
+describe('the audit `real` flag tells the truth about the command', () => {
+  // `real` is what makes a log readable as "nothing happened" — its own doc
+  // comment calls it "the field a reviewer scans". It was computed from the
+  // capability's category alone, so a SIMULATED command holding a real
+  // capability would have been recorded real:true for doing nothing.
+  //
+  // Measured before writing this: no shipped command is in that state. The four
+  // simulated commands that declare anything hold process.read, portfolio.read
+  // or virtual.policy.elevate, none of which is both real and audited. So this
+  // guards a reclassification — giving `ping` network.fetch, say — rather than
+  // repairing a live defect.
+  it('is false for a simulated command holding a real, audited capability', () => {
+    const broker = new CapabilityBroker({ grants: ['network.fetch'] });
+    const scoped = broker.forCommand(
+      manifest({
+        name: 'ping',
+        display: 'ping',
+        runtime: 'semantic',
+        fidelity: 'simulated',
+        risk: 'query-external',
+        capabilities: ['network.fetch'],
+        notes: 'Invents round-trip times. Sends no packet.',
+      }),
+      1,
+    );
+
+    scoped.require('network.fetch');
+    const record = broker.audit.records.at(-1);
+    assert.ok(record !== undefined, 'a real, audited capability must leave a line');
+    assert.equal(record.decision, 'granted');
+    assert.equal(record.fidelity, 'simulated');
+    assert.equal(record.real, false, 'a simulated command sends nothing');
+  });
+
+  it('is still true for a browser-backed command doing the same thing', () => {
+    const broker = new CapabilityBroker({ grants: ['filesystem.write'] });
+    broker.forCommand(manifest(), 1).require('filesystem.write');
+    const record = broker.audit.records.at(-1);
+    assert.equal(record?.real, true);
+  });
+
+  it('no shipped simulated command declares a real, audited capability today', async () => {
+    // The measurement the comment above rests on, kept as a test so the claim
+    // cannot quietly stop being true.
+    const { readFileSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const manifests = JSON.parse(
+      readFileSync(join(import.meta.dirname, '..', '..', 'src', 'commands', 'manifests.json'), 'utf8'),
+    ) as { commands: ReadonlyArray<{ name: string; fidelity: string; capabilities: readonly string[] }> };
+
+    const offenders = manifests.commands
+      .filter((c) => c.fidelity === 'simulated')
+      .filter((c) => c.capabilities.some((k) => CAPABILITY_REALITY[k as Capability] && CAPABILITY_AUDITED[k as Capability]))
+      .map((c) => c.name);
+
+    assert.deepEqual(offenders, [], 'if this fires, the guard above is now load-bearing');
+  });
+});

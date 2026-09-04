@@ -183,6 +183,6 @@ export const FIDELITY_BADGE: Record<Fidelity, string> = {
 export const FIDELITY_MEANING: Record<Fidelity, string> = {
   'native-semantic': 'Implemented here, measured against real PowerShell.',
   'browser-backed': 'Really calls a browser capability; the effect is genuine.',
-  simulated: 'Imitates a Linux machine. Reads and changes nothing outside this page.',
+  simulated: 'The output is invented or fixed. Nothing outside this page is read or changed.',
   'external-runtime': 'Executed by a separately downloaded runtime.',
 };
