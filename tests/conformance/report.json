@@ -20,11 +20,11 @@
   "platformCaveat": "Captured on Win32NT while the published compatibility profiles target PowerShell on Linux. The corpus is deliberately platform-neutral (no filesystem or path semantics), and the capture fails on any case where a drive letter survives normalisation, but path and provider behaviour remains untested.",
   "totals": {
     "cases": 89,
-    "compared": 69,
-    "matched": 69,
+    "compared": 75,
+    "matched": 75,
     "differencesExplained": 0,
     "differencesUnexplained": 0,
-    "unimplemented": 20
+    "unimplemented": 14
   },
   "coverage": {
     "nativeSemanticCommands": 24,
@@ -183,9 +183,9 @@
     },
     {
       "command": "where-object",
-      "behavioural": 15,
+      "behavioural": 16,
       "metadata": 2,
-      "unimplemented": 1,
+      "unimplemented": 0,
       "differences": 0
     },
     {
@@ -488,14 +488,14 @@
       "id": "comparison.array-eq-filters",
       "command": "where-object",
       "area": "comparison",
-      "outcome": "unimplemented",
+      "outcome": "match",
       "expected": [
         "System.Object[]=2"
       ],
-      "actual": null,
+      "actual": "System.Object[]=2",
       "explainedBy": null,
       "explanationKind": null,
-      "detail": "Array-valued left operands (the filtering form of -eq) are not modelled; compareValues answers a scalar comparison only."
+      "detail": null
     },
     {
       "id": "truthy.empty-array",
@@ -884,40 +884,40 @@
       "id": "strings.regex-replace-is-case-insensitive",
       "command": null,
       "area": "strings",
-      "outcome": "unimplemented",
+      "outcome": "match",
       "expected": [
         "AxC"
       ],
-      "actual": null,
+      "actual": "AxC",
       "explainedBy": null,
       "explanationKind": null,
-      "detail": "String operators are not implemented; the project models the object pipeline, not the expression language. Recorded so the gap is measurable rather than forgotten."
+      "detail": null
     },
     {
       "id": "strings.like-is-case-insensitive",
       "command": null,
       "area": "strings",
-      "outcome": "unimplemented",
+      "outcome": "match",
       "expected": [
         true
       ],
-      "actual": null,
+      "actual": true,
       "explainedBy": null,
       "explanationKind": null,
-      "detail": "String operators are not implemented."
+      "detail": null
     },
     {
       "id": "strings.split-returns-array",
       "command": null,
       "area": "strings",
-      "outcome": "unimplemented",
+      "outcome": "match",
       "expected": [
         3
       ],
-      "actual": null,
+      "actual": 3,
       "explainedBy": null,
       "explanationKind": null,
-      "detail": "String operators are not implemented."
+      "detail": null
     },
     {
       "id": "culture.interpolation-is-invariant",
@@ -1030,23 +1030,23 @@
       "id": "error.method-on-null",
       "command": null,
       "area": "errors",
-      "outcome": "unimplemented",
+      "outcome": "match",
       "expected": "InvokeMethodOnNull",
-      "actual": null,
+      "actual": "InvokeMethodOnNull",
       "explainedBy": null,
       "explanationKind": null,
-      "detail": "No expression evaluator yet."
+      "detail": null
     },
     {
       "id": "error.divide-by-zero",
       "command": null,
       "area": "errors",
-      "outcome": "unimplemented",
+      "outcome": "match",
       "expected": "RuntimeException",
-      "actual": null,
+      "actual": "RuntimeException",
       "explainedBy": null,
       "explanationKind": null,
-      "detail": "No expression evaluator yet."
+      "detail": null
     },
     {
       "id": "error.no-error-on-success",
