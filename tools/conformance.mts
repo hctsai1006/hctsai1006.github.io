@@ -59,6 +59,9 @@ import {
 } from '../src/pipeline/psobject.ts';
 import type { PSValue } from '../src/pipeline/psobject.ts';
 import { errorRecord } from '../src/pipeline/streams.ts';
+import { cultureByName } from '../src/formatting/culture.ts';
+import { formatOperator, toCultureString } from '../src/formatting/format-operator.ts';
+import { toPSString } from '../src/formatting/to-string.ts';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -712,6 +715,23 @@ const PROBES: Record<string, Probe> = {
     // Checks the composition rule in streams.ts, `<ErrorId>,<CommandName>`,
     // against the FullyQualifiedErrorId the reference implementation produced.
     errorRecord('unused message', String(args['errorId']), String(args['command'])).fullyQualifiedErrorId,
+  // The three culture probes. They exist as SEPARATE kinds because the whole
+  // point of the corpus cases they serve is that the three conversions are not
+  // the same function: interpolation is invariant, ToString follows the culture,
+  // and the format operator follows it differently again. One shared probe would
+  // hide exactly what is being tested.
+  'to-ps-string': (args, where) => toPSString(decodeValue(args['value'], where)),
+  'culture-tostring': (args, where) =>
+    toCultureString(decodeValue(args['value'], where), cultureByName(String(args['culture'] ?? 'en-US'))),
+  'format-operator': (args, where) => {
+    const raw = args['args'];
+    if (!Array.isArray(raw)) fail(`${where}: 'args' must be an array`);
+    return formatOperator(
+      String(args['format']),
+      (raw as readonly unknown[]).map((v) => decodeValue(v, where)),
+      cultureByName(String(args['culture'] ?? 'en-US')),
+    );
+  },
   'error-category-known': () => 'known',
   'manifest-parameter': (args) => manifestParameterField(args),
 };

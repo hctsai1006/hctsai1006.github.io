@@ -484,8 +484,7 @@
       "why": "PowerShell's OWN number-to-string conversion is culture-INVARIANT: \"$(1.5)\" is '1.5' even under a culture whose decimal separator is a comma. Assuming it follows the culture is a classic error, and the capture's culture passes settle it empirically.",
       "source": "\"$(1.5)\"",
       "observe": "values",
-      "probe": { "kind": "none" },
-      "pending": "The project has no value-to-string conversion layer yet. Captured now so the invariant is on record before that layer is written."
+      "probe": { "kind": "to-ps-string", "args": { "value": 1.5 } }
     },
     {
       "id": "culture.tostring-follows-culture",
@@ -494,8 +493,7 @@
       "why": "The .NET .ToString() call DOES follow the culture, unlike interpolation. Pairing it with culture.interpolation-is-invariant is what makes the distinction visible instead of theoretical.",
       "source": "(1234.5).ToString()",
       "observe": "values",
-      "probe": { "kind": "none" },
-      "pending": "No value-to-string conversion layer yet."
+      "probe": { "kind": "culture-tostring", "args": { "value": 1234.5, "culture": "en-US" } }
     },
     {
       "id": "culture.format-operator-follows-culture",
@@ -504,8 +502,7 @@
       "why": "-f formatting is culture-dependent in both the group and the decimal separator. Captured under the pinned culture; the culture passes record what a differently-configured host produces.",
       "source": "'{0:N2}' -f 1234.5",
       "observe": "values",
-      "probe": { "kind": "none" },
-      "pending": "No formatting layer yet."
+      "probe": { "kind": "format-operator", "args": { "format": "{0:N2}", "args": [1234.5], "culture": "en-US" } }
     },
 
     {

@@ -20,11 +20,11 @@
   "platformCaveat": "Captured on Win32NT while the published compatibility profiles target PowerShell on Linux. The corpus is deliberately platform-neutral (no filesystem or path semantics), and the capture fails on any case where a drive letter survives normalisation, but path and provider behaviour remains untested.",
   "totals": {
     "cases": 89,
-    "compared": 69,
-    "matched": 69,
+    "compared": 72,
+    "matched": 72,
     "differencesExplained": 0,
     "differencesUnexplained": 0,
-    "unimplemented": 20
+    "unimplemented": 17
   },
   "coverage": {
     "nativeSemanticCommands": 24,
@@ -923,40 +923,40 @@
       "id": "culture.interpolation-is-invariant",
       "command": null,
       "area": "culture",
-      "outcome": "unimplemented",
+      "outcome": "match",
       "expected": [
         "1.5"
       ],
-      "actual": null,
+      "actual": "1.5",
       "explainedBy": null,
       "explanationKind": null,
-      "detail": "The project has no value-to-string conversion layer yet. Captured now so the invariant is on record before that layer is written."
+      "detail": null
     },
     {
       "id": "culture.tostring-follows-culture",
       "command": null,
       "area": "culture",
-      "outcome": "unimplemented",
+      "outcome": "match",
       "expected": [
         "1234.5"
       ],
-      "actual": null,
+      "actual": "1234.5",
       "explainedBy": null,
       "explanationKind": null,
-      "detail": "No value-to-string conversion layer yet."
+      "detail": null
     },
     {
       "id": "culture.format-operator-follows-culture",
       "command": null,
       "area": "culture",
-      "outcome": "unimplemented",
+      "outcome": "match",
       "expected": [
         "1,234.50"
       ],
-      "actual": null,
+      "actual": "1,234.50",
       "explainedBy": null,
       "explanationKind": null,
-      "detail": "No formatting layer yet."
+      "detail": null
     },
     {
       "id": "status.dollar-hook-true-on-success",
