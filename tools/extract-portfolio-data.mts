@@ -14,9 +14,21 @@
  * So this evaluates the actual `D` object literal in an isolated VM context with
  * no globals, and writes it out as typed JSON. The evaluation is deliberate and
  * narrow: the source is our own committed file, the extracted span is a single
- * object literal, and the context has nothing in it to attack. This is the one
- * place in the repo where evaluation is acceptable, and it runs at build time,
- * never in the browser.
+ * object literal, and the context has nothing in it to attack.
+ *
+ * The conditions under which that is acceptable, since this is not the only
+ * place it happens — extract-command-inventory.mts does the same, and the
+ * js-literal tests do it to prove a span is whole: build time only, never the
+ * browser; a committed file as the source, never anything fetched; a span the
+ * parser says is a single literal; and a context built from Object.create(null)
+ * so there is nothing to reach. An earlier version of this comment claimed to
+ * be the only such place, which was simply false and would have made the next
+ * person think the rule was narrower than it is.
+ *
+ * `vm` is not a security boundary, and the escape that mattered here was ours:
+ * a Proxy once returned a host-realm function for unknown identifiers, so
+ * `anything.constructor` was the host `Function`. It is gone, and nothing
+ * should reintroduce a way for the evaluated literal to name something real.
  *
  * What gets DERIVED rather than stored
  * ------------------------------------
