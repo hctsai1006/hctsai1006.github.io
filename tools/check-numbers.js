@@ -4,28 +4,76 @@
    但 <noscript> 那段是給 SEO 與無 JS 讀者的靜態文字、不能由 JS 產生 ——
    它是唯一還要手動同步的地方，本檔就是為了盯它。
 
+   計數是從 src/data/profile.json 讀的，不是直接掃 index.html。訊息裡仍寫「D.stats」，
+   而那是準確的 —— 但只在下面那道新鮮度閘門通過之後才準確：閘門先證明 src/data
+   就是 index.html 當前的抽取結果，兩者才是同一個數字。沒有閘門的話，這些訊息會
+   拿舊的抽取結果去談 D.stats，講的是一個 index.html 裡已經不存在的數字。
+
    另可帶第二個參數指向 NYCU CS 的 open-source/index.html，一併比對是否與權威頁一致。
    用法：node tools/check-numbers.js [index.html] [權威 open-source/index.html] */
-/* ESM: package.json declares "type":"module" as of this commit, so this file
-   is an ES module too. import.meta.dirname replaces the CommonJS directory
-   global (Node 20.11+). Converting it here rather than later is not tidiness:
-   "type":"module" makes require() a ReferenceError, so a version of this file
-   that still used it would be broken from the moment the field landed. */
+/* ESM: the repo gained a package.json with "type":"module", so this file is now
+   an ES module. import.meta.dirname replaces the CommonJS directory global
+   (Node 20.11+). */
 import fs from 'node:fs';
 import path from 'node:path';
-const FILE = process.argv[2] || path.join(import.meta.dirname, '..', 'index.html');
-const AUTH = process.argv[3] || 'C:/Users/thc1006/Desktop/MAY/personal-homepage/open-source/index.html';
+import { spawnSync } from 'node:child_process';
+const DEFAULT_FILE = path.join(import.meta.dirname, '..', 'index.html');
+const FILE = process.argv[2] || DEFAULT_FILE;
+/* The authoritative NYCU CS page lives outside this repo, so checks 5 and 6 can
+   only run on a machine that has it. That is fine — but it must be VISIBLE.
+   Previously CI ran 4 of the 6 checks under a step named "portfolio counts are
+   consistent" and reported success, so the two cross-repo checks were silently
+   absent from every CI run. The summary now states what actually ran. */
+const AUTH = process.argv[3] || process.env.AUTHORITATIVE_OPEN_SOURCE ||
+  'C:/Users/thc1006/Desktop/MAY/personal-homepage/open-source/index.html';
+let skipped = 0;
+const skip = m => { console.log('  - ' + m); skipped++; };
 let fails = 0;
 const bad = m => { console.log('  x ' + m); fails++; };
 const ok = m => console.log('  v ' + m);
 
 const s = fs.readFileSync(FILE, 'utf8');
-const s2 = s;   /* ⑥ 用的別名，避免與後面區塊變數混淆 */
 
-const st = s.match(/stats:\{merged:(\d+),\s*projects:(\d+),\s*foundations:(\d+),\s*asOf:'([\d-]+)'\}/);
-if (!st) { bad('找不到 D.stats'); process.exit(1); }
-const merged = +st[1], projects = +st[2], foundations = +st[3], asOf = st[4];
-console.log(`D.stats: merged=${merged} projects=${projects} foundations=${foundations} asOf=${asOf}`);
+/* 計數改從抽出來的 src/data/profile.json 讀，不再用 regex 掃 index.html。
+   regex 掃結構正是當初讓計數從 115 漂到 148 沒被發現的同一類手法；
+   src/data 由 tools/extract-portfolio-data.mts 用真正的 JS parser 抽出，
+   而且它自己的 --check 會確保跟 index.html 不會脫節。 */
+const DATA = path.join(import.meta.dirname, '..', 'src', 'data', 'profile.json');
+if (!fs.existsSync(DATA)) {
+  bad(`找不到 ${DATA} —— 先跑 npm run data`);
+  process.exit(1);
+}
+/* 新鮮度是前置條件，不是「順便」。
+   沒有這道閘門時的實際行為：把 index.html 的 D.stats.merged 從 276 改成 999、
+   <noscript> 保持 276、不重新產生 src/data —— 本檔會拿舊的 276 去比對 276，
+   然後印「① noscript 與 D.stats 一致（276/79/8）… OK 全部通過」並回傳 0。
+   index.html 自己前後矛盾，而唯一盯著這件事的工具通過了。
+   本檔讀的是「抽取結果」而非 index.html，所以必須先證明兩者同步，
+   ①②③④ 的結論才有意義。 */
+if (FILE === DEFAULT_FILE) {
+  const fresh = spawnSync(
+    process.execPath,
+    [path.join(import.meta.dirname, 'extract-portfolio-data.mts'), '--check'],
+    { encoding: 'utf8' },
+  );
+  if (fresh.status !== 0) {
+    bad('src/data 與 index.html 不同步 —— 本檔的計數來自抽取結果，先跑 npm run data');
+    const detail = (fresh.stderr || fresh.stdout || '').trim();
+    if (detail) console.log(detail.split('\n').map(l => '      ' + l).join('\n'));
+    console.log('\nFAIL 1 項（前置條件未滿足，其餘檢查未執行）');
+    process.exit(1);
+  }
+} else {
+  /* 指定了別的檔案，抽取器的 --check 只認得 repo 內的 index.html，
+     所以這裡無法證明新鮮度。說出來，不要假裝檢查過。
+     不用 skip()：那個計數器屬於下面那 6 項檢查，前置條件混進去會讓
+     結尾印出「跑了 5/6」——用錯的方式描述實際跑了什麼。 */
+  console.log('  - 新鮮度前置條件：指定了非預設的 index.html，抽取結果無從比對');
+}
+
+const profile = JSON.parse(fs.readFileSync(DATA, 'utf8'));
+const { merged, projects, foundations, asOf } = profile.stats;
+console.log(`src/data/profile.json: merged=${merged} projects=${projects} foundations=${foundations} asOf=${asOf}`);
 
 /* ① noscript 的靜態句子必須與 D.stats 相符 */
 const ns = s.match(/<p>(\d+) 個已合併的上游 pull request,橫跨 (\d+) 個專案與 (\d+) 個基金會。<\/p>/);
@@ -80,7 +128,7 @@ try {
     ? ok('⑤ 與 NYCU CS 權威頁一致')
     : bad(`⑤ 與權威頁不一致：本站 ${merged}/${projects}/${foundations} vs 權威 ${am}/${ap}/${af}`);
 } catch (e) {
-  console.log('  - ⑤ 讀不到權威頁，略過（' + e.code + '）');
+  skip('⑤ 讀不到權威頁，略過（' + e.code + '）');
 }
 
 /* ⑥ contribTop 的 CNCF 旗標必須與權威頁 Ledger 的 CNCF section 一致。
@@ -94,7 +142,7 @@ try {
   const rows = [...ctBlock.matchAll(/\['([\w.\-\/]+)',(\d+),([01])\]/g)].map(m => [m[1], +m[3]]);
   if (rows.length !== expectRows) bad(`⑥ CNCF 旗標只解析到 ${rows.length}/${expectRows} 列（有列缺旗標或格式不符）`);
   if (!rows.length) bad('⑥ contribTop 沒有 CNCF 旗標欄（第三欄）');
-  else if (!cncf.size) console.log('  - ⑥ 權威 Ledger 解析不出 CNCF section，略過');
+  else if (!cncf.size) skip('⑥ 權威 Ledger 解析不出 CNCF section，略過');
   else {
     const wrong = rows.filter(r => (cncf.has(r[0]) ? 1 : 0) !== r[1]);
     wrong.length
@@ -102,8 +150,10 @@ try {
       : ok(`⑥ contribTop ${rows.length} 列的 CNCF 旗標全部與權威 Ledger 一致`);
   }
 } catch (e) {
-  console.log('  - ⑥ 讀不到權威 Ledger，略過（' + e.code + '）');
+  skip('⑥ 讀不到權威 Ledger，略過（' + e.code + '）');
 }
 
-console.log(fails === 0 ? '\nOK 全部通過' : `\nFAIL ${fails} 項`);
+const ran = 6 - skipped;
+console.log(`\n跑了 ${ran}/6 項檢查` + (skipped ? `，略過 ${skipped} 項（權威頁不在本機）` : ''));
+console.log(fails === 0 ? 'OK 全部通過' : `FAIL ${fails} 項`);
 process.exit(fails ? 1 : 0);

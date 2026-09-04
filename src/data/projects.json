@@ -1,0 +1,43 @@
+{
+  "$comment": "Projects and the year timeline.",
+  "projects": [
+    {
+      "name": "Nephio (LFN)",
+      "focus": "TSC 治理 + Intent-based O-RAN 自動化"
+    },
+    {
+      "name": "DRA correctness audit",
+      "focus": "Kubernetes 動態資源配置的端到端正確性稽核"
+    },
+    {
+      "name": "Upstream correctness audits",
+      "focus": "上游專案的靜默失效與重現性缺陷稽核 · CNCF / NASA / 學術"
+    },
+    {
+      "name": "O-RAN × NTN",
+      "focus": "LEO 衛星地面段 · 3GPP R17 NTN 參數驗證"
+    },
+    {
+      "name": "COSCUP 2026",
+      "focus": "體驗火箭導控 Balloon Popping Challenge workshop"
+    }
+  ],
+  "timeline": [
+    {
+      "year": "2023",
+      "highlights": "總統教育獎 · 捷克進修 · 首次 COSCUP 講者"
+    },
+    {
+      "year": "2024",
+      "highlights": "Nephio TSC · CTU GDSC Lead · O-RAN organizer"
+    },
+    {
+      "year": "2025",
+      "highlights": "IEEE R10 ACEI · O-RAN × NTN 研究"
+    },
+    {
+      "year": "2026",
+      "highlights": "CNCF Ambassador · 國科會研究創作獎 (114) · TASA 青年人才 · DRA 稽核"
+    }
+  ]
+}

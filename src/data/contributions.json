@@ -1,0 +1,102 @@
+{
+  "$comment": "Top merged-PR counts per repository. A TOP LIST, not the full set: the rows deliberately do not sum to stats.merged. The cncf flag comes from the NYCU CS ledger buckets, never from a keyword regex.",
+  "foundations": {
+    "cncf": {
+      "label": "CNCF",
+      "merged": 191,
+      "repositories": 46
+    }
+  },
+  "top": [
+    {
+      "repository": "kubernetes-sigs/kueue",
+      "merged": 49,
+      "cncf": true
+    },
+    {
+      "repository": "open-telemetry/opentelemetry-cpp",
+      "merged": 37,
+      "cncf": true
+    },
+    {
+      "repository": "RocketPy-Team/RocketPy",
+      "merged": 18,
+      "cncf": false
+    },
+    {
+      "repository": "kubernetes/kubernetes",
+      "merged": 22,
+      "cncf": true
+    },
+    {
+      "repository": "zephyrproject-rtos/zephyr",
+      "merged": 10,
+      "cncf": false
+    },
+    {
+      "repository": "ocudu/ocudu",
+      "merged": 10,
+      "cncf": false
+    },
+    {
+      "repository": "kubernetes-sigs/dra-driver-cpu",
+      "merged": 9,
+      "cncf": true
+    },
+    {
+      "repository": "kubernetes-sigs/dranet",
+      "merged": 6,
+      "cncf": true
+    },
+    {
+      "repository": "sysprog21/muxleq",
+      "merged": 6,
+      "cncf": false
+    },
+    {
+      "repository": "llm-d/llm-d-router",
+      "merged": 6,
+      "cncf": true
+    },
+    {
+      "repository": "jaegertracing/jaeger-ui",
+      "merged": 6,
+      "cncf": true
+    },
+    {
+      "repository": "ROCm/k8s-gpu-dra-driver",
+      "merged": 4,
+      "cncf": false
+    },
+    {
+      "repository": "kptdev/porch",
+      "merged": 4,
+      "cncf": true
+    },
+    {
+      "repository": "volcano-sh/volcano",
+      "merged": 3,
+      "cncf": true
+    },
+    {
+      "repository": "argoproj/argo-workflows",
+      "merged": 3,
+      "cncf": true
+    },
+    {
+      "repository": "k8s-operatorhub/community-operators",
+      "merged": 3,
+      "cncf": true
+    },
+    {
+      "repository": "nephio-project/test-infra",
+      "merged": 3,
+      "cncf": false
+    },
+    {
+      "repository": "AverageMarcus/devstats-viewer",
+      "merged": 3,
+      "cncf": false
+    }
+  ]
+}

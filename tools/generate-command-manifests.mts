@@ -1,0 +1,294 @@
+/**
+ * generate-command-manifests.mts — merge three sources into one manifest set.
+ *
+ *   what v1 implements   ←  src/commands/v1-inventory.json   (extracted)
+ *   how real each is     ←  src/commands/classification.data.mts (judged)
+ *   what its parameters  ←  compat/upstream/v<ver>/command-metadata.json
+ *   actually are            (captured from a real PowerShell)
+ *
+ * The point of merging rather than hand-writing is that only the middle one is
+ * a judgement. v1 declares 36 parameters across 67 commands; the reference
+ * implementation reports 398 across 43. Hand-authoring parameter metadata would
+ * mean inventing the other 362, and inventing an API is how an emulator ends up
+ * confidently wrong.
+ *
+ * Three invariants are enforced, and each one has already caught something:
+ *
+ *   1. Every command in the inventory must be classified. An unclassified
+ *      command has no declared fidelity, which means the UI cannot tell the
+ *      visitor whether it is real.
+ *   2. Every `simulated` command must carry a note saying what it does NOT do.
+ *      A fiction without a disclaimer is the failure this taxonomy exists for.
+ *   3. Parameter metadata is marked `verified` only when it came from the
+ *      reference implementation. Anything else is labelled `declared`, so the
+ *      difference is visible rather than assumed.
+ *
+ * Usage:
+ *   node tools/generate-command-manifests.mts            write
+ *   node tools/generate-command-manifests.mts --check    verify, exit 1 on drift
+ */
+
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { CLASSIFICATION } from '../src/commands/classification.data.mts';
+import type { Classification } from '../src/commands/classification.data.mts';
+import type { CommandManifest, ParameterMetadata } from '../src/commands/manifest.ts';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const REPO = resolve(HERE, '..');
+const INVENTORY = join(REPO, 'src', 'commands', 'v1-inventory.json');
+const LOCKFILE = join(REPO, 'compat', 'upstream', 'releases.lock.json');
+const OUT = join(REPO, 'src', 'commands', 'manifests.json');
+
+interface Inventory {
+  commands: Array<{
+    name: string;
+    display: string;
+    kind: string;
+    params: string[];
+    help: string;
+    aliases: string[];
+    streamsOutput: boolean;
+    offersPaths: boolean;
+  }>;
+  easterEggs: string[];
+}
+
+interface CapturedParameter {
+  type: string;
+  isSwitch: boolean;
+  aliases: string[];
+  sets: Record<
+    string,
+    { position: number | null; isMandatory: boolean; valueFromPipeline: boolean }
+  >;
+  attributes: Array<{ type: string }>;
+}
+
+interface CapturedCommand {
+  name: string;
+  outputType: string[];
+  parameters: Record<string, CapturedParameter>;
+}
+
+interface Captured {
+  engine: { psVersion: string };
+  commands: Record<string, CapturedCommand>;
+}
+
+const read = <T,>(p: string): T => JSON.parse(readFileSync(p, 'utf8')) as T;
+
+/** Case-insensitive lookup: v1 keys commands in lower case, pwsh in Pascal. */
+function findCaptured(captured: Captured, name: string): CapturedCommand | undefined {
+  const target = name.toLowerCase();
+  for (const [key, value] of Object.entries(captured.commands)) {
+    if (key.toLowerCase() === target) return value;
+  }
+  return undefined;
+}
+
+function parametersFrom(command: CapturedCommand): ParameterMetadata[] {
+  return Object.entries(command.parameters)
+    .map(([name, p]) => {
+      // Keep the per-set truth. Flattening it away made `New-Item -Path` look
+      // unconditionally mandatory (it is mandatory in 1 of 2 sets) and
+      // `Test-Connection -Repeat` look required, which is absurd — and both were
+      // stamped verified:true, contradicting this file's own invariant that
+      // only captured facts carry that flag.
+      const sets = Object.fromEntries(
+        Object.entries(p.sets).map(([setName, s]) => [
+          setName,
+          {
+            position: s.position,
+            mandatory: s.isMandatory,
+            valueFromPipeline: s.valueFromPipeline,
+          },
+        ]),
+      );
+      const values = Object.values(sets);
+      const positions = values
+        .map((s) => s.position)
+        .filter((x): x is number => typeof x === 'number');
+      return {
+        name,
+        aliases: p.aliases,
+        type: p.type,
+        isSwitch: p.isSwitch,
+        sets,
+        mandatoryInAnySet: values.some((s) => s.mandatory),
+        mandatoryInEverySet: values.length > 0 && values.every((s) => s.mandatory),
+        firstPosition: positions.length > 0 ? Math.min(...positions) : null,
+        valueFromPipelineInAnySet: values.some((s) => s.valueFromPipeline),
+        validation: p.attributes.map((a) => a.type).filter((t) => t.startsWith('Validate')),
+        verified: true,
+      } satisfies ParameterMetadata;
+    })
+    .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+}
+
+/** v1's `params` is a flat list of flag names with no type behind it. */
+function declaredParameters(params: readonly string[]): ParameterMetadata[] {
+  return params.map((raw) => ({
+    name: raw.replace(/^-+/, ''),
+    aliases: [],
+    type: 'System.Object',
+    isSwitch: false,
+    sets: {},
+    mandatoryInAnySet: false,
+    mandatoryInEverySet: false,
+    firstPosition: null,
+    valueFromPipelineInAnySet: false,
+    validation: [],
+    verified: false,
+  }));
+}
+
+function build(): { manifests: CommandManifest[]; problems: string[]; stats: Record<string, number> } {
+  const inventory = read<Inventory>(INVENTORY);
+  const lock = read<{ channels: { lts: string } }>(LOCKFILE);
+  const ltsVersion = lock.channels.lts.replace(/^v/, '');
+  const capturedPath = join(REPO, 'compat', 'upstream', `v${ltsVersion}`, 'command-metadata.json');
+  const captured = existsSync(capturedPath) ? read<Captured>(capturedPath) : null;
+
+  const problems: string[] = [];
+  const manifests: CommandManifest[] = [];
+
+  const entries: Array<{ name: string; display: string; aliases: string[]; help: string; params: string[] }> = [
+    ...inventory.commands.map((c) => ({
+      name: c.name,
+      display: c.display,
+      aliases: c.aliases,
+      help: c.help,
+      params: c.params,
+    })),
+    // Easter eggs are commands too. Leaving them out would let the least
+    // honest part of the terminal be the only undeclared part.
+    ...inventory.easterEggs.map((name) => ({
+      name,
+      display: name,
+      aliases: [],
+      help: '',
+      params: [],
+    })),
+  ];
+
+  let verifiedCount = 0;
+
+  for (const entry of entries) {
+    const cls: Classification | undefined = CLASSIFICATION[entry.name];
+    if (cls === undefined) {
+      problems.push(`"${entry.name}" has no classification — its fidelity is undeclared`);
+      continue;
+    }
+    if (cls.fidelity === 'simulated' && (cls.notes === undefined || cls.notes.trim() === '')) {
+      problems.push(`"${entry.name}" is simulated but has no note saying what it does not do`);
+    }
+
+    const hit = captured === null ? undefined : findCaptured(captured, entry.name);
+    const parameters = hit !== undefined ? parametersFrom(hit) : declaredParameters(entry.params);
+    if (hit !== undefined) verifiedCount++;
+
+    manifests.push({
+      name: entry.name,
+      display: entry.display,
+      aliases: entry.aliases,
+      runtime: cls.runtime,
+      fidelity: cls.fidelity,
+      risk: cls.risk,
+      capabilities: cls.capabilities,
+      parameters,
+      outputTypeNames: hit?.outputType ?? [],
+      synopsis: entry.help,
+      ...(cls.notes !== undefined ? { notes: cls.notes } : {}),
+      parameterSource:
+        hit !== undefined
+          ? 'reference-implementation'
+          : entry.params.length > 0
+            ? 'declared'
+            : 'none',
+    });
+  }
+
+  // A classification for a command that does not exist is dead weight that will
+  // quietly rot, so it is reported too.
+  const known = new Set(entries.map((e) => e.name));
+  for (const name of Object.keys(CLASSIFICATION)) {
+    if (!known.has(name)) problems.push(`"${name}" is classified but is not in the inventory`);
+  }
+
+  manifests.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+
+  const byFidelity: Record<string, number> = {};
+  for (const m of manifests) byFidelity[m.fidelity] = (byFidelity[m.fidelity] ?? 0) + 1;
+
+  return {
+    manifests,
+    problems,
+    stats: {
+      total: manifests.length,
+      verified: verifiedCount,
+      parameters: manifests.reduce((n, m) => n + m.parameters.length, 0),
+      ...byFidelity,
+    },
+  };
+}
+
+const serialise = (manifests: CommandManifest[], engine: string): string =>
+  JSON.stringify(
+    {
+      $comment:
+        'Generated by tools/generate-command-manifests.mts. Do not hand-edit: classification lives in src/commands/classification.data.mts, parameters come from the reference implementation.',
+      parameterReference: engine,
+      commands: manifests,
+    },
+    null,
+    2,
+  ) + '\n';
+
+const KNOWN_FLAGS = new Set(['--check']);
+
+function main(): void {
+  const argv = process.argv.slice(2);
+  const unknown = argv.filter((a) => !KNOWN_FLAGS.has(a));
+  if (unknown.length > 0) {
+    process.stderr.write(`\n  unknown option(s): ${unknown.join(', ')}\n\n`);
+    process.exitCode = 2;
+    return;
+  }
+
+  const { manifests, problems, stats } = build();
+
+  if (problems.length > 0) {
+    process.stderr.write('\n  command manifests are incomplete:\n');
+    for (const p of problems) process.stderr.write(`    - ${p}\n`);
+    process.stderr.write('\n');
+    process.exitCode = 2;
+    return;
+  }
+
+  const lock = read<{ channels: { lts: string } }>(LOCKFILE);
+  const text = serialise(manifests, lock.channels.lts);
+
+  if (argv.includes('--check')) {
+    if (!existsSync(OUT) || readFileSync(OUT, 'utf8').replace(/\r\n/g, '\n') !== text) {
+      process.stderr.write('\n  command manifests are out of date.\n  run: npm run manifests\n\n');
+      process.exitCode = 1;
+      return;
+    }
+    process.stdout.write(`  command manifests are in sync (${stats['total']} commands).\n`);
+    return;
+  }
+
+  mkdirSync(dirname(OUT), { recursive: true });
+  writeFileSync(OUT, text, 'utf8');
+  process.stdout.write(
+    `  wrote ${stats['total']} manifests: ` +
+      `${stats['native-semantic'] ?? 0} native-semantic, ${stats['browser-backed'] ?? 0} browser-backed, ` +
+      `${stats['simulated'] ?? 0} simulated\n` +
+      `  ${stats['parameters']} parameters, ${stats['verified']} commands with reference-implementation metadata\n`,
+  );
+}
+
+main();
