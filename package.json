@@ -12,7 +12,7 @@
     "truth:write": "node tools/verify-release-truth.mts --write",
     "roadmap": "node tools/generate-roadmap.mts",
     "check:numbers": "node tools/check-numbers.js",
-    "verify": "npm run typecheck && npm test && npm run data -- --check && npm run inventory -- --check && npm run manifests -- --check && npm run truth:check && npm run profiles -- --check && npm run explorer -- --check && npm run check:numbers",
+    "verify": "npm run typecheck && npm test && npm run data -- --check && npm run inventory -- --check && npm run manifests -- --check && npm run truth:check && npm run profiles -- --check && npm run explorer -- --check && npm run roadmap -- --check && npm run check:numbers",
     "typecheck": "tsc --noEmit",
     "test": "node tools/run-tests.mts",
     "capture:metadata": "pwsh -NoProfile -File tools/capture-pwsh-metadata.ps1",
