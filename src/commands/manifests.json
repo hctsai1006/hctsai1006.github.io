@@ -7455,6 +7455,7 @@
       "parameters": [],
       "outputTypeNames": [],
       "synopsis": "print effective user name, with a profile summary",
+      "notes": "Prints the profile owner, not you. A page has no effective user, so unlike the Unix command this reports a fixed identity; the profile summary beside it is real data.",
       "parameterSource": "none"
     },
     {

@@ -41,8 +41,18 @@ export type Fidelity =
    */
   | 'browser-backed'
   /**
-   * Simulates the appearance of a Linux machine and nothing more. No host
-   * state is read or changed. `sudo` grants nothing; `ping` sends no packet.
+   * The output is invented or fixed, and nothing outside this page is read or
+   * changed. `sudo` grants nothing; `ping` sends no packet; `free` reports
+   * memory figures the browser cannot see.
+   *
+   * Deliberately wider than "pretends to be a Linux machine", because most of
+   * the commands carrying this label are not doing that. Eight of them are
+   * jokes, `classic` is a link to the archived v1, and `exit` explains why a
+   * tab cannot close itself. An earlier version of this comment described only
+   * the Linux facade, which left the majority of its own members undescribed —
+   * and a taxonomy that does not describe its members cannot be applied
+   * consistently. What actually unites them is the absence of real effect and
+   * real information, which is the thing a visitor needs to be told.
    */
   | 'simulated'
   /**

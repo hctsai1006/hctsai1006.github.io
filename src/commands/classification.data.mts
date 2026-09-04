@@ -145,7 +145,21 @@ export const CLASSIFICATION: Record<string, Classification> = {
   'get-publication': portfolio,
   'get-source': portfolio,
   'get-timeline': portfolio,
-  whoami: portfolio,
+  // Not the shared `portfolio` preset, because this one needs to say something
+  // the others do not. The profile it prints is real data, so native-semantic
+  // is right — but every sibling that answers a question about the machine
+  // (hostname, uname, uptime, free, df, ps, lsb_release) is `simulated` and
+  // says so, while this one would have been badged SEMANTIC with no note on
+  // precisely the command whose Unix name promises to identify the person
+  // running it. A browser has no effective user, and the badge should not be
+  // the one place a visitor is left to assume otherwise.
+  whoami: {
+    ...portfolio,
+    notes:
+      'Prints the profile owner, not you. A page has no effective user, so unlike ' +
+      'the Unix command this reports a fixed identity; the profile summary beside ' +
+      'it is real data.',
+  },
 
   // ------------------------------------------------------------- pipeline
   'where-object': pipeline,
