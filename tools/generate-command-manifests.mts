@@ -12,7 +12,8 @@
  * mean inventing the other 362, and inventing an API is how an emulator ends up
  * confidently wrong.
  *
- * Three invariants are enforced, and each one has already caught something:
+ * Four invariants are enforced. The first three have each already caught
+ * something; the fourth guards a silent loss that has not happened yet:
  *
  *   1. Every command in the inventory must be classified. An unclassified
  *      command has no declared fidelity, which means the UI cannot tell the
@@ -22,6 +23,11 @@
  *   3. Parameter metadata is marked `verified` only when it came from the
  *      reference implementation. Anything else is labelled `declared`, so the
  *      difference is visible rather than assumed.
+ *   4. A parameter v1 declares must exist in the reference implementation, as a
+ *      name or an alias, whenever captured metadata is being used. Captured
+ *      metadata replaces the declaration rather than merging with it, so
+ *      otherwise a v1-only parameter would disappear without a word and the
+ *      manifest would describe a command the terminal does not have.
  *
  * Usage:
  *   node tools/generate-command-manifests.mts            write
@@ -188,7 +194,36 @@ function build(): { manifests: CommandManifest[]; problems: string[]; stats: Rec
 
     const hit = captured === null ? undefined : findCaptured(captured, entry.name);
     const parameters = hit !== undefined ? parametersFrom(hit) : declaredParameters(entry.params);
-    if (hit !== undefined) verifiedCount++;
+    if (hit !== undefined) {
+      verifiedCount++;
+      // Invariant 4. Captured metadata REPLACES what v1 declared, it does not
+      // merge with it — which is right, because the reference implementation is
+      // the better source. But it also means a parameter v1 accepts that real
+      // pwsh has no name for would vanish from the manifest without a word, and
+      // the manifest would then describe a command the terminal does not have.
+      //
+      // No command is in that state today (measured: 0 across the 26 commands
+      // with captured metadata), so this is a guard against a future edit rather
+      // than a repair. It is an error and not a warning because the failure it
+      // prevents is silent: nothing downstream can tell a dropped parameter from
+      // one that never existed.
+      const known = new Set<string>();
+      for (const [name, p] of Object.entries(hit.parameters)) {
+        known.add(name.toLowerCase());
+        for (const alias of p.aliases) known.add(alias.toLowerCase());
+      }
+      const dropped = entry.params
+        .map((raw) => raw.replace(/^-+/, ''))
+        .filter((name) => !known.has(name.toLowerCase()));
+      if (dropped.length > 0) {
+        problems.push(
+          `"${entry.name}" declares ${dropped.map((d) => `-${d}`).join(', ')}, which the ` +
+            'reference implementation has no parameter or alias for. Captured metadata replaces ' +
+            'the declaration, so these would be dropped silently. Either the name is wrong, or ' +
+            'this command diverges from pwsh on purpose and needs somewhere to say so.',
+        );
+      }
+    }
 
     manifests.push({
       name: entry.name,
