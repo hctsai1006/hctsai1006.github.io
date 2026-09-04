@@ -17,6 +17,7 @@
 
 import {
   compareValues,
+  toPSString,
   getProperty,
   hasProperty,
   isPSObject,
@@ -276,10 +277,6 @@ export function toNumber(value: PSValue): number | undefined {
 // rendering
 // ---------------------------------------------------------------------------
 
-/** ISO 8601 rather than the host's culture. See the note in `renderValue`. */
-function renderDate(value: Date): string {
-  return value.toISOString();
-}
 
 /**
  * The string PowerShell produces for a value — what `"$x"` shows, what
@@ -298,20 +295,13 @@ function renderDate(value: Date): string {
  * a differential test must not depend on the runner's regional settings.
  */
 export function renderValue(value: PSValue): string {
-  if (value === null) return '';
-  if (typeof value === 'boolean') return value ? 'True' : 'False';
-  if (typeof value === 'string') return value;
-  if (typeof value === 'number' || typeof value === 'bigint') return String(value);
-  if (value instanceof Date) return renderDate(value);
-  if (value instanceof Uint8Array) return [...value].join(' ');
-  if (Array.isArray(value)) return value.map((item) => renderValue(item as PSValue)).join(' ');
-  if (isPSObject(value)) {
-    const body = Object.entries(value.properties)
-      .map(([key, item]) => `${key}=${renderValue(item)}`)
-      .join('; ');
-    return `@{${body}}`;
-  }
-  return String(value);
+  // Delegates. This was a second implementation of the same conversion, and it
+  // disagreed with the object model's on the case that matters most: it used
+  // String(value) for numbers, so 0.1 + 0.2 rendered as 0.30000000000000004
+  // where pwsh prints 0.3. An adversarial review found three renderings in the
+  // repository at once; there is now one, in psobject.ts, next to the value
+  // model it describes.
+  return toPSString(value);
 }
 
 // ---------------------------------------------------------------------------

@@ -30,6 +30,7 @@ import {
   compareForSorting,
   ComparisonTypeError,
   valuesEqual,
+  toPSString,
   isTruthy,
   enumerate,
   PS_CUSTOM_OBJECT,
@@ -281,5 +282,101 @@ describe('integer width', () => {
 
   it('still calls a non-integer Double', () => {
     assert.equal(typeNameOf(1.5), 'System.Double');
+  });
+});
+
+/**
+ * Regressions from an adversarial review. Every one of these was a real defect
+ * found by attacking the object model rather than by reading it, and every
+ * expectation is what pwsh 7.6.5 answers.
+ */
+describe('property access does not walk the prototype chain', () => {
+  it('getProperty returns undefined for an inherited name', () => {
+    // It read `properties[name]` before checking ownership, so this returned the
+    // host Function — a JavaScript function escaping into PSValue — and
+    // `Where-Object toString -ne $null` matched every object.
+    const o = psObject({ a: 1 });
+    assert.equal(getProperty(o, 'toString'), undefined);
+    assert.equal(getProperty(o, 'constructor'), undefined);
+    assert.equal(getProperty(o, '__proto__'), undefined);
+  });
+
+  it('getProperty and hasProperty agree about the same name', () => {
+    const o = psObject({ a: 1 });
+    for (const name of ['toString', 'constructor', 'valueOf', 'a', 'A', 'missing']) {
+      assert.equal(
+        getProperty(o, name) !== undefined,
+        hasProperty(o, name),
+        `${name}: the two must not disagree`,
+      );
+    }
+  });
+});
+
+describe('Int64 survives comparison', () => {
+  it('a bigint equals its own decimal string', () => {
+    // The comparison went through BigInt(Number(text)), and
+    // Number('9223372036854775807') is ...808 — so the one reason the binder
+    // produces a bigint for Int64 was undone by the first comparison.
+    assert.equal(valuesEqual(9223372036854775807n, '9223372036854775807'), true);
+    assert.equal(compareValues(9223372036854775807n, '9223372036854775807'), 0);
+  });
+
+  it('still orders two adjacent Int64 values correctly', () => {
+    assert.equal(compareValues(9007199254740993n, '9007199254740992'), 1);
+  });
+});
+
+describe('the text fallback is PowerShell rendering, not JavaScript', () => {
+  it('sorts a date ahead of "a", because its text form starts with a digit', () => {
+    // pwsh: @('a',(Get-Date)) | Sort-Object -> the date first.
+    // String(date) is "Sat Sep 05 2026 …", which sorted it after.
+    assert.ok(compareForSorting('a', new Date(2026, 8, 5)) > 0);
+  });
+
+  it('compares an array against its space-joined form', () => {
+    // pwsh: '1 2' -eq @(1,2) is True. String([1,2]) is "1,2", which said false.
+    assert.equal(valuesEqual('1 2', [1, 2]), true);
+    assert.equal(valuesEqual('1,2', [1, 2]), false);
+  });
+
+  it('uses G15 for doubles in a comparison, not JavaScript round-trip', () => {
+    assert.equal(valuesEqual('0.3', 0.1 + 0.2), true);
+  });
+});
+
+describe('integer width has both bounds', () => {
+  it('classifies each side of the Int32 and Int64 boundaries', () => {
+    assert.equal(typeNameOf(2147483647), 'System.Int32');
+    assert.equal(typeNameOf(2147483648), 'System.Int64');
+    // 9223372036854775807 and ...808 are the SAME double, so the bound has to be
+    // 2**63 rather than a literal that rounds up past itself.
+    assert.equal(typeNameOf(2 ** 63), 'System.Decimal');
+    // Decimal is a narrow band above Int64, not everything above it.
+    assert.equal(typeNameOf(1e30), 'System.Double');
+  });
+});
+
+describe('two distinct objects are not one value', () => {
+  it('-eq is false and ordering refuses', () => {
+    // Both render ToString() as empty in pwsh, so a text comparison called every
+    // pair equal. pwsh answers False for -eq and raises for -lt.
+    const a = psObject({ a: 1 });
+    const b = psObject({ b: 2 });
+    assert.equal(valuesEqual(a, b), false);
+    assert.throws(() => compareValues(a, b), ComparisonTypeError);
+  });
+
+  it('an object still compares against text', () => {
+    assert.equal(valuesEqual(psObject({ a: 1 }), '@{a=1}'), true);
+  });
+});
+
+describe('there is exactly one value-to-string implementation', () => {
+  it('psobject and the formatting re-export are the same function', async () => {
+    // Three renderings once existed and disagreed. This fails if a second one
+    // is reintroduced behind the formatting module's name.
+    const reexport = await import('../../src/formatting/to-string.ts');
+    assert.equal(reexport.toPSString, toPSString);
   });
 });

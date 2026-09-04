@@ -66,7 +66,7 @@ import type { ProcessId } from './ids.ts';
  * `Record<Capability, boolean>` rather than a Set, so the compiler requires an
  * entry for every member of the union.
  */
-export const CAPABILITY_REALITY: Record<Capability, boolean> = {
+export const CAPABILITY_REALITY: Record<Capability, boolean> = Object.freeze({
   'filesystem.read': true,
   'filesystem.write': true,
   'filesystem.delete': true,
@@ -82,7 +82,7 @@ export const CAPABILITY_REALITY: Record<Capability, boolean> = {
   'device.request': true,
   // The only virtual one. It moves a number inside a policy engine we wrote.
   'virtual.policy.elevate': false,
-};
+});
 
 /**
  * Which capabilities always produce an audit record.
@@ -94,7 +94,7 @@ export const CAPABILITY_REALITY: Record<Capability, boolean> = {
  * `process.control` is audited because stopping someone else's job is a state
  * change the user should be able to review after the fact.
  */
-export const CAPABILITY_AUDITED: Record<Capability, boolean> = {
+export const CAPABILITY_AUDITED: Record<Capability, boolean> = Object.freeze({
   'filesystem.read': false,
   'filesystem.write': true,
   'filesystem.delete': true,
@@ -109,7 +109,7 @@ export const CAPABILITY_AUDITED: Record<Capability, boolean> = {
   'clipboard.write': true,
   'device.request': true,
   'virtual.policy.elevate': true,
-};
+});
 
 /**
  * The same question asked of the command's declared risk.
@@ -137,7 +137,7 @@ export const RISK_AUDITED: Record<Risk, boolean> = {
  * `assertElevationCannotConferReality` below, which runs at module load and
  * again on every grant computation.
  */
-export const ELEVATION_CONFERS: readonly Capability[] = [];
+export const ELEVATION_CONFERS: readonly Capability[] = Object.freeze([]);
 
 /** What the UI must show, every time, when something elevates. */
 export const ELEVATION_DISCLOSURE =

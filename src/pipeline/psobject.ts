@@ -68,6 +68,22 @@ export function psObject(
   properties: Readonly<Record<string, PSValue>>,
   typeNames: readonly string[] = [PS_CUSTOM_OBJECT, 'System.Object'],
 ): PSObject {
+  // A plain bag, deliberately, and the reason is worth recording because the
+  // safer-looking option does not work here.
+  //
+  // getProperty once read `properties[name]` before checking ownership, so
+  // `Select-Object -Property constructor` handed the host Function constructor
+  // out as pipeline data — in a file whose own comment says it "never calls eval
+  // or new Function". It does not have to, if it gives the caller Function.
+  //
+  // The obvious fix is Object.create(null) here. It does not hold: structuredClone
+  // NORMALISES a null-prototype object back to Object.prototype, so every object
+  // crossing the worker boundary would arrive with the chain restored — and the
+  // round-trip would stop being identity-preserving, which the protocol depends
+  // on. So the guarantee lives where it survives: getProperty and hasProperty
+  // gate on Object.hasOwn, which is true regardless of prototype, and the one
+  // place that WRITES a caller-supplied property name (Select-Object) builds its
+  // bag with a null prototype so `-Property __proto__` cannot re-parent it.
   return { typeNames, properties };
 }
 
@@ -102,7 +118,12 @@ export function isPSObject(value: unknown): value is PSObject {
  */
 export function getProperty(target: PSValue, name: string): PSValue | undefined {
   if (!isPSObject(target)) return undefined;
-  const direct = target.properties[name];
+  // Object.hasOwn FIRST, not as a fallback. Reading `properties[name]` before
+  // checking ownership walks the prototype chain, so `getProperty(o, 'toString')`
+  // returned the host Function — a JavaScript function escaping into PSValue,
+  // which nothing downstream is typed for — and disagreed with hasProperty about
+  // the same name. `Where-Object toString -ne $null` matched every object.
+  const direct = Object.hasOwn(target.properties, name) ? target.properties[name] : undefined;
   if (direct !== undefined || Object.hasOwn(target.properties, name)) return direct;
 
   const lower = name.toLowerCase();
@@ -176,11 +197,99 @@ export function typeNameOf(value: PSValue): string {
       // not reuse this function to type the result of a sum.
       if (!Number.isInteger(value)) return 'System.Double';
       if (value >= -2147483648 && value <= 2147483647) return 'System.Int32';
-      if (value >= -9223372036854775808 && value <= 9223372036854775807) return 'System.Int64';
-      return 'System.Decimal';
+      // The Int64 bound cannot be written as a float64 literal: 9223372036854775807
+      // and 9223372036854775808 are the SAME double, so the first version of this
+      // classified its own documented Decimal example as Int64. 2**63 is exact.
+      if (Math.abs(value) < 2 ** 63) return 'System.Int64';
+      // Decimal is a narrow band above Int64, not everything above it. Without an
+      // upper bound this reported System.Decimal for 1e30, where pwsh says
+      // System.Double. Decimal.MaxValue is ~7.9228e28.
+      if (Math.abs(value) <= 7.9228162514264337e28) return 'System.Decimal';
+      return 'System.Double';
     default:
       return 'System.Object';
   }
+}
+
+// ---------------------------------------------------------------------------
+// rendering
+// ---------------------------------------------------------------------------
+
+/**
+ * How a value becomes text — `"$x"`, the culture-INVARIANT conversion.
+ *
+ * This lives with the object model rather than in the formatting layer because
+ * it is part of what a PSValue IS, and because everything that compares, sorts,
+ * joins or groups needs it. It had drifted into three implementations —
+ * `renderValue` in the cmdlets' support module, a copy in the formatting layer,
+ * and bare `String()` inside the comparison fallbacks — and they disagreed on
+ * the case that matters most:
+ *
+ *     String(0.1 + 0.2)      "0.30000000000000004"     JavaScript
+ *     toPSString(0.1 + 0.2)  "0.3"                     pwsh 7.6.5
+ *
+ * `String()` was also wrong for arrays (`"1,2"` where PowerShell joins with a
+ * space, so `'1 2' -eq @(1,2)` answered false) and for dates (a JavaScript date
+ * string, so `@('a', $date) | Sort-Object` put them the wrong way round — the
+ * example the sort comment itself cites).
+ *
+ * `.ToString()` is deliberately NOT this function: it follows the host culture,
+ * so `(1.5).ToString()` is `1,5` under de-DE while `"$(1.5)"` stays `1.5`. It
+ * also differs in kind — `@(1,2).ToString()` is `System.Object[]` and
+ * `$null.ToString()` throws. That belongs with the method-call evaluator.
+ */
+export const DEFAULT_OFS = ' ';
+
+/**
+ * .NET formats a double as "G15" — fifteen significant digits, not the shortest
+ * round-trippable form JavaScript produces. Measured in pwsh 7.6.5:
+ *
+ *     "$(0.1 + 0.2)"  0.3                    "$(1/3)"    0.333333333333333
+ *     "$(1.0)"        1                      "$(1e21)"   1E+21
+ */
+export function formatDouble(value: number): string {
+  if (Number.isNaN(value)) return 'NaN';
+  if (value === Infinity) return 'Infinity';
+  if (value === -Infinity) return '-Infinity';
+  if (value === 0) return '0';
+  if (Number.isInteger(value) && Math.abs(value) < 1e15) return String(value);
+
+  const exponent = Math.floor(Math.log10(Math.abs(value)));
+  if (exponent < -5 || exponent >= 15) {
+    const [mantissa, exp] = value.toExponential(14).split('e') as [string, string];
+    const trimmed = mantissa.includes('.') ? mantissa.replace(/0+$/, '').replace(/\.$/, '') : mantissa;
+    const sign = exp.startsWith('-') ? '-' : '+';
+    return `${trimmed}E${sign}${exp.replace(/^[+-]/, '').padStart(2, '0')}`;
+  }
+
+  const fixed = value.toPrecision(15);
+  return fixed.includes('.') ? fixed.replace(/0+$/, '').replace(/\.$/, '') : fixed;
+}
+
+/** The invariant date form: `"$(Get-Date '2020-03-04T05:06:07')"` is `03/04/2020 05:06:07`. */
+function formatDateInvariant(value: Date): string {
+  const p = (n: number, w = 2): string => String(n).padStart(w, '0');
+  return (
+    `${p(value.getMonth() + 1)}/${p(value.getDate())}/${p(value.getFullYear(), 4)} ` +
+    `${p(value.getHours())}:${p(value.getMinutes())}:${p(value.getSeconds())}`
+  );
+}
+
+export function toPSString(value: PSValue, ofs: string = DEFAULT_OFS): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'boolean') return value ? 'True' : 'False';
+  if (typeof value === 'number') return formatDouble(value);
+  if (typeof value === 'bigint') return value.toString();
+  if (value instanceof Date) return formatDateInvariant(value);
+  if (value instanceof Uint8Array) return Array.from(value).join(ofs);
+  if (Array.isArray(value)) return value.map((item) => toPSString(item as PSValue, ofs)).join(ofs);
+  if (isPSObject(value)) {
+    return `@{${Object.entries(value.properties)
+      .map(([key, item]) => `${key}=${toPSString(item, ofs)}`)
+      .join('; ')}}`;
+  }
+  return String(value);
 }
 
 // ---------------------------------------------------------------------------
@@ -229,13 +338,28 @@ export class ComparisonTypeError extends Error {
  * Returns the pair to compare, or throws if the conversion is impossible.
  */
 function coerceToLeft(a: PSValue, b: PSValue): [PSValue, PSValue] {
+  // Before the typeof shortcut: two PSObjects are both 'object', so the shortcut
+  // returned first and the check below never ran. pwsh reports False for
+  // `$a -eq $b` on two distinct PSCustomObjects and raises "does not implement
+  // IComparable" for `$a -lt $b`; comparing their text forms would call them
+  // equal, since ToString() is the empty string for both.
+  if (isPSObject(a) && isPSObject(b)) throw new ComparisonTypeError(a, b);
+
   if (typeof b === typeof a) return [a, b];
 
   if (typeof a === 'boolean') return [a, isTruthy(b)];
 
   if (typeof a === 'number' || typeof a === 'bigint') {
     if (typeof b === 'boolean') return [a, b ? 1 : 0];
-    const text = typeof b === 'string' ? b.trim() : String(b);
+    const text = typeof b === 'string' ? b.trim() : toPSString(b);
+
+    // Int64 goes through BigInt directly, never through Number. The whole reason
+    // the binder produces a bigint for Int64 is that a double cannot hold
+    // 9223372036854775807 — and routing the comparison back through Number()
+    // undid that on the first use: BigInt(Number('9223372036854775807')) is
+    // ...808, so the value never equalled its own string form.
+    if (typeof a === 'bigint' && /^[+-]?\d+$/.test(text)) return [a, BigInt(text)];
+
     const n = text === '' ? 0 : Number(text);
     if (!Number.isFinite(n)) throw new ComparisonTypeError(a, b);
     return typeof a === 'bigint' && Number.isInteger(n) ? [a, BigInt(n)] : [Number(a), n];
@@ -320,7 +444,7 @@ export function compareValues(a: PSValue, b: PSValue, caseSensitive = false): nu
   }
 
   const collator = caseSensitive ? COLLATOR_SENSITIVE : COLLATOR_INSENSITIVE;
-  const result = collator.compare(String(x), String(y));
+  const result = collator.compare(toPSString(x), toPSString(y));
   return result < 0 ? -1 : result > 0 ? 1 : 0;
 }
 
@@ -351,7 +475,7 @@ export function compareForSorting(a: PSValue, b: PSValue, caseSensitive = false)
   } catch (error) {
     if (!(error instanceof ComparisonTypeError)) throw error;
     const collator = caseSensitive ? COLLATOR_SENSITIVE : COLLATOR_INSENSITIVE;
-    const result = collator.compare(String(a), String(b));
+    const result = collator.compare(toPSString(a), toPSString(b));
     return result < 0 ? -1 : result > 0 ? 1 : 0;
   }
 }

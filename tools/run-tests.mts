@@ -82,19 +82,49 @@ if (result.stderr) process.stderr.write(result.stderr);
 
 if (result.status !== 0) process.exit(result.status ?? 1);
 
-const reported = /^\s*ℹ tests (\d+)\s*$/m.exec(output);
-if (reported === null) {
+/** Read one `ℹ <name> <n>` line out of the spec reporter's summary. */
+function reported(name: string): number | null {
+  const hit = new RegExp(`^\\s*ℹ ${name} (\\d+)\\s*$`, 'm').exec(output);
+  return hit === null ? null : Number(hit[1]);
+}
+
+const tests = reported('tests');
+if (tests === null) {
   process.stderr.write(
     '\n  the test runner exited 0 but reported no summary line.\n' +
       '  Refusing to call that a pass: nothing here can say whether it ran.\n\n',
   );
   process.exit(2);
 }
-if (Number(reported[1]) === 0) {
+
+// `tests > 0` alone is not enough, and an adversarial review proved it: rewriting
+// every `it(` to `it.skip(` across the whole suite produced
+//
+//     ℹ tests 561   ℹ pass 0   ℹ fail 0   ℹ skipped 561
+//
+// and this gate passed it, because 561 tests were still *reported*. `it.todo` is
+// worse — a todo test whose assertion is FALSE prints `✖ … # TODO`, counts as
+// neither pass nor fail, and exits 0. So the counts that mean "something was
+// actually checked" are the ones to read.
+const pass = reported('pass') ?? 0;
+const skipped = reported('skipped') ?? 0;
+const todo = reported('todo') ?? 0;
+
+if (tests === 0 || pass === 0) {
   process.stderr.write(
-    `\n  ${files.length} test file(s) ran and produced 0 tests.\n` +
-      '  A suite with nothing in it exits 0, which is how a commented-out file\n' +
-      '  keeps CI green. Refusing to report success.\n\n',
+    `\n  ${files.length} test file(s) ran and produced ${tests} test(s), ${pass} passing.\n` +
+      '  A suite that asserts nothing exits 0, which is how a commented-out or\n' +
+      '  skipped file keeps CI green. Refusing to report success.\n\n',
+  );
+  process.exit(2);
+}
+
+if (skipped > 0 || todo > 0) {
+  process.stderr.write(
+    `\n  ${skipped} skipped and ${todo} todo test(s).\n` +
+      '  Both hide a check that is not happening, and a todo whose assertion\n' +
+      '  fails still exits 0. If a test must be disabled, delete it and say why\n' +
+      '  in the commit — a suite cannot report success for work it did not do.\n\n',
   );
   process.exit(2);
 }
