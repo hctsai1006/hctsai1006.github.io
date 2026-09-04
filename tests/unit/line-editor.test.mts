@@ -15,6 +15,7 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import ts from 'typescript';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -291,35 +292,91 @@ describe('the core is headless', () => {
     'addEventListener',
   ];
 
-  function stripComments(source: string): string {
-    return source
-      .replace(/\/\*[\s\S]*?\*\//g, '')
-      .split('\n')
-      .filter((line) => !/^\s*(\/\/|\*)/.test(line))
-      .join('\n');
+  /**
+   * Walk the file with TypeScript's parser, not a regex.
+   *
+   * The first version stripped comments by hand and then searched the text. An
+   * adversarial review defeated it with ORDINARY code — no concatenation, no
+   * base64, no computed keys:
+   *
+   *     return 1
+   *       * host.document.body.clientWidth
+   *       / cellWidth;
+   *
+   * because `.filter(line => !/^\s*(\/\/|\*)/.test(line))` deletes any line
+   * whose first non-space character is `*`, and a `*` continuation line is
+   * legal. It also went wrong in the other direction: a trailing
+   * `// mentions document` comment FAILED the test, since only lines that
+   * *start* with `//` were dropped. And a pair of string constants holding the
+   * block-comment delimiters deleted every line between them, because the
+   * regex is string-blind. (Writing that second delimiter literally here ends
+   * this comment early — which is the same bug, one layer up, and is why the
+   * example is described rather than quoted.)
+   *
+   * This repository already made this decision once, in
+   * `refactor(js-literal): parse with TypeScript instead of a hand-written
+   * lexer`. The same argument applies to a test that guards a claim.
+   *
+   * What this still cannot decide, stated rather than papered over: a key built
+   * at runtime — `globalThis['docu' + 'ment']`, `atob(...)`, `String.fromCharCode`
+   * — is not statically visible to any checker. The claim this test supports is
+   * "no module NAMES a browser global", which is what a reader of the source can
+   * verify, not "no module can ever reach one".
+   */
+  function browserGlobalsNamedIn(source: string, file: string): string[] {
+    const tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+    const found: string[] = [];
+    const forbidden = new Set<string>(FORBIDDEN);
+
+    const visit = (node: ts.Node): void => {
+      // An identifier anywhere: a bare reference, a property name in
+      // `globalThis.document`, a destructured binding, a shorthand.
+      if (ts.isIdentifier(node) && forbidden.has(node.text)) found.push(node.text);
+      // A string used as a computed key: `globalThis['document']`.
+      if (ts.isStringLiteralLike(node) && forbidden.has(node.text)) found.push(node.text);
+      ts.forEachChild(node, visit);
+    };
+    visit(tree);
+    return found;
+  }
+
+  /** Every module specifier, whatever the quote style and whatever the form. */
+  function importsIn(source: string, file: string): string[] {
+    const tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+    const specifiers: string[] = [];
+
+    const visit = (node: ts.Node): void => {
+      // `import x from '…'`, and the side-effect form `import '…'` which has no
+      // `from` at all — the regex looked for `from '…'` and saw neither that nor
+      // any double-quoted specifier. A `createRequire` slipped through both.
+      if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
+        const spec = node.moduleSpecifier;
+        if (spec !== undefined && ts.isStringLiteralLike(spec)) specifiers.push(spec.text);
+      }
+      // `import('…')`
+      if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+        const first = node.arguments[0];
+        if (first !== undefined && ts.isStringLiteralLike(first)) specifiers.push(first.text);
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(tree);
+    return specifiers;
   }
 
   it('names no browser global in any module', () => {
     const files = readdirSync(DIRECTORY).filter((f) => f.endsWith('.ts'));
     assert.ok(files.length >= 9, `expected the whole core, found ${files.length} files`);
     for (const file of files) {
-      const code = stripComments(readFileSync(join(DIRECTORY, file), 'utf8'));
-      for (const name of FORBIDDEN) {
-        assert.equal(
-          new RegExp(`\\b${name}\\b`).test(code),
-          false,
-          `${file} references the DOM identifier \`${name}\``,
-        );
-      }
+      const named = browserGlobalsNamedIn(readFileSync(join(DIRECTORY, file), 'utf8'), file);
+      assert.deepEqual(named, [], `${file} references browser identifiers: ${named.join(', ')}`);
     }
   });
 
   it('imports nothing outside the core but the generated manifests', () => {
     const files = readdirSync(DIRECTORY).filter((f) => f.endsWith('.ts'));
     for (const file of files) {
-      const code = readFileSync(join(DIRECTORY, file), 'utf8');
-      for (const match of code.matchAll(/from '([^']+)'/g)) {
-        const specifier = match[1] ?? '';
+      for (const specifier of importsIn(readFileSync(join(DIRECTORY, file), 'utf8'), file)) {
         assert.ok(
           specifier.startsWith('./') || specifier === '../commands/manifests.json',
           `${file} imports ${specifier}, which is outside the core`,
@@ -327,4 +384,5 @@ describe('the core is headless', () => {
       }
     }
   });
+
 });
