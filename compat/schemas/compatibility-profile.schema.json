@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hctsai1006.github.io/compat/schemas/compatibility-profile.schema.json",
+  "title": "PowerShell compatibility profile",
+  "description": "Declares which PowerShell version's OBSERVABLE SEMANTICS a BrowserShell session emulates. A profile is data, never code: the engine reads it at boot and the same command implementation behaves differently under different profiles. Adding a version must never mean forking a command.",
+  "type": "object",
+  "required": ["schemaVersion", "profile", "channel", "displayVersion", "source", "behaviors", "commands"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "profile": {
+      "description": "Stable profile id. Shape: powershell/<version>/<platform>.",
+      "type": "string",
+      "pattern": "^powershell/[0-9A-Za-z.+-]+/(linux|windows|macos)$"
+    },
+    "channel": { "enum": ["lts", "stable", "preview", "edge"] },
+    "displayVersion": {
+      "description": "What the session banner and $PSVersionTable report. Must equal source.releaseTag minus its leading v, or be explicitly justified in notes.",
+      "type": "string"
+    },
+    "inherits": {
+      "description": "Profile id this one is a delta against. Resolution is deep-merge: behaviors and command patches from the parent apply first, then this profile's. Cycles are a hard error.",
+      "type": ["string", "null"]
+    },
+    "supported": {
+      "type": "object",
+      "properties": {
+        "isSupportedUpstream": { "type": "boolean" },
+        "endOfSupport": { "type": ["string", "null"] },
+        "notes": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "source": {
+      "description": "Provenance. Every field here is copied from the release-truth lockfile, never typed by hand.",
+      "type": "object",
+      "required": ["releaseTag", "publishedAt", "dotnetSdk", "sourceCommit"],
+      "properties": {
+        "releaseTag": { "type": "string" },
+        "publishedAt": { "type": "string", "format": "date-time" },
+        "dotnetSdk": { "type": "string" },
+        "sourceCommit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "snapshotDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "derivedFrom": {
+          "description": "Which lockfile generation produced this profile.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "bundledModules": {
+      "description": "Modules shipped in the box at this version, as stated by the release notes.",
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "behaviors": {
+      "description": "The semantic switchboard. Every entry is a behavior a command implementation may branch on. Keys are dotted, stable, and documented; a key is added here BEFORE any command reads it.",
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [
+          { "type": "boolean" },
+          { "type": "number" },
+          { "type": "string" },
+          { "type": "null" }
+        ]
+      }
+    },
+    "behaviorDocs": {
+      "description": "Human explanation plus upstream citation for each behavior key. A behavior without a doc entry fails validation in CI: an undocumented flag is a guess.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["summary"],
+        "properties": {
+          "summary": { "type": "string" },
+          "upstreamPr": { "type": ["integer", "null"] },
+          "breaking": { "type": "boolean" },
+          "since": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "commands": {
+      "description": "Per-command availability and metadata patches, applied over the base command manifest. Absent command means inherit from parent profile.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "availability": { "enum": ["available", "added", "removed", "not-implemented"] },
+          "since": { "type": "string" },
+          "removedIn": { "type": "string" },
+          "parameterPatches": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "added": { "type": "boolean" },
+                "removed": { "type": "boolean" },
+                "validation": { "type": "array", "items": { "type": "string" } },
+                "switchSemantics": { "enum": ["presence", "boolean-value"] },
+                "defaultValue": {},
+                "notes": { "type": "string" }
+              },
+              "additionalProperties": false
+            }
+          },
+          "notes": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "experimentalFeatures": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "engineLimits": {
+      "description": "Where BrowserShell knowingly diverges from upstream. Stating a limit is mandatory; silently behaving differently is not allowed.",
+      "type": "object",
+      "properties": {
+        "nativePowerShellEngine": { "const": false },
+        "unimplementedAstNodes": { "type": "array", "items": { "type": "string" } },
+        "notes": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

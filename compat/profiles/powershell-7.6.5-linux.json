@@ -1,0 +1,260 @@
+{
+  "schemaVersion": 1,
+  "profile": "powershell/7.6.5/linux",
+  "channel": "lts",
+  "displayVersion": "7.6.5",
+  "inherits": null,
+  "supported": {
+    "isSupportedUpstream": true,
+    "endOfSupport": "2028-11-14",
+    "notes": "Support is inherited from .NET: this line builds on a .NET LTS channel."
+  },
+  "source": {
+    "releaseTag": "v7.6.5",
+    "publishedAt": "2026-08-14T16:57:02Z",
+    "dotnetSdk": "10.0.303",
+    "sourceCommit": "7acb29279dd64e646d821f75d1cc8ad59455a9a6",
+    "snapshotDigest": "sha256:ecf64e4d814489f7410558b25aa4b5945b4af423ac6e7d85841910ebc19adf8c",
+    "derivedFrom": "releases.lock.json generated 2026-09-04T15:40:30.917Z"
+  },
+  "bundledModules": {
+    "Microsoft.PowerShell.Archive": "1.2.6",
+    "Microsoft.PowerShell.PSResourceGet": "1.2.0",
+    "Microsoft.PowerShell.ThreadJob": "2.2.0",
+    "PSReadLine": "2.4.5",
+    "PackageManagement": "1.4.8.1",
+    "PowerShellGet": "2.2.5"
+  },
+  "behaviors": {
+    "ansi.resetMidStringHandled": false,
+    "application.outputEncodingVariable": false,
+    "csv.noTypeInformationObsolete": false,
+    "exportCsv.appendNoHeaderExclusive": false,
+    "format.excludeProperty": false,
+    "format.property.rejectNullOrEmpty": false,
+    "joinPath.extension": false,
+    "newGuid.defaultVersion": 4,
+    "progress.doubleWidthAware": false,
+    "switchParameters.honourExplicitFalse": false,
+    "temporaryDirectory.cmdlet": false,
+    "unix.lastWriteTime.dynamicWidth": false,
+    "validation.throwsArgumentException": false
+  },
+  "behaviorDocs": {
+    "ansi.resetMidStringHandled": {
+      "summary": "VT Reset sequences appearing mid-string are handled correctly",
+      "upstreamPr": 26424,
+      "breaking": false,
+      "since": "7.7.0-preview.4"
+    },
+    "application.outputEncodingVariable": {
+      "summary": "Automatic variable controlling how native command output is decoded",
+      "upstreamPr": 21219,
+      "breaking": false,
+      "since": "7.7.0-preview.4"
+    },
+    "csv.noTypeInformationObsolete": {
+      "summary": "`-NoTypeInformation` is an obsolete no-op; `-IncludeTypeInformation` is evaluated by value",
+      "upstreamPr": 26719,
+      "breaking": false,
+      "since": "7.7.0-preview.4"
+    },
+    "exportCsv.appendNoHeaderExclusive": {
+      "summary": "`-Append` and `-NoHeader` are now mutually exclusive",
+      "upstreamPr": 26472,
+      "breaking": false,
+      "since": "7.7.0-preview.4"
+    },
+    "format.excludeProperty": {
+      "summary": "`-ExcludeProperty` parameter added to Format-* cmdlets",
+      "upstreamPr": 26514,
+      "breaking": false,
+      "since": "7.7.0-preview.4"
+    },
+    "format.property.rejectNullOrEmpty": {
+      "summary": "`ValidateNotNullOrEmpty` added to `-Property`",
+      "upstreamPr": 26552,
+      "breaking": true,
+      "since": "7.7.0-preview.4"
+    },
+    "joinPath.extension": {
+      "summary": "`-Extension` parameter added",
+      "upstreamPr": 26482,
+      "breaking": false,
+      "since": "7.7.0-preview.4"
+    },
+    "newGuid.defaultVersion": {
+      "summary": "`New-Guid` emits a time-sortable UUID v7 by default instead of a random UUID v4",
+      "upstreamPr": 27033,
+      "breaking": true,
+      "since": "7.7.0-preview.4"
+    },
+    "progress.doubleWidthAware": {
+      "summary": "Progress bar renders correctly with double-width Unicode characters",
+      "upstreamPr": 26185,
+      "breaking": false,
+      "since": "7.7.0-preview.4"
+    },
+    "switchParameters.honourExplicitFalse": {
+      "summary": "Explicit -<Operator>:$false is now honoured rather than treated as present",
+      "upstreamPr": 26485,
+      "breaking": true,
+      "since": "7.7.0-preview.4"
+    },
+    "temporaryDirectory.cmdlet": {
+      "summary": "`New-TemporaryDirectory` cmdlet added",
+      "upstreamPr": 27549,
+      "breaking": false,
+      "since": "7.7.0-preview.4"
+    },
+    "unix.lastWriteTime.dynamicWidth": {
+      "summary": "LastWriteTime column width is computed dynamically on Unix",
+      "upstreamPr": 24624,
+      "breaking": false,
+      "since": "7.7.0-preview.4"
+    },
+    "validation.throwsArgumentException": {
+      "summary": "Not-null-not-empty validation now throws ArgumentException instead of PSArgumentNullException",
+      "upstreamPr": 26668,
+      "breaking": true,
+      "since": "7.7.0-preview.4"
+    }
+  },
+  "commands": {
+    "Add-Content": {
+      "availability": "available"
+    },
+    "ConvertFrom-Csv": {
+      "availability": "available"
+    },
+    "ConvertTo-Csv": {
+      "availability": "available"
+    },
+    "ConvertTo-Json": {
+      "availability": "available"
+    },
+    "Copy-Item": {
+      "availability": "available"
+    },
+    "Export-Csv": {
+      "availability": "available"
+    },
+    "Format-Custom": {
+      "availability": "available"
+    },
+    "Format-List": {
+      "availability": "available"
+    },
+    "Format-Table": {
+      "availability": "available"
+    },
+    "Get-ChildItem": {
+      "availability": "available"
+    },
+    "Get-Command": {
+      "availability": "available"
+    },
+    "Get-Content": {
+      "availability": "available"
+    },
+    "Get-Date": {
+      "availability": "available"
+    },
+    "Get-Help": {
+      "availability": "available"
+    },
+    "Get-History": {
+      "availability": "available"
+    },
+    "Get-Item": {
+      "availability": "available"
+    },
+    "Get-Location": {
+      "availability": "available"
+    },
+    "Get-Member": {
+      "availability": "available"
+    },
+    "Get-Process": {
+      "availability": "available"
+    },
+    "Get-Random": {
+      "availability": "available"
+    },
+    "Get-SecureRandom": {
+      "availability": "available"
+    },
+    "Get-TimeZone": {
+      "availability": "available"
+    },
+    "Get-Uptime": {
+      "availability": "available"
+    },
+    "Group-Object": {
+      "availability": "available"
+    },
+    "Import-Csv": {
+      "availability": "available"
+    },
+    "Join-Path": {
+      "availability": "available"
+    },
+    "Measure-Object": {
+      "availability": "available"
+    },
+    "Move-Item": {
+      "availability": "available"
+    },
+    "New-Guid": {
+      "availability": "available"
+    },
+    "New-Item": {
+      "availability": "available"
+    },
+    "Out-Null": {
+      "availability": "available"
+    },
+    "Remove-Item": {
+      "availability": "available"
+    },
+    "Rename-Item": {
+      "availability": "available"
+    },
+    "Select-Object": {
+      "availability": "available"
+    },
+    "Select-String": {
+      "availability": "available"
+    },
+    "Set-Content": {
+      "availability": "available"
+    },
+    "Set-Location": {
+      "availability": "available"
+    },
+    "Sort-Object": {
+      "availability": "available"
+    },
+    "Split-Path": {
+      "availability": "available"
+    },
+    "Test-Connection": {
+      "availability": "available"
+    },
+    "Test-Path": {
+      "availability": "available"
+    },
+    "Where-Object": {
+      "availability": "available"
+    },
+    "Write-Output": {
+      "availability": "available"
+    }
+  },
+  "experimentalFeatures": [],
+  "engineLimits": {
+    "nativePowerShellEngine": false,
+    "unimplementedAstNodes": [],
+    "notes": "BrowserShell emulates observable semantics; it does not execute PowerShell. Recognised-but-unimplemented syntax must fail with an explicit error naming the AST node rather than silently doing something approximate."
+  }
+}
