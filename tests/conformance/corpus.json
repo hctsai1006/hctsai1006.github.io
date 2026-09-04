@@ -383,8 +383,7 @@
       "why": "TypeNames is a HIERARCHY, not a label. -is and the formatter both walk it, so the whole chain is part of the contract.",
       "source": "(Get-Date).PSObject.TypeNames -join ','",
       "observe": "values",
-      "probe": { "kind": "none" },
-      "pending": "The project has no DateTime PSObject wrapper, so it has no hierarchy of its own to compare. isOfType is exercised instead by type.is-matches-short-name, using the chain this case records."
+      "probe": { "kind": "datetime-hierarchy" }
     },
     {
       "id": "type.is-matches-short-name",
@@ -809,21 +808,19 @@
       "id": "normalisation.guid-is-canonicalised",
       "area": "normalisation",
       "command": null,
-      "why": "A GUID differs on every run. This case PROVES the normaliser earns its keep: without the guid rule the two determinism passes disagree and the capture fails.",
+      "why": "A GUID differs on every run. This case PROVES the normaliser earns its keep: without the guid rule the two determinism passes disagree and the capture fails. Now that New-Guid exists it also measures the SHAPE it emits: a value that is not canonical 8-4-4-4-12 hex would not match the rule, and the comparison would fail.",
       "source": "(New-Guid).ToString()",
       "observe": "values",
-      "probe": { "kind": "none" },
-      "pending": "New-Guid is not implemented. The case is here for the normaliser, not for the command."
+      "probe": { "kind": "guid-canonical", "args": { "version": 4 } }
     },
     {
       "id": "normalisation.cwd-is-canonicalised",
       "area": "normalisation",
       "command": "get-location",
-      "why": "The working directory is machine-specific and leaks into output. Canonicalising it to <CWD> is what lets a fixture captured here reproduce anywhere.",
+      "why": "The working directory is machine-specific and leaks into output. Canonicalising it to <REPO> is what lets a fixture captured here reproduce anywhere. It is also the one behavioural claim Get-Location makes: PathInfo.Path is the working directory VERBATIM, so any decoration would stop the rule matching.",
       "source": "(Get-Location).Path",
       "observe": "values",
-      "probe": { "kind": "none" },
-      "pending": "Get-Location has no implementation; the browser build's virtual cwd shape is not settled."
+      "probe": { "kind": "location-path" }
     },
     {
       "id": "normalisation.declared-volatile-clock",
@@ -835,6 +832,265 @@
       "volatile": "Reads the wall clock, so the value is a bare year that the residue scanner is right to flag. Declared here so the scanner's refusal is exercised by a case that is expected to survive it.",
       "probe": { "kind": "none" },
       "pending": "No clock abstraction yet."
+    },
+    {
+      "id": "date.format-single-char-is-standard",
+      "area": "date",
+      "command": "get-date",
+      "why": "A ONE-CHARACTER -Format is a STANDARD specifier, never a custom one: 'M' is the month-and-day pattern, not the month number. Reading it as custom is the single most likely way to get -Format wrong, and it is silent.",
+      "source": "Get-Date -Date '2026-03-04T05:06:07' -Format 'M'",
+      "observe": "values",
+      "probe": { "kind": "date-format", "args": { "format": "M" } }
+    },
+
+    {
+      "id": "date.format-two-chars-is-custom",
+      "area": "date",
+      "command": "get-date",
+      "why": "The mirror of the case above: TWO characters make the same letter a custom specifier, so 'MM' is the zero-padded month. The rule is about length, not about the letter.",
+      "source": "Get-Date -Date '2026-03-04T05:06:07' -Format 'MM'",
+      "observe": "values",
+      "probe": { "kind": "date-format", "args": { "format": "MM" } }
+    },
+
+    {
+      "id": "date.format-single-char-hour-throws",
+      "area": "date",
+      "command": "get-date",
+      "why": "'H' is a valid CUSTOM specifier but not a standard one, so a lone 'H' is REJECTED rather than treated as the hour. An implementation that silently formatted it would disagree with the reference implementation by producing an answer where there is none.",
+      "source": "try { Get-Date -Date '2026-03-04T05:06:07' -Format 'H' -ErrorAction Stop; 'no error' } catch { 'threw' }",
+      "observe": "values",
+      "probe": { "kind": "date-format-throws", "args": { "format": "H" } }
+    },
+
+    {
+      "id": "date.format-day-and-month-names",
+      "area": "date",
+      "command": "get-date",
+      "why": "Three letters give the abbreviation and four the full name, for both days and months. The names are en-US invariant here because the capture pins the culture.",
+      "source": "Get-Date -Date '2026-03-04T05:06:07' -Format 'ddd dddd MMM MMMM'",
+      "observe": "values",
+      "probe": { "kind": "date-format", "args": { "format": "ddd dddd MMM MMMM" } }
+    },
+
+    {
+      "id": "date.format-meridiem-and-twelve-hour",
+      "area": "date",
+      "command": "get-date",
+      "why": "'hh' is the 12-hour clock and 'HH' the 24-hour one; at 05:06 they agree, which is why 'tt' is in the same string — it is what makes the pair readable at all.",
+      "source": "Get-Date -Date '2026-03-04T05:06:07' -Format 'hh|HH|tt'",
+      "observe": "values",
+      "probe": { "kind": "date-format", "args": { "format": "hh|HH|tt" } }
+    },
+
+    {
+      "id": "date.format-fractional-second-widths",
+      "area": "date",
+      "command": "get-date",
+      "why": "A .NET DateTime keeps 100-nanosecond ticks, so 'fffffff' has seven digits and the shorter forms TRUNCATE rather than round. A millisecond-only model cannot produce 0089000.",
+      "source": "Get-Date -Date '2026-03-04T05:06:07.0089' -Format 'fffffff|ffffff|fff|ff'",
+      "observe": "values",
+      "probe": { "kind": "date-format", "args": { "format": "fffffff|ffffff|fff|ff", "millisecond": 8, "subMillisecondTicks": 9000} }
+    },
+
+    {
+      "id": "date.ticks-are-int64",
+      "area": "date",
+      "command": "get-date",
+      "why": "Ticks is 6.39e17, past Number.MAX_SAFE_INTEGER. A JavaScript number would silently lose the low digits, so the value has to be a bigint. Compared as text precisely so the comparison itself cannot round it.",
+      "source": "(Get-Date -Date '2026-03-04T05:06:07').Ticks.ToString()",
+      "observe": "values",
+      "probe": { "kind": "date-property", "args": { "property": "Ticks" } }
+    },
+
+    {
+      "id": "date.property-order",
+      "area": "date",
+      "command": "get-date",
+      "why": "Format-List follows declaration order, so the order is part of the contract and not a detail. Get-Date ADDS DisplayHint as a NoteProperty; a bare [datetime] has no such member.",
+      "source": "((Get-Date -Date '2026-03-04T05:06:07').PSObject.Properties | ForEach-Object { $_.Name }) -join ','",
+      "observe": "values",
+      "probe": { "kind": "date-property-names" }
+    },
+
+    {
+      "id": "date.uformat-day-numbering-wednesday",
+      "area": "date",
+      "command": "get-date",
+      "why": "%u and %w are different numbering schemes that happen to AGREE on a Wednesday. Recorded so its Sunday twin below is visibly the discriminating case rather than an arbitrary second example.",
+      "source": "Get-Date -Date '2026-03-04T05:06:07' -UFormat '%u|%w'",
+      "observe": "values",
+      "probe": { "kind": "date-uformat", "args": { "format": "%u|%w" } }
+    },
+
+    {
+      "id": "date.uformat-day-numbering-sunday",
+      "area": "date",
+      "command": "get-date",
+      "why": "The discriminating case: on a Sunday %u is 7 (ISO, Monday-first) and %w is 0 (C, Sunday-first). An implementation that used one number for both passes the Wednesday case and fails here.",
+      "source": "Get-Date -Date '2026-03-08T05:06:07' -UFormat '%u|%w'",
+      "observe": "values",
+      "probe": { "kind": "date-uformat", "args": { "format": "%u|%w", "day": 8} }
+    },
+
+    {
+      "id": "date.uformat-week-numbers",
+      "area": "date",
+      "command": "get-date",
+      "why": "Three week numberings that disagree on the same day: %V is ISO-8601, %U counts from the first Sunday and %W from the first Monday. Only %V is 10.",
+      "source": "Get-Date -Date '2026-03-04T05:06:07' -UFormat '%j|%V|%U|%W'",
+      "observe": "values",
+      "probe": { "kind": "date-uformat", "args": { "format": "%j|%V|%U|%W" } }
+    },
+
+    {
+      "id": "date.uformat-padding-variants",
+      "area": "date",
+      "command": "get-date",
+      "why": "The padding is the whole difference between these pairs: %d is zero-padded and %e SPACE-padded, %H zero-padded and %k space-padded. Trimming either would look like a cosmetic tidy-up and change the output width.",
+      "source": "Get-Date -Date '2026-03-04T05:06:07' -UFormat '%d|%e|%H|%k|%I|%l'",
+      "observe": "values",
+      "probe": { "kind": "date-uformat", "args": { "format": "%d|%e|%H|%k|%I|%l" } }
+    },
+
+    {
+      "id": "date.uformat-unknown-specifier-keeps-the-letter",
+      "area": "date",
+      "command": "get-date",
+      "why": "An unrecognised specifier drops the percent and KEEPS the letter rather than erroring or passing the pair through. Guessed either way, this is wrong.",
+      "source": "Get-Date -Date '2026-03-04T05:06:07' -UFormat '%q'",
+      "observe": "values",
+      "probe": { "kind": "date-uformat", "args": { "format": "%q" } }
+    },
+
+    {
+      "id": "date.uformat-percent-escape",
+      "area": "date",
+      "command": "get-date",
+      "why": "%% is a literal percent. Needed because the previous case makes an unknown specifier swallow its percent, so the escape has to be distinguishable from it.",
+      "source": "Get-Date -Date '2026-03-04T05:06:07' -UFormat 'a%%b'",
+      "observe": "values",
+      "probe": { "kind": "date-uformat", "args": { "format": "a%%b" } }
+    },
+
+    {
+      "id": "random.maximum-is-exclusive-single-value",
+      "area": "random",
+      "command": "get-random",
+      "why": "THE case for the bound. Two hundred draws from [0,1) produce only 0, which is possible only if -Maximum is exclusive. An inclusive implementation yields 0 and 1 and fails here.",
+      "source": "(1..200 | ForEach-Object { Get-Random -Minimum 0 -Maximum 1 } | Sort-Object -Unique) -join ','",
+      "observe": "values",
+      "probe": { "kind": "random-range-unique", "args": { "minimum": 0, "maximum": 1} }
+    },
+
+    {
+      "id": "random.maximum-is-exclusive-pair",
+      "area": "random",
+      "command": "get-random",
+      "why": "The other half: [0,2) really does produce both 0 and 1, so the case above is about exclusivity and not about the generator being stuck.",
+      "source": "(1..200 | ForEach-Object { Get-Random -Minimum 0 -Maximum 2 } | Sort-Object -Unique) -join ','",
+      "observe": "values",
+      "probe": { "kind": "random-range-unique", "args": { "minimum": 0, "maximum": 2} }
+    },
+
+    {
+      "id": "random.empty-range-is-an-error",
+      "area": "random",
+      "command": "get-random",
+      "why": "Minimum equal to Maximum is a TERMINATING argument error, not a degenerate range that always returns the bound. The obvious implementation answers 5; the reference implementation refuses.",
+      "source": "try { Get-Random -Minimum 5 -Maximum 5 -ErrorAction Stop } catch { $_.FullyQualifiedErrorId }",
+      "observe": "values",
+      "probe": { "kind": "random-range-error", "args": { "minimum": 5, "maximum": 5, "field": "errorId" } }
+    },
+
+    {
+      "id": "random.empty-range-error-message",
+      "area": "random",
+      "command": "get-random",
+      "why": "The id alone is not the whole contract: the message names both values, and a script or a user reads it. Compared verbatim so a reworded message is a visible change.",
+      "source": "try { Get-Random -Minimum 5 -Maximum 5 -ErrorAction Stop } catch { $_.Exception.Message }",
+      "observe": "values",
+      "probe": { "kind": "random-range-error", "args": { "minimum": 5, "maximum": 5, "field": "message" } }
+    },
+
+    {
+      "id": "random.count-larger-than-the-list",
+      "area": "random",
+      "command": "get-random",
+      "why": "-Count 5 over three items returns THREE, each exactly once: it is a sample without replacement, capped at the list length, not five draws with repeats.",
+      "source": "((Get-Random -InputObject 'a','b','c' -Count 5) | Sort-Object) -join ','",
+      "observe": "values",
+      "probe": { "kind": "random-sample", "args": { "items": ["a", "b", "c"], "count": 5} }
+    },
+
+    {
+      "id": "history.info-property-order",
+      "area": "history",
+      "command": "get-history",
+      "why": "HistoryInfo is an OBJECT, not a numbered line, and Duration is DERIVED from the two timestamps rather than stored beside them. The order is what Format-List follows.",
+      "source": "Add-History -InputObject ([pscustomobject]@{CommandLine='Get-Date';ExecutionStatus='Completed';StartExecutionTime=[datetime]'2026-01-01T00:00:00';EndExecutionTime=[datetime]'2026-01-01T00:00:01'}); (((Get-History)[0]).PSObject.Properties | ForEach-Object { $_.Name }) -join ','",
+      "observe": "values",
+      "probe": { "kind": "history-property-names" }
+    },
+
+    {
+      "id": "help.auto-generated-view-typenames",
+      "area": "help",
+      "command": "get-help",
+      "why": "A command with no MAML help file gets AUTO-GENERATED help, and its chain is ExtendedCmdletHelpInfo, not MamlCommandHelpInfo. Every command in this project is in that position, so picking the MAML shape — which the first implementation did — was wrong.",
+      "source": "(Get-Help Get-Random).PSObject.TypeNames -join ','",
+      "observe": "values",
+      "probe": { "kind": "help-view-typenames", "args": { "view": null} }
+    },
+
+    {
+      "id": "help.full-view-adds-a-twin-per-name",
+      "area": "help",
+      "command": "get-help",
+      "why": "-Full changes the TYPE NAME and nothing else, and it adds a #FullView twin for EVERY base name — six entries, not two. That is the whole Get-Help finding: the view is a formatting decision, so the object is unchanged.",
+      "source": "(Get-Help Get-Random -Full).PSObject.TypeNames -join ','",
+      "observe": "values",
+      "probe": { "kind": "help-view-typenames", "args": { "view": "Full" } }
+    },
+
+    {
+      "id": "help.parameter-descriptor-members",
+      "area": "help",
+      "command": "get-help",
+      "why": "-Parameter is the one switch that really does return a different object. Its members differ from the MAML descriptor's, which is the second half of the shape mix-up above.",
+      "source": "((Get-Help Get-Random -Parameter Count).PSObject.Properties | ForEach-Object { $_.Name }) -join ','",
+      "observe": "values",
+      "probe": { "kind": "help-parameter-names" }
+    },
+
+    {
+      "id": "commands.cmdlet-info-hierarchy",
+      "area": "commands",
+      "command": "get-command",
+      "why": "Get-Command emits typed CommandInfo objects, and the formatter keys off the chain. A single label would be indistinguishable from the alias case below.",
+      "source": "(Get-Command Get-Date).PSObject.TypeNames -join ','",
+      "observe": "values",
+      "probe": { "kind": "command-typenames", "args": { "commandType": "Cmdlet" } }
+    },
+
+    {
+      "id": "commands.alias-info-hierarchy",
+      "area": "commands",
+      "command": "get-command",
+      "why": "An alias reports AliasInfo even though the command behind it is a cmdlet, and reports its OWN name. Resolving the alias to its target would answer a different question.",
+      "source": "(Get-Command gcm).PSObject.TypeNames -join ','",
+      "observe": "values",
+      "probe": { "kind": "command-typenames", "args": { "commandType": "Alias" } }
+    },
+
+    {
+      "id": "version.table-key-order",
+      "area": "version",
+      "command": "$psversiontable",
+      "why": "The key ORDER is what the Name/Value table renders, and PSVersion is first rather than alphabetical. Nine keys, and none of them invented: OS and Platform describe the simulated machine, and the version comes from the resolved profile.",
+      "source": "($PSVersionTable.Keys) -join ','",
+      "observe": "values",
+      "probe": { "kind": "version-table-keys", "args": { "version": "7.6.5" } }
     }
   ]
 }

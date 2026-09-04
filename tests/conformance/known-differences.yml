@@ -60,11 +60,28 @@ differences:
       agree. It is recorded as `matches` rather than `differs` because it has
       been MEASURED not to change any answer in the corpus: the capture evaluates
       every case under en-US, under this host's real culture (zh-TW) and under a
-      stress culture with different separators (de-DE), and the only cases whose
-      results move are culture.tostring-follows-culture and
-      culture.format-operator-follows-culture -- neither of which is a
-      comparison. Collation outside the Latin script has not been probed and is
-      not claimed.
+      stress culture with different separators (de-DE), and no COMPARISON case
+      moves. Cases outside comparison do move -- the two culture.* cases and the
+      three date-formatting ones covered by date-formatting-pinned-to-en-us --
+      and none of them is a comparison. Collation outside the Latin script has
+      not been probed and is not claimed.
+
+  - id: date-formatting-pinned-to-en-us
+    kind: deliberate
+    expect: matches
+    cases: [date.format-single-char-is-standard, date.format-day-and-month-names, date.format-meridiem-and-twelve-hour]
+    reason: >-
+      Get-Date's -Format and -UFormat emit en-US invariant names -- March,
+      Wednesday, AM -- rather than following the host culture, for the same
+      reason psobject.ts pins its collator: a browser tab has no reliable culture
+      to follow and a differential expectation that moves with the runner is not
+      an expectation. The reference implementation DOES follow CurrentCulture,
+      and the capture proves it: these three cases are the ones whose results
+      change under the de-DE stress culture, which is why they are named here.
+      Recorded as `matches` rather than `differs` because the capture pins en-US,
+      so the answers agree under the conditions the fixture was taken in; the
+      divergence is in what the two implementations would do on a German
+      machine, not in what they did here.
 
   - id: typename-of-null-is-total
     kind: deliberate
