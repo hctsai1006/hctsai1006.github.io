@@ -1,0 +1,645 @@
+/**
+ * snapshot.ts — export before people can lose work, and the overlay graft.
+ *
+ * PR-09's risk section is unambiguous: "OPFS is deleted on site-data clear with
+ * no warning from the browser; export/import must land in the same PR." Not a
+ * later PR. A user clears cookies for an unrelated reason, and everything they
+ * wrote in `nano` is gone, with no dialog, no undo, and nothing that even tells
+ * them it happened. So this exists before the storage it protects does.
+ *
+ * ---------------------------------------------------------------------------
+ * ONE MECHANISM, TWO JOBS
+ * ---------------------------------------------------------------------------
+ *
+ * The export a user downloads and the overlay the page persists on every write
+ * are the SAME format at two scopes:
+ *
+ *   'full'     every node UNDER the root, with its bytes. Survives a cleared
+ *              origin, an OPFS that never comes back, a move to another
+ *              browser. The mount root itself is not an entry: it always exists,
+ *              and its ownership is the seed's to set, not a restore's.
+ *   'overlay'  only what the user changed. Seed files contribute at most their
+ *              mode and mtime, never their content, because the content comes
+ *              from re-running the seed on the next boot — which is what makes
+ *              a portfolio update visible to a returning visitor.
+ *
+ * Two formats would be two parsers, two version fields and two ways to be
+ * subtly wrong about the same tree. v1 has exactly one serialiser (`fsSer`) and
+ * uses it only for the overlay; the full export is what it is missing.
+ *
+ * ---------------------------------------------------------------------------
+ * WRITTEN AGAINST THE INTERFACE, NOT AGAINST THE MEMORY BACKEND
+ * ---------------------------------------------------------------------------
+ *
+ * Every read here is `readdir`, `stat` or `readBytes`, and every write is
+ * `mkdir`, `writeBytes`, `chmod` or `utimes`. Nothing reaches into a backend's
+ * internals. That is the reason `origin` is a field of `FileStat` rather than a
+ * private of `MemoryStorage`: without it in the interface, the overlay scope
+ * would need one implementation per backend, and the first thing to diverge
+ * would be the export that exists to prevent data loss.
+ *
+ * ---------------------------------------------------------------------------
+ * REFUSING TO RESTORE
+ * ---------------------------------------------------------------------------
+ *
+ * Three refusals, all before a single node is touched:
+ *
+ *   1. wrong `format` — the bytes are not a snapshot at all;
+ *   2. unknown `version` — a newer build wrote it, and guessing at a format
+ *      from the future is how you silently drop the fields you do not know
+ *      about. A refusal is recoverable; a lossy restore is not;
+ *   3. checksum mismatch — the payload was truncated or corrupted.
+ *
+ * The checksum is FNV-1a 32-bit. It detects CORRUPTION and nothing else: it is
+ * not a MAC, it stops no one who wants to edit the file, and it is not claimed
+ * to. v1 already learned to validate this blob's metadata on the way back in
+ * (`applyMeta` regex-checks the mode string before trusting it) because
+ * localStorage is user-editable; every field here is validated on the same
+ * reasoning.
+ */
+
+import { err, ok } from './types.ts';
+import type {
+  FileStat,
+  NodeOrigin,
+  Result,
+  SeedSpec,
+  StorageBackend,
+  StorageError,
+} from './types.ts';
+
+// ---------------------------------------------------------------------------
+// the format
+// ---------------------------------------------------------------------------
+
+export const SNAPSHOT_FORMAT = 'browsershell.fs.snapshot';
+
+/**
+ * Bumped when the ENTRY SHAPE changes, never for a content change.
+ *
+ * Version 1 has no tombstones, which is the known limitation of the seed/overlay
+ * split recorded in `vfs.ts`: deleting a seed file does not persist. Adding them
+ * is a third entry kind and therefore a version 2, and the refusal below is what
+ * makes that upgrade safe to make later — a version 1 reader will decline a
+ * version 2 file rather than silently ignore its tombstones and resurrect every
+ * deleted file.
+ */
+export const SNAPSHOT_VERSION = 1;
+
+export type SnapshotScope = 'full' | 'overlay';
+
+/**
+ * One node. Short keys because the overlay is written on every mutation and
+ * v1's blob lives in localStorage, where the 5 MB ceiling is real.
+ */
+export interface SnapshotEntry {
+  /** 'f' file, 'd' directory. */
+  readonly t: 'f' | 'd';
+  /** Absolute path. */
+  readonly p: string;
+  /** Base64 file content. Absent for a directory, and for a seed node in an overlay. */
+  readonly c?: string;
+  /**
+   * 1 when this node's origin is `seed`.
+   *
+   * It records ORIGIN and nothing else. Whether the content is carried is
+   * decided by the document's SCOPE: an overlay omits seed content because the
+   * next boot rebuilds it, a full export carries everything because there may
+   * be no next seed. Letting this one flag mean both is how a full restore of a
+   * seeded tree silently drops every seed file — which it did, until a test
+   * caught it.
+   */
+  readonly s?: 1;
+  /** Mode, when it deviates from what the seed declared (or always, when full). */
+  readonly m?: number;
+  /** mtime, when it deviates from the seed time (or always, when full). */
+  readonly mt?: number;
+}
+
+export interface SnapshotDocument {
+  readonly format: typeof SNAPSHOT_FORMAT;
+  readonly version: number;
+  readonly scope: SnapshotScope;
+  /** Epoch ms, from the caller's clock. */
+  readonly createdAt: number;
+  /** The seed timestamp this overlay was taken against. Null for a full export. */
+  readonly seedTime: number | null;
+  /** FNV-1a 32-bit of the canonical entries JSON, lower-case hex. */
+  readonly checksum: string;
+  readonly entries: readonly SnapshotEntry[];
+  /** Subtrees the export could not read. Empty is the good case. */
+  readonly skipped: readonly string[];
+}
+
+// ---------------------------------------------------------------------------
+// base64
+// ---------------------------------------------------------------------------
+
+const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+
+/**
+ * Hand-rolled rather than `btoa` or `Uint8Array.prototype.toBase64`.
+ *
+ * `btoa` takes a latin-1 STRING, so a byte array has to be turned into one
+ * first, and the obvious `String.fromCharCode(...bytes)` blows the argument
+ * limit on a file of any size. `toBase64` is the right API and is too new to
+ * depend on — it is not in the baseline this project targets, and a storage
+ * export that throws on an older browser fails at exactly the moment it was
+ * built to help. Twenty lines with a test is the cheaper end of that trade.
+ */
+export function toBase64(bytes: Uint8Array): string {
+  let out = '';
+  for (let i = 0; i < bytes.length; i += 3) {
+    const a = bytes[i] ?? 0;
+    const b = bytes[i + 1];
+    const c = bytes[i + 2];
+    const triple = (a << 16) | ((b ?? 0) << 8) | (c ?? 0);
+    out += ALPHABET[(triple >> 18) & 0x3f] ?? '';
+    out += ALPHABET[(triple >> 12) & 0x3f] ?? '';
+    out += b === undefined ? '=' : (ALPHABET[(triple >> 6) & 0x3f] ?? '');
+    out += c === undefined ? '=' : (ALPHABET[triple & 0x3f] ?? '');
+  }
+  return out;
+}
+
+/** Null on anything that is not well-formed base64 — the blob is user-editable. */
+export function fromBase64(text: string): Uint8Array | null {
+  if (text.length % 4 !== 0) return null;
+  const body = text.endsWith('==') ? text.slice(0, -2) : text.endsWith('=') ? text.slice(0, -1) : text;
+  const padding = text.length - body.length;
+  const out = new Uint8Array((text.length / 4) * 3 - padding);
+
+  let index = 0;
+  for (let i = 0; i < body.length; i += 4) {
+    let triple = 0;
+    let bits = 0;
+    for (let j = 0; j < 4 && i + j < body.length; j += 1) {
+      const value = ALPHABET.indexOf(body[i + j] ?? '');
+      if (value === -1) return null;
+      triple = (triple << 6) | value;
+      bits += 6;
+    }
+    triple <<= 24 - bits;
+    for (let shift = 16; shift >= 0 && index < out.length; shift -= 8) {
+      out[index] = (triple >> shift) & 0xff;
+      index += 1;
+    }
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// checksum
+// ---------------------------------------------------------------------------
+
+const ENCODER = new TextEncoder();
+
+/**
+ * FNV-1a, 32-bit. Corruption detection, NOT authentication.
+ *
+ * Chosen because it needs no dependency, runs in a worker, and is deterministic
+ * across every engine — the three things a format-integrity check has to be.
+ * Anyone editing the file can recompute it; that is not the threat model. The
+ * threat is a truncated download and a half-written localStorage value, both of
+ * which this catches.
+ */
+export function fnv1a32(text: string): string {
+  let hash = 0x811c9dc5;
+  const bytes = ENCODER.encode(text);
+  for (const byte of bytes) {
+    hash ^= byte;
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(16).padStart(8, '0');
+}
+
+// ---------------------------------------------------------------------------
+// export
+// ---------------------------------------------------------------------------
+
+export interface SnapshotOptions {
+  readonly scope: SnapshotScope;
+  /** Epoch ms for `createdAt`. Injected, so a snapshot is reproducible in a test. */
+  readonly now: number;
+  /**
+   * The seed this overlay is taken against.
+   *
+   * With it, a seed node is recorded only when its mode or mtime DEVIATES —
+   * which is v1's `fsSer` rule (`if(n.mode!==DEFMODE[n.t]) o.m=n.mode`) and the
+   * reason a freshly booted, untouched filesystem serialises to almost nothing.
+   * Without it, every seed node is recorded, which is correct but larger.
+   */
+  readonly seed?: SeedSpec;
+  /** Where to start. Defaults to the mount root. */
+  readonly root?: string;
+}
+
+interface SeedExpectation {
+  readonly mode: number;
+  readonly mtime: number;
+}
+
+function seedExpectations(spec: SeedSpec | undefined): Map<string, SeedExpectation> | null {
+  if (spec === undefined) return null;
+  const map = new Map<string, SeedExpectation>();
+  for (const entry of spec.entries) {
+    if (entry.mode === undefined) continue;
+    map.set(entry.path, { mode: entry.mode, mtime: spec.time });
+  }
+  return map;
+}
+
+/**
+ * Walk the tree through the interface and build the document.
+ *
+ * A subtree the caller cannot read is SKIPPED and named, not an error. That is
+ * what a user-level backup does — `/root` is 0o700 and root-owned, so a visitor
+ * genuinely cannot read it, and failing the whole export over a directory whose
+ * contents are seed data anyway would mean nobody ever gets an export.
+ */
+export async function createSnapshot(
+  backend: StorageBackend,
+  options: SnapshotOptions,
+): Promise<Result<SnapshotDocument>> {
+  const entries: SnapshotEntry[] = [];
+  const skipped: string[] = [];
+  const expectations = seedExpectations(options.seed);
+  const seedTime = options.seed?.time ?? null;
+  const full = options.scope === 'full';
+
+  const record = async (stat: FileStat): Promise<Result<void>> => {
+    const isSeed = stat.origin === 'seed';
+
+    if (isSeed && !full) {
+      // A seed node carries no content. It is recorded only when the user
+      // changed something about it that the next boot would otherwise lose.
+      const expected = expectations?.get(stat.path);
+      const modeChanged = expected === undefined || stat.mode !== expected.mode;
+      const timeChanged = seedTime === null || stat.mtime !== seedTime;
+      if (expectations !== null && !modeChanged && !timeChanged) return ok(undefined);
+      entries.push({
+        t: stat.kind === 'directory' ? 'd' : 'f',
+        p: stat.path,
+        s: 1,
+        ...(modeChanged ? { m: stat.mode } : {}),
+        ...(timeChanged ? { mt: stat.mtime } : {}),
+      });
+      return ok(undefined);
+    }
+
+    if (stat.kind === 'directory') {
+      entries.push({
+        t: 'd',
+        p: stat.path,
+        m: stat.mode,
+        mt: stat.mtime,
+        ...(isSeed ? { s: 1 as const } : {}),
+      });
+      return ok(undefined);
+    }
+
+    const bytes = await backend.readBytes(stat.path);
+    if (!bytes.ok) {
+      skipped.push(stat.path);
+      return ok(undefined);
+    }
+    entries.push({
+      t: 'f',
+      p: stat.path,
+      c: toBase64(bytes.value),
+      m: stat.mode,
+      mt: stat.mtime,
+      ...(isSeed ? { s: 1 as const } : {}),
+    });
+    return ok(undefined);
+  };
+
+  const walk = async (path: string): Promise<Result<void>> => {
+    const rows = await backend.readdir(path);
+    if (!rows.ok) {
+      skipped.push(path);
+      return ok(undefined);
+    }
+    // Sorted so two exports of the same tree are byte-identical. A snapshot
+    // whose bytes depend on insertion order cannot be diffed or compared.
+    const sorted = [...rows.value].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+    for (const row of sorted) {
+      const written = await record(row.stat);
+      if (!written.ok) return written;
+      if (row.stat.kind === 'directory') {
+        const descended = await walk(row.stat.path);
+        if (!descended.ok) return descended;
+      }
+    }
+    return ok(undefined);
+  };
+
+  const walked = await walk(options.root ?? '/');
+  if (!walked.ok) return walked;
+
+  const payload = JSON.stringify(entries);
+  return ok({
+    format: SNAPSHOT_FORMAT,
+    version: SNAPSHOT_VERSION,
+    scope: options.scope,
+    createdAt: options.now,
+    seedTime,
+    checksum: fnv1a32(payload),
+    entries,
+    skipped,
+  });
+}
+
+export function encodeSnapshot(document: SnapshotDocument): Uint8Array {
+  return ENCODER.encode(JSON.stringify(document));
+}
+
+/** Build and serialise in one call. What a `Export-FileSystem` command runs. */
+export async function exportSnapshot(
+  backend: StorageBackend,
+  options: SnapshotOptions,
+): Promise<Result<Uint8Array>> {
+  const document = await createSnapshot(backend, options);
+  if (!document.ok) return document;
+  return ok(encodeSnapshot(document.value));
+}
+
+// ---------------------------------------------------------------------------
+// import
+// ---------------------------------------------------------------------------
+
+const DECODER = new TextDecoder('utf-8', { fatal: false });
+
+function refuse(reason: string, message: string): Result<never> {
+  return err({
+    code: 'EINVAL',
+    path: '<snapshot>',
+    syscall: 'restore',
+    message,
+    reason,
+  });
+}
+
+function isEntry(value: unknown): value is SnapshotEntry {
+  if (typeof value !== 'object' || value === null) return false;
+  const row = value as Record<string, unknown>;
+  if (row['t'] !== 'f' && row['t'] !== 'd') return false;
+  if (typeof row['p'] !== 'string' || !row['p'].startsWith('/')) return false;
+  if (row['c'] !== undefined && typeof row['c'] !== 'string') return false;
+  if (row['s'] !== undefined && row['s'] !== 1) return false;
+  if (row['m'] !== undefined && !isSaneMode(row['m'])) return false;
+  if (row['mt'] !== undefined && !isSaneTime(row['mt'])) return false;
+  return true;
+}
+
+/** 0 to 0o7777. v1 regex-checks the same field; the reasoning is identical. */
+function isSaneMode(value: unknown): boolean {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 0o7777;
+}
+
+function isSaneTime(value: unknown): boolean {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0;
+}
+
+/**
+ * Parse and validate. Nothing is written before all three refusals have passed.
+ */
+export function decodeSnapshot(bytes: Uint8Array): Result<SnapshotDocument> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(DECODER.decode(bytes));
+  } catch {
+    return refuse('not-json', 'the snapshot is not valid JSON');
+  }
+  if (typeof parsed !== 'object' || parsed === null) {
+    return refuse('not-an-object', 'the snapshot is not an object');
+  }
+  const doc = parsed as Record<string, unknown>;
+
+  if (doc['format'] !== SNAPSHOT_FORMAT) {
+    return refuse(
+      'wrong-format',
+      `these bytes are not a ${SNAPSHOT_FORMAT}; the format field says ${JSON.stringify(doc['format'])}`,
+    );
+  }
+  if (doc['version'] !== SNAPSHOT_VERSION) {
+    return refuse(
+      'unsupported-version',
+      `this build understands snapshot version ${String(SNAPSHOT_VERSION)}, and the file is ` +
+        `version ${String(doc['version'])}. Refusing rather than guessing: a restore that ` +
+        'ignores the fields it does not recognise loses them silently.',
+    );
+  }
+  const scope = doc['scope'];
+  if (scope !== 'full' && scope !== 'overlay') {
+    return refuse('unknown-scope', `unknown snapshot scope ${JSON.stringify(scope)}`);
+  }
+  const raw = doc['entries'];
+  if (!Array.isArray(raw)) return refuse('no-entries', 'the snapshot has no entries array');
+
+  const entries: SnapshotEntry[] = [];
+  for (const row of raw) {
+    if (!isEntry(row)) return refuse('bad-entry', `a snapshot entry is malformed: ${JSON.stringify(row)}`);
+    entries.push(row);
+  }
+
+  const checksum = doc['checksum'];
+  if (typeof checksum !== 'string') return refuse('no-checksum', 'the snapshot has no checksum');
+  const actual = fnv1a32(JSON.stringify(entries));
+  if (actual !== checksum) {
+    return refuse(
+      'checksum-mismatch',
+      `the snapshot is corrupt: checksum ${checksum} does not match the entries (${actual})`,
+    );
+  }
+
+  return ok({
+    format: SNAPSHOT_FORMAT,
+    version: SNAPSHOT_VERSION,
+    scope,
+    createdAt: isSaneTime(doc['createdAt']) ? (doc['createdAt'] as number) : 0,
+    seedTime: isSaneTime(doc['seedTime']) ? (doc['seedTime'] as number) : null,
+    checksum,
+    entries,
+    skipped: [],
+  });
+}
+
+export interface RestoreReport {
+  /** Nodes written or updated. */
+  readonly restored: number;
+  /**
+   * Seed entries whose path no longer exists in this version's seed.
+   *
+   * DROPPED, not materialised. v1 creates a file whose content reads
+   * "(seed content unavailable)", which puts a broken file in the user's home
+   * directory forever; if the site removed the file, it is gone.
+   */
+  readonly dropped: readonly string[];
+  /**
+   * Paths where the seed now has a different kind than the overlay recorded.
+   * The seed wins — v1 makes the same call, and it is the right one: the site's
+   * shape is authoritative and the overlay is a patch on top of it.
+   */
+  readonly conflicts: readonly string[];
+  /** Entries that failed to write, with the reason. */
+  readonly failures: readonly { readonly path: string; readonly error: StorageError }[];
+}
+
+export interface RestoreOptions {
+  /** Where to put restored nodes. Defaults to the mount root. */
+  readonly root?: string;
+}
+
+/**
+ * Graft a snapshot onto whatever is already mounted.
+ *
+ * For an overlay this runs straight after `installImage`, and the rules are
+ * v1's `graftUser`, preserved and enumerated in `vfs.ts`. For a full snapshot
+ * it runs against an empty mount and every entry carries its own content.
+ *
+ * Runs AS THE USER, through the ordinary write API. That is deliberate: a
+ * snapshot is a file someone can hand you, and a restore that bypassed
+ * permission checks would let a crafted file write into `/etc`. The seed is
+ * installed privileged because it is the image; the overlay is not.
+ */
+export async function restoreSnapshot(
+  backend: StorageBackend,
+  document: SnapshotDocument,
+  options: RestoreOptions = {},
+): Promise<Result<RestoreReport>> {
+  const prefix = options.root ?? '/';
+  let restored = 0;
+  const dropped: string[] = [];
+  const conflicts: string[] = [];
+  const failures: { path: string; error: StorageError }[] = [];
+
+  // TWO PASSES, and both orderings are load-bearing.
+  //
+  // Pass 1 creates, parents before children, so a nested directory is never
+  // created implicitly and left with a mode nobody chose.
+  //
+  // Pass 2 applies mode and mtime, CHILDREN BEFORE PARENTS, for two reasons
+  // that both bite in one pass. A directory restored to 0o500 before its
+  // contents are written locks the restore out of its own tree. And adding a
+  // child moves the parent's mtime, so a directory stamped before its children
+  // exist gets that stamp overwritten seconds later — which is how a restored
+  // tree quietly ends up with every directory dated "now". v1's `graftUser`
+  // sets mode and mtime before it recurses and has the second bug.
+  const byDepth = [...document.entries].sort(
+    (a, b) => depth(a.p) - depth(b.p) || (a.p < b.p ? -1 : 1),
+  );
+  const created: { path: string; entry: SnapshotEntry }[] = [];
+
+  for (const entry of byDepth) {
+    const path = prefix === '/' ? entry.p : `${prefix}${entry.p}`;
+    const existing = await backend.stat(path);
+    const wantedKind = entry.t === 'd' ? 'directory' : 'file';
+    const origin: NodeOrigin = entry.s === 1 ? 'seed' : 'user';
+    // Only an OVERLAY leaves seed content to the next boot. A full snapshot may
+    // be all that is left after a site-data clear, so it materialises everything.
+    const metadataOnly = document.scope === 'overlay' && entry.s === 1;
+
+    if (metadataOnly) {
+      // Only its metadata is ours to restore, and only if this version's seed
+      // still has it, with the same kind.
+      if (!existing.ok) {
+        dropped.push(path);
+        continue;
+      }
+      if (existing.value.kind !== wantedKind) {
+        conflicts.push(path);
+        continue;
+      }
+      created.push({ path, entry });
+      continue;
+    }
+
+    if (existing.ok && existing.value.kind !== wantedKind) {
+      // The seed replaced a user path with a node of the other kind. Seed wins.
+      conflicts.push(path);
+      continue;
+    }
+
+    if (entry.t === 'd') {
+      if (!existing.ok) {
+        const made = await backend.mkdir(path, { recursive: true, origin });
+        if (!made.ok) {
+          failures.push({ path, error: made.error });
+          continue;
+        }
+      }
+    } else {
+      const content = entry.c === undefined ? new Uint8Array(0) : fromBase64(entry.c);
+      if (content === null) {
+        failures.push({
+          path,
+          error: {
+            code: 'EINVAL',
+            path,
+            syscall: 'restore',
+            message: 'the entry content is not valid base64',
+            reason: 'bad-base64',
+          },
+        });
+        continue;
+      }
+      const written = await backend.writeBytes(path, content, {
+        createParents: true,
+        origin,
+        ...(entry.m === undefined ? {} : { mode: entry.m }),
+      });
+      if (!written.ok) {
+        failures.push({ path, error: written.error });
+        continue;
+      }
+    }
+    created.push({ path, entry });
+  }
+
+  for (const { path, entry } of created.reverse()) {
+    if (await applyMeta(backend, path, entry, failures)) restored += 1;
+  }
+
+  return ok({ restored, dropped, conflicts, failures });
+}
+
+async function applyMeta(
+  backend: StorageBackend,
+  path: string,
+  entry: SnapshotEntry,
+  failures: { path: string; error: StorageError }[],
+): Promise<boolean> {
+  if (entry.m !== undefined) {
+    const changed = await backend.chmod(path, entry.m);
+    if (!changed.ok) {
+      failures.push({ path, error: changed.error });
+      return false;
+    }
+  }
+  if (entry.mt !== undefined) {
+    const stamped = await backend.utimes(path, { mtime: entry.mt }, false);
+    if (!stamped.ok) {
+      failures.push({ path, error: stamped.error });
+      return false;
+    }
+  }
+  return true;
+}
+
+/** Decode and restore in one call. What `Import-FileSystem` runs. */
+export async function importSnapshot(
+  backend: StorageBackend,
+  bytes: Uint8Array,
+  options: RestoreOptions = {},
+): Promise<Result<RestoreReport>> {
+  const document = decodeSnapshot(bytes);
+  if (!document.ok) return document;
+  return restoreSnapshot(backend, document.value, options);
+}
+
+function depth(path: string): number {
+  let count = 0;
+  for (const character of path) if (character === '/') count += 1;
+  return count;
+}
