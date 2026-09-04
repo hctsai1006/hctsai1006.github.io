@@ -76,19 +76,32 @@ describe('integer overflow escapes to Double, never to Int64', () => {
     // pwsh: 2147483648 + 1           ->  2147483649            System.Int64
     // pwsh: 10000000000 / 2          ->  5000000000            System.Int64
     assert.equal(arithmetic('*', 4611686018427387904, 2).typeName, 'System.Double');
-    assert.equal(arithmetic('*', 9223372036854775807, 2).typeName, 'System.Double');
+    // 9223372036854775807 is not representable: JavaScript rounds it to 2**63,
+    // and pwsh types THAT literal Decimal, so multiplying it gives Decimal.
+    // Measured on the value we actually hold, not the one that was typed:
+    //   9223372036854775808 * 2  ->  18446744073709551616  System.Decimal
+    // This expected System.Double until typeNameOf's Int64 bound was corrected —
+    // the old bound was a float64 literal that rounds up past itself, so 2**63
+    // was classified Int64 and the multiply looked like an overflow escape.
+    assert.equal(arithmetic('*', 9223372036854775807, 2).typeName, 'System.Decimal');
     assert.deepEqual(t('+', 2147483648, 1), [2147483649, 'System.Int64']);
     assert.deepEqual(t('/', 10000000000, 2), [5000000000, 'System.Int64']);
   });
 
-  it('RECORDS A LIMIT: Int64.MaxValue itself is not representable, so +0 diverges', () => {
-    // pwsh: 9223372036854775807 + 0  ->  9223372036854775807  System.Int64
-    // Here it answers Double, because the literal rounded to 2^63 before any
-    // arithmetic saw it -- the same JavaScript number that 4611686018427387904*2
-    // produces, which pwsh DOES call an overflow. No rule can separate them; the
-    // exclusive bound is chosen so the genuine overflow above is detected.
-    // Written down as a test so the trade is visible rather than folklore.
-    assert.equal(arithmetic('+', 9223372036854775807, 0).typeName, 'System.Double');
+  it('RECORDS A LIMIT: Int64.MaxValue itself is not representable', () => {
+    // pwsh: 9223372036854775807 + 0  ->  System.Int64
+    //       9223372036854775808 + 0  ->  System.Decimal
+    // Those are the SAME JavaScript number, so one of the two answers is
+    // unreachable here. It gives Decimal, which is pwsh's answer for the value
+    // actually held — the literal rounded up to 2**63 before any arithmetic saw
+    // it, and pwsh calls that Decimal.
+    //
+    // The trade is still real and still visible: 4611686018427387904 * 2
+    // produces the same 2**63, and pwsh calls THAT an Int64 overflow escaping to
+    // Double. No rule can separate a value from how it was reached. The
+    // operands' own types do separate them, which is why the multiply above
+    // still answers Double while this answers Decimal.
+    assert.equal(arithmetic('+', 9223372036854775807, 0).typeName, 'System.Decimal');
     assert.equal(9223372036854775807, 9223372036854775808, 'the same double');
   });
 

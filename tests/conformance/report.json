@@ -16,27 +16,27 @@
     "outputRendering": "PlainText",
     "strictMode": "Latest"
   },
-  "fixtureCapturedAt": "2026-09-04T17:01:33.1819133Z",
+  "fixtureCapturedAt": "2026-09-04T18:53:37.8214123Z",
   "platformCaveat": "Captured on Win32NT while the published compatibility profiles target PowerShell on Linux. The corpus is deliberately platform-neutral (no filesystem or path semantics), and the capture fails on any case where a drive letter survives normalisation, but path and provider behaviour remains untested.",
   "totals": {
-    "cases": 89,
-    "compared": 72,
-    "matched": 72,
+    "cases": 115,
+    "compared": 107,
+    "matched": 107,
     "differencesExplained": 0,
     "differencesUnexplained": 0,
-    "unimplemented": 17
+    "unimplemented": 8
   },
   "coverage": {
     "nativeSemanticCommands": 24,
-    "commandsWithBehaviouralEvidence": 7,
-    "behaviouralCoveragePercent": 29.2,
+    "commandsWithBehaviouralEvidence": 12,
+    "behaviouralCoveragePercent": 50,
     "commandsWithMetadataEvidence": 12,
     "metadataCoveragePercent": 50
   },
   "perCommand": [
     {
       "command": "$psversiontable",
-      "behavioural": 0,
+      "behavioural": 1,
       "metadata": 0,
       "unimplemented": 0,
       "differences": 0
@@ -64,7 +64,7 @@
     },
     {
       "command": "get-command",
-      "behavioural": 2,
+      "behavioural": 4,
       "metadata": 2,
       "unimplemented": 1,
       "differences": 0
@@ -78,30 +78,30 @@
     },
     {
       "command": "get-date",
-      "behavioural": 1,
+      "behavioural": 15,
       "metadata": 2,
       "unimplemented": 1,
       "differences": 0
     },
     {
       "command": "get-help",
-      "behavioural": 0,
+      "behavioural": 3,
       "metadata": 2,
       "unimplemented": 0,
       "differences": 0
     },
     {
       "command": "get-history",
-      "behavioural": 0,
+      "behavioural": 1,
       "metadata": 2,
       "unimplemented": 0,
       "differences": 0
     },
     {
       "command": "get-location",
-      "behavioural": 0,
+      "behavioural": 1,
       "metadata": 2,
-      "unimplemented": 1,
+      "unimplemented": 0,
       "differences": 0
     },
     {
@@ -120,7 +120,7 @@
     },
     {
       "command": "get-random",
-      "behavioural": 0,
+      "behavioural": 5,
       "metadata": 2,
       "unimplemented": 0,
       "differences": 0
@@ -183,9 +183,9 @@
     },
     {
       "command": "where-object",
-      "behavioural": 15,
+      "behavioural": 16,
       "metadata": 2,
-      "unimplemented": 1,
+      "unimplemented": 0,
       "differences": 0
     },
     {
@@ -205,7 +205,10 @@
   ],
   "cultureSensitiveCases": [
     "culture.format-operator-follows-culture",
-    "culture.tostring-follows-culture"
+    "culture.tostring-follows-culture",
+    "date.format-day-and-month-names",
+    "date.format-meridiem-and-twelve-hour",
+    "date.format-single-char-is-standard"
   ],
   "knownDifferences": [
     {
@@ -219,6 +222,16 @@
         "comparison.eq-is-case-insensitive",
         "comparison.ceq-is-case-sensitive",
         "comparison.strings-compare-as-strings"
+      ]
+    },
+    {
+      "id": "date-formatting-pinned-to-en-us",
+      "kind": "deliberate",
+      "expect": "matches",
+      "cases": [
+        "date.format-single-char-is-standard",
+        "date.format-day-and-month-names",
+        "date.format-meridiem-and-twelve-hour"
       ]
     },
     {
@@ -488,14 +501,14 @@
       "id": "comparison.array-eq-filters",
       "command": "where-object",
       "area": "comparison",
-      "outcome": "unimplemented",
+      "outcome": "match",
       "expected": [
         "System.Object[]=2"
       ],
-      "actual": null,
+      "actual": "System.Object[]=2",
       "explainedBy": null,
       "explanationKind": null,
-      "detail": "Array-valued left operands (the filtering form of -eq) are not modelled; compareValues answers a scalar comparison only."
+      "detail": null
     },
     {
       "id": "truthy.empty-array",
@@ -787,14 +800,14 @@
       "id": "type.datetime-hierarchy",
       "command": null,
       "area": "types",
-      "outcome": "unimplemented",
+      "outcome": "match",
       "expected": [
         "System.DateTime,System.ValueType,System.Object"
       ],
-      "actual": null,
+      "actual": "System.DateTime,System.ValueType,System.Object",
       "explainedBy": null,
       "explanationKind": null,
-      "detail": "The project has no DateTime PSObject wrapper, so it has no hierarchy of its own to compare. isOfType is exercised instead by type.is-matches-short-name, using the chain this case records."
+      "detail": null
     },
     {
       "id": "type.is-matches-short-name",
@@ -884,40 +897,40 @@
       "id": "strings.regex-replace-is-case-insensitive",
       "command": null,
       "area": "strings",
-      "outcome": "unimplemented",
+      "outcome": "match",
       "expected": [
         "AxC"
       ],
-      "actual": null,
+      "actual": "AxC",
       "explainedBy": null,
       "explanationKind": null,
-      "detail": "String operators are not implemented; the project models the object pipeline, not the expression language. Recorded so the gap is measurable rather than forgotten."
+      "detail": null
     },
     {
       "id": "strings.like-is-case-insensitive",
       "command": null,
       "area": "strings",
-      "outcome": "unimplemented",
+      "outcome": "match",
       "expected": [
         true
       ],
-      "actual": null,
+      "actual": true,
       "explainedBy": null,
       "explanationKind": null,
-      "detail": "String operators are not implemented."
+      "detail": null
     },
     {
       "id": "strings.split-returns-array",
       "command": null,
       "area": "strings",
-      "outcome": "unimplemented",
+      "outcome": "match",
       "expected": [
         3
       ],
-      "actual": null,
+      "actual": 3,
       "explainedBy": null,
       "explanationKind": null,
-      "detail": "String operators are not implemented."
+      "detail": null
     },
     {
       "id": "culture.interpolation-is-invariant",
@@ -1030,23 +1043,23 @@
       "id": "error.method-on-null",
       "command": null,
       "area": "errors",
-      "outcome": "unimplemented",
+      "outcome": "match",
       "expected": "InvokeMethodOnNull",
-      "actual": null,
+      "actual": "InvokeMethodOnNull",
       "explainedBy": null,
       "explanationKind": null,
-      "detail": "No expression evaluator yet."
+      "detail": null
     },
     {
       "id": "error.divide-by-zero",
       "command": null,
       "area": "errors",
-      "outcome": "unimplemented",
+      "outcome": "match",
       "expected": "RuntimeException",
-      "actual": null,
+      "actual": "RuntimeException",
       "explainedBy": null,
       "explanationKind": null,
-      "detail": "No expression evaluator yet."
+      "detail": null
     },
     {
       "id": "error.no-error-on-success",
@@ -1362,27 +1375,27 @@
       "id": "normalisation.guid-is-canonicalised",
       "command": null,
       "area": "normalisation",
-      "outcome": "unimplemented",
+      "outcome": "match",
       "expected": [
         "<GUID>"
       ],
-      "actual": null,
+      "actual": "<GUID>",
       "explainedBy": null,
       "explanationKind": null,
-      "detail": "New-Guid is not implemented. The case is here for the normaliser, not for the command."
+      "detail": null
     },
     {
       "id": "normalisation.cwd-is-canonicalised",
       "command": "get-location",
       "area": "normalisation",
-      "outcome": "unimplemented",
+      "outcome": "match",
       "expected": [
         "<REPO>"
       ],
-      "actual": null,
+      "actual": "<REPO>",
       "explainedBy": null,
       "explanationKind": null,
-      "detail": "Get-Location has no implementation; the browser build's virtual cwd shape is not settled."
+      "detail": null
     },
     {
       "id": "normalisation.declared-volatile-clock",
@@ -1396,6 +1409,344 @@
       "explainedBy": null,
       "explanationKind": null,
       "detail": "No clock abstraction yet."
+    },
+    {
+      "id": "date.format-single-char-is-standard",
+      "command": "get-date",
+      "area": "date",
+      "outcome": "match",
+      "expected": [
+        "March 4"
+      ],
+      "actual": "March 4",
+      "explainedBy": "date-formatting-pinned-to-en-us",
+      "explanationKind": "deliberate",
+      "detail": null
+    },
+    {
+      "id": "date.format-two-chars-is-custom",
+      "command": "get-date",
+      "area": "date",
+      "outcome": "match",
+      "expected": [
+        "03"
+      ],
+      "actual": "03",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "date.format-single-char-hour-throws",
+      "command": "get-date",
+      "area": "date",
+      "outcome": "match",
+      "expected": [
+        "threw"
+      ],
+      "actual": "threw",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "date.format-day-and-month-names",
+      "command": "get-date",
+      "area": "date",
+      "outcome": "match",
+      "expected": [
+        "Wed Wednesday Mar March"
+      ],
+      "actual": "Wed Wednesday Mar March",
+      "explainedBy": "date-formatting-pinned-to-en-us",
+      "explanationKind": "deliberate",
+      "detail": null
+    },
+    {
+      "id": "date.format-meridiem-and-twelve-hour",
+      "command": "get-date",
+      "area": "date",
+      "outcome": "match",
+      "expected": [
+        "05|05|AM"
+      ],
+      "actual": "05|05|AM",
+      "explainedBy": "date-formatting-pinned-to-en-us",
+      "explanationKind": "deliberate",
+      "detail": null
+    },
+    {
+      "id": "date.format-fractional-second-widths",
+      "command": "get-date",
+      "area": "date",
+      "outcome": "match",
+      "expected": [
+        "0089000|008900|008|00"
+      ],
+      "actual": "0089000|008900|008|00",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "date.ticks-are-int64",
+      "command": "get-date",
+      "area": "date",
+      "outcome": "match",
+      "expected": [
+        "639081975670000000"
+      ],
+      "actual": "639081975670000000",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "date.property-order",
+      "command": "get-date",
+      "area": "date",
+      "outcome": "match",
+      "expected": [
+        "DisplayHint,DateTime,Date,Day,DayOfWeek,DayOfYear,Hour,Kind,Millisecond,Microsecond,Nanosecond,Minute,Month,Second,Ticks,TimeOfDay,Year"
+      ],
+      "actual": "DisplayHint,DateTime,Date,Day,DayOfWeek,DayOfYear,Hour,Kind,Millisecond,Microsecond,Nanosecond,Minute,Month,Second,Ticks,TimeOfDay,Year",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "date.uformat-day-numbering-wednesday",
+      "command": "get-date",
+      "area": "date",
+      "outcome": "match",
+      "expected": [
+        "3|3"
+      ],
+      "actual": "3|3",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "date.uformat-day-numbering-sunday",
+      "command": "get-date",
+      "area": "date",
+      "outcome": "match",
+      "expected": [
+        "7|0"
+      ],
+      "actual": "7|0",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "date.uformat-week-numbers",
+      "command": "get-date",
+      "area": "date",
+      "outcome": "match",
+      "expected": [
+        "063|10|9|9"
+      ],
+      "actual": "063|10|9|9",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "date.uformat-padding-variants",
+      "command": "get-date",
+      "area": "date",
+      "outcome": "match",
+      "expected": [
+        "04| 4|05| 5|05| 5"
+      ],
+      "actual": "04| 4|05| 5|05| 5",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "date.uformat-unknown-specifier-keeps-the-letter",
+      "command": "get-date",
+      "area": "date",
+      "outcome": "match",
+      "expected": [
+        "q"
+      ],
+      "actual": "q",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "date.uformat-percent-escape",
+      "command": "get-date",
+      "area": "date",
+      "outcome": "match",
+      "expected": [
+        "a%b"
+      ],
+      "actual": "a%b",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "random.maximum-is-exclusive-single-value",
+      "command": "get-random",
+      "area": "random",
+      "outcome": "match",
+      "expected": [
+        "0"
+      ],
+      "actual": "0",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "random.maximum-is-exclusive-pair",
+      "command": "get-random",
+      "area": "random",
+      "outcome": "match",
+      "expected": [
+        "0,1"
+      ],
+      "actual": "0,1",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "random.empty-range-is-an-error",
+      "command": "get-random",
+      "area": "random",
+      "outcome": "match",
+      "expected": [
+        "MinGreaterThanOrEqualMax,Microsoft.PowerShell.Commands.GetRandomCommand"
+      ],
+      "actual": "MinGreaterThanOrEqualMax,Microsoft.PowerShell.Commands.GetRandomCommand",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "random.empty-range-error-message",
+      "command": "get-random",
+      "area": "random",
+      "outcome": "match",
+      "expected": [
+        "The Minimum value (5) cannot be greater than or equal to the Maximum value (5)."
+      ],
+      "actual": "The Minimum value (5) cannot be greater than or equal to the Maximum value (5).",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "random.count-larger-than-the-list",
+      "command": "get-random",
+      "area": "random",
+      "outcome": "match",
+      "expected": [
+        "a,b,c"
+      ],
+      "actual": "a,b,c",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "history.info-property-order",
+      "command": "get-history",
+      "area": "history",
+      "outcome": "match",
+      "expected": [
+        "Id,CommandLine,ExecutionStatus,StartExecutionTime,EndExecutionTime,Duration"
+      ],
+      "actual": "Id,CommandLine,ExecutionStatus,StartExecutionTime,EndExecutionTime,Duration",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "help.auto-generated-view-typenames",
+      "command": "get-help",
+      "area": "help",
+      "outcome": "match",
+      "expected": [
+        "ExtendedCmdletHelpInfo,CmdletHelpInfo,HelpInfo"
+      ],
+      "actual": "ExtendedCmdletHelpInfo,CmdletHelpInfo,HelpInfo",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "help.full-view-adds-a-twin-per-name",
+      "command": "get-help",
+      "area": "help",
+      "outcome": "match",
+      "expected": [
+        "ExtendedCmdletHelpInfo#FullView,CmdletHelpInfo#FullView,HelpInfo#FullView,ExtendedCmdletHelpInfo,CmdletHelpInfo,HelpInfo"
+      ],
+      "actual": "ExtendedCmdletHelpInfo#FullView,CmdletHelpInfo#FullView,HelpInfo#FullView,ExtendedCmdletHelpInfo,CmdletHelpInfo,HelpInfo",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "help.parameter-descriptor-members",
+      "command": "get-help",
+      "area": "help",
+      "outcome": "match",
+      "expected": [
+        "name,required,pipelineInput,isDynamic,globbing,parameterSetName,parameterValue,type,position,aliases"
+      ],
+      "actual": "name,required,pipelineInput,isDynamic,globbing,parameterSetName,parameterValue,type,position,aliases",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "commands.cmdlet-info-hierarchy",
+      "command": "get-command",
+      "area": "commands",
+      "outcome": "match",
+      "expected": [
+        "System.Management.Automation.CmdletInfo,System.Management.Automation.CommandInfo,System.Object"
+      ],
+      "actual": "System.Management.Automation.CmdletInfo,System.Management.Automation.CommandInfo,System.Object",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "commands.alias-info-hierarchy",
+      "command": "get-command",
+      "area": "commands",
+      "outcome": "match",
+      "expected": [
+        "System.Management.Automation.AliasInfo,System.Management.Automation.CommandInfo,System.Object"
+      ],
+      "actual": "System.Management.Automation.AliasInfo,System.Management.Automation.CommandInfo,System.Object",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "version.table-key-order",
+      "command": "$psversiontable",
+      "area": "version",
+      "outcome": "match",
+      "expected": [
+        "PSVersion,PSEdition,GitCommitId,OS,Platform,PSCompatibleVersions,PSRemotingProtocolVersion,SerializationVersion,WSManStackVersion"
+      ],
+      "actual": "PSVersion,PSEdition,GitCommitId,OS,Platform,PSCompatibleVersions,PSRemotingProtocolVersion,SerializationVersion,WSManStackVersion",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
     }
   ]
 }

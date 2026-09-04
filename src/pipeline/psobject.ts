@@ -338,12 +338,20 @@ export class ComparisonTypeError extends Error {
  * Returns the pair to compare, or throws if the conversion is impossible.
  */
 function coerceToLeft(a: PSValue, b: PSValue): [PSValue, PSValue] {
-  // Before the typeof shortcut: two PSObjects are both 'object', so the shortcut
-  // returned first and the check below never ran. pwsh reports False for
-  // `$a -eq $b` on two distinct PSCustomObjects and raises "does not implement
-  // IComparable" for `$a -lt $b`; comparing their text forms would call them
-  // equal, since ToString() is the empty string for both.
-  if (isPSObject(a) && isPSObject(b)) throw new ComparisonTypeError(a, b);
+  // Two opaque objects are not one value. pwsh reports False for `$a -eq $b` on
+  // two distinct PSCustomObjects and raises "does not implement IComparable" for
+  // `$a -lt $b`; comparing their text forms would call every pair equal, since
+  // ToString() is the empty string for both.
+  //
+  // This has to run before the typeof shortcut below, because two PSObjects are
+  // both 'object' and the shortcut would return first. But "opaque" is the whole
+  // point: a value that is ALSO a Date has a comparable representation, and
+  // PSDateTime is exactly that — a Date carrying pwsh's property set, so
+  // isPSObject and `instanceof Date` are both true of it. Guarding on isPSObject
+  // alone made two dates incomparable, which integration caught.
+  const opaque = (v: PSValue): boolean =>
+    isPSObject(v) && !(v instanceof Date) && !(v instanceof Uint8Array) && !Array.isArray(v);
+  if (opaque(a) && opaque(b)) throw new ComparisonTypeError(a, b);
 
   if (typeof b === typeof a) return [a, b];
 
