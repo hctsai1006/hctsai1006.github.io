@@ -63,10 +63,26 @@ describe('differential conformance against pwsh 7.6.5', () => {
   it('does not count a known gap as evidence of fidelity', () => {
     // A known-gap entry explains a difference so the run can be green; it must
     // never make a command look verified.
+    //
+    // This used to assert `gapCases.size > 0` — "expected at least one known
+    // gap to be recorded" — which made the suite depend on the project still
+    // having the defects. Both gaps it was written for (right-operand coercion,
+    // the Int32/Int64 boundary) were then fixed, and the test failed for having
+    // nothing left to complain about. A test that goes red when a bug is fixed
+    // is measuring the wrong thing.
+    //
+    // What it should establish is that the file was really read and the rule
+    // really applies, so: the parsed entries must be non-empty, and no gap may
+    // match. With no gaps the loop is vacuous, which is the correct state of
+    // affairs rather than a hole — the entries assertion is what keeps a
+    // silently empty known-differences.yml from passing.
+    assert.ok(
+      report.knownDifferences.length > 0,
+      'known-differences.yml parsed to nothing; the file is not being read',
+    );
     const gapCases = new Set(
       report.knownDifferences.filter((k) => k.kind === 'known-gap').flatMap((k) => k.cases),
     );
-    assert.ok(gapCases.size > 0, 'expected at least one known gap to be recorded');
     for (const c of report.cases) {
       if (gapCases.has(c.id)) assert.notEqual(c.outcome, 'match', `${c.id} is explained as a gap but matched`);
     }

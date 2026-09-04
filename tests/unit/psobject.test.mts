@@ -27,6 +27,8 @@ import {
   isOfType,
   typeNameOf,
   compareValues,
+  compareForSorting,
+  ComparisonTypeError,
   valuesEqual,
   isTruthy,
   enumerate,
@@ -183,5 +185,101 @@ describe('pipeline enumeration', () => {
   it('sends a non-array as itself', () => {
     assert.deepEqual(drain('one'), ['one']);
     assert.deepEqual(drain(null), [null]);
+  });
+});
+
+/**
+ * Comparison coercion.
+ *
+ * Every expectation below was read off pwsh 7.6.5. The differential harness
+ * found this: compareValues used to fall back to string collation whenever the
+ * two JavaScript types differed, so `10 -lt '9'` answered True where PowerShell
+ * answers False, and every comparison mixing a number with a numeric string was
+ * wrong.
+ */
+describe('comparison converts the right operand to the left operand type', () => {
+  // The direction is the whole rule, and it is genuinely asymmetric.
+  it('10 -lt "9" is False, because the right side becomes the number 9', () => {
+    assert.ok(compareValues(10, '9') > 0);
+  });
+
+  it('"9" -lt 10 is also False, because the right side becomes the string "10"', () => {
+    // Not a contradiction: '9' sorts after '10' as text.
+    assert.ok(compareValues('9', 10) > 0);
+  });
+
+  it('accepts the numeric string forms PowerShell accepts', () => {
+    assert.ok(valuesEqual(10, '10.0'), '10 -eq "10.0"');
+    assert.ok(valuesEqual(10, '1e1'), '10 -eq "1e1"');
+    assert.ok(compareValues(10, ' 11 ') < 0, '10 -lt " 11 " tolerates whitespace');
+  });
+
+  it('booleans take the left type too', () => {
+    assert.ok(valuesEqual(true, 1), '$true -eq 1');
+    assert.ok(compareValues(true, 2) === 0, '$true -lt 2 is False: 2 becomes $true');
+    assert.ok(compareValues(true, false) > 0, '$true -gt $false');
+    assert.ok(valuesEqual('true', true), '"true" -eq $true');
+  });
+
+  it('treats $null as less than everything, and "" as not null', () => {
+    assert.ok(compareValues(null, 1) < 0, '$null -lt 1');
+    assert.ok(compareValues(1, null) > 0, '1 -gt $null');
+    assert.ok(!valuesEqual('', null), '"" -eq $null is False');
+    assert.ok(valuesEqual(null, null), '$null -eq $null');
+  });
+
+  it('converts a string to a date when the left operand is one', () => {
+    assert.ok(compareValues(new Date('2020-01-01'), '2021-01-01') < 0);
+  });
+});
+
+describe('ordering throws where equality does not', () => {
+  // Measured: `10 -eq 'abc'` is False, `10 -lt 'abc'` raises. Equality can
+  // answer "not the same"; ordering has no answer, so it refuses.
+  it('-eq returns false rather than throwing', () => {
+    assert.equal(valuesEqual(10, 'abc'), false);
+  });
+
+  it('-lt throws ComparisonTypeError', () => {
+    assert.throws(() => compareValues(10, 'abc'), ComparisonTypeError);
+  });
+
+  it('the sorting order never throws, because Sort-Object does not', () => {
+    assert.doesNotThrow(() => compareForSorting(10, 'abc'));
+  });
+});
+
+describe('the cmdlet sort order falls back to text, not to a type rank', () => {
+  // A type rank (numbers, then strings, then booleans) fits some cases and is
+  // the obvious guess. These two rule it out: only comparing the string forms
+  // produces both results.
+  it('puts $true before "zzz" but after "aaa"', () => {
+    assert.ok(compareForSorting('zzz', true) > 0, '@("zzz",$true) sorts to True zzz');
+    assert.ok(compareForSorting('aaa', true) < 0, '@("aaa",$true) sorts to aaa True');
+  });
+
+  it('puts a number before a non-numeric string', () => {
+    assert.ok(compareForSorting(1, 'a') < 0, '@("a",1) sorts to 1 a');
+  });
+
+  it('orders a whole mixed list the way pwsh does', () => {
+    // pwsh: @(1,'a',$true) | Sort-Object  ->  1 a True
+    const sorted = [true, 'a', 1].sort((x, y) => compareForSorting(x, y));
+    assert.deepEqual(sorted, [1, 'a', true]);
+  });
+});
+
+describe('integer width', () => {
+  // pwsh types a literal by its magnitude; reporting Int32 for everything made
+  // Get-Member wrong for any value above 2147483647.
+  it('widens at the Int32 boundary', () => {
+    assert.equal(typeNameOf(2147483647), 'System.Int32');
+    assert.equal(typeNameOf(2147483648), 'System.Int64');
+    assert.equal(typeNameOf(-2147483648), 'System.Int32');
+    assert.equal(typeNameOf(-2147483649), 'System.Int64');
+  });
+
+  it('still calls a non-integer Double', () => {
+    assert.equal(typeNameOf(1.5), 'System.Double');
   });
 });

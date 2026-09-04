@@ -21,8 +21,8 @@
   "totals": {
     "cases": 89,
     "compared": 69,
-    "matched": 67,
-    "differencesExplained": 2,
+    "matched": 69,
+    "differencesExplained": 0,
     "differencesUnexplained": 0,
     "unimplemented": 20
   },
@@ -183,10 +183,10 @@
     },
     {
       "command": "where-object",
-      "behavioural": 14,
+      "behavioural": 15,
       "metadata": 2,
       "unimplemented": 1,
-      "differences": 1
+      "differences": 0
     },
     {
       "command": "whoami",
@@ -219,22 +219,6 @@
         "comparison.eq-is-case-insensitive",
         "comparison.ceq-is-case-sensitive",
         "comparison.strings-compare-as-strings"
-      ]
-    },
-    {
-      "id": "right-operand-not-coerced-to-left-type",
-      "kind": "known-gap",
-      "expect": "differs",
-      "cases": [
-        "comparison.left-operand-decides-type"
-      ]
-    },
-    {
-      "id": "no-int32-int64-boundary",
-      "kind": "known-gap",
-      "expect": "differs",
-      "cases": [
-        "type.int64-boundary"
       ]
     },
     {
@@ -478,13 +462,13 @@
       "id": "comparison.left-operand-decides-type",
       "command": "where-object",
       "area": "comparison",
-      "outcome": "difference",
+      "outcome": "match",
       "expected": [
         false
       ],
-      "actual": true,
-      "explainedBy": "right-operand-not-coerced-to-left-type",
-      "explanationKind": "known-gap",
+      "actual": false,
+      "explainedBy": null,
+      "explanationKind": null,
       "detail": null
     },
     {
@@ -712,13 +696,13 @@
       "id": "type.int64-boundary",
       "command": null,
       "area": "types",
-      "outcome": "difference",
+      "outcome": "match",
       "expected": [
         "System.Int64"
       ],
-      "actual": "System.Int32",
-      "explainedBy": "no-int32-int64-boundary",
-      "explanationKind": "known-gap",
+      "actual": "System.Int64",
+      "explainedBy": null,
+      "explanationKind": null,
       "detail": null
     },
     {

@@ -66,32 +66,6 @@ differences:
       comparison. Collation outside the Latin script has not been probed and is
       not claimed.
 
-  - id: right-operand-not-coerced-to-left-type
-    kind: known-gap
-    expect: differs
-    cases: [comparison.left-operand-decides-type]
-    reason: >-
-      PowerShell converts the RIGHT operand to the LEFT operand's type before
-      comparing, so `10 -lt '9'` is a numeric comparison and is False. This
-      project's compareValues falls back to string collation whenever the two
-      operands are not the same JavaScript type, and therefore answers True. This
-      is a gap, not a choice: the fix belongs in the conversion layer that does
-      not exist yet, and until it does, any comparison mixing a number with a
-      numeric string is wrong. Found by this harness rather than by reasoning.
-
-  - id: no-int32-int64-boundary
-    kind: known-gap
-    expect: differs
-    cases: [type.int64-boundary]
-    reason: >-
-      PowerShell types an integer literal past Int32.MaxValue as Int64;
-      typeNameOf reports System.Int32 for every whole JavaScript number. A single
-      float64 cannot see the boundary, so representing it needs bigint to reach
-      the object model -- PSPrimitive already admits bigint, and typeNameOf maps
-      it to System.Int64, but a literal parsed from JSON arrives as a number and
-      loses the distinction before it gets there. Get-Member would report the
-      wrong type for any value above 2147483647.
-
   - id: typename-of-null-is-total
     kind: deliberate
     expect: unimplemented
