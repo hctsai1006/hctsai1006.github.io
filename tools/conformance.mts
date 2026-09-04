@@ -59,6 +59,18 @@ import {
 } from '../src/pipeline/psobject.ts';
 import type { PSValue } from '../src/pipeline/psobject.ts';
 import { errorRecord } from '../src/pipeline/streams.ts';
+import { toPSString } from '../src/formatting/to-string.ts';
+import {
+  arithmetic,
+  comparisonOperator,
+  invokeMethod,
+  likeOperator,
+  PSRuntimeError,
+  replaceOperator,
+  splitOperator,
+  type ArithmeticOp,
+  type ComparisonOp,
+} from '../src/operators/index.ts';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -714,6 +726,70 @@ const PROBES: Record<string, Probe> = {
     errorRecord('unused message', String(args['errorId']), String(args['command'])).fullyQualifiedErrorId,
   'error-category-known': () => 'known',
   'manifest-parameter': (args) => manifestParameterField(args),
+
+  // --- operators -----------------------------------------------------------
+  // Each of these runs the real operator, not a re-statement of its rule, so a
+  // regression in src/operators shows up here as a DIFFERENCE rather than as a
+  // still-green corpus.
+  'string-replace': (args, where) =>
+    replaceOperator(
+      decodeValue(args['left'], where),
+      decodeValue(args['pattern'], where),
+      decodeValue(args['replacement'] ?? '', where),
+      { caseSensitive: args['caseSensitive'] === true },
+    ),
+  'string-like': (args, where) =>
+    likeOperator(decodeValue(args['left'], where), decodeValue(args['pattern'], where), {
+      caseSensitive: args['caseSensitive'] === true,
+    }),
+  // The corpus source asks pwsh for `(... -split ...).Count`, so the probe
+  // answers a count rather than the array: comparing a JS array against the
+  // Int32 pwsh emitted would fail for the wrong reason.
+  'string-split-count': (args, where) =>
+    splitOperator(
+      decodeValue(args['left'], where),
+      decodeValue(args['delimiter'], where),
+      0,
+      null,
+      { caseSensitive: args['caseSensitive'] === true },
+    ).length,
+  // `$r = @(1,2,3) -eq 2; "$($r.GetType().FullName)=$r"` -- the corpus asks for
+  // the TYPE as well as the value, because a boolean-returning implementation
+  // would still print 'True' and could otherwise look close.
+  'comparison-filter-render': (args, where) => {
+    const result = comparisonOperator(
+      String(args['op']) as ComparisonOp,
+      decodeValue(args['left'], where),
+      decodeValue(args['right'], where),
+      { caseSensitive: args['caseSensitive'] === true },
+    );
+    return `${typeNameOf(result)}=${toPSString(result)}`;
+  },
+  // The two error cases run the operator and read the id off the ErrorRecord it
+  // carried, which is the whole point of PSRuntimeError: a bare JavaScript Error
+  // would have no id to compare.
+  'arithmetic-error-id': (args, where) => {
+    try {
+      arithmetic(
+        String(args['op']) as ArithmeticOp,
+        decodeValue(args['left'], where),
+        decodeValue(args['right'], where),
+      );
+    } catch (error) {
+      if (error instanceof PSRuntimeError) return error.record.fullyQualifiedErrorId;
+      throw error;
+    }
+    return fail(`${where}: the operator did not raise`);
+  },
+  'method-on-null-error-id': (args, where) => {
+    try {
+      invokeMethod(null, String(args['method']));
+    } catch (error) {
+      if (error instanceof PSRuntimeError) return error.record.fullyQualifiedErrorId;
+      throw error;
+    }
+    return fail(`${where}: calling a method on null did not raise`);
+  },
 };
 
 // ---------------------------------------------------------------------------

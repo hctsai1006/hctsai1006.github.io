@@ -171,11 +171,10 @@
       "id": "comparison.array-eq-filters",
       "area": "comparison",
       "command": "where-object",
-      "why": "@(1,2,3) -eq 2 does not return a boolean -- it FILTERS and returns 2. An operator that always returns a boolean is wrong about the whole left-hand-array family.",
+      "why": "@(1,2,3) -eq 2 does not return a boolean -- it FILTERS and returns 2. An operator that always returns a boolean is wrong about the whole left-hand-array family. The source asks for the TYPE as well as the value, because a boolean implementation would still print something and could otherwise look close.",
       "source": "$r = @(1,2,3) -eq 2; \"$($r.GetType().FullName)=$r\"",
       "observe": "values",
-      "probe": { "kind": "none" },
-      "pending": "Array-valued left operands (the filtering form of -eq) are not modelled; compareValues answers a scalar comparison only."
+      "probe": { "kind": "comparison-filter-render", "args": { "op": "eq", "left": [1, 2, 3], "right": 2 } }
     },
 
     {
@@ -451,31 +450,28 @@
       "id": "strings.regex-replace-is-case-insensitive",
       "area": "strings",
       "command": null,
-      "why": "-replace is case-INSENSITIVE by default, so 'ABC' -replace 'b','x' is 'AxC'. Every regex engine defaults the other way.",
+      "why": "-replace is case-INSENSITIVE by default, so 'ABC' -replace 'b','x' is 'AxC'. Every regex engine defaults the other way, so copying a JavaScript RegExp's default would be wrong here and on -match, -like and -split with it.",
       "source": "'ABC' -replace 'b','x'",
       "observe": "values",
-      "probe": { "kind": "none" },
-      "pending": "String operators are not implemented; the project models the object pipeline, not the expression language. Recorded so the gap is measurable rather than forgotten."
+      "probe": { "kind": "string-replace", "args": { "left": "ABC", "pattern": "b", "replacement": "x" } }
     },
     {
       "id": "strings.like-is-case-insensitive",
       "area": "strings",
       "command": null,
-      "why": "-like is case-insensitive and uses wildcards, not regex.",
+      "why": "-like is case-insensitive and uses wildcards, not regex. The wildcard language is genuinely different: '.' and '+' are literals, the escape character is a backtick, and [!a] does NOT negate.",
       "source": "'abc' -like 'A*'",
       "observe": "values",
-      "probe": { "kind": "none" },
-      "pending": "String operators are not implemented."
+      "probe": { "kind": "string-like", "args": { "left": "abc", "pattern": "A*" } }
     },
     {
       "id": "strings.split-returns-array",
       "area": "strings",
       "command": null,
-      "why": "-split returns an array whose Count is observable.",
+      "why": "-split returns an array whose Count is observable. The probe answers a count rather than the array because the source asks pwsh for .Count, and comparing a list against that Int32 would fail for the wrong reason.",
       "source": "('a,b,c' -split ',').Count",
       "observe": "values",
-      "probe": { "kind": "none" },
-      "pending": "String operators are not implemented."
+      "probe": { "kind": "string-split-count", "args": { "left": "a,b,c", "delimiter": "," } }
     },
     {
       "id": "culture.interpolation-is-invariant",
@@ -576,21 +572,19 @@
       "id": "error.method-on-null",
       "area": "errors",
       "command": null,
-      "why": "Calling a method on $null is an engine-level error with a stable id, not a command error.",
+      "why": "Calling a method on $null is an engine-level error with a stable id, not a command error -- so the id stands alone, with no ',<CommandName>' suffix. That is why the operator layer builds its ErrorRecord directly instead of through errorRecord(), whose composition rule is right for a cmdlet and wrong here.",
       "source": "$null.Foo()",
       "observe": "errorId",
-      "probe": { "kind": "none" },
-      "pending": "No expression evaluator yet."
+      "probe": { "kind": "method-on-null-error-id", "args": { "method": "Foo" } }
     },
     {
       "id": "error.divide-by-zero",
       "area": "errors",
       "command": null,
-      "why": "Arithmetic errors are TERMINATING in PowerShell, a different control-flow shape from a cmdlet's non-terminating error.",
+      "why": "Arithmetic errors are TERMINATING in PowerShell, a different control-flow shape from a cmdlet's non-terminating error. Only INTEGER and DECIMAL division raise: a double divided by zero is Infinity, which was measured rather than assumed.",
       "source": "1 / 0",
       "observe": "errorId",
-      "probe": { "kind": "none" },
-      "pending": "No expression evaluator yet."
+      "probe": { "kind": "arithmetic-error-id", "args": { "op": "/", "left": 1, "right": 0 } }
     },
     {
       "id": "error.no-error-on-success",
