@@ -59,6 +59,25 @@ import {
 } from '../src/pipeline/psobject.ts';
 import type { PSValue } from '../src/pipeline/psobject.ts';
 import { errorRecord } from '../src/pipeline/streams.ts';
+import {
+  SIMULATED_MACHINE,
+  commandTypeNames,
+  drawInRange,
+  formatDotNet,
+  formatUnix,
+  guidText,
+  helpParameter,
+  helpViewTypeNames,
+  historyInfo,
+  minGreaterThanOrEqualMaxError,
+  pathInfo,
+  psDateTime,
+  psVersionTable,
+  sampleWithoutReplacement,
+  seededRandom,
+} from '../src/commands/native/index.ts';
+import type { CommandTypeName, HistoryEntry } from '../src/commands/native/index.ts';
+import { parameter } from '../src/commands/powershell/support.ts';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -642,6 +661,49 @@ function manifestParameterField(args: Record<string, unknown>): unknown {
 type Probe = (args: Record<string, unknown>, where: string) => unknown;
 
 /**
+ * The DateTime the date probes format.
+ *
+ * A case may override the components; the default is the instant every pwsh
+ * probe in this work was run against. `displayHint` is set because `Get-Date`
+ * adds it as a NoteProperty and a bare `[datetime]` does not — the property
+ * list differs by that one member, and a case that asked about `Get-Date` must
+ * compare against the object `Get-Date` returns.
+ */
+function referenceDate(args: Record<string, unknown>, where: string): ReturnType<typeof psDateTime> {
+  const n = (key: string, fallback: number): number => {
+    const value = args[key];
+    if (value === undefined) return fallback;
+    if (typeof value !== 'number') fail(`${where}: '${key}' must be a number`);
+    return value as number;
+  };
+  return psDateTime(
+    {
+      year: n('year', 2026),
+      month: n('month', 3),
+      day: n('day', 4),
+      hour: n('hour', 5),
+      minute: n('minute', 6),
+      second: n('second', 7),
+      millisecond: n('millisecond', 0),
+    },
+    { displayHint: 'DateTime', subMillisecondTicks: n('subMillisecondTicks', 0) },
+  );
+}
+
+/**
+ * The history entry the Get-History probe describes. Matches the entry the
+ * corpus source adds through `Add-History`, so the two sides are talking about
+ * the same row.
+ */
+const REFERENCE_HISTORY: HistoryEntry = {
+  id: 1,
+  commandLine: 'Get-Date',
+  executionStatus: 'Completed',
+  startedAt: Date.UTC(2026, 0, 1, 0, 0, 0),
+  endedAt: Date.UTC(2026, 0, 1, 0, 0, 1),
+};
+
+/**
  * The registry. A corpus case naming a kind that is not here is a hard error --
  * a typo must never silently become "unimplemented", because unimplemented is a
  * claim about the project, not about the corpus.
@@ -708,6 +770,102 @@ const PROBES: Record<string, Probe> = {
     if (!Array.isArray(typeNames)) fail(`${where}: 'typeNames' must be an array`);
     return isOfType(psObject({}, (typeNames as readonly unknown[]).map(String)), String(args['query']));
   },
+  // The three probes below compare against a NORMALISED fixture value, so each
+  // applies the same rule the capture applied. The rules are reproduced from
+  // tools/generate-conformance-fixtures.ps1 rather than imported, because that
+  // file is PowerShell; they are kept adjacent to the case that needs them and
+  // named after the rule they mirror, so a change to one is visibly a change to
+  // a pair.
+  //
+  // `guid`:          [0-9a-fA-F]{8}-{4}-{4}-{4}-{12}  ->  <GUID>
+  // `machine-paths`: the repo root, in either separator form  ->  <REPO>
+  'guid-canonical': (args) => {
+    // A GUID that is not in canonical form simply would not match the rule, so
+    // a `<GUID>` here is evidence about the shape New-Guid produces — which is
+    // exactly what the corpus case says it is for.
+    const version = Number(args['version'] ?? 4);
+    const text = guidText(version, seededRandom(1), Date.UTC(2026, 2, 4, 5, 6, 7));
+    return text.replace(
+      /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/g,
+      '<GUID>',
+    );
+  },
+  'location-path': () => {
+    // Get-Location's Path is the working directory VERBATIM. Running it with
+    // the repo root as the cwd is what lets the capture's machine-path rule
+    // rewrite it to the same token the fixture holds; any decoration would stop
+    // the rule matching and the case would fail for a reason that is not about
+    // Get-Location.
+    const path = String(pathInfo(REPO).properties['Path']);
+    return path.split(REPO).join('<REPO>').split(REPO.replace(/\\/g, '/')).join('<REPO>');
+  },
+  'datetime-hierarchy': () =>
+    psDateTime({ year: 2026, month: 3, day: 4, hour: 5, minute: 6, second: 7 }).typeNames.join(','),
+
+  // ---- the native commands ------------------------------------------------
+  //
+  // Each of these calls the SAME function the command body calls, rather than a
+  // re-implementation of it. That is what makes them evidence: a probe that
+  // repeated the logic would agree with pwsh while the command disagreed.
+  //
+  // The reference date is 2026-03-04T05:06:07, Unspecified. Nothing here uses a
+  // specifier whose answer depends on the capture host's UTC offset (%Z, %s,
+  // zzz, K, U, *Universal), because the corpus has to reproduce on a machine in
+  // another timezone.
+  'date-format': (args, where) => formatDotNet(referenceDate(args, where), String(args['format'])),
+  'date-format-throws': (args, where) => {
+    try {
+      formatDotNet(referenceDate(args, where), String(args['format']));
+      return 'no error';
+    } catch {
+      return 'threw';
+    }
+  },
+  'date-uformat': (args, where) => formatUnix(referenceDate(args, where), String(args['format'])),
+  'date-property': (args, where) =>
+    String(referenceDate(args, where).properties[String(args['property'])]),
+  'date-property-names': (args, where) => Object.keys(referenceDate(args, where).properties).join(','),
+
+  'random-range-unique': (args) => {
+    // Draws many values and reports the DISTINCT set, which is what makes the
+    // exclusive upper bound observable: [0,1) can only ever yield 0.
+    const minimum = Number(args['minimum']);
+    const maximum = Number(args['maximum']);
+    const draws = Number(args['draws'] ?? 200);
+    const random = seededRandom(17);
+    const seen = new Set<number>();
+    for (let i = 0; i < draws; i += 1) seen.add(drawInRange(random, minimum, maximum, true));
+    return [...seen].sort((a, b) => a - b).join(',');
+  },
+  'random-sample': (args, where) => {
+    const items = requireArray(args, 'items', where).map(String);
+    const count = Number(args['count']);
+    return sampleWithoutReplacement(seededRandom(23), items, count)
+      .map(String)
+      .sort()
+      .join(',');
+  },
+  'random-range-error': (args) => {
+    const record = minGreaterThanOrEqualMaxError(Number(args['minimum']), Number(args['maximum']));
+    return String(args['field']) === 'message' ? record.message : record.fullyQualifiedErrorId;
+  },
+
+  'history-property-names': () =>
+    Object.keys(historyInfo(REFERENCE_HISTORY, 0).properties).join(','),
+
+  'help-view-typenames': (args) => {
+    const view = args['view'] === null || args['view'] === undefined ? null : String(args['view']);
+    return helpViewTypeNames(view as 'Full' | 'Detailed' | 'Examples' | null).join(',');
+  },
+  'help-parameter-names': () =>
+    Object.keys(helpParameter(parameter('Name', 'System.String', { position: 0 })).properties).join(','),
+
+  'command-typenames': (args) =>
+    commandTypeNames(String(args['commandType']) as CommandTypeName).join(','),
+
+  'version-table-keys': (args) =>
+    Object.keys(psVersionTable(String(args['version'] ?? '7.6.5'), SIMULATED_MACHINE).properties).join(','),
+
   'error-id': (args) =>
     // Checks the composition rule in streams.ts, `<ErrorId>,<CommandName>`,
     // against the FullyQualifiedErrorId the reference implementation produced.
