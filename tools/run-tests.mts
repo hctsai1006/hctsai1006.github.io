@@ -14,6 +14,22 @@
  *
  * This resolves the files first, refuses to run with an empty list, and asserts
  * afterwards that tests actually executed.
+ *
+ * That second half was a promise this file did not keep — it said it asserted
+ * execution and then just forwarded the child's exit code. A review pointed out
+ * the hole is still reachable one level down:
+ *
+ *     describe('everything', () => { /* someone commented the tests out *\/ });
+ *     ℹ tests 0 … exit 0
+ *
+ * A suite of zero tests passes. So the reported count is now read back and has
+ * to be greater than zero.
+ *
+ * What that does NOT catch, stated so nobody assumes otherwise: one file going
+ * empty while the others still run. Catching that needs a per-file count, which
+ * means running the files separately, and the whole-suite floor is what the
+ * docstring claimed. If per-file coverage ever matters, that is the next step,
+ * not a reason to believe this already does it.
  */
 
 import { globSync } from 'node:fs';
@@ -46,10 +62,13 @@ if (empty.length > 0) {
 
 process.stdout.write(`  running ${files.length} test file(s)\n`);
 
+// Captured rather than inherited, so the summary can be read back. The cost is
+// that output arrives at the end instead of streaming; for a suite that runs in
+// about two seconds that is a fair trade for closing the hole above.
 const result = spawnSync(
   process.execPath,
   ['--test', '--test-reporter=spec', ...files.map((f) => relative(REPO, resolve(REPO, f)))],
-  { cwd: REPO, stdio: 'inherit' },
+  { cwd: REPO, encoding: 'utf8' },
 );
 
 if (result.error !== undefined) {
@@ -57,4 +76,27 @@ if (result.error !== undefined) {
   process.exit(2);
 }
 
-process.exit(result.status ?? 1);
+const output = `${result.stdout ?? ''}`;
+process.stdout.write(output);
+if (result.stderr) process.stderr.write(result.stderr);
+
+if (result.status !== 0) process.exit(result.status ?? 1);
+
+const reported = /^\s*ℹ tests (\d+)\s*$/m.exec(output);
+if (reported === null) {
+  process.stderr.write(
+    '\n  the test runner exited 0 but reported no summary line.\n' +
+      '  Refusing to call that a pass: nothing here can say whether it ran.\n\n',
+  );
+  process.exit(2);
+}
+if (Number(reported[1]) === 0) {
+  process.stderr.write(
+    `\n  ${files.length} test file(s) ran and produced 0 tests.\n` +
+      '  A suite with nothing in it exits 0, which is how a commented-out file\n' +
+      '  keeps CI green. Refusing to report success.\n\n',
+  );
+  process.exit(2);
+}
+
+process.exit(0);
