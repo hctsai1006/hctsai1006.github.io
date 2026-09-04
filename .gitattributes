@@ -1,0 +1,9 @@
+# This repository compares generated files against committed ones byte for
+# byte, so line endings have to be deterministic. core.autocrlf on Windows
+# would check these out as CRLF while CI on Linux writes LF, which turns a
+# clean tree into a --check failure that reproduces on one platform only.
+* text=auto eol=lf
+
+# index.html is the deployed artifact; never let a checkout rewrite it.
+index.html -text
+legacy/*.html -text
