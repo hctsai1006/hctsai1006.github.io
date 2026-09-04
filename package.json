@@ -12,7 +12,7 @@
     "truth:write": "node tools/verify-release-truth.mts --write",
     "roadmap": "node tools/generate-roadmap.mts",
     "check:numbers": "node tools/check-numbers.js",
-    "verify": "npm run typecheck",
+    "verify": "npm run typecheck && npm test && npm run truth:check",
     "typecheck": "tsc --noEmit",
     "test": "node tools/run-tests.mts",
     "capture:metadata": "pwsh -NoProfile -File tools/capture-pwsh-metadata.ps1",

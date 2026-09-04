@@ -1,0 +1,173 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hctsai1006.github.io/compat/schemas/release-truth.schema.json",
+  "title": "Upstream release truth lockfile",
+  "description": "Machine-verified record of what PowerShell releases actually exist, what each tag pins, what runtime that resolves to, and where the documentation disagrees. Generated only by tools/verify-release-truth.mts. Never hand-edited: every field must be re-derivable from a primary source.",
+  "type": "object",
+  "required": ["schemaVersion", "generatedAt", "generator", "sources", "channels", "releases", "dotnet", "discrepancies"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "generator": {
+      "type": "object",
+      "required": ["tool", "version"],
+      "properties": {
+        "tool": { "type": "string" },
+        "version": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "sources": {
+      "description": "Every URL consulted, in precedence order. Precedence is normative: 1 = highest authority. A lower-precedence source may never override a higher one; it may only raise a discrepancy. Deduplicated by URL and sorted by (precedence, url) so a re-run cannot produce spurious drift.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["precedence", "kind", "url", "fetchedAt", "digest"],
+        "properties": {
+          "precedence": { "type": "integer", "minimum": 1, "maximum": 6 },
+          "kind": {
+            "enum": [
+              "github-release-api",
+              "github-metadata",
+              "github-tag-object",
+              "github-tag-file",
+              "dotnet-release-index",
+              "dotnet-channel-releases",
+              "microsoft-learn-docs",
+              "team-blog"
+            ]
+          },
+          "url": { "type": "string", "format": "uri" },
+          "fetchedAt": { "type": "string" },
+          "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "channels": {
+      "description": "Named tracks the site can boot into, resolved to concrete tags at generation time.",
+      "type": "object",
+      "required": ["lts", "ltsPrevious", "preview", "edge", "next"],
+      "properties": {
+        "lts": { "type": "string" },
+        "ltsPrevious": {
+          "description": "Other tags metadata.json declares as LTS and that were corroborated in the releases feed. Two LTS lines are supported concurrently, so discarding these would leave the lockfile unable to answer whether the older line is still supported.",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "preview": { "type": "string" },
+        "edge": { "type": ["string", "null"] },
+        "next": {
+          "description": "Tag upstream says is coming next (metadata.json NextReleaseTag). Not a release; a hint that this lockfile is about to go stale.",
+          "type": ["string", "null"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "releases": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/release" }
+    },
+    "dotnet": {
+      "description": "State of the .NET trains the PowerShell tags build on. Carries runtime and SDK as SEPARATE fields because they are separate version spaces.",
+      "type": "object",
+      "required": ["channels"],
+      "properties": {
+        "channels": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["channelVersion", "latestRelease", "latestRuntime", "latestSdk", "releaseType", "supportPhase", "eolDate"],
+            "properties": {
+              "channelVersion": { "type": "string" },
+              "latestRelease": { "type": "string" },
+              "latestRuntime": { "type": "string" },
+              "latestSdk": { "type": "string" },
+              "releaseType": {
+                "description": "lts = 3 years of support, sts = 2 years (dotnet/core release-policies.md; the older 18-month figure is superseded). A PowerShell line inherits its support class from the .NET it is built on, which is why this is recorded rather than assumed.",
+                "type": "string"
+              },
+              "supportPhase": { "type": "string" },
+              "eolDate": { "type": ["string", "null"] }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "discrepancies": {
+      "description": "Every place two sources disagree. A non-empty array is NOT a build failure by itself; it is a signal that a human must decide which source is right. Sorted deterministically so drift comparison is stable.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["severity", "code", "message"],
+        "properties": {
+          "severity": { "enum": ["info", "warning", "error"] },
+          "code": { "type": "string" },
+          "message": { "type": "string" },
+          "expected": {},
+          "actual": {},
+          "sources": { "type": "array", "items": { "type": "string" } }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "$defs": {
+    "dotnetBuild": {
+      "description": "What a PowerShell release was actually built on. SDK and runtime are recorded separately and must never be compared against each other: SDK 10.0.303 ships runtime 10.0.11, and .NET release 10.0.11 ships SDKs 10.0.400, 10.0.303 and 10.0.111 simultaneously.",
+      "type": "object",
+      "required": ["sdk", "runtime", "featureBand", "channelVersion", "releaseType", "supportPhase", "eolDate"],
+      "additionalProperties": false,
+      "properties": {
+        "sdk": {
+          "description": "Exact SDK version from global.json at the tag. The only trustworthy statement of what the release built against.",
+          "type": "string"
+        },
+        "runtime": {
+          "description": "Runtime that SDK ships, resolved through the .NET channel releases.json. Null when the SDK is not present in public .NET metadata.",
+          "type": ["string", "null"]
+        },
+        "featureBand": {
+          "description": "SDK feature band such as 3xx. Bands are PARALLEL, independently-serviced trains of the same runtime. Recorded for display; never ordered.",
+          "type": ["string", "null"]
+        },
+        "channelVersion": { "type": ["string", "null"] },
+        "releaseType": { "type": ["string", "null"] },
+        "supportPhase": { "type": ["string", "null"] },
+        "eolDate": { "type": ["string", "null"] }
+      }
+    },
+    "release": {
+      "type": "object",
+      "required": ["tag", "version", "channel", "prerelease", "publishedAt", "commitSha", "tagObjectSha", "dotnet", "supportedUntil", "snapshotDigest"],
+      "additionalProperties": false,
+      "properties": {
+        "tag": { "type": "string", "pattern": "^v[0-9]+[.][0-9]+[.][0-9]+(-preview[.][0-9]+|-rc[.][0-9]+)?$" },
+        "version": { "type": "string" },
+        "channel": {
+          "description": "Derived from the .NET channel's release-type, not hardcoded. lts and sts mirror .NET's own support classes.",
+          "enum": ["lts", "sts", "preview", "servicing"]
+        },
+        "prerelease": { "type": "boolean" },
+        "publishedAt": { "type": "string" },
+        "commitSha": {
+          "description": "The COMMIT sha the tag resolves to. PowerShell uses annotated tags, so this is the dereferenced target, not the tag object's own sha.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "tagObjectSha": {
+          "description": "The annotated tag object's own sha, or null when the ref pointed straight at a commit.",
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "dotnet": { "$ref": "#/$defs/dotnetBuild" },
+        "supportedUntil": { "type": ["string", "null"] },
+        "snapshotDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+      }
+    }
+  }
+}
