@@ -32,6 +32,32 @@
  *      ExpandPropertyNotFound,Microsoft.PowerShell.Commands.SelectObjectCommand
  *      InvalidArgument / PSArgumentException / 'Property "V" cannot be found.'
  *    and processing CONTINUES with the remaining objects.
+ *
+ * 5. A COLLISION BETWEEN -Property AND -ExpandProperty KEEPS THE EXPANDED
+ *    OBJECT'S OWN VALUE, and raises a DIFFERENT error id from the duplicate
+ *    -Property case:
+ *      $src = @([pscustomobject]@{K=1; V=[pscustomobject]@{K=9; Z=8}})
+ *      $src | Select-Object -Property K -ExpandProperty V
+ *        ->  one object, K=9 and Z=8            the expanded K WINS
+ *        ->  AlreadyExistingUserSpecifiedPropertyExpand,...SelectObjectCommand
+ *      @([pscustomobject]@{A=1}) | Select-Object -Property A,A
+ *        ->  AlreadyExistingUserSpecifiedPropertyNoExpand,...
+ *    Two ids for the same sentence. This used to spread the selected
+ *    properties over the expanded object, so K became 1 -- the source's value
+ *    silently overwrote the expanded one, with no error and a successful exit.
+ *    Where there is no collision the added property goes AFTER the expanded
+ *    object's own: `-Property K -ExpandProperty V` over `V=@{Z=8}` gives Z
+ *    then K.
+ *
+ * 6. THE PARAMETER SETS ARE REAL, and -SkipLast is what splits them. Measured
+ *    on `(Get-Command Select-Object).ParameterSets`, DefaultParameter is the
+ *    default and holds First/Last/Skip; SkipLastParameter holds Skip/SkipLast
+ *    and NOT First or Last. So:
+ *      1..5 | Select-Object -First 2 -Last 2   ->  1,2,4,5   LEGAL
+ *      1..3 | Select-Object -First 2 -Last 2   ->  1,2,3     overlap dedupes
+ *      1..5 | Select-Object -Skip 1 -SkipLast 1 ->  2,3,4    LEGAL
+ *      1..5 | Select-Object -Last 2 -SkipLast 1 ->  AmbiguousParameterSet
+ *    All four were accepted here; the last one is the one that was wrong.
  */
 
 import { enumerate, isPSObject, psObject, psWrap, typeNameOf } from '../../pipeline/psobject.ts';
@@ -46,6 +72,7 @@ import {
   STRING,
   STRING_ARRAY,
   SWITCH,
+  commandInput,
   hasResolvableProperty,
   manifest,
   matchPropertyNames,
@@ -72,13 +99,36 @@ function expandNotFound(property: string): ErrorRecord {
   );
 }
 
-function duplicateProperty(property: string, target: PSValue): ErrorRecord {
+/**
+ * The same sentence under two error ids, which is what pwsh does. `NoExpand` is
+ * `-Property A,A`; `Expand` is `-Property K` colliding with what
+ * `-ExpandProperty` produced. Both measured.
+ */
+function duplicateProperty(
+  property: string,
+  target: PSValue,
+  duringExpand = false,
+): ErrorRecord {
   return errorRecord(
     `The property cannot be processed because the property "${property}" already exists.`,
-    'AlreadyExistingUserSpecifiedPropertyNoExpand',
+    duringExpand
+      ? 'AlreadyExistingUserSpecifiedPropertyExpand'
+      : 'AlreadyExistingUserSpecifiedPropertyNoExpand',
     COMMAND,
     'InvalidOperation',
     { exceptionType: 'System.Management.Automation.PSArgumentException', targetObject: target },
+  );
+}
+
+function ambiguousParameterSet(): ErrorRecord {
+  return errorRecord(
+    'Parameter set cannot be resolved using the specified named parameters. One or more ' +
+      'parameters issued cannot be used together or an insufficient number of parameters ' +
+      'were provided.',
+    'AmbiguousParameterSet',
+    COMMAND,
+    'InvalidArgument',
+    { exceptionType: 'System.Management.Automation.ParameterBindingException' },
   );
 }
 
@@ -113,9 +163,34 @@ function selectProperties(
   return { object: psObject(properties, selectedTypeNames(source)), errors };
 }
 
-function attach(value: PSValue, extra: Readonly<Record<string, PSValue>>): PSValue {
-  if (Object.keys(extra).length === 0) return value;
-  if (isPSObject(value)) return psObject({ ...value.properties, ...extra }, value.typeNames);
+/**
+ * Add the selected properties to an expanded object, WITHOUT overwriting.
+ *
+ * The spread used to run the other way, so a `-Property K` collided with the
+ * expanded object's own `K` and replaced it. Measured, pwsh keeps the expanded
+ * object's value and raises AlreadyExistingUserSpecifiedPropertyExpand; the
+ * collisions are returned so the caller can do that.
+ */
+function attach(
+  value: PSValue,
+  extra: Readonly<Record<string, PSValue>>,
+): { value: PSValue; collisions: readonly string[] } {
+  if (Object.keys(extra).length === 0) return { value, collisions: [] };
+  if (isPSObject(value)) {
+    const collisions = Object.keys(extra).filter((name) => Object.hasOwn(value.properties, name));
+    const merged: Record<string, PSValue> = { ...value.properties };
+    for (const [name, item] of Object.entries(extra)) {
+      if (!Object.hasOwn(merged, name)) merged[name] = item;
+    }
+    return { value: psObject(merged, value.typeNames), collisions };
+  }
+  return { value: attachToPrimitive(value, extra), collisions: [] };
+}
+
+function attachToPrimitive(
+  value: PSValue,
+  extra: Readonly<Record<string, PSValue>>,
+): PSValue {
   // pwsh keeps the expanded value's own type — `$r[0].GetType().FullName` is
   // System.Int32 — while still answering `$r[0].Tag`. That is a PSObject
   // wrapping the primitive, which is exactly what baseObject is for.
@@ -141,11 +216,13 @@ function project(
     if (requested === undefined) return { values: expanded, errors: [], projected: false };
     const selected = selectProperties(source, requested);
     const extra = isPSObject(selected.object) ? selected.object.properties : {};
-    return {
-      values: expanded.map((item) => attach(item, extra)),
-      errors: selected.errors,
-      projected: false,
-    };
+    const errors = [...selected.errors];
+    const values = expanded.map((item) => {
+      const merged = attach(item, extra);
+      for (const name of merged.collisions) errors.push(duplicateProperty(name, item, true));
+      return merged.value;
+    });
+    return { values, errors, projected: false };
   }
 
   if (requested !== undefined) {
@@ -200,8 +277,13 @@ const SELECT_OBJECT_MANIFEST = manifest({
     'Windowing (-First/-Last/-Skip/-SkipLast), projection (-Property/-ExpandProperty) and ' +
     '-Unique are implemented, and -First really does stop the upstream. -Unique reproduces ' +
     "pwsh's case-sensitive ToString comparison, including its collapse of distinct " +
-    'PSCustomObjects onto one another. -Wait, -Index and -Skip/-First over property sets ' +
-    'are not implemented.',
+    'PSCustomObjects onto one another. The parameter sets are enforced: -SkipLast belongs ' +
+    'to a different set from -First and -Last, so combining them is refused the way pwsh ' +
+    'refuses it, while -First with -Last is legal and windows both ends. A -Property that ' +
+    'collides with what -ExpandProperty produced keeps the expanded value and reports ' +
+    'AlreadyExistingUserSpecifiedPropertyExpand, verified against pwsh 7.6.5. -Wait, ' +
+    '-Index, -SkipIndex, -ExcludeProperty and -CaseInsensitive are upstream-only and are ' +
+    'not accepted.',
   parameters: [
     parameter('Property', STRING_ARRAY, { position: 0 }),
     parameter('ExpandProperty', STRING),
@@ -227,6 +309,14 @@ export const selectObject: CommandModule = {
     const skip = numberValue(parameters, 'Skip') ?? 0;
     const skipLast = numberValue(parameters, 'SkipLast');
     const unique = switchValue(parameters, 'Unique');
+
+    // Rule 6. Measured: -SkipLast lives in SkipLastParameter, which declares
+    // neither -First nor -Last, so pwsh cannot resolve the combination. All
+    // three were accepted here and silently produced some window or other.
+    if (skipLast !== undefined && (first !== undefined || last !== undefined)) {
+      await context.streams.error.write(ambiguousParameterSet());
+      return 1;
+    }
 
     const sink = context.streams.success;
     const seenKeys = new Set<string>();
@@ -280,7 +370,7 @@ export const selectObject: CommandModule = {
       await emit(item);
     };
 
-    for await (const item of context.input) {
+    for await (const item of commandInput(context, parameters, COMMAND)) {
       throwIfCancelled(context.signal, 'Select-Object');
 
       // Nulls are dropped before anything counts them.

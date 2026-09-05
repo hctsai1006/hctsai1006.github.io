@@ -26,6 +26,8 @@ import {
   typeNameOf,
 } from '../../pipeline/psobject.ts';
 import type { PSObject, PSValue } from '../../pipeline/psobject.ts';
+import { errorRecord } from '../../pipeline/streams.ts';
+import type { ErrorRecord } from '../../pipeline/streams.ts';
 import type { BoundParameters } from '../invocation.ts';
 import type {
   Capability,
@@ -304,6 +306,81 @@ export function renderValue(value: PSValue): string {
   // repository at once; there is now one, in psobject.ts, next to the value
   // model it describes.
   return toPSString(value);
+}
+
+// ---------------------------------------------------------------------------
+// -InputObject
+// ---------------------------------------------------------------------------
+
+/**
+ * What the command should iterate: the pipeline, or the direct argument.
+ *
+ * Every object cmdlet DECLARED `-InputObject` and every one of them read
+ * `context.input` and nothing else, so `Measure-Object -InputObject @(1,2,3)
+ * -Sum` bound the parameter, ignored it, saw an empty pipeline and reported
+ * Count 0 as a success. Measured against pwsh 7.6.5:
+ *
+ *   Measure-Object -InputObject @(1,2,3) -Sum
+ *     ->  Count 1, Sum empty, NonNumericInputObject 'System.Object[]'
+ *   @(Sort-Object -InputObject 3,1,2).Count            ->  1
+ *   @(Group-Object -InputObject 3,1,2).Count           ->  1, Name '3 1 2'
+ *   (Get-Member -InputObject 3,1,2).TypeName           ->  System.Object[]
+ *   @(Select-Object -InputObject 3,1,2 -First 1)       ->  the whole array
+ *
+ * So `-InputObject` supplies exactly ONE object and it is NOT enumerated. An
+ * array argument is one array, which is why the Measure-Object line reports a
+ * non-numeric System.Object[] rather than summing to 6.
+ *
+ * And when BOTH are supplied the pipeline items are rejected individually:
+ *
+ *   $e = $null
+ *   1..2 | Measure-Object -InputObject 9 -ErrorVariable e -ErrorAction SilentlyContinue
+ *     ->  Count 0, and TWO errors
+ *   $e[0].FullyQualifiedErrorId
+ *     ->  InputObjectNotBound,Microsoft.PowerShell.Commands.MeasureObjectCommand
+ *   $e[0].TargetObject -> 1
+ *
+ * Count 0, not 1: the direct argument does not get measured either. That is
+ * reproduced rather than tidied — a caller who wrote both meant one of them,
+ * and quietly picking is how this whole family of defects started.
+ */
+export async function* commandInput(
+  context: {
+    readonly input: AsyncIterable<PSValue>;
+    readonly streams: { readonly error: { write(record: ErrorRecord): Promise<void> } };
+  },
+  bound: BoundParameters,
+  commandTypeName: string,
+): AsyncGenerator<PSValue> {
+  if (!isBound(bound, 'InputObject')) {
+    yield* context.input;
+    return;
+  }
+
+  // Drain rather than abandon: an unread input would leave the upstream stage
+  // waiting on a consumer that has walked away.
+  let rejected = 0;
+  for await (const item of context.input) {
+    rejected += 1;
+    await context.streams.error.write(
+      errorRecord(
+        'The input object cannot be bound to any parameters for the command either because ' +
+          'the command does not take pipeline input or the input and its properties do not ' +
+          'match any of the parameters that take pipeline input.',
+        'InputObjectNotBound',
+        commandTypeName,
+        'InvalidArgument',
+        {
+          targetObject: item,
+          exceptionType: 'System.Management.Automation.ParameterBindingException',
+        },
+      ),
+    );
+  }
+  if (rejected > 0) return;
+
+  const value = rawValue(bound, 'InputObject');
+  if (value !== undefined) yield value;
 }
 
 // ---------------------------------------------------------------------------

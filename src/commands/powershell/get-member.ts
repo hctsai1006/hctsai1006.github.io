@@ -43,6 +43,26 @@
  * reports 54 members for a string; this reports the four universal methods plus
  * Length. The members that ARE reported are real; the list is not exhaustive,
  * and the manifest says so rather than letting the output imply completeness.
+ *
+ * -Force AND -MemberType, MEASURED AND REFUSED
+ *
+ *   ([pscustomobject]@{A=1} | Get-Member).Count          ->   5
+ *   ([pscustomobject]@{A=1} | Get-Member -Force).Count   ->  10
+ *   ... -Force names -> pstypenames, psadapted, psbase, psextended, psobject,
+ *                       Equals, GetHashCode, GetType, ToString, A
+ *
+ * So -Force is not cosmetic: it reveals five intrinsic PSObject members that
+ * this engine does not model at all. It was in the manifest and never read, so
+ * `Get-Member -Force` returned the same five members as without it and looked
+ * like a complete answer. It now says no.
+ *
+ *   [pscustomobject]@{A=1} | Get-Member -MemberType Bogus
+ *     ->  CannotConvertArgumentNoMessage,...GetMemberCommand, listing every
+ *         valid PSMemberTypes value
+ *
+ * An unrecognised member type was silently filtering everything out and
+ * emitting nothing -- a wrong answer shaped exactly like "this object has no
+ * members of that kind".
  */
 
 import { isPSObject, typeNameOf } from '../../pipeline/psobject.ts';
@@ -53,6 +73,7 @@ import type { BindingResult, CommandModule, InvocationContext } from '../invocat
 import {
   STRING_ARRAY,
   SWITCH,
+  commandInput,
   compareMemberNames,
   emitAll,
   manifest,
@@ -118,6 +139,17 @@ interface Member {
   readonly definition: string;
 }
 
+/**
+ * Every value `-MemberType` accepts, in the order pwsh lists them in its own
+ * error message. Copied from that message rather than from documentation.
+ */
+const MEMBER_TYPES: readonly string[] = [
+  'AliasProperty', 'CodeProperty', 'Property', 'NoteProperty', 'ScriptProperty',
+  'PropertySet', 'Method', 'CodeMethod', 'ScriptMethod', 'Methods',
+  'ParameterizedProperty', 'MemberSet', 'Event', 'Dynamic', 'InferredProperty',
+  'Properties', 'All',
+];
+
 /** Present on every object, whatever it is. Definitions copied verbatim. */
 const UNIVERSAL_METHODS: readonly Member[] = [
   { name: 'Equals', memberType: 'Method', definition: 'bool Equals(System.Object obj)' },
@@ -159,8 +191,13 @@ const GET_MEMBER_MANIFEST = manifest({
     'Reports the members this engine actually models: note properties of a PSObject, the ' +
     'four universal methods, and Length/Count on strings and arrays. It is NOT the full ' +
     '.NET member surface — pwsh lists 54 members for a string where this lists 5 — so a ' +
-    'member missing from this output may still exist on the real type. -Static, -Force and ' +
-    '-View are not implemented.',
+    'member missing from this output may still exist on the real type. -Static and -Force ' +
+    'are REFUSED with named errors rather than ignored: measured, -Force adds five ' +
+    'intrinsic PSObject members (pstypenames, psadapted, psbase, psextended, psobject) ' +
+    'that are not modelled here, so accepting it would report the plain member list as if ' +
+    'it were the forced one. An unrecognised -MemberType is an error listing the valid ' +
+    'values, as pwsh does, instead of quietly matching nothing. -View is upstream-only and ' +
+    'is not accepted.',
   parameters: [
     parameter('Name', STRING_ARRAY, { position: 0 }),
     parameter('MemberType', STRING_ARRAY),
@@ -191,13 +228,54 @@ export const getMember: CommandModule = {
       );
       return 1;
     }
+    // Measured: -Force adds pstypenames, psadapted, psbase, psextended and
+    // psobject, taking a PSCustomObject from 5 members to 10. None of the five
+    // exists in this engine's object model, so accepting the switch would
+    // answer the un-forced question and call it the forced one.
+    if (switchValue(parameters, 'Force')) {
+      await context.streams.error.write(
+        errorRecord(
+          '-Force is not implemented by BrowserShell. In PowerShell it reveals the intrinsic ' +
+            'members pstypenames, psadapted, psbase, psextended and psobject, none of which ' +
+            'this engine models, so the output would be identical to Get-Member without ' +
+            '-Force and would misreport that as the complete forced list.',
+          'ParameterNotSupported',
+          COMMAND,
+          'NotImplemented',
+          { exceptionType: 'System.NotSupportedException' },
+        ),
+      );
+      return 1;
+    }
+    // pwsh rejects an unrecognised -MemberType at BIND time, listing the valid
+    // values; the enum conversion is metadata this engine's binder does not
+    // have, so the check lives here. Silently filtering to nothing was the
+    // alternative, and it is indistinguishable from a real empty result.
+    const unknownTypes = (memberTypeFilters ?? []).filter(
+      (name) => !MEMBER_TYPES.some((known) => known.toLowerCase() === name.toLowerCase()),
+    );
+    if (unknownTypes.length > 0) {
+      await context.streams.error.write(
+        errorRecord(
+          `Cannot bind parameter 'MemberType'. Cannot convert value "${unknownTypes[0] ?? ''}" ` +
+            'to type "System.Management.Automation.PSMemberTypes" due to enumeration values ' +
+            `that are not valid. Specify one of the following enumeration values and try ` +
+            `again. The possible enumeration values are "${MEMBER_TYPES.join(',')}".`,
+          'CannotConvertArgumentNoMessage',
+          COMMAND,
+          'InvalidArgument',
+          { exceptionType: 'System.Management.Automation.ParameterBindingException' },
+        ),
+      );
+      return 1;
+    }
 
     // Insertion-ordered: types report in the order they were first seen, and
     // only the first object of each type is inspected.
     const byType = new Map<string, readonly Member[]>();
     let sawObject = false;
 
-    for await (const item of context.input) {
+    for await (const item of commandInput(context, parameters, COMMAND)) {
       throwIfCancelled(context.signal, 'Get-Member');
       if (item === null) continue;
       sawObject = true;

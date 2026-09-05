@@ -67,6 +67,7 @@ import {
   STRING,
   SWITCH,
   asScriptBlock,
+  commandInput,
   isBound,
   manifest,
   parameter,
@@ -518,7 +519,7 @@ export const whereObject: CommandModule = {
       return 1;
     }
 
-    for await (const item of context.input) {
+    for await (const item of commandInput(context, parameters, COMMAND)) {
       throwIfCancelled(context.signal, 'Where-Object');
 
       let keep: boolean;

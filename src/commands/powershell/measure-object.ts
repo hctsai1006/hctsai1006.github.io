@@ -47,6 +47,31 @@
  *      @('a','b') | Measure-Object -Maximum -Sum   ->  GenericMeasureInfo + errors
  *    Asking only for Min/Max over non-numeric data switches to the object-typed
  *    result, where Maximum is `System.Object` instead of `double`.
+ *
+ * 9. -StandardDeviation IS A COMPUTATION, and it is the SAMPLE one (n-1):
+ *      1..5 | Measure-Object -StandardDeviation  ->  1.58113883008419
+ *      [Math]::Sqrt(2.5)                         ->  1.58113883008419
+ *    It is independent of the other switches -- `-Sum -StandardDeviation`
+ *    fills in both, `-StandardDeviation` alone leaves Sum null. This command
+ *    used to declare the switch, accept it, and always report null, which is
+ *    a successful wrong answer rather than a missing feature.
+ *
+ * 10. -IgnoreWhiteSpace AFFECTS CHARACTERS ONLY:
+ *      'a b  c' | Measure-Object -Character                      ->  6
+ *      'a b  c' | Measure-Object -Character -IgnoreWhiteSpace     ->  3
+ *      'a b  c' | Measure-Object -Word -IgnoreWhiteSpace          ->  3  (same
+ *                                                                    as without)
+ *      " a `n b " | Measure-Object -Line -IgnoreWhiteSpace        ->  2  (same)
+ *    The plausible reading -- "ignore whitespace everywhere" -- would change
+ *    the word and line counts too, and it is wrong.
+ *
+ * 11. -IgnoreWhiteSpace IS IN THE TEXT PARAMETER SET, so it conflicts with the
+ *    numeric switches even though it counts nothing itself:
+ *      1..3 | Measure-Object -Sum -IgnoreWhiteSpace
+ *        ->  AmbiguousParameterSet,...MeasureObjectCommand
+ *    Measured sets: GenericMeasure (default) holds Sum/Average/Maximum/
+ *    Minimum/StandardDeviation/AllStats, TextMeasure holds Line/Word/
+ *    Character/IgnoreWhiteSpace.
  */
 
 import { compareForSorting } from '../../pipeline/psobject.ts';
@@ -59,6 +84,7 @@ import {
   OBJECT,
   STRING_ARRAY,
   SWITCH,
+  commandInput,
   hasResolvableProperty,
   manifest,
   parameter,
@@ -136,11 +162,56 @@ function countWords(text: string): number {
   return text.split(/\s+/u).filter((word) => word.length > 0).length;
 }
 
+/**
+ * Running totals, NOT the values.
+ *
+ * The old version pushed every value into `values` and every number into
+ * `numbers`, then finished with `Math.max(...numbers)`. Two problems, one of
+ * them a hard failure:
+ *
+ *   MEASURED on node 24.13.0, `Math.max(...a)` throws
+ *   `RangeError: Maximum call stack size exceeded` at 124,767 elements --
+ *   124,766 is the largest that works. `1..200000 | Measure-Object -Maximum`
+ *   is an ordinary thing to type and pwsh answers it in a blink; this crashed.
+ *   The same spread has already bitten this repository elsewhere.
+ *
+ *   And Measure-Object is a STREAMING command in pwsh -- it reports on a
+ *   pipeline it never has to hold. Buffering made a fold into a collection.
+ *
+ * Everything wanted is a fold: count, sum, sum of squares (for the standard
+ * deviation), and running min/max under two different comparisons -- numeric
+ * for the GenericMeasureInfo result and `compareForSorting` for the
+ * GenericObjectMeasureInfo one, which is chosen by the data and cannot be
+ * known until the end.
+ */
 interface NumericTally {
   count: number;
-  readonly values: PSValue[];
-  readonly numbers: number[];
+  /** Numeric fold. `numberCount` is how many values converted, not `count`. */
+  numberCount: number;
+  sum: number;
+  sumOfSquares: number;
+  numericMinimum: number | null;
+  numericMaximum: number | null;
+  /** Total-order fold, for the object-typed result. */
+  objectMinimum: PSValue;
+  objectMaximum: PSValue;
+  sawAnyValue: boolean;
   sawNonNumeric: boolean;
+}
+
+function emptyNumericTally(): NumericTally {
+  return {
+    count: 0,
+    numberCount: 0,
+    sum: 0,
+    sumOfSquares: 0,
+    numericMinimum: null,
+    numericMaximum: null,
+    objectMinimum: null,
+    objectMaximum: null,
+    sawAnyValue: false,
+    sawNonNumeric: false,
+  };
 }
 
 interface TextTally {
@@ -150,17 +221,41 @@ interface TextTally {
   characters: number;
 }
 
+/**
+ * The sample standard deviation, from the running sums.
+ *
+ * Sample (n-1) and not population (n): measured, `1..5 | Measure-Object
+ * -StandardDeviation` reports 1.58113883008419, which is sqrt(10/4), where the
+ * population figure would be sqrt(10/5) = 1.414.
+ *
+ * Computed from sum and sum-of-squares so the command stays a single pass. The
+ * textbook warning about that form losing precision on large means is real and
+ * is the reason this note exists rather than a bare formula; for the pipeline
+ * sizes a browser terminal sees it is the right trade against holding every
+ * value, and `Math.max(0, ...)` keeps a negative rounding artefact from
+ * reaching `Math.sqrt` and returning NaN.
+ */
+function sampleStandardDeviation(tally: NumericTally): number | null {
+  if (tally.numberCount < 2) return null;
+  const mean = tally.sum / tally.numberCount;
+  const variance =
+    Math.max(0, tally.sumOfSquares - tally.numberCount * mean * mean) / (tally.numberCount - 1);
+  return Math.sqrt(variance);
+}
+
 const MEASURE_OBJECT_MANIFEST = manifest({
   display: 'Measure-Object',
   aliases: ['measure'],
   synopsis: 'Calculates the numeric properties of objects, and the characters, words and lines in text.',
   notes:
     'Both parameter sets are implemented, including the data-dependent choice between ' +
-    'GenericMeasureInfo and GenericObjectMeasureInfo. -StandardDeviation is NOT implemented: ' +
-    'the property is present on the result and always null, matching where pwsh leaves it ' +
-    'when the switch is absent. Sum/Average/Minimum/Maximum are System.Double in pwsh even ' +
-    'for integer input; here they carry whatever type the shared number model reports, so ' +
-    'Get-Member on a whole-number Sum says Int32 where pwsh says Double.',
+    'GenericMeasureInfo and GenericObjectMeasureInfo, -StandardDeviation (the SAMPLE ' +
+    'deviation, n-1, verified against pwsh 7.6.5) and -IgnoreWhiteSpace (which affects ' +
+    'the character count only, also verified). Measuring is a single streaming pass: no ' +
+    'input value is retained, so a pipeline of any length costs the same. -AllStats is ' +
+    'upstream-only and is not accepted. Sum/Average/Minimum/Maximum are System.Double in ' +
+    'pwsh even for integer input; here they carry whatever type the shared number model ' +
+    'reports, so Get-Member on a whole-number Sum says Int32 where pwsh says Double.',
   parameters: [
     parameter('Property', STRING_ARRAY, { position: 0 }),
     parameter('Sum', SWITCH),
@@ -191,12 +286,18 @@ export const measureObject: CommandModule = {
     const wantAverage = switchValue(parameters, 'Average');
     const wantMaximum = switchValue(parameters, 'Maximum');
     const wantMinimum = switchValue(parameters, 'Minimum');
+    const wantDeviation = switchValue(parameters, 'StandardDeviation');
     const wantLine = switchValue(parameters, 'Line');
     const wantWord = switchValue(parameters, 'Word');
     const wantCharacter = switchValue(parameters, 'Character');
+    const ignoreWhiteSpace = switchValue(parameters, 'IgnoreWhiteSpace');
 
-    const textMode = wantLine || wantWord || wantCharacter;
-    const numericMode = wantSum || wantAverage || wantMaximum || wantMinimum;
+    // Rule 11: -IgnoreWhiteSpace is in the TEXT set even though it counts
+    // nothing, so it conflicts with the numeric switches. Leaving it out of
+    // this test let `Measure-Object -Sum -IgnoreWhiteSpace` succeed, where
+    // pwsh refuses to bind.
+    const textMode = wantLine || wantWord || wantCharacter || ignoreWhiteSpace;
+    const numericMode = wantSum || wantAverage || wantMaximum || wantMinimum || wantDeviation;
 
     if (textMode && numericMode) {
       // Not a warning and not a partial result: pwsh refuses to bind at all.
@@ -218,7 +319,7 @@ export const measureObject: CommandModule = {
      */
     const forcedNumeric = wantSum || wantAverage;
 
-    for await (const item of context.input) {
+    for await (const item of commandInput(context, parameters, COMMAND)) {
       throwIfCancelled(context.signal, 'Measure-Object');
 
       // Rule 1: a null INPUT object is skipped entirely. Not a null property.
@@ -235,21 +336,31 @@ export const measureObject: CommandModule = {
           tally.count += 1;
           tally.lines += countLines(text);
           tally.words += countWords(text);
-          tally.characters += text.length;
+          // Rule 10: -IgnoreWhiteSpace narrows the CHARACTER count and nothing
+          // else. Lines and words are counted from the untouched text above.
+          tally.characters += ignoreWhiteSpace
+            ? text.replace(/\s/gu, '').length
+            : text.length;
           textTallies.set(key, tally);
           continue;
         }
 
-        const tally = numericTallies.get(key) ?? {
-          count: 0,
-          values: [],
-          numbers: [],
-          sawNonNumeric: false,
-        };
+        const tally = numericTallies.get(key) ?? emptyNumericTally();
         // Rule 2: counted before any numeric conversion is attempted, which is
         // why a null property value adds to Count but not to Sum.
         tally.count += 1;
-        tally.values.push(value);
+
+        // The total-order fold, which the object-typed result reads. It has to
+        // run over EVERY value including nulls, because that result reports the
+        // extremes of the data as it arrived rather than of the numbers.
+        if (!tally.sawAnyValue) {
+          tally.objectMinimum = value;
+          tally.objectMaximum = value;
+          tally.sawAnyValue = true;
+        } else {
+          if (compareForSorting(value, tally.objectMinimum) < 0) tally.objectMinimum = value;
+          if (compareForSorting(value, tally.objectMaximum) > 0) tally.objectMaximum = value;
+        }
 
         // A null property value is counted and then IGNORED: it is neither
         // summed nor reported as non-numeric.
@@ -263,7 +374,17 @@ export const measureObject: CommandModule = {
             tally.sawNonNumeric = true;
             if (forcedNumeric) await context.streams.error.write(nonNumeric(value));
           } else {
-            tally.numbers.push(asNumber);
+            tally.numberCount += 1;
+            tally.sum += asNumber;
+            tally.sumOfSquares += asNumber * asNumber;
+            tally.numericMinimum =
+              tally.numericMinimum === null || asNumber < tally.numericMinimum
+                ? asNumber
+                : tally.numericMinimum;
+            tally.numericMaximum =
+              tally.numericMaximum === null || asNumber > tally.numericMaximum
+                ? asNumber
+                : tally.numericMaximum;
           }
         }
         numericTallies.set(key, tally);
@@ -278,6 +399,7 @@ export const measureObject: CommandModule = {
             wantAverage,
             wantMaximum,
             wantMinimum,
+            wantDeviation,
           });
       if (result !== null) await context.streams.success.write(result);
     }
@@ -326,6 +448,7 @@ function buildNumeric(
     wantAverage: boolean;
     wantMaximum: boolean;
     wantMinimum: boolean;
+    wantDeviation: boolean;
   },
 ): PSValue | null {
   if (tally === undefined) {
@@ -346,19 +469,18 @@ function buildNumeric(
     );
   }
 
-  const onlyExtremes = !wants.wantSum && !wants.wantAverage;
+  const onlyExtremes = !wants.wantSum && !wants.wantAverage && !wants.wantDeviation;
 
   // Rule 8: the OBJECT-typed result is chosen by the data, and only when Sum
   // and Average were both left out.
   if (onlyExtremes && tally.sawNonNumeric) {
-    const sorted = [...tally.values].sort((a, b) => compareForSorting(a, b));
     return typedObject(
       {
         Count: tally.count,
         Average: null,
         Sum: null,
-        Maximum: wants.wantMaximum ? (sorted.at(-1) ?? null) : null,
-        Minimum: wants.wantMinimum ? (sorted[0] ?? null) : null,
+        Maximum: wants.wantMaximum ? tally.objectMaximum : null,
+        Minimum: wants.wantMinimum ? tally.objectMinimum : null,
         StandardDeviation: null,
         Property: key,
       },
@@ -367,16 +489,19 @@ function buildNumeric(
   }
 
   // Rule 5: one bad value suppresses every numeric result. Count survives.
-  const usable = !tally.sawNonNumeric && tally.numbers.length > 0;
-  const sum = usable ? tally.numbers.reduce((a, b) => a + b, 0) : null;
+  const usable = !tally.sawNonNumeric && tally.numberCount > 0;
+  const sum = usable ? tally.sum : null;
   return typedObject(
     {
       Count: tally.count,
-      Average: usable && wants.wantAverage && sum !== null ? sum / tally.numbers.length : null,
+      Average: usable && wants.wantAverage && sum !== null ? sum / tally.numberCount : null,
       Sum: wants.wantSum ? sum : null,
-      Maximum: usable && wants.wantMaximum ? Math.max(...tally.numbers) : null,
-      Minimum: usable && wants.wantMinimum ? Math.min(...tally.numbers) : null,
-      StandardDeviation: null,
+      // No spread. `Math.max(...numbers)` threw RangeError at 124,767 values;
+      // these are running extremes kept as the pipeline went past.
+      Maximum: usable && wants.wantMaximum ? tally.numericMaximum : null,
+      Minimum: usable && wants.wantMinimum ? tally.numericMinimum : null,
+      StandardDeviation:
+        usable && wants.wantDeviation ? sampleStandardDeviation(tally) : null,
       Property: key,
     },
     GENERIC_TYPE,

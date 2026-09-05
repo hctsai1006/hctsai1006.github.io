@@ -35,6 +35,29 @@
  *    A null *property* is different: it forms a group whose Name is the EMPTY
  *    STRING, and `$null -eq $group.Name` is False.
  *
+ * -AsHashTable AND -AsString, MEASURED AND REFUSED
+ *
+ *   ($g | Group-Object K -AsHashTable).GetType().FullName
+ *     ->  System.Collections.Hashtable                       ONE object, not
+ *                                                            a stream of groups
+ *   (@(1,1,2) | Group-Object -AsHashTable).Keys[0].GetType().Name
+ *     ->  Int32                                              keys keep their type
+ *   (@(1,1,2) | Group-Object -AsHashTable -AsString).Keys[0].GetType().Name
+ *     ->  String                                             -AsString is what
+ *                                                            makes them strings
+ *   $g | Group-Object K -AsString
+ *     ->  ArgumentException,...GroupObjectCommand
+ *         'The command cannot be run because the AsString parameter requires
+ *          that you specify the AsHashtable parameter.'
+ *
+ * Both were in the manifest and neither was read: -AsHashTable produced the
+ * ordinary GroupInfo stream and -AsString did nothing at all. The first is
+ * REFUSED rather than approximated, because the answer is a
+ * System.Collections.Hashtable and this engine's value model has no hashtable
+ * in it -- anything emitted would be a different type, with different member
+ * access, under a name that says otherwise. The second reproduces pwsh's own
+ * error, which is the same refusal pwsh makes.
+ *
  * KNOWN DIVERGENCE. pwsh inserts each new group into a list by binary search,
  * so when the keys are of mixed types — and the comparison is therefore not a
  * consistent ordering — the result is neither sorted nor input order:
@@ -47,11 +70,13 @@
 import { compareForSorting } from '../../pipeline/psobject.ts';
 import type { PSValue } from '../../pipeline/psobject.ts';
 import { throwIfCancelled } from '../../pipeline/pipeline.ts';
+import { errorRecord } from '../../pipeline/streams.ts';
 import type { BindingResult, CommandModule, InvocationContext } from '../invocation.ts';
 import {
   OBJECT,
   STRING_ARRAY,
   SWITCH,
+  commandInput,
   emitAll,
   manifest,
   parameter,
@@ -61,6 +86,8 @@ import {
   switchValue,
   typedObject,
 } from './support.ts';
+
+const COMMAND = 'Microsoft.PowerShell.Commands.GroupObjectCommand';
 
 const GROUP_INFO_TYPE = ['Microsoft.PowerShell.Commands.GroupInfo', 'System.Object'] as const;
 
@@ -84,9 +111,13 @@ const GROUP_OBJECT_MANIFEST = manifest({
   synopsis: 'Groups objects that contain the same value for specified properties.',
   notes:
     'Emits GroupInfo (or GroupInfoNoElement for -NoElement) with Count, Name, Group and ' +
-    'Values, verified against pwsh 7.6.5. -AsHashTable and -AsString are not implemented. ' +
-    'Group ordering is sorted by key; pwsh sorts by key too, except for mixed-type keys ' +
-    'where its binary-search insertion produces an arbitrary order.',
+    'Values, verified against pwsh 7.6.5. -AsHashTable is REFUSED with a named error rather ' +
+    'than ignored: it returns a System.Collections.Hashtable in pwsh and this value model ' +
+    'has no hashtable, so any object emitted under that name would answer differently. ' +
+    '-AsString without -AsHashTable reproduces pwsh\'s own ArgumentException. -Culture is ' +
+    'upstream-only and is not accepted. Group ordering is sorted by key; pwsh sorts by key ' +
+    'too, except for mixed-type keys where its binary-search insertion produces an ' +
+    'arbitrary order.',
   parameters: [
     parameter('Property', STRING_ARRAY, { position: 0 }),
     parameter('NoElement', SWITCH),
@@ -106,10 +137,46 @@ export const groupObject: CommandModule = {
     const properties = stringArray(parameters, 'Property');
     const noElement = switchValue(parameters, 'NoElement');
     const caseSensitive = switchValue(parameters, 'CaseSensitive');
+    const asHashTable = switchValue(parameters, 'AsHashTable');
+    const asString = switchValue(parameters, 'AsString');
+
+    // pwsh's own message and error id, word for word. -AsString is meaningless
+    // without -AsHashTable because all it does is stringify the hashtable KEYS.
+    if (asString && !asHashTable) {
+      await context.streams.error.write(
+        errorRecord(
+          'The command cannot be run because the AsString parameter requires that you ' +
+            'specify the AsHashtable parameter.',
+          'ArgumentException',
+          COMMAND,
+          'InvalidArgument',
+          { exceptionType: 'System.ArgumentException' },
+        ),
+      );
+      return 1;
+    }
+
+    // Refused, not approximated. See the header note.
+    if (asHashTable) {
+      await context.streams.error.write(
+        errorRecord(
+          '-AsHashTable is not supported by BrowserShell. In PowerShell it emits a single ' +
+            'System.Collections.Hashtable whose keys are the group keys; this engine has no ' +
+            'hashtable in its value model, and an object emitted under that name would not ' +
+            'answer .Keys or an index the way the real one does. Use the default GroupInfo ' +
+            'output, whose Name and Group carry the same information.',
+          'ParameterNotSupported',
+          COMMAND,
+          'NotImplemented',
+          { exceptionType: 'System.NotSupportedException' },
+        ),
+      );
+      return 1;
+    }
 
     const groups = new Map<string, Group>();
 
-    for await (const item of context.input) {
+    for await (const item of commandInput(context, parameters, COMMAND)) {
       throwIfCancelled(context.signal, 'Group-Object');
       if (item === null) continue;
 
