@@ -4,7 +4,7 @@
 
 **Phase** Core  
 **Status** [~] in progress  
-**Tasks** 5/6 `###############...`
+**Tasks** 6/6 `##################`
 
 ## Why
 
@@ -50,9 +50,12 @@ Today every command returns pre-formatted rows, so `gci | Sort-Object` sorts ren
   - *evidence:* `src/commands/powershell/group-object.ts` exports `groupObject`
   - *evidence:* `src/pipeline/psobject.ts` exports `compareValues`
   - *evidence:* `tests/unit/psobject.test.mts` — test "reproduces the reference implementation Sort-Object result"
-- [ ] **7.6** Keep an EncodingBroker so native byte streams are not corrupted by UTF-16 round-trips
-  - The byte channel type exists (NativeStreams, and the kernel forwards raw chunks as bytes events), but no command reads or writes it and there is no broker guarding the boundary.
-  - *evidence:* nothing under `src/**/*.{ts,mts}` matches `/EncodingBroker/`
+- [x] **7.6** Keep an EncodingBroker so native byte streams are not corrupted by UTF-16 round-trips
+  - Built. One place decides an encoding and one place applies it: the two tables that existed before disagreed about `ascii`, disagreed about which names existed at all, and neither matched pwsh on `oem`. Legacy single-byte codecs are hand-rolled rather than delegated to TextDecoder, because Node and Chrome disagree across the whole 0x80-0x9F range for windows-1252 and .NET agrees with Chrome — using TextDecoder would have pinned one answer in the tests and shipped the other. UTF-8 is delegated, measured to agree across Node, Chrome and .NET even on invalid input. A structural gate now fails on any TextDecoder or TextEncoder constructed in src/ outside it.
+  - *evidence:* `src/pipeline/encoding.ts` exports `EncodingBroker`
+  - *evidence:* `src/pipeline/encoding.ts` exports `resolveEncodingName`
+  - *evidence:* `tests/unit/encoding.test.mts` — test "does NOT decode ascii as windows-1252, which is the bug this replaced"
+  - *evidence:* `tests/unit/encoding.test.mts` — test "distinguishes latin1 from windows-1252 across the whole 0x80-0x9F range"
 
 ## Acceptance
 

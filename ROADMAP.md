@@ -5,7 +5,7 @@
 
 Turning a single-file PowerShell-flavoured web terminal into a browser workstation with a versioned PowerShell compatibility layer, a real object pipeline, durable state, a trusted package model and an audited AI surface.
 
-**54 of 104 tasks complete**, 15 partial.  `#################/////..........`
+**55 of 104 tasks complete**, 15 partial.  `#################/////..........`
 
 Legend: `[x]` done · `[/]` partial · `[~]` in progress · `[ ]` todo · `[!]` blocked · `[-]` deferred
 
@@ -16,7 +16,7 @@ Every `done` and `partial` task cites evidence — a symbol, a passing test, a v
 | Phase | Goal | Items | Progress |
 | --- | --- | --- | --- |
 | **Ground truth** | Make it impossible to be wrong about upstream by accident. Nothing downstream is trustworthy until version truth is mechanised. | 1, 2, 3 | `##############//..` 24/30 +4 partial |
-| **Core** | A real execution engine: one lexer, one AST, a version-aware binder, and a typed object pipeline. This is where the current site is weakest. | 4, 5, 6, 7, 8 | `############///...` 20/31 +5 partial |
+| **Core** | A real execution engine: one lexer, one AST, a version-aware binder, and a typed object pipeline. This is where the current site is weakest. | 4, 5, 6, 7, 8 | `############///...` 21/31 +5 partial |
 | **State** | Durable, inspectable, recoverable virtual machine state — filesystem, providers, transactions, migrations. | 9, 10 | `#####/////........` 3/11 +3 partial |
 | **Compatibility** | Prove the emulation is faithful by differential-testing against real pwsh, and express version differences as data. | 11, 12 | `###########//.....` 5/8 +1 partial |
 | **Declarative** | The workstation as a configuration that can be exported, diffed, tested and restored. | 13 | `..................` 0/4 |
@@ -38,7 +38,7 @@ Dependency-respecting. An item cannot be complete before everything it depends o
 | 4 | [Extract portfolio data and command manifests out of index.html](roadmap/pr/PR-04-extract-data-and-manifests.md) | Core | [~] in progress | 1 | 8/9 |
 | 5 | [Extract a headless LineEditorCore behind input and render adapters](roadmap/pr/PR-05-headless-line-editor.md) | Core | [~] in progress | 4 | 3/5 +1 partial |
 | 6 | [Move execution into a worker behind a typed kernel protocol](roadmap/pr/PR-06-worker-kernel-protocol.md) | Core | [~] in progress | 5 | 2/4 +2 partial |
-| 7 | [Build the typed object pipeline and stream model](roadmap/pr/PR-07-object-pipeline.md) | Core | [~] in progress | 6 | 5/6 |
+| 7 | [Build the typed object pipeline and stream model](roadmap/pr/PR-07-object-pipeline.md) | Core | [~] in progress | 6 | 6/6 |
 | 8 | [Build one lexer, one AST and a version-aware parameter binder](roadmap/pr/PR-08-version-aware-binder.md) | Core | [~] in progress | 3, 7 | 2/7 +2 partial |
 | 9 | [OPFS-backed filesystem with overlay, WAL, snapshots and migrations](roadmap/pr/PR-09-storage-layer.md) | State | [~] in progress | 6 | 2/7 +2 partial |
 | 10 | [PowerShell provider model over the mount table](roadmap/pr/PR-10-provider-model.md) | State | [~] in progress | 9 | 1/4 +1 partial |
@@ -250,7 +250,7 @@ Every claim below was checked against a primary source on 2026-09-04. These are 
   - [x] 7.3 Move formatting to the end of the pipeline as Format-* directives
   - [x] 7.4 Reimplement Get-ChildItem to emit objects, with formatting applied last
   - [x] 7.5 Make Sort/Select/Where/Measure/Group operate on properties, not on rendered text
-  - [ ] 7.6 Keep an EncodingBroker so native byte streams are not corrupted by UTF-16 round-trips
+  - [x] 7.6 Keep an EncodingBroker so native byte streams are not corrupted by UTF-16 round-trips
 - [~] **8. Build one lexer, one AST and a version-aware parameter binder** — [detail](roadmap/pr/PR-08-version-aware-binder.md)
   - [/] 8.1 Write one lexer with real quote and escape handling
   - [ ] 8.2 Separate the editing parser (incremental, error-tolerant) from the execution parser (strict)

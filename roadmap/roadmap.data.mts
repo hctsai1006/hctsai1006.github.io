@@ -991,9 +991,30 @@ export const WORK = [
       {
         id: '7.6',
         title: 'Keep an EncodingBroker so native byte streams are not corrupted by UTF-16 round-trips',
-        detail: 'The byte channel type exists (NativeStreams, and the kernel forwards raw chunks as bytes events), but no command reads or writes it and there is no broker guarding the boundary.',
-        status: 'todo',
-        evidence: [{ kind: 'absent', glob: 'src/**/*.{ts,mts}', pattern: 'EncodingBroker' }],
+        detail:
+          'Built. One place decides an encoding and one place applies it: the two tables that ' +
+          'existed before disagreed about `ascii`, disagreed about which names existed at all, ' +
+          'and neither matched pwsh on `oem`. Legacy single-byte codecs are hand-rolled rather ' +
+          'than delegated to TextDecoder, because Node and Chrome disagree across the whole ' +
+          '0x80-0x9F range for windows-1252 and .NET agrees with Chrome — using TextDecoder ' +
+          'would have pinned one answer in the tests and shipped the other. UTF-8 is delegated, ' +
+          'measured to agree across Node, Chrome and .NET even on invalid input. A structural ' +
+          'gate now fails on any TextDecoder or TextEncoder constructed in src/ outside it.',
+        status: 'done',
+        evidence: [
+          { kind: 'export', file: 'src/pipeline/encoding.ts', symbol: 'EncodingBroker' },
+          { kind: 'export', file: 'src/pipeline/encoding.ts', symbol: 'resolveEncodingName' },
+          {
+            kind: 'test',
+            file: 'tests/unit/encoding.test.mts',
+            name: 'does NOT decode ascii as windows-1252, which is the bug this replaced',
+          },
+          {
+            kind: 'test',
+            file: 'tests/unit/encoding.test.mts',
+            name: 'distinguishes latin1 from windows-1252 across the whole 0x80-0x9F range',
+          },
+        ],
       },
     ],
     acceptance: [
