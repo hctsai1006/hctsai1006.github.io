@@ -250,3 +250,60 @@ describe('Get-Content -Encoding failures', () => {
     assert.equal(result.errors[0]?.category, 'NotImplemented');
   });
 });
+
+describe('every command that reads text sniffs the BOM, not just Get-Content', () => {
+  // MEASURED on pwsh 7.6.5 against a UTF-16LE file (FF FE 68 00 65 00 ...)
+  // holding "hello world":
+  //
+  //   Select-String -Pattern world  ->  MATCHED: [hello world]
+  //   Get-Content -Raw              ->  hello world
+  //
+  // This engine's cat, grep and Select-String read through
+  // FileSystemPort.readText, which decodes UTF-8 unconditionally and has no
+  // sniff, so all three saw replacement characters interleaved with NULs and
+  // Select-String matched nothing. That was the last path by which bytes
+  // became text without the broker.
+
+  /** 'hello world' as UTF-16LE with a BOM. */
+  const UTF16_HELLO = [
+    0xff, 0xfe,
+    0x68, 0x00, 0x65, 0x00, 0x6c, 0x00, 0x6c, 0x00, 0x6f, 0x00, 0x20, 0x00,
+    0x77, 0x00, 0x6f, 0x00, 0x72, 0x00, 0x6c, 0x00, 0x64, 0x00,
+  ];
+
+  it('Select-String matches inside a UTF-16LE file', async () => {
+    const { selectString } = await import('../../src/commands/fs-read/index.ts');
+    const h = await withBytes({ 'u16.txt': UTF16_HELLO });
+    const result = await run(
+      selectString,
+      { Path: 'u16.txt', Pattern: 'world' },
+      { port: h.port },
+    );
+    assert.deepEqual(result.errors, []);
+    assert.equal(result.values.length, 1, 'expected one MatchInfo');
+  });
+
+  it('cat prints a UTF-16LE file as text', async () => {
+    const { cat } = await import('../../src/commands/fs-read/index.ts');
+    const h = await withBytes({ 'u16.txt': UTF16_HELLO });
+    const result = await run(cat, {}, { port: h.port, remaining: ['u16.txt'] });
+    assert.deepEqual(result.errors, []);
+    assert.deepEqual(result.values, ['hello world']);
+  });
+
+  it('grep matches inside a UTF-16LE file', async () => {
+    const { grep } = await import('../../src/commands/fs-read/index.ts');
+    const h = await withBytes({ 'u16.txt': UTF16_HELLO });
+    const result = await run(grep, {}, { port: h.port, remaining: ['world', 'u16.txt'] });
+    assert.deepEqual(result.values, ['hello world']);
+  });
+
+  it('still reads a plain UTF-8 file unchanged', async () => {
+    // The regression guard for the change itself: swapping readText for
+    // readBytes + decodeFile must not move the ordinary case.
+    const { cat } = await import('../../src/commands/fs-read/index.ts');
+    const h = await withBytes({ 'plain.txt': [0x68, 0x69, 0x0a, 0x74, 0x68, 0x65, 0x72, 0x65] });
+    const result = await run(cat, {}, { port: h.port, remaining: ['plain.txt'] });
+    assert.deepEqual(result.values, ['hi', 'there']);
+  });
+});

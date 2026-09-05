@@ -108,15 +108,26 @@ import type { PSErrorShape, ProviderErrorIds } from './support.ts';
  *               InvalidData, "'sausage' is not a supported encoding name."
  *
  * WHY THE UTF-16 AND UTF-32 FAMILIES ARE STILL REFUSED, and why the reason in
- * the message CHANGED. It used to say Get-Content could not read them back.
- * That is no longer true — Get-Content reads bytes and BOM-sniffs, so a UTF-16
- * file written here would round-trip through it correctly today. But `cat`,
- * `grep` and `Select-String` all read through `FileSystemPort.readText`, which
- * decodes UTF-8 with replacement and has no sniff, so those three would return
- * mojibake for such a file. Writing them would trade one honest refusal for
- * three silent wrong answers, so the refusal stays and now names the real
- * reason. Fixing it means giving readText an encoding, which lives in
- * `src/storage/` — see the report accompanying this change.
+ * the message CHANGED TWICE. It used to say Get-Content could not read them
+ * back; that stopped being true when Get-Content started reading bytes and
+ * sniffing the BOM. It then said `cat`, `grep` and `Select-String` would see
+ * mojibake; that stopped being true when those three moved to
+ * `readTextSniffed` as well. Every reader in this engine can now read a UTF-16
+ * file.
+ *
+ * The reason that remains is the WRITE side, and it is structural.
+ * `Add-Content` appends through `FileSystemPort.appendText`, which takes a
+ * string; there is no `appendBytes` on the port, so an append cannot carry a
+ * codec. Set-Content and Add-Content share one `-Encoding` contract here and in
+ * pwsh, so supporting a codec on one and not the other would be a worse lie
+ * than refusing both.
+ *
+ * Lifting it is now a small and well-understood change rather than an open
+ * question: `VirtualFileSystem.appendBytes` already exists
+ * (`src/storage/vfs.ts`), so the work is to surface it on the port and give
+ * Add-Content the create-versus-append split Set-Content already has. It is not
+ * done here because it widens this change into `ports.ts` for a capability
+ * nothing yet asks for.
  */
 
 /** What this engine can WRITE such that every reader in it can read it back. */
@@ -138,9 +149,9 @@ function encodingOf(raw: string | undefined): Encoding {
       kind: 'refused',
       name: resolved.name,
       why:
-        'This engine can produce those bytes, but `cat`, `grep` and `Select-String` read ' +
-        'through a port that decodes UTF-8 only, so the file would come back as mojibake ' +
-        'from three of the four commands that read it.',
+        'This engine can produce those bytes and every reader here could read them back, ' +
+        'but Add-Content appends through a port method that takes a string and cannot ' +
+        'carry a codec, and the two content cmdlets share one -Encoding contract.',
     };
   }
   return { kind: 'ok', id: resolved.id, name: resolved.name };

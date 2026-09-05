@@ -49,6 +49,7 @@ import {
 } from '../../storage/index.ts';
 import type { DirectoryEntry, FileStat, Result, StorageError } from '../../storage/index.ts';
 import type { ResolvedPath } from '../../storage/vfs.ts';
+import { decodeFile } from '../../pipeline/encoding.ts';
 import { compareValues, psObject } from '../../pipeline/psobject.ts';
 import type { PSObject, PSValue } from '../../pipeline/psobject.ts';
 import { errorRecord } from '../../pipeline/streams.ts';
@@ -788,6 +789,37 @@ export async function emit(
   if (sink.closed || signal.aborted) return false;
   await sink.write(value);
   return !sink.closed && !signal.aborted;
+}
+
+/**
+ * Read a file as text the way PowerShell's own readers do: BYTES first, then
+ * the broker, with the byte-order mark consulted.
+ *
+ * `FileSystemPort.readText` decodes UTF-8 unconditionally and has no sniff, so
+ * every command that used it returned mojibake for a UTF-16 file. MEASURED on
+ * pwsh 7.6.5 against a UTF-16LE file holding "hello world":
+ *
+ *   Select-String -Pattern world   ->  MATCHED: [hello world]
+ *   Get-Content -Raw               ->  hello world
+ *
+ * This engine's Select-String found nothing there, because the bytes
+ * FF FE 68 00 65 00 ... decode under UTF-8 to replacement characters
+ * interleaved with NULs and the pattern cannot match. `cat` and `grep` had the
+ * same hole.
+ *
+ * Routed through `decodeFile` rather than a private decoder so there is still
+ * exactly one place that decides an encoding — see the gate in
+ * tests/unit/encoding.test.mts. UTF-8 is the requested codec because that is
+ * what these commands assumed; what changes is that a BOM now overrides it, as
+ * it does in the reference implementation.
+ */
+export async function readTextSniffed(
+  fs: FileSystemPort,
+  path: string,
+): Promise<Result<string>> {
+  const bytes = await fs.readBytes(path);
+  if (!bytes.ok) return bytes;
+  return { ok: true, value: decodeFile(bytes.value, 'utf8') };
 }
 
 /** v1's `stripQ`: one leading and one trailing quote, nothing cleverer. */

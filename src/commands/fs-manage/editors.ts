@@ -75,6 +75,7 @@ import { dirname } from '../../storage/index.ts';
 import type { CommandModule, InvocationContext } from '../invocation.ts';
 import type { CommandManifest } from '../manifest.ts';
 import type { DialogPort, FileSystemPort } from '../ports.ts';
+import { readTextSniffed } from '../fs-read/support.ts';
 import {
   EXIT_FAILURE,
   EXIT_SUCCESS,
@@ -143,7 +144,9 @@ async function open(
       });
       return null;
     }
-    const text = await fs.readText(typed);
+    // Through the broker, like every other reader: an editor that opened a
+    // UTF-16 file as mojibake would then SAVE the mojibake.
+    const text = await readTextSniffed(fs, typed);
     if (!text.ok) {
       await writeError(context, manifest, {
         message:
