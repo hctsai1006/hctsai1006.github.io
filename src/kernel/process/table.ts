@@ -39,6 +39,7 @@
 import type { Runtime } from '../../commands/manifest.ts';
 import type { ProcessGroupId, ProcessId, RequestId, TerminalId } from '../ids.ts';
 import { KERNEL_PID } from '../ids.ts';
+import type { ProcessView } from '../inspect.ts';
 import type { VirtualSignal } from '../signals.ts';
 import type { ProcessSnapshot, ProcessState } from './snapshot.ts';
 
@@ -79,11 +80,39 @@ export class ProcessTable {
   readonly #processes = new Map<ProcessId, ProcessSnapshot>();
   readonly #listeners = new Set<ProcessListener>();
   readonly #clock: () => number;
+  #view: ProcessView | null = null;
 
   constructor(clock: () => number = Date.now) {
     // Injected so tests get deterministic startedAt values. A kernel that reads
     // the wall clock directly cannot be asserted against.
     this.#clock = clock;
+    Object.freeze(this);
+  }
+
+  /**
+   * The half of this table that cannot change it.
+   *
+   * `create`, `transition`, `exit`, `reap` and `reapBefore` are the kernel's;
+   * a UI, a task manager or a third-party module gets this instead. The
+   * snapshots it hands out are already frozen and `list()` builds a fresh array
+   * per call, so the read side needed nothing but the removal of the mutators.
+   */
+  view(): ProcessView {
+    const table = this;
+    this.#view ??= Object.freeze({
+      get nextPid(): ProcessId {
+        return table.nextPid;
+      },
+      get: (pid: ProcessId): ProcessSnapshot | undefined => table.get(pid),
+      list: (): readonly ProcessSnapshot[] => table.list(),
+      live: (): readonly ProcessSnapshot[] => table.live(),
+      membersOf: (pgid: ProcessGroupId): readonly ProcessSnapshot[] => table.membersOf(pgid),
+      byTerminal: (terminalId: TerminalId): readonly ProcessSnapshot[] =>
+        table.byTerminal(terminalId),
+      byRequest: (requestId: RequestId): readonly ProcessSnapshot[] => table.byRequest(requestId),
+      onChange: (listener: ProcessListener): (() => void) => table.onChange(listener),
+    });
+    return this.#view;
   }
 
   /** The pid the next `create` will return. Exposed for tests, not for logic. */

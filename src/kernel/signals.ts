@@ -45,6 +45,7 @@
  */
 
 import type { ProcessGroupId, ProcessId, TerminalId } from './ids.ts';
+import type { SignalView } from './inspect.ts';
 
 /** The signals the kernel can actually deliver. */
 export type VirtualSignal = 'SIGINT' | 'SIGTERM' | 'SIGKILL';
@@ -125,6 +126,33 @@ export class SignalController {
   /** The last signal each process was sent, for the exit code and for Get-Process. */
   readonly #delivered = new Map<ProcessId, VirtualSignal>();
   readonly #listeners = new Set<SignalListener>();
+  #view: SignalView | null = null;
+
+  constructor() {
+    Object.freeze(this);
+  }
+
+  /**
+   * The half of this controller that cannot deliver a signal.
+   *
+   * `raise`, `raiseGroup`, `deliver`, `interrupt` and `setForeground` are the
+   * kernel's. A UI does not call them either: Ctrl+C travels as a `signal`
+   * request through `Kernel.send`, which is the door that has a terminal id and
+   * therefore knows which foreground group the keystroke belongs to.
+   * `signalFor` is left out too — an AbortSignal cannot be aborted by its
+   * holder, but there is no reason outside the kernel to hold one.
+   */
+  view(): SignalView {
+    const signals = this;
+    this.#view ??= Object.freeze({
+      groupOf: (pid: ProcessId): ProcessGroupId | undefined => signals.groupOf(pid),
+      members: (pgid: ProcessGroupId): readonly ProcessId[] => signals.members(pgid),
+      deliveredTo: (pid: ProcessId): VirtualSignal | undefined => signals.deliveredTo(pid),
+      foregroundGroup: (terminalId: TerminalId): ProcessGroupId | undefined =>
+        signals.foregroundGroup(terminalId),
+    });
+    return this.#view;
+  }
 
   /**
    * Give a process its AbortSignal and put it in a group.

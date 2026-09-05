@@ -48,6 +48,7 @@ import type { ProcessGroupId, ProcessId, RequestId, TerminalId } from './ids.ts'
 import type { KernelEvent, KernelRequest } from './protocol.ts';
 import { assertCloneSafe, sanitizePSValue } from './protocol.ts';
 import { AuditLog, CapabilityBroker, VirtualPolicy } from './capabilities.ts';
+import type { AuditView, CapabilityView, JobView, ProcessView, SignalView } from './inspect.ts';
 import { JobManager } from './process/jobs.ts';
 import type { ProcessSnapshot } from './process/snapshot.ts';
 import { ProcessTable } from './process/table.ts';
@@ -359,23 +360,43 @@ export class Kernel {
 
   // -- inspection ----------------------------------------------------------
 
-  get processes(): ProcessTable {
-    return this.#table;
+  /**
+   * READ-ONLY, AND THE WORD IS MEANT AT RUNTIME.
+   *
+   * These five getters used to return the live managers — the ProcessTable, the
+   * JobManager, the SignalController, the CapabilityBroker and the AuditLog —
+   * so `kernel.capabilities`, `kernel.jobs` and the rest were the kernel's own
+   * mutable state under an inspection heading. Measured against the real class:
+   *
+   *     (kernel.capabilities.grants as Set<Capability>).add('device.request')
+   *     => filesystem.read,device.request
+   *
+   * A holder of a Kernel could grant itself a capability the kernel was never
+   * given, kill a process, drain a job's buffer before Receive-Job saw it, and
+   * both forge and erase audit lines. `readonly` in the signature stopped none
+   * of it, because `readonly` does not survive compilation.
+   *
+   * Each getter now returns a frozen view with the mutators absent — see
+   * `inspect.ts` for what that costs and what it does not buy. The mutating
+   * objects stay behind `#` fields, reachable only from inside this class.
+   */
+  get processes(): ProcessView {
+    return this.#table.view();
   }
 
-  get jobs(): JobManager {
-    return this.#jobs;
+  get jobs(): JobView {
+    return this.#jobs.view();
   }
 
-  get signals(): SignalController {
-    return this.#signals;
+  get signals(): SignalView {
+    return this.#signals.view();
   }
 
-  get capabilities(): CapabilityBroker {
-    return this.#broker;
+  get capabilities(): CapabilityView {
+    return this.#broker.view();
   }
 
-  get audit(): AuditLog {
+  get audit(): AuditView {
     return this.#broker.audit;
   }
 

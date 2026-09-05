@@ -31,6 +31,8 @@
 import type { PSValue } from '../../pipeline/psobject.ts';
 import type { ErrorRecord } from '../../pipeline/streams.ts';
 import type { JobId, ProcessId } from '../ids.ts';
+import { frozenList } from '../inspect.ts';
+import type { JobView } from '../inspect.ts';
 
 /**
  * PowerShell's own `JobState` names, in PowerShell's own casing, because
@@ -106,9 +108,43 @@ export class JobManager {
   readonly #byPid = new Map<ProcessId, JobId>();
   readonly #listeners = new Set<JobListener>();
   readonly #clock: () => number;
+  #view: JobView | null = null;
 
   constructor(clock: () => number = Date.now) {
     this.#clock = clock;
+    Object.freeze(this);
+  }
+
+  /**
+   * The half of this manager that cannot change a job.
+   *
+   * `receive` is deliberately absent even though it looks like a read: its
+   * default is DESTRUCTIVE, because PowerShell's is, so anything holding this
+   * could empty a job's buffer and the output would be gone before
+   * `Receive-Job` ever asked for it. `peek` is `receive(id, keep = true)` under
+   * a name that says what it does.
+   */
+  view(): JobView {
+    const jobs = this;
+    this.#view ??= Object.freeze({
+      get nextId(): JobId {
+        return jobs.nextId;
+      },
+      get: (id: JobId): JobSnapshot | undefined => jobs.get(id),
+      byPid: (pid: ProcessId): JobSnapshot | undefined => jobs.byPid(pid),
+      list: (): readonly JobSnapshot[] => jobs.list(),
+      peek: (id: JobId): JobOutput => {
+        const output = jobs.receive(id, true);
+        // `receive` already copies; freezing stops a reader from splicing the
+        // copy and handing it on as if it were what the job produced.
+        return Object.freeze({
+          values: frozenList(output.values),
+          errors: frozenList(output.errors),
+        });
+      },
+      onChange: (listener: JobListener): (() => void) => jobs.onChange(listener),
+    });
+    return this.#view;
   }
 
   get nextId(): JobId {
