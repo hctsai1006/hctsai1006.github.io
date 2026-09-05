@@ -188,6 +188,32 @@ describe('the execution parser refuses, by name', () => {
     }
   });
 
+  it('refuses a variable reference, because there is no variable table', () => {
+    // Nothing in src/ stores a variable: assignment is refused as
+    // AssignmentStatementAst and no variable store exists. So `Get-Item $x` has
+    // no value to bind, and the alternative to refusing it is binding the
+    // literal four characters `$x` as a path — which is the "something
+    // approximate" the engine limits forbid, and which FAILS SILENTLY:
+    // `Remove-Item $target` would try to delete a file called `$target`.
+    for (const source of ['Get-Item $x', 'Get-ChildItem @params', 'Write-Output $env:PATH']) {
+      const parsed = parseForExecution(source);
+      assert.equal(parsed.ok, false, `${JSON.stringify(source)} was accepted`);
+      if (parsed.ok) continue;
+      assert.ok(
+        parsed.refusals.some((r) => r.nodeType === 'VariableExpressionAst'),
+        `${JSON.stringify(source)} was not refused as VariableExpressionAst`,
+      );
+    }
+  });
+
+  it('still accepts $true and $false, which are literals rather than lookups', () => {
+    // `coercion.ts`'s `booleanLiteral` recognises these by SPELLING, which is
+    // how `-Switch:$false` works with no variable table at all. Refusing them
+    // alongside real variables would break switch semantics.
+    assert.equal(parseForExecution('Get-Random -Shuffle:$false').ok, true);
+    assert.equal(parseForExecution('Get-Random -Shuffle:$true').ok, true);
+  });
+
   it('reports the first problem first', () => {
     const parsed = parseForExecution('Get-ChildItem > a.txt | if ($x) { 1 }');
     assert.equal(parsed.ok, false);

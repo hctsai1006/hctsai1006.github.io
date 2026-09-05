@@ -240,26 +240,20 @@ interface Range {
  * half-typed string is the normal state of the line editor and painting it red
  * on every keystroke would make the prompt flash constantly. Everything else
  * the execution parser refuses is painted, which is the guarantee.
+ *
+ * "Incomplete" is read off the refusal rather than decided here. This function
+ * used to carry its OWN list of the error ids that mean "keep typing", and a
+ * list maintained in two places is the defect this whole item exists to remove
+ * — that copy was already wrong, missing the `UnexpectedToken` the parser's
+ * no-progress guard emits, so a leading `|` was painted red while the comment
+ * beside the guard said it must not be.
  */
 function refusalRanges(text: string): readonly Range[] {
   const parsed = parseForExecution(text);
   if (parsed.ok) return [];
   return parsed.refusals
-    .filter((refusal) => !isIncomplete(refusal.id))
+    .filter((refusal) => !refusal.incomplete)
     .map((refusal) => ({ start: refusal.start, end: refusal.end, message: refusal.message }));
-}
-
-/** The ids that mean "keep typing" rather than "this cannot run". */
-function isIncomplete(id: string): boolean {
-  return (
-    id === 'TerminatorExpectedAtEndOfString' ||
-    id === 'MissingEndCurlyBrace' ||
-    id === 'MissingTerminatorMultiLineComment' ||
-    id === 'EmptyPipeElement' ||
-    id === 'MissingArgument' ||
-    id === 'MissingFileSpecification' ||
-    id === 'WhitespaceBeforeHereStringFooter'
-  );
 }
 
 function refusalCovering(ranges: readonly Range[], token: Token): string | null {

@@ -55,6 +55,7 @@ export {
   parseForExecution,
   parseScript,
   pipelineStages,
+  type ExecutableScript,
   type ExecutionParse,
   type ExecutionRefusal,
   type ParseResult,

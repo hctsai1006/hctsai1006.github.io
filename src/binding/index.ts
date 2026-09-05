@@ -8,14 +8,23 @@
  */
 
 export {
+  bindArgumentOf,
   bindParameters,
   tryBindParameters,
   parseParameterToken,
+  type BindArgument,
+  type BindInput,
   type BindOptions,
   type BindingOutcome,
   type BindingSuccess,
   type ParameterToken,
 } from './binder.ts';
+
+export {
+  bindCommand,
+  bindCommandArguments,
+  tryBindCommand,
+} from './from-ast.ts';
 
 export {
   ParameterBindingError,

@@ -97,8 +97,34 @@ class Parser {
     while (this.#i < this.#tokens.length) {
       this.#skip(['Semi', 'NewLine']);
       if (this.#i >= this.#tokens.length) break;
+      const before = this.#i;
       const statement = this.#parseStatement();
       if (statement !== null) statements.push(statement);
+
+      // A statement that consumed NOTHING would spin here forever. It happens:
+      // a line beginning `|`, `&&` or `||` has no pipeline element to parse, so
+      // `#parsePipeline` returns null having advanced past nothing.
+      //
+      // Found by fuzzing the finished parser, and it mattered more than most
+      // bugs would: the editing parser runs on EVERY KEYSTROKE, so a user
+      // typing a leading `|` hung the page rather than seeing a red squiggle.
+      // The lexer has carried the same guard from the start; the parser needed
+      // its own.
+      if (this.#i === before) {
+        const token = this.#peek();
+        this.#i += 1;
+        if (token !== undefined) {
+          this.#diagnose(
+            'UnexpectedToken',
+            `Unexpected token "${token.text}" in expression or statement.`,
+            token.start,
+            token.end,
+            // Incomplete: a leading `|` is usually a line still being typed, and
+            // painting it red on the way past would make the prompt flash.
+            true,
+          );
+        }
+      }
     }
     return {
       ast: {
@@ -649,10 +675,42 @@ export interface ExecutionRefusal {
   readonly end: number;
   /** Set when the refusal names an AST node, which is the common case. */
   readonly nodeType: PwshAstNode | null;
+  /**
+   * "Keep typing" rather than "this cannot run".
+   *
+   * Carried here so the highlighter does not need its own list of which error
+   * ids mean incomplete. It had one, and a list of ids maintained in two places
+   * is the defect this whole item is about — it was already wrong, missing the
+   * `UnexpectedToken` the parser's no-progress guard emits, so a leading `|`
+   * was painted red while the comment beside the guard said it must not be.
+   */
+  readonly incomplete: boolean;
+}
+
+declare const executable: unique symbol;
+
+/**
+ * A tree the execution parser has cleared, and the ONLY thing an evaluator
+ * should accept.
+ *
+ * The roadmap's note on this task is "error-tolerant parsing must never feed
+ * the evaluator", and a comment is not a mechanism. `parseForEditing` returns a
+ * plain `ScriptBlockAst`; this carries a private brand that nothing outside
+ * this module can construct, so an evaluator typed against `ExecutableScript`
+ * CANNOT be handed the editing parser's output. It is a compile error rather
+ * than a code-review question.
+ *
+ * The brand is a phantom: it exists in the type and never at runtime, so the
+ * value still passes through `structuredClone` to a Worker unchanged.
+ */
+export interface ExecutableScript {
+  readonly [executable]: true;
+  readonly ast: ScriptBlockAst;
+  readonly tokens: readonly Token[];
 }
 
 export type ExecutionParse =
-  | { readonly ok: true; readonly ast: ScriptBlockAst; readonly tokens: readonly Token[] }
+  | ({ readonly ok: true } & ExecutableScript)
   | { readonly ok: false; readonly refusals: readonly ExecutionRefusal[] };
 
 /**
@@ -675,6 +733,7 @@ export function parseForExecution(source: string): ExecutionParse {
       start: diagnostic.start,
       end: diagnostic.end,
       nodeType: null,
+      incomplete: true,
     });
   }
 
@@ -688,6 +747,7 @@ export function parseForExecution(source: string): ExecutionParse {
         start: diagnostic.start,
         end: diagnostic.end,
         nodeType: null,
+        incomplete: false,
       });
     }
   }
@@ -700,10 +760,44 @@ export function parseForExecution(source: string): ExecutionParse {
       start: node.extent.start,
       end: node.extent.end,
       nodeType: node.nodeType,
+      incomplete: false,
     });
   }
 
-  // 4. Nodes the parser builds correctly and the engine cannot run.
+  // 4. A variable reference this engine cannot resolve.
+  //
+  //    THERE IS NO VARIABLE TABLE. Nothing in `src/` stores one — assignment is
+  //    refused as `AssignmentStatementAst`, and a grep for a variable store
+  //    finds none. So `Get-Item $x` has no value to bind, and the alternative to
+  //    refusing it is binding the literal four characters `$x` as a path, which
+  //    is precisely the "something approximate" the engine limits forbid. It
+  //    would also FAIL SILENTLY: `Remove-Item $target` with no `$target` would
+  //    try to delete a file called `$target`.
+  //
+  //    `$true`, `$false` and `$null` are exempt because they are LITERALS, not
+  //    lookups — `coercion.ts`'s `booleanLiteral` recognises them by spelling,
+  //    which is how `-Switch:$false` works without a variable table at all.
+  const LITERAL_VARIABLES = new Set(['true', 'false', 'null']);
+  for (const node of walk(parsed.ast)) {
+    if (node.kind !== 'VariableExpressionAst') continue;
+    if (!node.splatted && LITERAL_VARIABLES.has(node.variablePath.toLowerCase())) continue;
+    refusals.push({
+      id: 'BrowserShellUnimplementedSyntax',
+      message: unimplementedMessage(
+        'VariableExpressionAst',
+        node.splatted
+          ? 'splatting, which needs a variable table this engine does not have'
+          : 'a variable reference, which this engine cannot resolve because it has no variables',
+        node.extent.text,
+      ),
+      start: node.extent.start,
+      end: node.extent.end,
+      nodeType: 'VariableExpressionAst',
+      incomplete: false,
+    });
+  }
+
+  // 5. Nodes the parser builds correctly and the engine cannot run.
   const refusedKinds = new Set<string>(EXECUTION_REFUSED_NODES);
   for (const node of walk(parsed.ast)) {
     if (!refusedKinds.has(node.kind)) continue;
@@ -718,6 +812,7 @@ export function parseForExecution(source: string): ExecutionParse {
       start: node.extent.start,
       end: node.extent.end,
       nodeType,
+      incomplete: false,
     });
   }
 
@@ -725,7 +820,11 @@ export function parseForExecution(source: string): ExecutionParse {
     refusals.sort((a, b) => a.start - b.start);
     return { ok: false, refusals };
   }
-  return { ok: true, ast: parsed.ast, tokens: parsed.tokens };
+  // The only construction of the brand in the codebase. It is a phantom type,
+  // so nothing is added to the value at runtime.
+  return { ok: true, ast: parsed.ast, tokens: parsed.tokens } as {
+    ok: true;
+  } & ExecutableScript;
 }
 
 /**
