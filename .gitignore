@@ -36,3 +36,8 @@ test-summary.json
 # Want the plugins? Enable them for yourself:
 #     /plugin  (in Claude Code)  — writes under .claude/
 .claude/
+
+# Throwaway probe scripts. These are written constantly while measuring things
+# against the real implementation, and `git add -A` swept three of them into
+# main before this line existed (commit 1a40b39, merged as part of #4).
+.scratch/
