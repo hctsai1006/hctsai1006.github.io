@@ -173,15 +173,28 @@ const esc = (s: unknown): string =>
     .replace(/"/g, '&quot;');
 
 /**
- * Escape, then set `backticked` spans in mono and normalise ASCII quotes to
- * typographic ones. The quote normalisation matters because lockfile messages
+ * Normalise ASCII quotes to typographic ones, escape, then set `backticked`
+ * spans in mono. The quote normalisation matters because lockfile messages
  * carry ASCII quotes while the page's own prose uses curly ones, and the two
  * appeared side by side in the same screenful.
+ *
+ * ORDER IS THE WHOLE THING, and it used to be wrong in a way that inverted the
+ * function: escape, then insert markup, then curl. By the time the curling ran,
+ * `esc` had already turned every quote in the TEXT into `&quot;` — so the regex
+ * could not match any of them, and the only ASCII quotes left in the string
+ * were the ones this function had just written itself, in
+ * `<span class="mono">`. It therefore never normalised a single quote it was
+ * written for, and corrupted 113 class attributes into `class=“mono”`,
+ * silently dropping the mono styling on every backticked identifier on the
+ * page. The one lockfile message with real quotes rendered as `&quot;runtime&quot;`.
+ *
+ * Curling first fixes both: real quotes become typographic before `esc` can
+ * hide them, and the markup goes in last where nothing rewrites it.
  */
 function prose(s: string): string {
-  const escaped = esc(s);
-  const withCode = escaped.replace(/`([^`]+)`/g, '<span class="mono">$1</span>');
-  return withCode.replace(/"([^"<]*)"/g, '“$1”');
+  const curled = s.replace(/"([^"<]*)"/g, '“$1”');
+  const escaped = esc(curled);
+  return escaped.replace(/`([^`]+)`/g, '<span class="mono">$1</span>');
 }
 
 const pluralise = (n: number, one: string, many: string): string => (n === 1 ? one : many);
