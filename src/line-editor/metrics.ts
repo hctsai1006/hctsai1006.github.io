@@ -12,11 +12,23 @@
  * implement this with the same probe span, a canvas adapter with `measureText`,
  * and a test with two numbers.
  *
- * `monospaceMetrics` is the table-driven default. It differs from v1's `dw()` in
- * two places that were bugs there: emoji are two cells wide, not one, and a
- * combining mark is zero cells, not one.
+ * WHAT THIS FILE NO LONGER DOES. It used to carry its own copy of the width
+ * table, and the copy had drifted from `src/formatting/width.ts` — the two
+ * disagreed on 914 code points, and on every one of U+2600–U+27BF. Two
+ * implementations of one measurement is one implementation and a bug, so the
+ * table is gone and the answer comes from
+ * `./cells.ts`, which the formatter imports too. What stays here is the PORT:
+ * the shape a host implements, and the default that assumes a monospace grid.
+ *
+ * THE TWO QUESTIONS, ONCE MORE. "How many cells does this occupy" is answered
+ * per code point by `./cells.ts`. "Where may the caret sit" is answered per
+ * grapheme cluster by `./graphemes.ts`. The editor needs both and they are not
+ * the same question; conflating them is what produced the second width table.
+ * `cellWidthOf` below bridges them: hand it one cluster and it returns the cells
+ * that cluster's code points add up to, which is what a cell terminal advances.
  */
 
+import { displayWidth as cellsOf } from './cells.ts';
 import { segmentGraphemes } from './graphemes.ts';
 
 export interface TerminalMetrics {
@@ -24,84 +36,32 @@ export interface TerminalMetrics {
   readonly columns: number;
   /** Usable height in rows. Bounds how many candidates a menu page shows. */
   readonly rows: number;
-  /** Cells one grapheme cluster occupies: 0 for a mark, 1 narrow, 2 wide. */
+  /** Cells one grapheme cluster occupies: the sum over its code points. */
   cellWidth(grapheme: string): number;
 }
 
-/** East Asian Wide and Fullwidth ranges, plus the emoji blocks that render wide. */
-const WIDE_RANGES: readonly (readonly [number, number])[] = [
-  [0x1100, 0x115f],
-  [0x2e80, 0x303e],
-  [0x3041, 0x33ff],
-  [0x3400, 0x4dbf],
-  [0x4e00, 0x9fff],
-  [0xa000, 0xa4cf],
-  [0xa960, 0xa97f],
-  [0xac00, 0xd7a3],
-  [0xf900, 0xfaff],
-  [0xfe10, 0xfe19],
-  [0xfe30, 0xfe6f],
-  [0xff00, 0xff60],
-  [0xffe0, 0xffe6],
-  [0x1f004, 0x1f004],
-  [0x1f0cf, 0x1f0cf],
-  [0x1f18e, 0x1f18e],
-  [0x1f191, 0x1f19a],
-  [0x1f200, 0x1f320],
-  [0x1f32d, 0x1f335],
-  [0x1f337, 0x1f37c],
-  [0x1f37e, 0x1f393],
-  [0x1f3a0, 0x1f3ca],
-  [0x1f3cf, 0x1f3d3],
-  [0x1f3e0, 0x1f3f0],
-  [0x1f3f4, 0x1f3f4],
-  [0x1f3f8, 0x1f43e],
-  [0x1f440, 0x1f440],
-  [0x1f442, 0x1f4fc],
-  [0x1f4ff, 0x1f53d],
-  [0x1f54b, 0x1f54e],
-  [0x1f550, 0x1f567],
-  [0x1f57a, 0x1f57a],
-  [0x1f595, 0x1f596],
-  [0x1f5a4, 0x1f5a4],
-  [0x1f5fb, 0x1f64f],
-  [0x1f680, 0x1f6c5],
-  [0x1f6cc, 0x1f6cc],
-  [0x1f6d0, 0x1f6d2],
-  [0x1f6eb, 0x1f6ec],
-  [0x1f6f4, 0x1f6fc],
-  [0x1f7e0, 0x1f7eb],
-  [0x1f90c, 0x1f9ff],
-  [0x1fa70, 0x1faff],
-  [0x20000, 0x2fffd],
-  [0x30000, 0x3fffd],
-];
-
-const MARK = /\p{M}/u;
-
-function isWide(cp: number): boolean {
-  for (const range of WIDE_RANGES) {
-    if (cp >= range[0] && cp <= range[1]) return true;
-  }
-  return false;
-}
+/**
+ * Cells one grapheme cluster occupies.
+ *
+ * The same function as `displayWidth`, named for the port. It is NOT capped at
+ * two: a cluster is as wide as its parts, so `é` is 1, `中` is 2 and the ZWJ
+ * family 👨‍👩‍👧‍👦 is 8 — four emoji that a cell terminal has no way to fuse.
+ * The previous version returned 2 for all of them, which is why a line
+ * containing one wrapped in the wrong place.
+ */
+export const cellWidthOf: (grapheme: string) => number = cellsOf;
 
 /**
- * Cells one cluster occupies, decided by its BASE code point.
+ * Cells a whole string occupies. The replacement for v1's `dw()`.
  *
- * A cluster's marks add nothing — that is what makes them marks — so `e` plus
- * U+0301 is one cell and 👨‍👩‍👧‍👦 is two, not eleven.
+ * With the default measurement this is exactly `./cells.ts`'s `displayWidth`:
+ * segmentation partitions the string, so summing per cluster and summing per
+ * code point cannot differ. The `cellWidth` parameter exists for hosts that
+ * genuinely measure — a proportional font, a canvas — and only then does the
+ * per-cluster walk do any work the default would not.
  */
-export function cellWidthOf(grapheme: string): number {
-  const cp = grapheme.codePointAt(0);
-  if (cp === undefined) return 0;
-  if (cp < 0x20 || (cp >= 0x7f && cp < 0xa0)) return 0;
-  if (MARK.test(String.fromCodePoint(cp))) return 0;
-  return isWide(cp) ? 2 : 1;
-}
-
-/** Cells a whole string occupies. The replacement for v1's `dw()`. */
-export function displayWidth(text: string, cellWidth = cellWidthOf): number {
+export function displayWidth(text: string, cellWidth?: (grapheme: string) => number): number {
+  if (cellWidth === undefined) return cellsOf(text);
   let total = 0;
   for (const g of segmentGraphemes(text)) total += cellWidth(g);
   return total;

@@ -45,7 +45,7 @@ import { DEFAULT_CULTURE, type CultureData } from './culture.ts';
 import { formatDateGeneral } from './datetime.ts';
 import { formatFixed, formatGeneral } from './numeric.ts';
 import { toPSString } from './to-string.ts';
-import { displayWidth, graphemeWidth, padLeft, padRight, truncateToWidth } from './width.ts';
+import { clusters, displayWidth, padLeft, padRight, truncateToWidth } from './width.ts';
 import type { PSValue } from '../pipeline/psobject.ts';
 
 /**
@@ -81,17 +81,18 @@ export type Alignment = 'left' | 'right';
 // graphemes
 // ---------------------------------------------------------------------------
 
-let segmenter: Intl.Segmenter | null = null;
-
 /**
- * Split into grapheme clusters. width.ts keeps its own copy of this private;
- * duplicating the three lines is better than widening that module's surface,
- * and the rule it encodes — never split a cluster — is enforced in both places.
+ * Grapheme clustering comes from `width.ts`, which gets it from the line
+ * editor's `graphemes.ts`. This file used to hold a fourth copy, justified on
+ * the grounds that three lines are cheaper than a wider surface. They were not:
+ * this copy had no fallback for a missing `Intl.Segmenter`, so a host without
+ * ECMA-402 threw here while the editor kept working.
+ *
+ * Note what clustering is and is not used for. Cutting and wrapping must land
+ * on a cluster boundary — half an emoji renders as a replacement character.
+ * COUNTING does not go through clusters at all: `displayWidth` sums code
+ * points, because that is what a terminal cell grid does.
  */
-function clusters(text: string): string[] {
-  segmenter ??= new Intl.Segmenter('en', { granularity: 'grapheme' });
-  return [...segmenter.segment(text)].map((s) => s.segment);
-}
 
 // ---------------------------------------------------------------------------
 // what a cell says
@@ -266,7 +267,7 @@ export function truncateCell(text: string, width: number, alignment: Alignment =
     const kept: string[] = [];
     let used = 0;
     for (const cluster of ordered) {
-      const w = graphemeWidth(cluster);
+      const w = displayWidth(cluster);
       if (used + w > budget) break;
       kept.push(cluster);
       used += w;
@@ -337,7 +338,7 @@ const isSpace = (cluster: string): boolean => cluster === ' ' || cluster === '\t
  */
 export function wrapText(text: string, width: number): string[] {
   if (width <= 0) return [text];
-  const cells = clusters(text).map((cluster) => ({ cluster, width: graphemeWidth(cluster) }));
+  const cells = clusters(text).map((cluster) => ({ cluster, width: displayWidth(cluster) }));
 
   const out: string[] = [];
   let start = 0;
