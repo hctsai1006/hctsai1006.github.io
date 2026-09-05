@@ -40,7 +40,12 @@ import {
   sanitizeErrorRecord,
   sanitizePSValue,
 } from '../../src/kernel/protocol.ts';
-import type { KernelEvent, KernelRequest, ObjectsEvent } from '../../src/kernel/protocol.ts';
+import type {
+  KernelEvent,
+  KernelEventBody,
+  KernelRequest,
+  ObjectsEvent,
+} from '../../src/kernel/protocol.ts';
 import {
   EXIT_COMMAND_NOT_FOUND,
   EXIT_FAILURE,
@@ -169,7 +174,7 @@ const CHATTY = command({ name: 'chatty', display: 'Write-Everything' }, async (c
 
 function objectValues(events: readonly KernelEvent[]): readonly PSValue[] {
   return events
-    .filter((event): event is ObjectsEvent => event.kind === 'objects')
+    .filter((event): event is ObjectsEvent & { seq: number } => event.kind === 'objects')
     .flatMap((event) => [...event.values]);
 }
 
@@ -284,8 +289,14 @@ describe('sanitizePSValue', () => {
 });
 
 describe('every KernelEvent survives structuredClone', () => {
-  /** One of every variant of the union, including all four `stream` shapes. */
-  const samples: readonly KernelEvent[] = [
+  /**
+   * One of every variant of the union, including all four `stream` shapes.
+   *
+   * Typed as the BODY rather than the event: only `Kernel.#emit` may assign a
+   * sequence number, and a test that could invent one would be asserting about
+   * a shape the kernel never produces.
+   */
+  const samples: readonly KernelEventBody[] = [
     {
       kind: 'objects',
       requestId: 'r1',
@@ -1044,6 +1055,107 @@ describe('everything a real session emits is clone-safe', () => {
     // The throw is caught by the kernel and reported as a command failure,
     // which is what a bug in a command should look like.
     assert.equal(events.find((e) => e.kind === 'exit')?.exitCode, EXIT_FAILURE);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// cross-stream ordering
+// ---------------------------------------------------------------------------
+
+describe('the sequence that makes interleaving reconstructable', () => {
+  /** Writes to four different channels in a known order, several times over. */
+  function interleaver(name: string, rounds: number): CommandModule {
+    return command({ name, display: name }, async (context) => {
+      for (let round = 0; round < rounds; round += 1) {
+        await context.streams.success.write(`out-${round}`);
+        await context.streams.error.write(errorRecord(`err-${round}`, 'E', name));
+        await context.streams.warning.write(`warn-${round}`);
+        const stdout = context.native?.stdout.getWriter();
+        if (stdout !== undefined) {
+          await stdout.write(encoder.encode(`bytes-${round}`));
+          stdout.releaseLock();
+        }
+      }
+      return 0;
+    });
+  }
+
+  it('numbers every event, densely and strictly increasing', async () => {
+    const { kernel, events } = newKernel();
+    kernel.register(interleaver('noisy', 3));
+    kernel.send({ kind: 'exec', requestId: 'r1', terminalId: 't1', source: 'noisy', background: false });
+    await kernel.drain();
+
+    assert.ok(events.length > 10, 'the session has to be long enough to be worth ordering');
+    assert.deepEqual(
+      events.map((e) => e.seq),
+      events.map((_unused, index) => index + 1),
+      'dense from 1: a gap would mean an event was minted somewhere other than #emit',
+    );
+    assert.equal(kernel.sequence, events.length);
+  });
+
+  it('preserves the true interleaving of four independent channels', async () => {
+    // This is the thing that could not be done before. Every event carried a
+    // pid; none carried an order. Success travels keyed by requestId, error and
+    // warning by pid, stdout as bytes — four channels arriving at one renderer
+    // with no common ordinal can be printed in any order at all, so
+    // `command 2>&1` and a transcript were both unreconstructable.
+    const { kernel, events } = newKernel();
+    kernel.register(interleaver('noisy', 3));
+    kernel.send({ kind: 'exec', requestId: 'r1', terminalId: 't1', source: 'noisy', background: false });
+    await kernel.drain();
+
+    const decoder = new TextDecoder();
+    const transcript = [...events]
+      .sort((a, b) => a.seq - b.seq)
+      .flatMap((event) => {
+        if (event.kind === 'objects') return event.values.map((v) => String(v));
+        if (event.kind === 'stdout') return [decoder.decode(event.bytes)];
+        if (event.kind === 'stream' && event.which === 'error') return [event.payload.message];
+        if (event.kind === 'stream' && event.which === 'warning') return [event.payload];
+        return [];
+      });
+
+    assert.deepEqual(transcript, [
+      'out-0', 'err-0', 'warn-0', 'bytes-0',
+      'out-1', 'err-1', 'warn-1', 'bytes-1',
+      'out-2', 'err-2', 'warn-2', 'bytes-2',
+    ]);
+  });
+
+  it('does not reset between requests, or between foreground and background', async () => {
+    const { kernel, events } = newKernel();
+    kernel.register(emitter('greet', ['a']));
+
+    kernel.send({ kind: 'exec', requestId: 'r1', terminalId: 't1', source: 'greet', background: false });
+    await kernel.drain();
+    const afterFirst = kernel.sequence;
+    assert.ok(afterFirst > 0);
+
+    kernel.send({ kind: 'exec', requestId: 'r2', terminalId: 't1', source: 'greet', background: true });
+    await kernel.drain();
+    kernel.send({ kind: 'exec', requestId: 'r3', terminalId: 't2', source: 'greet', background: false });
+    await kernel.drain();
+
+    const numbers = events.map((e) => e.seq);
+    assert.deepEqual(numbers, [...numbers].sort((a, b) => a - b));
+    assert.equal(new Set(numbers).size, numbers.length, 'no number is used twice');
+    assert.ok(kernel.sequence > afterFirst);
+  });
+
+  it('numbers a rejection too, so a bad message has its place in the transcript', () => {
+    const { kernel, events } = newKernel();
+    kernel.register(emitter('greet', ['a']));
+    kernel.send({ kind: 'resize', terminalId: 't1', columns: -1, rows: 24 });
+    assert.equal(events[0]?.seq, 1);
+  });
+
+  it('starts at 1, so 0 can mean "nothing yet"', () => {
+    const { kernel, events } = newKernel();
+    assert.equal(kernel.sequence, 0);
+    kernel.send({ kind: 'resize', terminalId: 't1', columns: 0, rows: 0 });
+    assert.equal(events[0]?.seq, 1);
   });
 });
 

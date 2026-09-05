@@ -509,7 +509,15 @@ export interface RejectedEvent {
   readonly problems: readonly string[];
 }
 
-export type KernelEvent =
+/**
+ * An event as its call site builds it, before the kernel stamps it.
+ *
+ * Exported because a test that constructs a sample event should not have to
+ * invent a sequence number, and because the distinction is the whole point:
+ * only ONE function may assign `seq`, and this is the type of everything that
+ * has not been through it.
+ */
+export type KernelEventBody =
   | ObjectsEvent
   | StdoutEvent
   | StderrEvent
@@ -518,7 +526,37 @@ export type KernelEvent =
   | ExitEvent
   | RejectedEvent;
 
-export type KernelEventKind = KernelEvent['kind'];
+/**
+ * The envelope every event passes through.
+ *
+ * Every event already carried a process id, and none carried an ORDER. So
+ * nothing downstream could reconstruct the true interleaving of `command 2>&1`
+ * or of a transcript: success travels keyed by requestId, error and warning by
+ * pid, stdout and stderr as bytes, and four independent streams arriving at one
+ * renderer with no common ordinal can be printed in any order at all.
+ *
+ * `seq` is monotonic across the WHOLE kernel — not per process, not per stream,
+ * not per request. Per-stream counters would order each stream against itself,
+ * which is the one thing that was never in doubt.
+ *
+ * It is spelled as an intersection rather than a wrapper object because there
+ * is exactly one payload per message: `{ seq, event }` would nest every
+ * consumer's switch one level deeper for no additional information. The
+ * guarantee — one assignment site — comes from `Kernel.#emit` being the only
+ * place that can produce a `KernelEvent` from a `KernelEventBody`.
+ */
+export interface Sequenced {
+  /**
+   * Strictly increasing, starting at 1, never reset for the life of the kernel.
+   * 0 therefore means "no event has been emitted yet" and can never be an
+   * event's own number.
+   */
+  readonly seq: number;
+}
+
+export type KernelEvent = KernelEventBody & Sequenced;
+
+export type KernelEventKind = KernelEventBody['kind'];
 
 export const KERNEL_EVENT_KINDS = [
   'objects',

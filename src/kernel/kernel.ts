@@ -45,7 +45,7 @@ import type {
 } from '../pipeline/streams.ts';
 import { CallbackSink, errorRecord } from '../pipeline/streams.ts';
 import type { ProcessGroupId, ProcessId, RequestId, TerminalId } from './ids.ts';
-import type { KernelEvent, KernelRequest } from './protocol.ts';
+import type { KernelEvent, KernelEventBody, KernelRequest } from './protocol.ts';
 import {
   assertCloneSafe,
   decodeKernelRequest,
@@ -334,6 +334,11 @@ export class Kernel {
   readonly #preferences: PreferencesPort | null;
   readonly #dialog: DialogPort | null;
   readonly #validateEvents: boolean;
+  /**
+   * The last sequence number handed out. Never reset, so a consumer that sees
+   * seq N knows it has missed nothing if it has already seen 1..N-1.
+   */
+  #sequence = 0;
 
   constructor(options: KernelOptions = {}) {
     this.#clock = options.clock ?? Date.now;
@@ -394,6 +399,16 @@ export class Kernel {
     return this.#broker.audit;
   }
 
+  /**
+   * The highest sequence number emitted so far; 0 before anything is emitted.
+   *
+   * Exposed so a reconnecting consumer can say what it has already seen, and so
+   * a test can assert the counter does not restart.
+   */
+  get sequence(): number {
+    return this.#sequence;
+  }
+
   /** Character cells, not pixels. What `Format-Table` will read. */
   terminalSize(terminalId: TerminalId): { columns: number; rows: number } {
     const terminal = this.#terminals.get(terminalId);
@@ -436,7 +451,23 @@ export class Kernel {
     };
   }
 
-  #emit(event: KernelEvent): void {
+  /**
+   * The ONE place an event acquires its sequence number.
+   *
+   * Every event already carried a pid; none carried an order. Success travels
+   * keyed by requestId, error and warning by pid, stdout and stderr as bytes,
+   * and four independent streams arriving at one renderer with no common
+   * ordinal can be printed in any order at all — so `command 2>&1` and a
+   * transcript were both unreconstructable. The counter is per KERNEL rather
+   * than per process or per stream, because ordering a stream against itself
+   * was never the thing in doubt.
+   *
+   * Stamped here and nowhere else, which is what makes the numbers dense and
+   * gap-free: a call site that could mint its own would eventually mint two.
+   */
+  #emit(body: KernelEventBody): void {
+    this.#sequence += 1;
+    const event = { ...body, seq: this.#sequence } as KernelEvent;
     if (this.#validateEvents) assertCloneSafe(event, `KernelEvent(${event.kind})`);
     // Copy first: a listener that unsubscribes on `exit` — the obvious thing
     // for a "wait for this command" helper to do — would otherwise mutate the
