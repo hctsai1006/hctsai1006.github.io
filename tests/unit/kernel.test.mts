@@ -22,6 +22,7 @@ import assert from 'node:assert/strict';
 import { CapabilityDeniedError } from '../../src/commands/invocation.ts';
 import type { CommandModule, InvocationContext } from '../../src/commands/invocation.ts';
 import type { CommandManifest } from '../../src/commands/manifest.ts';
+import type { FileSystemPort } from '../../src/commands/ports.ts';
 import type { PSValue } from '../../src/pipeline/psobject.ts';
 // The seed's home, imported rather than repeated: the kernel default and the
 // filesystem it boots into were two different strings, and nothing compared them.
@@ -108,6 +109,35 @@ function aborted(signal: AbortSignal): Promise<void> {
       return;
     }
     signal.addEventListener('abort', () => resolve(), { once: true });
+  });
+}
+
+/**
+ * A `FileSystemPort` that is nothing but a current directory.
+ *
+ * A stub rather than the real VFS because what is being pinned is the KERNEL's
+ * reconciliation of the shell's location, not `Set-Location`'s behaviour. The
+ * real command over a real filesystem is exercised across a real Worker in
+ * kernel-worker.test.mts.
+ */
+function movingPort(start: string): FileSystemPort {
+  let full = start;
+  return {
+    get location() {
+      return { full } as unknown as ReturnType<FileSystemPort['resolve']>;
+    },
+    setLocation: async (path: string) => {
+      full = path;
+      return { ok: true as const, value: { full } };
+    },
+  } as unknown as FileSystemPort;
+}
+
+/** Moves the port and emits nothing, which is exactly what `Set-Location` does. */
+function mover(to = '/home/thc1006/sub'): CommandModule {
+  return command({ name: 'cd', display: 'cd' }, async (context) => {
+    await context.fs?.setLocation(to);
+    return 0;
   });
 }
 
@@ -361,6 +391,7 @@ describe('every KernelEvent survives structuredClone', () => {
       signalled: null,
     },
     { kind: 'rejected', requestId: 'r1', requestKind: 'resize', problems: ['columns must be an integer'] },
+    { kind: 'cwd-changed', terminalId: 't1', cwd: '/home/thc1006/sub' },
   ];
 
   it('covers every event kind and every stream', () => {
@@ -1000,8 +1031,9 @@ describe('capabilities through the kernel', () => {
 
 describe('everything a real session emits is clone-safe', () => {
   it('round-trips every event of a session that uses every channel', async () => {
-    const { kernel, events } = newKernel();
+    const { kernel, events } = newKernel({ fs: movingPort(DEFAULT_HOME), cwd: DEFAULT_HOME });
     kernel.register(CHATTY);
+    kernel.register(mover());
 
     kernel.send({
       kind: 'exec',
@@ -1014,6 +1046,9 @@ describe('everything a real session emits is clone-safe', () => {
     // session is talking to a page. It must come back as an event like any
     // other, and must survive the boundary like any other.
     kernel.send({ kind: 'resize', terminalId: 't1', columns: 0, rows: 24 });
+    // And so is moving the shell, which is the one event a terminal renders as
+    // chrome rather than as output.
+    kernel.send({ kind: 'exec', requestId: 'r2', terminalId: 't1', source: 'cd', background: false });
     await kernel.drain();
 
     // The kernel validates on the way out; this proves the real algorithm
@@ -1262,5 +1297,444 @@ describe('requests the kernel will not act on', () => {
     kernel.send({ kind: 'resize', terminalId: 't1', columns: 120, rows: 40 });
     kernel.send({ kind: 'resize', terminalId: 't1', columns: 0, rows: Number.NaN });
     assert.deepEqual(kernel.terminalSize('t1'), { columns: 120, rows: 40 });
+  });
+
+  it('rejects an exec whose source contains no command, instead of going silent', async () => {
+    // MEASURED before this: a whitespace-only source produced ZERO events and
+    // left `sequence` at 0, while the requestId was already spent in the
+    // kernel's submitted set. Nothing could be retried and nothing would ever
+    // arrive, so a caller waiting for the request to finish waited forever.
+    const { kernel, events } = newKernel();
+    kernel.send({ kind: 'exec', requestId: 'r1', terminalId: 't1', source: '   ', background: false });
+    await kernel.drain();
+
+    const rejected = events.filter((e) => e.kind === 'rejected');
+    assert.equal(rejected.length, 1);
+    assert.equal(rejected[0]?.requestId, 'r1');
+    assert.equal(rejected[0]?.requestKind, 'exec');
+    assert.deepEqual(rejected[0]?.problems, ['source contains no command']);
+    assert.equal(events.some((e) => e.kind === 'process-changed'), false, 'nothing ran');
+  });
+
+  it('rejects a source that is only a pipe, for the same reason', async () => {
+    const { kernel, events } = newKernel();
+    kernel.send({ kind: 'exec', requestId: 'r1', terminalId: 't1', source: ' | ', background: false });
+    await kernel.drain();
+    assert.equal(events.filter((e) => e.kind === 'rejected').length, 1);
+  });
+});
+
+describe('the shell moving, as an event rather than as prompt chrome', () => {
+  /**
+   * Roadmap 6.4. v1's `cd` sets a global and then repaints the prompt itself:
+   *
+   *     CWD = p; ... document.getElementById('prompt').textContent = shortCwd()
+   *
+   * A command that repaints the prompt cannot run in a Worker. Here the command
+   * moves the FILESYSTEM and the kernel notices; the terminal owns the prompt.
+   *
+   * The port is a stub rather than the real VFS on purpose: what is being
+   * pinned is the KERNEL's reconciliation, not `Set-Location`'s. The real
+   * command, over a real filesystem, is exercised across a real Worker in
+   * kernel-worker.test.mts.
+   */
+  it('emits cwd-changed, and emits it before the exit that ends the request', async () => {
+    // MEASURED before this existed: the port moved to /home/thc1006/sub while
+    // `kernel.cwd('t1')` still answered /home/thc1006, the NEXT process was
+    // created with the stale directory in its snapshot and in $PWD, and no
+    // event was emitted either way. Two sources of truth, disagreeing.
+    const port = movingPort('/home/thc1006');
+    const { kernel, events } = newKernel({ fs: port, cwd: '/home/thc1006' });
+    kernel.register(mover());
+
+    kernel.send({ kind: 'exec', requestId: 'r1', terminalId: 't1', source: 'cd', background: false });
+    await kernel.drain();
+
+    const changed = events.filter((e) => e.kind === 'cwd-changed');
+    assert.equal(changed.length, 1);
+    assert.equal(changed[0]?.terminalId, 't1');
+    assert.equal(changed[0]?.cwd, '/home/thc1006/sub');
+    assert.equal(kernel.cwd('t1'), '/home/thc1006/sub');
+
+    const exit = events.find((e) => e.kind === 'exit');
+    assert.ok(
+      (changed[0]?.seq ?? 0) < (exit?.seq ?? 0),
+      'a prompt rendered on exit must already know where it is',
+    );
+  });
+
+  it('gives the next process the new directory, in its snapshot and in $PWD', async () => {
+    const port = movingPort('/home/thc1006');
+    const { kernel, events } = newKernel({ fs: port, cwd: '/home/thc1006' });
+    kernel.register(mover());
+    let sawPwd: string | undefined;
+    kernel.register(
+      command({ name: 'pwd', display: 'pwd' }, async (context) => {
+        sawPwd = context.env.get('PWD');
+        return 0;
+      }),
+    );
+
+    kernel.send({ kind: 'exec', requestId: 'r1', terminalId: 't1', source: 'cd', background: false });
+    await kernel.drain();
+    kernel.send({ kind: 'exec', requestId: 'r2', terminalId: 't1', source: 'pwd', background: false });
+    await kernel.drain();
+
+    assert.equal(sawPwd, '/home/thc1006/sub');
+    const second = events
+      .filter((e) => e.kind === 'process-changed')
+      .map((e) => e.snapshot)
+      .find((s) => s.name === 'pwd');
+    assert.equal(second?.cwd, '/home/thc1006/sub');
+  });
+
+  it('says nothing when the command did not move anything', async () => {
+    const port = movingPort('/home/thc1006');
+    const { kernel, events } = newKernel({ fs: port, cwd: '/home/thc1006' });
+    kernel.register(emitter('greet', ['hello']));
+
+    kernel.send({ kind: 'exec', requestId: 'r1', terminalId: 't1', source: 'greet', background: false });
+    await kernel.drain();
+
+    assert.equal(events.some((e) => e.kind === 'cwd-changed'), false);
+  });
+
+  it('does not need a filesystem at all', async () => {
+    // The kernel ships with `fs: null` in every test above this one; the poll
+    // must be a no-op rather than a crash in `#drive`'s finally.
+    const { kernel, events } = newKernel();
+    kernel.register(emitter('greet', ['hello']));
+    kernel.send({ kind: 'exec', requestId: 'r1', terminalId: 't1', source: 'greet', background: false });
+    await kernel.drain();
+    assert.equal(events.some((e) => e.kind === 'cwd-changed'), false);
+    assert.equal(events.filter((e) => e.kind === 'exit').length, 1);
+  });
+
+  it('still reports the exits when the port’s location getter throws', async () => {
+    // `#syncLocation` runs inside `#drive`'s finally, so a throwing getter
+    // would cost the pipeline every `exit` it was about to emit.
+    const port = {
+      get location(): never {
+        throw new Error('the backend went away');
+      },
+      setLocation: async () => ({ ok: true as const, value: { full: '/x' } }),
+    } as unknown as FileSystemPort;
+    const { kernel, events } = newKernel({ fs: port });
+    kernel.register(emitter('greet', ['hello']));
+
+    kernel.send({ kind: 'exec', requestId: 'r1', terminalId: 't1', source: 'greet', background: false });
+    await kernel.drain();
+
+    assert.equal(events.filter((e) => e.kind === 'exit').length, 1);
+    assert.equal(events.some((e) => e.kind === 'cwd-changed'), false);
+  });
+});
+
+describe('cancelling something that has not started yet', () => {
+  /**
+   * Counts INVOCATIONS, not exit codes, and that is the whole design of these
+   * tests. A kernel that runs the command and then reports 130 passes any
+   * assertion about the exit code while having already committed whatever side
+   * effects the command performs — which is the thing a Ctrl+C before the
+   * command starts is supposed to prevent.
+   */
+  function counter(name: string, calls: { n: number }): CommandModule {
+    return command({ name, display: name }, async (context) => {
+      calls.n += 1;
+      context.signal.throwIfAborted();
+      await context.streams.success.write('ran');
+      return 0;
+    });
+  }
+
+  it('does not invoke the command when the cancel arrived first', async () => {
+    // MEASURED before the reordering: `invocations = 1`. The check used to run
+    // AFTER `#track(#drive(...))`, and `#drive` is an async function — calling
+    // it executes as far as its first await, which is far enough to enter the
+    // first stage.
+    const calls = { n: 0 };
+    const { kernel, events } = newKernel();
+    kernel.register(counter('work', calls));
+
+    kernel.send({ kind: 'cancel', requestId: 'r1' });
+    kernel.send({ kind: 'exec', requestId: 'r1', terminalId: 't1', source: 'work', background: false });
+    await kernel.drain();
+
+    assert.equal(calls.n, 0, 'the command must not have run at all');
+    assert.deepEqual(objectValues(events), []);
+    const exit = events.find((e) => e.kind === 'exit');
+    assert.equal(exit?.signalled, 'SIGINT');
+    assert.equal(exit?.exitCode, SIGNAL_EXIT_CODE.SIGINT);
+    assert.equal(exit?.succeeded, false);
+  });
+
+  it('honours a cancel sent from a process-changed listener', async () => {
+    // The window this closes: `#exec` creates every snapshot before registering
+    // any abort controller, so there is a moment when a process is in the table
+    // — findable — and unreachable by a signal. The old code branched on
+    // findability, so the cancel was neither remembered nor delivered.
+    // MEASURED before the fix:
+    //
+    //   invocations = 1   exits = [{"code":0,"signalled":null}]
+    //
+    // A Ctrl+C that vanished, and a command that reported success.
+    const calls = { n: 0 };
+    const { kernel, events } = newKernel();
+    kernel.register(counter('work', calls));
+
+    let cancelled = false;
+    kernel.on((event) => {
+      if (event.kind !== 'process-changed' || cancelled) return;
+      cancelled = true;
+      kernel.send({ kind: 'cancel', requestId: 'r1' });
+    });
+
+    kernel.send({ kind: 'exec', requestId: 'r1', terminalId: 't1', source: 'work', background: false });
+    await kernel.drain();
+
+    assert.equal(calls.n, 0, 'the command must not have run at all');
+    assert.equal(events.find((e) => e.kind === 'exit')?.signalled, 'SIGINT');
+  });
+
+  it('still produces exactly one exit per stage of the abandoned pipeline', async () => {
+    const calls = { n: 0 };
+    const { kernel, events } = newKernel();
+    kernel.register(counter('a', calls));
+    kernel.register(counter('b', calls));
+
+    kernel.send({ kind: 'cancel', requestId: 'r1' });
+    kernel.send({ kind: 'exec', requestId: 'r1', terminalId: 't1', source: 'a | b', background: false });
+    await kernel.drain();
+
+    assert.equal(calls.n, 0);
+    const exits = events.filter((e) => e.kind === 'exit');
+    assert.equal(exits.length, 2, 'one exit per process, cancelled or not');
+    assert.deepEqual(exits.map((e) => e.signalled), ['SIGINT', 'SIGINT']);
+  });
+
+  it('does not leave the cancellation lying around for the next request', async () => {
+    const calls = { n: 0 };
+    const { kernel } = newKernel();
+    kernel.register(counter('work', calls));
+
+    kernel.send({ kind: 'cancel', requestId: 'r1' });
+    kernel.send({ kind: 'exec', requestId: 'r1', terminalId: 't1', source: 'work', background: false });
+    await kernel.drain();
+    assert.equal(calls.n, 0);
+
+    kernel.send({ kind: 'exec', requestId: 'r2', terminalId: 't1', source: 'work', background: false });
+    await kernel.drain();
+    assert.equal(calls.n, 1, 'a different request must not inherit the cancellation');
+  });
+});
+
+describe('the status a process exits with is readable when the exit arrives', () => {
+  it('commits $? before publishing the exit that describes it', async () => {
+    // MEASURED before the reorder: `lastSucceeded at exit = true`, `after drain
+    // = false`. A listener reading the kernel on the event that says "this
+    // finished" was shown the PREVIOUS request's answer. A sequence number
+    // orders events; it cannot make an unwritten state readable.
+    const { kernel } = newKernel();
+    kernel.register(command({ name: 'fail', display: 'fail' }, async () => 3));
+
+    let atExit: { succeeded: boolean } | null = null;
+    kernel.on((event) => {
+      if (event.kind === 'exit') atExit = { succeeded: kernel.lastSucceeded('t1') };
+    });
+
+    kernel.send({ kind: 'exec', requestId: 'r1', terminalId: 't1', source: 'fail', background: false });
+    await kernel.drain();
+
+    assert.deepEqual(atExit, { succeeded: false });
+    assert.equal(kernel.lastSucceeded('t1'), false);
+  });
+
+  it('is still right when the listener submits the next request on the spot', async () => {
+    // The autopilot case: a listener that answers `exit` by sending the next
+    // `exec`. The second request's own teardown must not be able to reach back
+    // and overwrite the first's answer before the first listener has read it.
+    const { kernel } = newKernel();
+    kernel.register(command({ name: 'fail', display: 'fail' }, async () => 3));
+    kernel.register(emitter('ok', ['done']));
+
+    const observed: boolean[] = [];
+    kernel.on((event) => {
+      if (event.kind !== 'exit') return;
+      observed.push(kernel.lastSucceeded('t1'));
+      if (event.requestId === 'r1') {
+        kernel.send({ kind: 'exec', requestId: 'r2', terminalId: 't1', source: 'ok', background: false });
+      }
+    });
+
+    kernel.send({ kind: 'exec', requestId: 'r1', terminalId: 't1', source: 'fail', background: false });
+    await kernel.drain();
+
+    assert.deepEqual(observed, [false, true], 'each exit saw its own request’s result');
+  });
+
+  it('does not let a background job rewrite the terminal it was started from', async () => {
+    // MEASURED in pwsh 7.6.5 on this machine, via tools-free probe:
+    //
+    //   after Get-Date   : $? = True
+    //   job state        : Failed
+    //   after Wait-Job   : $? = True          <- the failure did NOT move it
+    //   after native job exit 42 : $LASTEXITCODE = <unset>
+    //
+    // A job is isolated from the session that started it. Before this, a
+    // background failure flipped the foreground terminal's `$?`.
+    const { kernel } = newKernel();
+    kernel.register(emitter('ok', ['done']));
+    kernel.register(command({ name: 'bad', display: 'bad' }, async () => 1));
+
+    kernel.send({ kind: 'exec', requestId: 'r1', terminalId: 't1', source: 'ok', background: false });
+    await kernel.drain();
+    assert.equal(kernel.lastSucceeded('t1'), true);
+
+    kernel.send({ kind: 'exec', requestId: 'r2', terminalId: 't1', source: 'bad', background: true });
+    await kernel.drain();
+    assert.equal(kernel.lastSucceeded('t1'), true, 'the job failed; the session did not');
+
+    // And the job itself still reports what happened, which is where the
+    // failure is supposed to be visible.
+    assert.equal(kernel.jobs.list()[0]?.state, 'Failed');
+  });
+
+  it('does not let a background command-not-found rewrite it either', async () => {
+    // Found by an adversarial pass on the fix above: `#teardown` stopped
+    // recording status for a background pipeline, but the two paths that report
+    // a request which never RAN — an unknown command, a binding failure — went
+    // on doing it, and marked their process as foreground while they were at
+    // it. MEASURED before this:
+    //
+    //     after BACKGROUND unknown: $? = false
+    //     its snapshot says background = false
+    const { kernel } = newKernel();
+    kernel.register(emitter('ok', ['done']));
+
+    kernel.send({ kind: 'exec', requestId: 'r1', terminalId: 't1', source: 'ok', background: false });
+    await kernel.drain();
+    assert.equal(kernel.lastSucceeded('t1'), true);
+
+    kernel.send({
+      kind: 'exec',
+      requestId: 'r2',
+      terminalId: 't1',
+      source: 'does-not-exist',
+      background: true,
+    });
+    await kernel.drain();
+
+    assert.equal(kernel.lastSucceeded('t1'), true, 'the job failed; the session did not');
+    const snapshot = [...kernel.processes.list()].find((p) => p.requestId === 'r2');
+    assert.equal(snapshot?.background, true, 'and it was a background process');
+    // The failure has to be visible SOMEWHERE, and a job is where.
+    assert.equal(kernel.jobs.list()[0]?.state, 'Failed');
+  });
+
+  it('does not let a background binding failure rewrite it either', async () => {
+    const { kernel } = newKernel();
+    kernel.register(emitter('ok', ['done']));
+    kernel.register(
+      command(
+        {
+          name: 'strict',
+          display: 'strict',
+          parameterSource: 'declared',
+          parameters: [
+            {
+              name: 'Path',
+              aliases: [],
+              type: 'System.String',
+              isSwitch: false,
+              sets: {
+                __AllParameterSets: { position: 0, mandatory: false, valueFromPipeline: false },
+              },
+              mandatoryInAnySet: false,
+              mandatoryInEverySet: false,
+              firstPosition: 0,
+              valueFromPipelineInAnySet: false,
+              validation: [],
+              verified: false,
+            },
+          ],
+        },
+        async () => 0,
+      ),
+    );
+
+    kernel.send({ kind: 'exec', requestId: 'r1', terminalId: 't1', source: 'ok', background: false });
+    await kernel.drain();
+
+    kernel.send({
+      kind: 'exec',
+      requestId: 'r2',
+      terminalId: 't1',
+      source: 'strict -NoSuchParameter x',
+      background: true,
+    });
+    await kernel.drain();
+
+    assert.equal(kernel.lastSucceeded('t1'), true);
+    assert.equal(kernel.jobs.list()[0]?.state, 'Failed');
+  });
+});
+
+describe('a listener that throws', () => {
+  /**
+   * The transport's `postMessage` IS a listener, and `postMessage` throws
+   * `DataCloneError`. Before this was contained, one throwing listener took the
+   * kernel down with it. MEASURED against the shipped class:
+   *
+   *     send() threw: listener blew up
+   *     listener A saw: [1]     listener B saw: []     final seq: 1
+   *
+   * — the second listener was never told about the event at all, and `#exec`
+   * aborted between creating the process and starting it.
+   */
+  it('does not stop the other listeners, the queue, or the execution', async () => {
+    const failures: unknown[] = [];
+    const kernel = new Kernel({
+      clock: () => 1_700_000_000_000,
+      onListenerError: (error) => failures.push(error),
+    });
+    kernel.register(emitter('greet', ['hello']));
+
+    const first: number[] = [];
+    const second: number[] = [];
+    kernel.on((event) => {
+      first.push(event.seq);
+      if (event.kind === 'process-changed') throw new Error('listener blew up');
+    });
+    kernel.on((event) => second.push(event.seq));
+
+    kernel.send({ kind: 'exec', requestId: 'r1', terminalId: 't1', source: 'greet', background: false });
+    await kernel.drain();
+
+    assert.deepEqual(second, first, 'the listener after the failing one saw every event');
+    assert.ok(first.length >= 4, `the pipeline ran to completion, saw ${first.length} events`);
+    assert.ok(failures.length > 0, 'and the failures were reported rather than swallowed');
+    assert.equal((failures[0] as Error).message, 'listener blew up');
+  });
+
+  it('survives a reporter that throws as well', () => {
+    const kernel = new Kernel({
+      clock: () => 1_700_000_000_000,
+      onListenerError: () => {
+        throw new Error('the reporter is broken too');
+      },
+    });
+    const seen: number[] = [];
+    kernel.on(() => {
+      throw new Error('listener blew up');
+    });
+    kernel.on((event) => seen.push(event.seq));
+
+    // Doubly broken: the listener throws and so does the sink the throw is
+    // reported to. Delivery still has to continue, or a bug in a log line ends
+    // the session — the exact failure the containment exists to prevent.
+    assert.doesNotThrow(() => {
+      kernel.send({ kind: 'resize', terminalId: 't1', columns: 0, rows: 0 });
+    });
+    assert.deepEqual(seen, [1], 'the second listener still got the rejection');
   });
 });

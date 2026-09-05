@@ -332,3 +332,65 @@ describe('the records that carry a PSValue', () => {
     assert.equal(Object.hasOwn(safe, 'invocation'), false);
   });
 });
+
+describe('a value whose entire content is the thing the boundary drops', () => {
+  /**
+   * `baseObject` is dropped, and that is right — it is the underlying host
+   * value, useful inside the kernel and meaningless outside it. It stops being
+   * right when it was the ONLY content, because what arrives still declares its
+   * type and carries nothing, and nothing anywhere reports that.
+   *
+   * MEASURED on a real `Format-Table` record before this rule existed:
+   *
+   *   before: isFormatRecord = true    document present = true
+   *   after wire: {"typeNames":["…Format.FormatEntryData","System.Object"],
+   *                "properties":{}}
+   *   after: document present = false  still typed as a format record = true
+   *
+   * The same defect the script block already taught: an unresolvable handle had
+   * to be an ERROR rather than a silent pass, or `Where-Object` passed every
+   * object through. An emptied format record is that silent pass one layer down.
+   */
+  it('is refused, and the error names the type', () => {
+    const emptied = psWrap({}, ['Some.Kernel.Local.Thing', 'System.Object'], {
+      everything: 'is in here',
+    });
+    assert.throws(
+      () => sanitizePSValue(emptied),
+      (error: unknown) =>
+        error instanceof WireValueError &&
+        /Some\.Kernel\.Local\.Thing/u.test(error.message) &&
+        /baseObject, which the boundary drops/u.test(error.message),
+    );
+  });
+
+  it('refuses the real Format-* record, which is how this was found', async () => {
+    // Imported rather than hand-rolled: what has to be refused is the shape the
+    // formatter actually emits, and a stand-in would keep passing if that shape
+    // changed. `src/formatting/` is not edited here — only read.
+    const { formatRecord, isFormatRecord } = await import('../../src/formatting/records.ts');
+    const record = formatRecord({ sections: [] } as never);
+    assert.equal(isFormatRecord(record), true);
+    assert.throws(() => sanitizePSValue(record), WireValueError);
+  });
+
+  it('still carries an object that keeps some of its content', () => {
+    // The narrow rule: dropping `baseObject` from something that also has
+    // properties loses the host handle and keeps the object, which is the
+    // behaviour every other command relies on.
+    const partial = psWrap({ Name: 'still here' }, ['T'], new WeakMap());
+    const safe = sanitizePSValue(partial) as PSObject;
+    assert.equal(safe.properties['Name'], 'still here');
+    assert.equal(Object.hasOwn(safe, 'baseObject'), false);
+  });
+
+  it('does not refuse an empty object that had nothing to lose', () => {
+    // `undefined` and `null` in `baseObject` are not content, so nothing goes
+    // missing when they go — and an ordinary empty PSObject must still cross.
+    const bare = sanitizePSValue(psObject({})) as PSObject;
+    assert.deepEqual(bare.properties, {});
+    assert.equal(Object.hasOwn(bare, 'baseObject'), false);
+    assert.doesNotThrow(() => sanitizePSValue(psWrap({}, ['T'], null)));
+    assert.doesNotThrow(() => sanitizePSValue(psWrap({}, ['T'], undefined)));
+  });
+});
