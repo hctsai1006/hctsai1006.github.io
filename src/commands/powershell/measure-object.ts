@@ -235,8 +235,13 @@ interface TextTally {
  * value, and `Math.max(0, ...)` keeps a negative rounding artefact from
  * reaching `Math.sqrt` and returning NaN.
  */
-function sampleStandardDeviation(tally: NumericTally): number | null {
-  if (tally.numberCount < 2) return null;
+function sampleStandardDeviation(tally: NumericTally): number {
+  // ZERO, not null, below two values. Measured, and it is not the guess:
+  //   @(7) | Measure-Object -StandardDeviation  ->  StandardDeviation 0
+  //   @()  | Measure-Object -StandardDeviation  ->  StandardDeviation 0
+  // The sample formula divides by n-1 and is undefined at n=1, so `null` was
+  // the reasonable answer and the wrong one.
+  if (tally.numberCount < 2) return 0;
   const mean = tally.sum / tally.numberCount;
   const variance =
     Math.max(0, tally.sumOfSquares - tally.numberCount * mean * mean) / (tally.numberCount - 1);
@@ -312,12 +317,17 @@ export const measureObject: CommandModule = {
     const numericTallies = new Map<string | null, NumericTally>();
     const textTallies = new Map<string | null, TextTally>();
     /**
-     * Errors are raised as values arrive ONLY when Sum or Average was asked
-     * for, because that is the only case where the numeric path is forced.
+     * Errors are raised as values arrive ONLY when the numeric path is forced.
      * `@(1,'a') | Measure-Object -Maximum` reports no error at all — it quietly
      * switches to the object-typed result instead.
+     *
+     * -StandardDeviation forces it too, which was measured rather than assumed:
+     *   @(1,'a') | Measure-Object -StandardDeviation
+     *     ->  Count 2, StandardDeviation empty, and a NonNumericInputObject
+     *         error for 'a'
+     * There is no object-typed standard deviation to fall back to.
      */
-    const forcedNumeric = wantSum || wantAverage;
+    const forcedNumeric = wantSum || wantAverage || wantDeviation;
 
     for await (const item of commandInput(context, parameters, COMMAND)) {
       throwIfCancelled(context.signal, 'Measure-Object');
@@ -462,7 +472,10 @@ function buildNumeric(
         Sum: null,
         Maximum: null,
         Minimum: null,
-        StandardDeviation: null,
+        // Measured: `@() | Measure-Object -StandardDeviation` reports 0, while
+        // `@() | Measure-Object` leaves it null. The switch is what decides,
+        // not the emptiness.
+        StandardDeviation: wants.wantDeviation ? 0 : null,
         Property: key,
       },
       GENERIC_TYPE,

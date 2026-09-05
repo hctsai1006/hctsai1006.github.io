@@ -167,9 +167,47 @@ describe('Measure-Object -StandardDeviation is a computation, not a null', () =>
     assert.ok(Math.abs((prop(result.values[0], 'StandardDeviation') as number) - Math.sqrt(2.5)) < 1e-12);
   });
 
-  it('leaves it null when there is nothing to deviate from', async () => {
-    const result = await run(measureObject, { StandardDeviation: true }, [7]);
+  it('reports ZERO, not null, below two values', async () => {
+    // Measured, and the opposite of the reasonable guess: the sample formula
+    // divides by n-1 and is undefined at n=1, but pwsh reports 0.
+    //   @(7) | Measure-Object -StandardDeviation  ->  0
+    //   @()  | Measure-Object -StandardDeviation  ->  0
+    //   @()  | Measure-Object                     ->  <null>
+    assert.equal(
+      prop((await run(measureObject, { StandardDeviation: true }, [7])).values[0], 'StandardDeviation'),
+      0,
+    );
+    assert.equal(
+      prop((await run(measureObject, { StandardDeviation: true }, [])).values[0], 'StandardDeviation'),
+      0,
+    );
+    assert.equal(
+      prop((await run(measureObject, {}, [])).values[0], 'StandardDeviation'),
+      null,
+    );
+  });
+
+  it('forces the numeric path, so a non-numeric value is an error', async () => {
+    // Measured: @(1,'a') | Measure-Object -StandardDeviation
+    //   ->  Count 2, StandardDeviation empty, NonNumericInputObject for 'a'
+    // -Maximum alone reports no error at all and switches result type instead;
+    // there is no object-typed standard deviation to switch to.
+    const result = await run(measureObject, { StandardDeviation: true }, [1, 'a']);
+    assert.equal(prop(result.values[0], 'Count'), 2);
     assert.equal(prop(result.values[0], 'StandardDeviation'), null);
+    assert.equal(
+      result.errors[0]?.fullyQualifiedErrorId,
+      'NonNumericInputObject,Microsoft.PowerShell.Commands.MeasureObjectCommand',
+    );
+  });
+
+  it('matches the two-value and float cases', async () => {
+    // pwsh: @(1,3) -> 1.4142135623731 = sqrt(2)
+    //       @(1.5,2.5,3.5) -> 1
+    const two = await run(measureObject, { StandardDeviation: true }, [1, 3]);
+    assert.ok(Math.abs((prop(two.values[0], 'StandardDeviation') as number) - Math.SQRT2) < 1e-12);
+    const floats = await run(measureObject, { StandardDeviation: true }, [1.5, 2.5, 3.5]);
+    assert.ok(Math.abs((prop(floats.values[0], 'StandardDeviation') as number) - 1) < 1e-12);
   });
 });
 
@@ -563,6 +601,29 @@ describe('Where-Object binds its parameter sets the way pwsh does', () => {
     assert.ok(sets.has('ScriptBlockSet'));
     assert.ok(sets.has('CaseSensitiveNotContainsSet'));
     assert.ok(sets.has('Not'), 'the -Not set is called Not, not NotSet');
+  });
+
+  it('binds every case-sensitive operator to its own set', () => {
+    // The fourteen C-prefixed switches are matched by TEMPLATE -- isBound(bound,
+    // `C${kind}`) -- so a search for their names as string literals finds
+    // nothing and they look unread. They are not: each is its own parameter set
+    // in pwsh and each binds here. Spot-checked end to end rather than by
+    // reading the table that generated them.
+    for (const [written, set] of [
+      ['-ceq', 'CaseSensitiveEqualSet'],
+      ['-clike', 'CaseSensitiveLikeSet'],
+      ['-cnotcontains', 'CaseSensitiveNotContainsSet'],
+    ] as const) {
+      const outcome = bindArgs(['Name', written, 'B']);
+      assert.ok(outcome.ok, written);
+      assert.equal(outcome.result.parameterSet, set, written);
+      assert.equal(outcome.result.parameters['Property'], 'Name');
+      assert.equal(outcome.result.parameters['Value'], 'B');
+    }
+    // And all 28 are declared, one set each.
+    const switches = whereObject.manifest.parameters.filter((p) => /^C[A-Z]/u.test(p.name));
+    assert.equal(switches.length, 14);
+    for (const p of switches) assert.equal(Object.keys(p.sets).length, 1, p.name);
   });
 
   it('is held out of the session registry, and says so', () => {

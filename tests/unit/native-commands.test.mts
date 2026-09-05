@@ -489,6 +489,21 @@ describe('Get-Command', () => {
     assert.deepEqual(prop(result.values[0], 'Capabilities'), ['terminal.control']);
   });
 
+  it('keeps ParameterSource and Implementation as separate answers', async () => {
+    // They look alike and are about different things. Where-Object's parameter
+    // metadata IS from the reference implementation -- pwsh reported all 35
+    // names -- and the command is still only partially implemented and not
+    // registered. One field said the first and nothing said the second, which
+    // is how 'reference-implementation' came to read as 'we built this'.
+    const where = await run(getCommand, { Name: 'Where-Object', Detailed: true });
+    assert.equal(prop(where.values[0], 'ParameterSource'), 'reference-implementation');
+    assert.equal(prop(where.values[0], 'Implementation'), 'partial');
+
+    const sort = await run(getCommand, { Name: 'Sort-Object', Detailed: true });
+    assert.equal(prop(sort.values[0], 'ParameterSource'), 'reference-implementation');
+    assert.equal(prop(sort.values[0], 'Implementation'), 'implemented');
+  });
+
   it('builds a syntax line from the declared parameters', () => {
     const module = need('get-location');
     const syntax = syntaxOf(module.manifest, 'Get-Location');

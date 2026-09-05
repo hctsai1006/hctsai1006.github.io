@@ -229,7 +229,15 @@ export function fidelityInfo(resolved: Resolved): PSObject {
       Runtime: m.runtime,
       Risk: m.risk,
       Capabilities: [...m.capabilities],
+      // Two different facts, side by side on purpose. ParameterSource says
+      // where the PARAMETER METADATA came from -- it is about upstream, and
+      // 'reference-implementation' means pwsh reported these names, never that
+      // this engine binds them. Implementation says how much was built here.
+      // Reading the first as the second is what let Where-Object be counted as
+      // an implemented command while its manifest could not express its own
+      // parameter sets.
       ParameterSource: m.parameterSource,
+      Implementation: m.implementationStatus,
       Synopsis: m.synopsis,
       Notes: m.notes ?? '',
     },
