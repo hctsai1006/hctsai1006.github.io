@@ -353,3 +353,95 @@ describe('the real curated change list', () => {
     assert.equal(citing[0]?.subject, 'ConvertTo-Csv, Export-Csv');
   });
 });
+
+// ---------------------------------------------------------------------------
+// found by attacking the gates above with data built to route around them
+// ---------------------------------------------------------------------------
+
+describe('routes around the gates, closed', () => {
+  it('refuses a record that sets both a mechanism and a behaviourKey', () => {
+    // keysFor returned the derived keys and dropped the hand-typed one without
+    // a word, so a record could name a key that reached neither the profile nor
+    // any lookup while reading as declared.
+    assert.throws(
+      () =>
+        keysFor(
+          sound({
+            mechanism: 'switch-explicit-false',
+            scope: { command: 'X', parameters: ['P'] },
+            behaviorKey: 'silently.dropped',
+          }),
+        ),
+      throwsWith(/sets both mechanism and behaviorKey/),
+    );
+  });
+
+  it('refuses a hand-typed key in the namespace the mechanism derives', () => {
+    // The exact shape the old curation had: a key with a `<operator>`
+    // placeholder in it, which no code path can ever compute. It sits in the
+    // table looking authoritative and is unreachable.
+    assert.throws(
+      () =>
+        assertCurationIsSound(
+          [sound({ behaviorKey: switchBehaviorKey('Where-Object', '<operator>') })],
+          REPO,
+        ),
+      throwsWith(/hand-types .*which is the shape the switch-explicit-false/),
+    );
+  });
+
+  it('refuses the retired engine-wide switch flag by name', () => {
+    // Declaring `scope.command: null` satisfies the scope gate, so the old
+    // global boolean could come back as a legitimately-engine-wide claim.
+    assert.throws(
+      () =>
+        assertCurationIsSound(
+          [
+            sound({
+              behaviorKey: 'switchParameters.honourExplicitFalse',
+              scope: { command: null },
+            }),
+          ],
+          REPO,
+        ),
+      throwsWith(/reintroduces "switchParameters.honourExplicitFalse"/),
+    );
+  });
+
+  it('refuses evidence that never mentions what it is offered as proof of', () => {
+    // "Cite a test" was satisfiable by any test that happened to exist. This
+    // gate found a real weakness in the repository's own data on its first run.
+    assert.throws(
+      () =>
+        assertCurationIsSound(
+          [
+            sound({
+              subject: 'Totally-Unrelated',
+              behaviorKey: 'made.up',
+              scope: { command: 'Totally-Unrelated' },
+              implementation: 'verified',
+              evidence: ['tests/unit/version.test.mts'],
+            }),
+          ],
+          REPO,
+        ),
+      throwsWith(/no evidence test mentions/),
+    );
+  });
+
+  it('accepts evidence that names the key, or the command, it proves', () => {
+    assert.doesNotThrow(() =>
+      assertCurationIsSound(
+        [
+          sound({
+            behaviorKey: 'newGuid.defaultVersion',
+            scope: { command: 'New-Guid' },
+            implementation: 'verified',
+            evidence: ['tests/unit/native-commands.test.mts'],
+          }),
+        ],
+        REPO,
+      ),
+    );
+  });
+});

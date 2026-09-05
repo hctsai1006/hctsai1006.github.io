@@ -175,6 +175,40 @@ function mergeCommandPatch(parent: CommandPatch, child: CommandPatch): CommandPa
 }
 
 /**
+ * A key a command can READ must be one BrowserShell emulates.
+ *
+ * The generator enforces this when it writes the profiles. This enforces it
+ * when the engine reads them, which is not the same gate: the generator is a
+ * build step, and a profile that is hand-edited, partially merged, or served
+ * from somewhere unexpected never passes through it. Found by attacking this
+ * module — an unemulated key pasted into `behaviors` was handed straight to
+ * `behavior()` and answered as a live semantic, which is precisely the defect
+ * the whole split exists to prevent.
+ *
+ * Checked per profile rather than on the merged table, because
+ * `documentedBehaviors` is a fact about the profile that declared the key.
+ * A profile carrying no `documentedBehaviors` makes no claim to check against
+ * and is left alone; the schema requires the section, so a real profile missing
+ * it fails `npm run profiles -- --check` instead.
+ */
+function assertOnlyEmulatedBehavioursAreExecutable(chain: readonly StoredProfile[]): void {
+  for (const profile of chain) {
+    const documented = profile.documentedBehaviors;
+    if (documented === undefined) continue;
+    for (const key of Object.keys(profile.behaviors ?? {})) {
+      const record = documented[key];
+      if (record === undefined || record.emulated === true) continue;
+      throw new ProfileResolutionError(
+        `compatibility profile "${profile.profile}" makes "${key}" readable by commands, but its ` +
+          `own record says it is "${String(record.implementation ?? 'not emulated')}". A difference ` +
+          'BrowserShell does not reproduce must not be served as an execution semantic. ' +
+          'Regenerate the profile: npm run profiles',
+      );
+    }
+  }
+}
+
+/**
  * Resolve a profile against a set of stored profiles keyed by their `profile` id.
  *
  * Merge order is parent-first: a derived profile overrides what it inherits,
@@ -225,6 +259,8 @@ export function resolveProfile(
 
   const root = chain[0];
   if (root === undefined) throw new ProfileResolutionError('empty profile chain');
+
+  assertOnlyEmulatedBehavioursAreExecutable(chain);
 
   return deepFreeze({
     id: root.profile,

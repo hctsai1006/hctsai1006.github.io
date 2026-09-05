@@ -468,6 +468,30 @@ describe('validation that depends on the profile', () => {
       'System.ArgumentException',
     );
   });
+
+  it('is driven by validation.throwsArgumentException and by nothing else', () => {
+    // Named here because this file is cited as the EVIDENCE for that behaviour
+    // key, and the curation gate now refuses a citation whose test never
+    // mentions what it is offered as proof of. A test that proves the right
+    // thing for an unrelated reason is the failure mode; asserting the key by
+    // name ties the proof to the claim.
+    const vnoe = manifest('Test-Val', [param('Value', { validation: ['ValidateNotNullOrEmpty'] })]);
+    assert.equal(V76.behavior('validation.throwsArgumentException', true), false);
+    assert.equal(V77.behavior('validation.throwsArgumentException', false), true);
+
+    // A view differing ONLY in that key flips the exception type, so the flag is
+    // what decides — not the version string, not the command name.
+    const off = viewOfBehaviors('7.7.0-preview.4', { 'validation.throwsArgumentException': false });
+    const on = viewOfBehaviors('7.6.5', { 'validation.throwsArgumentException': true });
+    assert.equal(
+      failure(['-Value', ''], vnoe, off).innerExceptionTypeName,
+      'System.Management.Automation.ValidationMetadataException',
+    );
+    assert.equal(
+      failure(['-Value', ''], vnoe, on).innerExceptionTypeName,
+      'System.ArgumentException',
+    );
+  });
 });
 
 describe('attribute parsing', () => {

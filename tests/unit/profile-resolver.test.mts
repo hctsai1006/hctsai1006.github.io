@@ -371,3 +371,69 @@ describe('the resolved profile cannot be edited by a command', () => {
     assert.throws(() => (resolved.lineage as string[]).push('nope'), TypeError);
   });
 });
+
+// ---------------------------------------------------------------------------
+// found by attacking the resolver: the generator's gate is not the only gate
+// ---------------------------------------------------------------------------
+
+describe('an unemulated key cannot be made executable by editing a profile', () => {
+  // The generator refuses to WRITE such a profile. That is a build step, and a
+  // profile can be hand-edited, half-merged, or served from somewhere the build
+  // never saw. Attacking this module with a key pasted into `behaviors` got it
+  // handed straight to behavior() and answered as a live semantic — the exact
+  // defect the documented/emulated split exists to prevent.
+  const tampered: StoredProfile = {
+    schemaVersion: 1,
+    profile: 'test/tampered/linux',
+    channel: 'lts',
+    displayVersion: '1.0.0',
+    inherits: null,
+    behaviors: { 'smuggled.flag': true },
+    documentedBehaviors: { 'smuggled.flag': { emulated: false, implementation: 'documented' } },
+  };
+
+  it('throws at resolve time, naming the key and the profile', () => {
+    assert.throws(
+      () => resolveProfile('test/tampered/linux', profileMap([tampered])),
+      (e: unknown) =>
+        e instanceof ProfileResolutionError &&
+        /smuggled\.flag/.test(e.message) &&
+        /test\/tampered\/linux/.test(e.message),
+    );
+  });
+
+  it('catches it in an INHERITED profile too, not only the one asked for', () => {
+    const child: StoredProfile = {
+      ...tampered,
+      profile: 'test/tampered-child/linux',
+      inherits: 'test/tampered/linux',
+      behaviors: {},
+      documentedBehaviors: {},
+    };
+    assert.throws(
+      () => resolveProfile('test/tampered-child/linux', profileMap([tampered, child])),
+      ProfileResolutionError,
+    );
+  });
+
+  it('allows a profile that makes no documented claim to check against', () => {
+    // Synthetic fixtures carry no documentedBehaviors. Absence is not a licence
+    // — the schema requires the section, so a REAL profile missing it fails
+    // `npm run profiles -- --check` — but the resolver has nothing to compare.
+    const plain: StoredProfile = {
+      schemaVersion: 1,
+      profile: 'test/plain/linux',
+      channel: 'lts',
+      displayVersion: '1.0.0',
+      inherits: null,
+      behaviors: { 'a.flag': true },
+    };
+    assert.doesNotThrow(() => resolveProfile('test/plain/linux', profileMap([plain])));
+  });
+
+  it('lets the real profiles through, which is the case that must not regress', () => {
+    const map = profileMap(loadRealProfiles());
+    assert.doesNotThrow(() => resolveProfile(PREVIEW, map));
+    assert.doesNotThrow(() => resolveProfile(LTS, map));
+  });
+});

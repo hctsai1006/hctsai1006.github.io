@@ -1380,7 +1380,7 @@
     "New-TemporaryDirectory": {
       "availability": "added",
       "since": "7.7.0-preview.4",
-      "notes": "`New-TemporaryDirectory` cmdlet added (upstream #27549)"
+      "notes": "`New-TemporaryDirectory` cmdlet added (upstream #27549). Upstream only: BrowserShell does not implement this cmdlet."
     }
   },
   "experimentalFeatures": [],

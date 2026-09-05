@@ -378,10 +378,19 @@ function collect(): Artifact[] {
     if ((c.scope?.parameters ?? []).length > 0) continue;
     for (const name of c.subject.split(',').map((s) => s.trim())) {
       if (ltsCaptured !== null && name in ltsCaptured.commands) continue;
+      // `availability` is an UPSTREAM fact: this version of PowerShell has the
+      // cmdlet. Whether BrowserShell implements it is a different fact, and
+      // saying only the first invites the page to read as "available here".
+      // Nothing under src/ can reach `commands` today, so this is a labelling
+      // fix rather than a semantic one — but an unlabelled claim is how the
+      // behaviour table went wrong.
+      const emulated = isEmulated(c);
       previewCommands[name] = {
         availability: 'added',
         since: preview.version,
-        notes: `${c.title} (upstream #${String(primaryPr(c))})`,
+        notes:
+          `${c.title} (upstream #${String(primaryPr(c))})` +
+          (emulated ? '' : '. Upstream only: BrowserShell does not implement this cmdlet.'),
       };
     }
   }

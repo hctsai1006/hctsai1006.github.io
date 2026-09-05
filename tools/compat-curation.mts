@@ -13,11 +13,23 @@
  * test can hand it a hostile record and watch it refuse.
  */
 
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { Change } from '../compat/deltas/powershell-77-changes.source.mts';
 import { switchBehaviorKey } from '../src/compatibility/behavior-keys.ts';
+
+/** The namespace `switchBehaviorKey` owns. Nothing may hand-type into it. */
+const SWITCH_KEY_PREFIX = 'switchParameter';
+
+/**
+ * The engine-wide flag this design replaced, refused by name.
+ *
+ * Not paranoia: it is the obvious thing to reach for, it reads as a tidier
+ * version of ten scoped keys, and reintroducing it silently un-fixes a measured
+ * divergence from the reference implementation.
+ */
+const RETIRED_GLOBAL_SWITCH_KEY = 'switchParameters.honourExplicitFalse';
 
 export type BehaviorValue = boolean | number | string | null;
 
@@ -59,6 +71,15 @@ export function primaryPr(change: Change): number {
  */
 export function keysFor(change: Change): readonly string[] {
   if (change.mechanism === 'switch-explicit-false') {
+    if (change.behaviorKey !== undefined) {
+      // Found by attacking this file: `keysFor` returned the derived keys and
+      // dropped the hand-typed one without a word, so a record could name a key
+      // that reached neither the profile nor any lookup while looking declared.
+      throw new Error(
+        `change "${change.title}" sets both mechanism and behaviorKey ` +
+          `("${change.behaviorKey}"). One of them would be silently ignored; say which you mean.`,
+      );
+    }
     const command = change.scope?.command;
     const parameters = change.scope?.parameters ?? [];
     if (command === undefined || command === null || parameters.length === 0) {
@@ -211,6 +232,26 @@ export function assertCurationIsSound(changes: readonly Change[], repoRoot: stri
       );
     }
 
+    // A key shaped like a derived one must BE a derived one. Hand-typing
+    // `switchParameter.Where-Object.<operator>.honourExplicitFalse` produces a
+    // key the binder can never compute: it sits in the table looking
+    // authoritative and is unreachable.
+    for (const key of keys) {
+      if (key.startsWith(`${SWITCH_KEY_PREFIX}.`) && c.mechanism !== 'switch-explicit-false') {
+        problems.push(
+          `${where(c)} — hand-types "${key}", which is the shape the switch-explicit-false ` +
+            'mechanism derives. Set the mechanism and scope the parameters instead.',
+        );
+      }
+      if (key === RETIRED_GLOBAL_SWITCH_KEY) {
+        problems.push(
+          `${where(c)} — reintroduces "${key}". That engine-wide boolean applied one cmdlet's ` +
+            'bug to every switch parameter in the binder, and made the 7.6 profile diverge from ' +
+            'the reference on Get-ChildItem -Force:$false. Upstream fixed this per cmdlet.',
+        );
+      }
+    }
+
     if (isEmulated(c)) {
       const evidence = c.evidence ?? [];
       if (evidence.length === 0) {
@@ -236,6 +277,27 @@ export function assertCurationIsSound(changes: readonly Change[], repoRoot: stri
         problems.push(
           `${where(c)} — is "${c.implementation}" but declares no behaviour key, so nothing it ` +
             'claims can reach the engine',
+        );
+      }
+
+      // "Cite a test" was satisfiable by any test that happened to exist —
+      // found by attacking this file with evidence pointing at
+      // tests/unit/version.test.mts. A citation has to be ABOUT the thing.
+      // Deliberately a substring search rather than anything cleverer: a test
+      // that never names the key or the command it is offered as proof of is
+      // not proof, and static analysis cannot decide the rest.
+      const wanted = [...keys, c.scope?.command ?? ''].filter((w) => w.length > 0);
+      const relevant = evidence.some((path) => {
+        if (!path.startsWith('tests/')) return false;
+        const full = join(repoRoot, path);
+        if (!existsSync(full)) return false;
+        const text = readFileSync(full, 'utf8');
+        return wanted.some((w) => text.includes(w));
+      });
+      if (evidence.length > 0 && !relevant) {
+        problems.push(
+          `${where(c)} — no evidence test mentions ${wanted.map((w) => `"${w}"`).join(' or ')}. ` +
+            'A test that never names what it is offered as proof of is not proof of it.',
         );
       }
     } else if ((c.evidence ?? []).length > 0) {
