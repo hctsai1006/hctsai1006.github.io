@@ -252,14 +252,34 @@ describe('terminal metrics', () => {
     assert.equal(cellWidthOf(CJK[0] ?? ''), 2);
     // v1's `dw()` returned 1 for emoji and 1 for a combining mark. Both wrong.
     assert.equal(cellWidthOf(THUMBS), 2);
-    assert.equal(cellWidthOf(FAMILY), 2, 'a cluster is as wide as its base, not its parts');
     assert.equal(cellWidthOf('́'), 0);
     assert.equal(cellWidthOf(E_ACUTE), 1);
   });
 
+  /**
+   * This assertion used to read `cellWidthOf(FAMILY) === 2`, with the comment
+   * "a cluster is as wide as its base, not its parts". That was the wrong model
+   * and it is worth saying why, because the old one is the intuitive one.
+   *
+   * A cell terminal has no idea the family is a family. xterm.js processes one
+   * code point at a time: `wcwidth` gives each of the four people 2 and each
+   * ZWJ 0, and the four people are written into four pairs of cells. Eight is
+   * what the grid actually spends. Measuring 2 meant the editor believed a line
+   * was six cells shorter than the terminal drew it, so it wrapped late and the
+   * caret sat six columns left of the block the user could see.
+   *
+   * The base-width rule was not merely imprecise, it was unreachable: no
+   * terminal in the cell family renders a ZWJ sequence in two cells unless it
+   * also does grapheme shaping, and one that shapes does not need this function.
+   */
+  it('counts a ZWJ sequence as the sum of its parts, which is what a grid draws', () => {
+    assert.equal(cellWidthOf(FAMILY), 8, 'four people at two cells each; the ZWJs are free');
+    assert.equal(displayWidth(FAMILY), 8);
+  });
+
   it('sums a whole string', () => {
     assert.equal(displayWidth(`${CJK}abc`), 7);
-    assert.equal(displayWidth(`x${FAMILY}`), 3);
+    assert.equal(displayWidth(`x${FAMILY}`), 9);
   });
 
   it('is a port, so a host can inject any measurement it likes', () => {
