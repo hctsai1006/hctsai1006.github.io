@@ -12,14 +12,16 @@ The honest sequencing is to use real pwsh in CI to generate golden ASTs first, a
 
 ## Depends on
 
-- [ ] **8. Build one lexer, one AST and a version-aware parameter binder** — [detail](PR-08-version-aware-binder.md)
+- [~] **8. Build one lexer, one AST and a version-aware parameter binder** — [detail](PR-08-version-aware-binder.md)
 - [~] **11. Differential conformance against real pwsh 7.6.5** — [detail](PR-11-differential-conformance.md)
 
 ## Tasks
 
 - [ ] **17.1** Define RuntimeAdapter so UI, VFS, AI and terminal never depend on which engine runs
+  - *evidence:* nothing under `src/**/*.ts` matches `/RuntimeAdapter/`
 - [ ] **17.2** Generate golden ASTs from real pwsh in CI and validate our parser against them
-  - This is the near-term win and needs no WASM at all.
+  - This is the near-term win and needs no WASM at all — but it still needs a parser of ours to validate, and item 8 has not written one.
+  - *evidence:* nothing under `src/**/*.ts` matches `/AstNodeKind/`
 - [!] **17.3** Spike loading a real PowerShell parser under .NET WASM
   - BLOCKED on substrate: Mono is still the Blazor WASM runtime through .NET 11; CoreCLR-on-WASM is opt-in early preview targeting .NET 12. PowerShell itself has ZERO WASM support in-tree (RIDs linux-x64;osx-x64). This is a spike, not a milestone.
 

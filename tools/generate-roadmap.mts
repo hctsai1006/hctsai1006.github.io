@@ -69,6 +69,8 @@ function renderEvidence(ev: Evidence): string {
       return `\`npm run ${ev.name}\``;
     case 'absent':
       return `nothing under \`${ev.glob}\` matches \`/${ev.pattern}/\``;
+    case 'no-files':
+      return `\`${ev.glob}\` matches no file, though \`${ev.within}\` does`;
     default: {
       const bad: never = ev;
       throw new Error(`unrenderable evidence: ${JSON.stringify(bad)}`);
@@ -106,6 +108,22 @@ function validatePlan(items: readonly WorkItem[]): string[] {
       if (open.length > 0) {
         problems.push(
           `item ${item.n} is marked done but ${open.length} task(s) are not: ${open.map((t) => t.id).join(', ')}`,
+        );
+      }
+    }
+
+    // ...and the mirror of it, which nothing checked and which is how this file
+    // came to be wrong. An item labelled `todo` while a fifth of its work is
+    // finished is not a plan, it is an out-of-date one, and it reads as "nothing
+    // here yet" to anyone answering "what is left". Five items were in exactly
+    // that state on 2026-09-06, PR-15 among them: risk classification had been
+    // complete for months, delivered as a by-product of another item.
+    if (item.status === 'todo') {
+      const started = item.tasks.filter((t) => t.status === 'done' || t.status === 'partial');
+      if (started.length > 0) {
+        problems.push(
+          `item ${item.n} is marked todo but ${started.length} task(s) are done or partial: ` +
+            `${started.map((t) => t.id).join(', ')}. Work has started; say so.`,
         );
       }
     }
