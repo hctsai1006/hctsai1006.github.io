@@ -43,14 +43,15 @@ import type { BindingResult, CommandModule, InvocationContext } from '../invocat
 import type { FileSystemPort } from '../ports.ts';
 import { isBound, numberValue, rawValue, stringArray, switchValue } from '../powershell/support.ts';
 import {
-  SELECT_STRING,
   basename,
   commandError,
   emit,
   fsReadManifest,
   matchesAny,
+  readTextSniffed,
   requirePort,
   resolveTargets,
+  SELECT_STRING,
   splitLines,
   storageErrorRecord,
 } from './support.ts';
@@ -467,7 +468,7 @@ async function scanFile(
   matchers: readonly Matcher[],
   target: Target,
 ): Promise<Scan> {
-  const text = await fs.readText(target.resolved.full);
+  const text = await readTextSniffed(fs, target.resolved.full);
   if (!text.ok) {
     await context.streams.error.write(
       storageErrorRecord(SELECT_STRING, text.error, target.resolved.full, SELECT_STRING_ERROR_IDS),

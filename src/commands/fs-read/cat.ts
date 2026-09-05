@@ -27,6 +27,7 @@ import {
   emit,
   fsReadManifest,
   nativeIdentity,
+  readTextSniffed,
   requirePort,
   splitLines,
   stripQuotes,
@@ -77,7 +78,7 @@ export const cat: CommandModule = {
         continue;
       }
 
-      const text = await fs.readText(resolved.value.full);
+      const text = await readTextSniffed(fs, resolved.value.full);
       if (!text.ok) {
         failed = true;
         await context.streams.error.write(

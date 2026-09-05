@@ -366,16 +366,66 @@ describe('quota', () => {
   it('does not re-walk the tree on every capacity-checked write', async () => {
     // MEASURED before the fix: 8000 writes took 1749 ms with a capacity set and
     // 35 ms without, because `#checkCapacity` walked the whole tree each time.
-    // The bound below is ~20x the fixed cost, so it fails loudly on a
-    // regression without being a stopwatch race.
-    const store = backend({ capacity: 10_000_000 });
-    const started = performance.now();
-    for (let index = 0; index < 8000; index += 1) {
-      await store.writeText(`/f${String(index)}`, 'x'.repeat(10));
-    }
-    const elapsed = performance.now() - started;
-    assert.ok(elapsed < 800, `8000 capacity-checked writes took ${elapsed.toFixed(0)} ms`);
-    assert.equal(value(await store.quota()).used, 80_000);
+    //
+    // THIS USED TO ASSERT `elapsed < 800`, under a comment claiming that was
+    // "~20x the fixed cost, so it fails loudly on a regression without being a
+    // stopwatch race". It was a stopwatch race. It failed at 1571 ms on a
+    // machine running six other test suites, for a change that touched nothing
+    // in this file — an absolute wall-clock bound in a required gate fails for
+    // reasons unrelated to the change under test, which is the exact property
+    // this repository refuses to accept from its live-network checks.
+    //
+    // The replacement compares the SAME workload with the capacity check on and
+    // off. Both halves run on the same machine moments apart, so a loaded
+    // machine slows both and the ratio holds — which is what the absolute bound
+    // could not do.
+    //
+    // A first attempt compared n against 2n on the same code, expecting ~2 when
+    // linear and ~4 when quadratic. MEASURED, that does not discriminate: with
+    // the defect reintroduced the ratio at n=1000 was 1.07, comfortably passing,
+    // and WITHOUT the defect the ratio at n=2000 was 3.33, comfortably failing.
+    // At those sizes JIT warm-up is larger than the signal. It would have been a
+    // test that passes with the bug and fails without it — worse than the flake
+    // it replaced. This control is the one the original measurement used, and
+    // the gap is an order of magnitude rather than a factor of two:
+    //
+    // MEASURED, three runs each way at this size:
+    //
+    //     fixed        1.02  1.12  1.84
+    //     broken      14.14 39.02 45.19
+    //
+    // A first attempt used 6000 files and a threshold of 4. That was still too
+    // close: the unchecked half is only ~60 ms, so dividing by it amplifies
+    // noise, and the broken case measured anywhere from 3.3 to 5.6 -- it passed
+    // WITH the defect present. The workload is larger here so the quadratic term
+    // dominates, and the threshold sits with roughly a 3x margin on both sides.
+    //
+    const time = async (capacity: number | null): Promise<number> => {
+      // Warm up separately, so JIT compilation is not inside the measurement.
+      const warm = backend(capacity === null ? {} : { capacity });
+      for (let index = 0; index < 500; index += 1) await warm.writeText(`/w${String(index)}`, 'x');
+
+      const store = backend(capacity === null ? {} : { capacity });
+      const started = performance.now();
+      for (let index = 0; index < 10_000; index += 1) {
+        await store.writeText(`/f${String(index)}`, 'x'.repeat(10));
+      }
+      const elapsed = performance.now() - started;
+      assert.equal(value(await store.quota()).used, 100_000);
+      return elapsed;
+    };
+
+    const checked = await time(20_000_000);
+    const unchecked = await time(null);
+    const ratio = checked / Math.max(unchecked, 1);
+
+    assert.ok(
+      ratio < 5,
+      `capacity checking made 10,000 writes ${ratio.toFixed(2)}x slower ` +
+        `(${checked.toFixed(0)} ms vs ${unchecked.toFixed(0)} ms without a capacity). ` +
+        'It should be near 1: the running total is maintained incrementally. This says ' +
+        '#checkCapacity is walking the whole tree on every write again.',
+    );
   });
 
   it('keeps the running total honest across every mutation', async () => {

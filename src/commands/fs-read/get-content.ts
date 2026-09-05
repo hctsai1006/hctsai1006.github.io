@@ -55,7 +55,10 @@
  */
 
 import { throwIfCancelled } from '../../pipeline/pipeline.ts';
+import { decodeFile, resolveEncodingName } from '../../pipeline/encoding.ts';
+import type { EncodingId } from '../../pipeline/encoding.ts';
 import type { PSValue } from '../../pipeline/psobject.ts';
+import type { ErrorRecord } from '../../pipeline/streams.ts';
 import type { BindingResult, CommandModule, InvocationContext } from '../invocation.ts';
 import type { FileSystemPort } from '../ports.ts';
 import { isBound, numberValue, stringArray, stringValue, switchValue } from '../powershell/support.ts';
@@ -90,31 +93,35 @@ export const GET_CONTENT_ERROR_IDS: FsErrorIds = {
 const IDS = GET_CONTENT_ERROR_IDS;
 
 /**
- * The `-Encoding` names pwsh 7.6.5 accepts, mapped to a WHATWG decoder label.
+ * `-Encoding` is resolved and applied by the broker in `pipeline/encoding.ts`,
+ * not here.
  *
- * Every name on the left was confirmed to bind:
+ * THIS FILE USED TO OWN A DECODER TABLE, and it was wrong in two ways that only
+ * a measurement could show. It mapped the PowerShell names `ascii`, `ansi` and
+ * `oem` all onto the WHATWG label `windows-1252`. Measured on pwsh 7.6.5 over
+ * the bytes 61 E9 80 7A, those three names produce three different strings:
+ *
+ *   -Encoding ascii   ->  U+0061 U+003F U+003F U+007A   ('?', not cp1252)
+ *   -Encoding ansi    ->  U+0061 U+00E9 U+20AC U+007A   (cp1252, on Ubuntu)
+ *   -Encoding oem     ->  U+0061 U+FFFD U+007A          (UTF-8, on Ubuntu)
+ *
+ * and `TextDecoder('windows-1252')` itself decodes 0x80 as U+0080 under Node
+ * and U+20AC under Chrome, so the table was not even self-consistent between
+ * the test suite and the shipped runtime.
+ *
+ * It also did no BOM sniffing, which pwsh does unconditionally: a UTF-16LE file
+ * read with `-Encoding utf8` still comes back as text there and came back as
+ * mojibake here.
+ *
+ * The names pwsh 7.6.5 BINDS were confirmed by round-tripping each one:
  *
  *   pwsh: ascii ansi bigendianunicode bigendianutf32 oem unicode utf7 utf8
- *         utf8BOM utf8NoBOM utf32   ->  all accepted
- *   pwsh: -Encoding Byte            ->  ParameterArgumentTransformationError
- *                                       (removed in PowerShell 6; -AsByteStream
- *                                        replaced it)
- *
- * `utf7`, `utf32` and `bigendianutf32` bind in pwsh but have no WHATWG decoder,
- * so they are refused HERE with a message that says which layer refused. That is
- * a smaller lie than decoding them as UTF-8 and returning mojibake.
+ *         utf8BOM utf8NoBOM utf32 latin1 default  ->  all accepted
+ *   pwsh: -Encoding Byte     ->  ParameterArgumentTransformationError
+ *                                (removed in PowerShell 6; -AsByteStream
+ *                                 replaced it)
+ *   pwsh: -Encoding sausage  ->  ParameterArgumentTransformationError
  */
-const DECODER_LABELS: ReadonlyMap<string, string> = new Map([
-  ['ascii', 'windows-1252'],
-  ['ansi', 'windows-1252'],
-  ['oem', 'windows-1252'],
-  ['unicode', 'utf-16le'],
-  ['bigendianunicode', 'utf-16be'],
-  ['utf8', 'utf-8'],
-  ['utf8bom', 'utf-8'],
-  ['utf8nobom', 'utf-8'],
-  ['default', 'utf-8'],
-]);
 
 interface Options {
   readonly raw: boolean;
@@ -123,7 +130,8 @@ interface Options {
   readonly tail: number | undefined;
   readonly readCount: number | undefined;
   readonly delimiter: string | undefined;
-  readonly encoding: string | undefined;
+  /** Already resolved: the binder-shaped failures happen before any file is opened. */
+  readonly codec: EncodingId;
   readonly force: boolean;
   readonly filter: string | undefined;
   readonly include: readonly string[] | undefined;
@@ -140,20 +148,43 @@ function window<T>(items: readonly T[], options: Options): readonly T[] {
   return items;
 }
 
-function decode(bytes: Uint8Array, encoding: string | undefined): string | Error {
-  if (encoding === undefined) return new TextDecoder().decode(bytes);
-  const label = DECODER_LABELS.get(encoding.toLowerCase());
-  if (label === undefined) {
-    return new Error(
-      `-Encoding ${encoding} is accepted by PowerShell but has no decoder in this engine. ` +
-        `Supported here: ${[...new Set(DECODER_LABELS.keys())].join(', ')}.`,
+/**
+ * Turn the `-Encoding` argument into a codec, or into the error pwsh gives.
+ *
+ * The two failure modes are DIFFERENT errors and were measured separately:
+ *
+ *   pwsh: Get-Content -Encoding sausage
+ *     -> ParameterArgumentTransformationError,…GetContentCommand, InvalidData,
+ *        "Cannot process argument transformation on parameter 'Encoding'.
+ *         'sausage' is not a supported encoding name. (Parameter 'name')"
+ *   pwsh: Get-Content -Encoding utf7
+ *     -> SUCCEEDS, with "WARNING: Encoding 'UTF-7' is obsolete, please use UTF-8."
+ *
+ * So an unknown name is a BINDING failure that never opens the file, and utf7
+ * is a name this engine recognises and cannot perform. Reporting the second as
+ * the first would claim pwsh rejects something it accepts.
+ */
+function codecFor(encoding: string | undefined): EncodingId | ErrorRecord {
+  const resolved = resolveEncodingName(encoding);
+  if (resolved.kind === 'ok') return resolved.id;
+  if (resolved.kind === 'unknown') {
+    return commandError(
+      GET_CONTENT,
+      `Cannot process argument transformation on parameter 'Encoding'. ` +
+        `'${resolved.name}' is not a supported encoding name. (Parameter 'name')`,
+      'ParameterArgumentTransformationError',
+      'InvalidData',
+      'System.Management.Automation.ParameterBindingArgumentTransformationException',
     );
   }
-  try {
-    return new TextDecoder(label).decode(bytes);
-  } catch (error) {
-    return error instanceof Error ? error : new Error(String(error));
-  }
+  return commandError(
+    GET_CONTENT,
+    `-Encoding ${resolved.name} is accepted by PowerShell but is not implemented by ` +
+      `BrowserShell. ${resolved.why}`,
+    'EncodingNotImplemented',
+    'NotImplemented',
+    'System.NotImplementedException',
+  );
 }
 
 /** `-ReadCount n` batches lines into arrays. `-ReadCount 0` is one array. */
@@ -215,20 +246,12 @@ async function readOne(
     return true;
   }
 
-  const text = decode(bytes.value, options.encoding);
-  if (text instanceof Error) {
-    await context.streams.error.write(
-      commandError(
-        GET_CONTENT,
-        text.message,
-        'EncodingNotImplemented',
-        'NotImplemented',
-        'System.NotImplementedException',
-        target.resolved.full,
-      ),
-    );
-    return true;
-  }
+  // decodeFile, not decodeBytes: pwsh sniffs the BOM here and the sniff
+  // OVERRIDES -Encoding. Measured, `Get-Content -Raw`:
+  //   FF FE 61 00     with -Encoding utf8   ->  U+0061   (utf16LE wins)
+  //   EF BB BF 61     with -Encoding ascii  ->  U+0061   (the BOM is consumed)
+  // Decoding with the requested codec alone returns mojibake for both.
+  const text = decodeFile(bytes.value, options.codec);
 
   if (options.raw) {
     // Note 2: an empty file emits nothing at all, -Raw included.
@@ -329,6 +352,16 @@ export const getContent: CommandModule = {
       }
     }
 
+    // Resolved BEFORE any path is touched. In pwsh an unusable -Encoding is a
+    // parameter-binding failure, so it happens before the provider is reached
+    // and no file is opened; emitting it per file would report it once per
+    // path and only after the first read had already succeeded.
+    const codec = codecFor(stringValue(parameters, 'Encoding'));
+    if (typeof codec !== 'string') {
+      await context.streams.error.write(codec);
+      return 1;
+    }
+
     const options: Options = {
       raw,
       asBytes: switchValue(parameters, 'AsByteStream'),
@@ -336,7 +369,7 @@ export const getContent: CommandModule = {
       tail,
       readCount: numberValue(parameters, 'ReadCount'),
       delimiter: stringValue(parameters, 'Delimiter'),
-      encoding: stringValue(parameters, 'Encoding'),
+      codec,
       force: switchValue(parameters, 'Force'),
       filter: stringValue(parameters, 'Filter'),
       include: stringArray(parameters, 'Include'),
