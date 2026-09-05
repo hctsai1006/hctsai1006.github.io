@@ -895,18 +895,15 @@ export async function readFollowerView(options: {
     winner = { contents: parsedB, slot: 'b' };
   }
   if (winner === null) {
-    return {
-      ok: true,
-      value: {
-        generation: 0,
-        storeVersion: STORE_VERSION,
-        slot: null,
-        overlay: null,
-        replay: [],
-        damaged,
-        log: 'empty',
-      },
-    };
+    return ok({
+      generation: 0,
+      storeVersion: STORE_VERSION,
+      slot: null,
+      overlay: null,
+      replay: [],
+      damaged,
+      log: 'empty',
+    });
   }
 
   let payload = winner.contents.payload;

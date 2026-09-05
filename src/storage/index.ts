@@ -175,7 +175,13 @@ export {
   serveStorageWorker,
   workerUnavailable,
 } from './opfs-worker.ts';
-export type { StorageCall, StorageOp, StorageReply } from './opfs-worker.ts';
+export type {
+  StorageCall,
+  StorageControl,
+  StorageControls,
+  StorageOp,
+  StorageReply,
+} from './opfs-worker.ts';
 
 export {
   BASE_BINARIES,

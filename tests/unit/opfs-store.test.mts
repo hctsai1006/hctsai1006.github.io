@@ -31,7 +31,11 @@ import {
   mountOpfsStorage,
   orderMigrations,
   parseWal,
+  WorkerStorageBackend,
+  exportSnapshot,
+  importSnapshot,
   requestLeadership,
+  serveStorageWorker,
   walHeader,
   walRecord,
 } from '../../src/storage/index.ts';
@@ -86,6 +90,36 @@ function code(result: Result<unknown>): StorageErrorCode | 'ok' {
 function leaderStore(report: MountReport): OpfsStore {
   assert.ok(report.store !== null, 'expected a leader mount, got a follower');
   return report.store;
+}
+
+/**
+ * Two ports wired to each other, delivering asynchronously through a structured
+ * clone — the same shape as `opfs-worker.test.mts`, because a boundary that is
+ * only tested with a direct call is not a boundary.
+ */
+function portPair(): [
+  { postMessage(m: unknown): void; addEventListener(t: 'message', l: (e: { data: unknown }) => void): void },
+  { postMessage(m: unknown): void; addEventListener(t: 'message', l: (e: { data: unknown }) => void): void },
+] {
+  const listeners: [((event: { data: unknown }) => void)[], ((event: { data: unknown }) => void)[]] = [[], []];
+  const make = (
+    self: 0 | 1,
+    other: 0 | 1,
+  ): {
+    postMessage(m: unknown): void;
+    addEventListener(t: 'message', l: (e: { data: unknown }) => void): void;
+  } => ({
+    postMessage: (message: unknown): void => {
+      const cloned = structuredClone(message);
+      queueMicrotask(() => {
+        for (const listener of listeners[other]) listener({ data: cloned });
+      });
+    },
+    addEventListener: (_type: 'message', listener: (event: { data: unknown }) => void): void => {
+      listeners[self].push(listener);
+    },
+  });
+  return [make(0, 1), make(1, 0)];
 }
 
 async function mount(
@@ -1191,5 +1225,110 @@ describe('adversarial: findings against the first draft of the OPFS store', () =
     );
     assert.equal(code(outcome), 'EINVAL');
     assert.ok(!outcome.ok && outcome.error.message.includes('no source'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// second adversarial pass: the durability controls, and export
+// ---------------------------------------------------------------------------
+
+describe('adversarial pass 2: what the first pass left', () => {
+  it('a page can checkpoint and sync through the worker boundary', async () => {
+    // THE GAP. `StorageCall` is derived from `StorageBackend` so it cannot
+    // drift from it — and `checkpoint` and `sync` are deliberately not on
+    // `StorageBackend`, because no command has any business calling them. The
+    // consequence, missed until a second pass: the PAGE owns `pagehide` and the
+    // WORKER owns the store, so a page could not tell its own storage to flush
+    // before the tab went away. The last operation of every session lost, for
+    // want of a message.
+    const [pageSide, workerSide] = portPair();
+    const fake = new FakeOpfs();
+    const mounted = await mount(fake);
+    serveStorageWorker(workerSide, mounted.backend, {
+      checkpoint: () => mounted.backend.checkpoint(),
+      sync: () => mounted.backend.sync(),
+    });
+    const client = new WorkerStorageBackend({ port: pageSide });
+
+    assert.equal(code(await client.writeText('/home/me/from-the-page.txt', 'across')), 'ok');
+    const synced = await client.sync();
+    assert.equal(code(synced), 'ok');
+    const generation = await client.checkpoint();
+    assert.ok(generation.ok);
+    assert.equal(generation.value, leaderStore(mounted).generation);
+    assert.equal(client.inFlight, 0);
+    leaderStore(mounted).close();
+  });
+
+  it('a worker serving a backend with no durability says so instead of ignoring it', async () => {
+    // Silence here is the dangerous answer: a page whose `pagehide` sync did
+    // nothing would believe its data was safe.
+    const [pageSide, workerSide] = portPair();
+    const memory = new MemoryStorage({ clock: clock(), user: 'me', group: 'me' });
+    serveStorageWorker(workerSide, memory);
+    const client = new WorkerStorageBackend({ port: pageSide });
+    await assert.rejects(() => client.sync(), /no sync/);
+    await assert.rejects(() => client.checkpoint(), /no checkpoint/);
+  });
+
+  it('a full export survives a store that is then destroyed and re-imported', async () => {
+    // PR-09's third acceptance condition: "Clearing site data is survivable via
+    // export." OPFS is deleted when the user clears site data, with no warning
+    // from the browser, so the only thing that survives is a file the user
+    // holds. `exportSnapshot` already worked on any `StorageBackend`; what this
+    // pins is that it works through THIS one, and that the document it makes is
+    // enough to rebuild the filesystem in a store that has been wiped.
+    const fake = new FakeOpfs();
+    const first = await mount(fake);
+    assert.ok((await first.backend.mkdir('/home/me/work', { recursive: true })).ok);
+    assert.ok((await first.backend.writeText('/home/me/work/notes.md', 'irreplaceable')).ok);
+    assert.ok((await first.backend.writeText('/home/me/README.md', 'my own README')).ok);
+    assert.ok((await first.backend.chmod('/home/me/work/notes.md', 0o600)).ok);
+    assert.ok((await first.backend.checkpoint()).ok);
+
+    // FULL scope, not overlay: after a site-data clear there is no seed on disk
+    // to rebuild from, and an overlay omits a seed node's content on purpose.
+    const rescued = value(
+      await exportSnapshot(first.backend, { scope: 'full', now: 2_000_000_000_000 }),
+    );
+    leaderStore(first).close();
+
+    // The user clears site data. Everything OPFS held is gone.
+    const wiped = new FakeOpfs();
+    const second = await mount(wiped);
+    assert.equal(await second.backend.exists('/home/me/work/notes.md'), false);
+
+    const restored = value(await importSnapshot(second.backend, rescued, { seed: SEED }));
+    assert.deepEqual(restored.failures, []);
+    assert.equal(value(await second.backend.readText('/home/me/work/notes.md')), 'irreplaceable');
+    assert.equal(value(await second.backend.readText('/home/me/README.md')), 'my own README');
+    assert.equal(value(await second.backend.stat('/home/me/work/notes.md')).mode, 0o600);
+
+    // And the rescue is itself durable: checkpoint, remount, still there.
+    assert.ok((await second.backend.checkpoint()).ok);
+    leaderStore(second).close();
+    const third = await mount(wiped);
+    assert.equal(value(await third.backend.readText('/home/me/work/notes.md')), 'irreplaceable');
+    leaderStore(third).close();
+  });
+
+  it('a checkpoint that fails replaces the mutation result rather than lying', async () => {
+    // The caller asked for a DURABLE write. If the disk could not keep up,
+    // saying the write succeeded is the lie this whole layer exists to stop
+    // telling. The mutation stays applied in memory; the error says so.
+    const fake = new FakeOpfs();
+    const mounted = await mount(fake, { checkpointBytes: 1 });
+    fake.setQuota(fake.usedBytes() + 300);
+    let refused: Result<unknown> | null = null;
+    for (let index = 0; index < 40 && refused === null; index += 1) {
+      const attempt = await mounted.backend.writeText(
+        `/home/me/f${String(index)}.txt`,
+        'x'.repeat(40),
+      );
+      if (!attempt.ok) refused = attempt;
+    }
+    assert.ok(refused !== null, 'the quota should have been reached');
+    assert.equal(code(refused), 'ENOSPC');
+    leaderStore(mounted).close();
   });
 });

@@ -138,6 +138,44 @@ export interface MessagePortLike {
   addEventListener(type: 'message', listener: (event: { data: unknown }) => void): void;
 }
 
+/**
+ * The durability controls, which are NOT part of `StorageBackend`.
+ *
+ * A SECOND ADVERSARIAL PASS found this gap. `StorageCall` is derived from
+ * `StorageBackend` so it cannot drift from it — and `checkpoint` and `sync` are
+ * not on `StorageBackend`, deliberately: no command has any business calling
+ * them, and putting them there would put them in front of all 28.
+ *
+ * But the page is where `pagehide` fires, and the store is in the worker. With
+ * only `StorageCall` crossing, a page could not tell its own storage to flush
+ * before the tab went away — so the last operation of every session was lost
+ * for want of a message. That is one of PR-09's own acceptance conditions
+ * ("clearing site data is survivable") failing on a technicality.
+ *
+ * So they cross as a separate message shape rather than being bolted onto the
+ * derived union. Nothing about `StorageCall`'s drift-proofing changes, and a
+ * backend that has no durability to control simply is not passed here.
+ */
+export interface StorageControls {
+  checkpoint(): Promise<Result<number>>;
+  sync(): Result<void>;
+}
+
+export type StorageControl = {
+  readonly id: number;
+  readonly control: 'checkpoint' | 'sync';
+};
+
+function isControl(message: unknown): message is StorageControl {
+  return (
+    typeof message === 'object' &&
+    message !== null &&
+    'control' in message &&
+    ((message as StorageControl).control === 'checkpoint' ||
+      (message as StorageControl).control === 'sync')
+  );
+}
+
 // ---------------------------------------------------------------------------
 // the worker side
 // ---------------------------------------------------------------------------
@@ -158,16 +196,38 @@ export interface MessagePortLike {
  * issued during a long `cp -r` answers straight away, which is the behaviour a
  * terminal needs.
  */
-export function serveStorageWorker(scope: MessagePortLike, backend: StorageBackend): void {
+export function serveStorageWorker(
+  scope: MessagePortLike,
+  backend: StorageBackend,
+  controls?: StorageControls,
+): void {
   scope.addEventListener('message', (event): void => {
-    const call = event.data as StorageCall;
+    const message = event.data;
     void (async (): Promise<void> => {
+      const id = (message as { id?: number }).id ?? 0;
       try {
-        const value = await dispatch(backend, call);
-        scope.postMessage({ id: call.id, ok: true, value } satisfies StorageReply);
+        if (isControl(message)) {
+          if (controls === undefined) {
+            // A backend with no durability to control. Reported rather than
+            // ignored: a page whose `pagehide` sync silently did nothing would
+            // believe its data was safe.
+            scope.postMessage({
+              id,
+              ok: false,
+              failed: `this storage worker serves a backend with no ${message.control}`,
+            } satisfies StorageReply);
+            return;
+          }
+          const value =
+            message.control === 'checkpoint' ? await controls.checkpoint() : controls.sync();
+          scope.postMessage({ id, ok: true, value } satisfies StorageReply);
+          return;
+        }
+        const value = await dispatch(backend, message as StorageCall);
+        scope.postMessage({ id, ok: true, value } satisfies StorageReply);
       } catch (cause) {
         scope.postMessage({
-          id: call.id,
+          id,
           ok: false,
           failed: cause instanceof Error ? cause.message : String(cause),
         } satisfies StorageReply);
@@ -365,6 +425,39 @@ export class WorkerStorageBackend implements StorageBackend {
 
   async reset(...args: Parameters<StorageBackend['reset']>): ReturnType<StorageBackend['reset']> {
     return this.#send('reset', args);
+  }
+
+  /**
+   * Fold the log into a checkpoint, from the other side of the boundary.
+   *
+   * Not part of `StorageBackend` and not in `STORAGE_OPS`; see
+   * `StorageControls` for why it crosses as a different message shape.
+   */
+  async checkpoint(): Promise<Result<number>> {
+    return this.#control<Result<number>>('checkpoint');
+  }
+
+  /**
+   * Force un-flushed commit markers down. WHAT A `pagehide` HANDLER CALLS.
+   *
+   * The page owns the lifecycle event and the worker owns the store, so without
+   * this the last operation of every session that ends without a checkpoint is
+   * lost — see `OpfsJournal.sync` for exactly how wide that window is.
+   */
+  async sync(): Promise<Result<void>> {
+    return this.#control<Result<void>>('sync');
+  }
+
+  #control<T>(control: 'checkpoint' | 'sync'): Promise<T> {
+    const id = this.#next;
+    this.#next += 1;
+    return new Promise<T>((resolve, reject) => {
+      this.#waiting.set(id, (reply) => {
+        if (reply.ok) resolve(reply.value as T);
+        else reject(new Error(`storage worker: ${reply.failed}`));
+      });
+      this.#port.postMessage({ id, control });
+    });
   }
 
   /** Calls still in flight. A test asserts this reaches zero. */
