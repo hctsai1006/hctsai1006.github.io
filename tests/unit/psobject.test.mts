@@ -370,6 +370,37 @@ describe('two distinct objects are not one value', () => {
   it('an object still compares against text', () => {
     assert.equal(valuesEqual(psObject({ a: 1 }), '@{a=1}'), true);
   });
+
+  it('but ONE object is equal to itself', () => {
+    // The half this suite was missing. "Distinct objects are not one value" was
+    // implemented by throwing for every PSObject pair, which also made an object
+    // unequal to ITSELF. MEASURED on pwsh 7.6.5 — PowerShell uses reference
+    // equality here, so both halves are real and only one was implemented:
+    //
+    //   $a -eq $a  True    $a -eq $b  False    $a -ne $a  False
+    //
+    const a = psObject({ Name: 'x' });
+    const b = psObject({ Name: 'x' });
+
+    assert.equal(valuesEqual(a, a), true, 'same reference');
+    assert.equal(valuesEqual(a, b), false, 'same content, different objects');
+
+    // -contains and -in ask the same question, and answered it wrongly too.
+    assert.equal([a, b].some((item) => valuesEqual(item, a)), true);
+
+    // Ordering still refuses, which is what makes this an equality fix and not
+    // a comparison one: pwsh raises PSObjectCompareTo for `$a -lt $a`.
+    assert.throws(() => compareValues(a, a), ComparisonTypeError);
+  });
+
+  it('does not short-circuit NaN, because pwsh does not either', () => {
+    // `NaN -eq NaN` is False in pwsh. An identity check written as `Object.is`
+    // would have made it true; `===` is false for NaN, which is why the
+    // identity test is `===` and this pins the reason.
+    assert.equal(valuesEqual(Number.NaN, Number.NaN), false);
+    // -0 and 0 ARE equal in pwsh, and `===` agrees.
+    assert.equal(valuesEqual(-0, 0), true);
+  });
 });
 
 describe('there is exactly one value-to-string implementation', () => {

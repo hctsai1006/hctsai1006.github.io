@@ -26,7 +26,7 @@ import {
   membershipOperator,
   PSRuntimeError,
 } from '../../src/operators/index.ts';
-import { psObject, type PSValue } from '../../src/pipeline/psobject.ts';
+import { compareForSorting, psObject, type PSValue } from '../../src/pipeline/psobject.ts';
 
 const SENSITIVE = { caseSensitive: true } as const;
 
@@ -314,3 +314,56 @@ function expectError(run: () => unknown): PSRuntimeError {
   }
   assert.fail('expected a throw');
 }
+
+describe('NaN orders against nothing, and the cmdlets disagree with the operators', () => {
+  // Every expectation here was read off pwsh 7.6.5 before the code was touched:
+  //
+  //   $n = [double]::NaN
+  //   $n -eq $n  False   $n -ne $n  True    $n -lt $n  False   $n -le $n  False
+  //   $n -gt $n  False   $n -ge $n  False   $n -lt 1   False    1 -eq $n   False
+  //   @($n) -contains $n                    False
+  //   'NaN' -eq $n       True               $n -eq 'NaN'       False
+  //   @(3, $n, 1) | Sort-Object             NaN 1 3
+  //
+  // Before the fix this engine got FIVE of the six operators wrong, because
+  // compareValues(NaN, anything) returned 0 -- NaN was equal to every number.
+  const N = Number.NaN;
+
+  it('answers False for all four orderings, and does not raise', () => {
+    // Not raising is half the point. The conversion SUCCEEDS here, so this is
+    // not the ComparisonTypeError case; pwsh returns False rather than an error.
+    for (const op of ['lt', 'le', 'gt', 'ge'] as const) {
+      assert.equal(comparisonOperator(op, N, N), false, `NaN -${op} NaN`);
+      assert.equal(comparisonOperator(op, N, 1), false, `NaN -${op} 1`);
+      assert.equal(comparisonOperator(op, 1, N), false, `1 -${op} NaN`);
+    }
+  });
+
+  it('is not equal to itself, and -ne says so', () => {
+    assert.equal(comparisonOperator('eq', N, N), false);
+    assert.equal(comparisonOperator('ne', N, N), true);
+    assert.equal(comparisonOperator('eq', 1, N), false);
+    assert.equal(membershipOperator('contains', [N], N), false);
+  });
+
+  it('depends on the LEFT operand, because that is what decides the conversion', () => {
+    // The discriminating pair, and the reason the NaN test lives after coercion
+    // rather than on the raw arguments. A string left operand makes this a
+    // comparison of the TEXT "NaN"; a numeric one makes it a numeric comparison.
+    assert.equal(comparisonOperator('eq', 'NaN', N), true, "'NaN' -eq NaN");
+    assert.equal(comparisonOperator('eq', N, 'NaN'), false, "NaN -eq 'NaN'");
+  });
+
+  it('sorts FIRST, which is the opposite rule from the operators', () => {
+    // Sort-Object uses .NET's total order, where NaN.CompareTo(NaN) is 0 and
+    // NaN precedes every number -- while `-lt` says NaN precedes nothing. Both
+    // are real, which is why compareForSorting is a separate function.
+    const sorted = [3, N, 1].sort((a, b) => compareForSorting(a, b));
+    assert.deepEqual(
+      sorted.map((v) => (Number.isNaN(v) ? 'NaN' : v)),
+      ['NaN', 1, 3],
+    );
+    // The text fallback would have sorted it by the string "NaN", after 1 and 3.
+    assert.equal(compareForSorting(N, N), 0);
+  });
+});

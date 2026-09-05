@@ -54,6 +54,7 @@ import { toPSString } from '../formatting/to-string.ts';
 import {
   ComparisonTypeError,
   compareValues,
+  UnorderedComparisonError,
   isPSObject,
   typeNameOf,
   valuesEqual,
@@ -141,6 +142,16 @@ function compareScalar(
   try {
     sign = compareValues(left, right, caseSensitive);
   } catch (error) {
+    // UNORDERED IS NOT A FAILURE. The conversion succeeded and the values
+    // simply do not order, which pwsh answers with False rather than an error.
+    // Measured: `[double]::NaN -lt 1`, `-le`, `-gt` and `-ge` are all False,
+    // and no error is raised. Routing this through raiseComparisonFailure
+    // would turn a legitimate False into a terminating error.
+    //
+    // It also cannot be derived from a sign: `-le` is `sign <= 0`, so any
+    // integer this could return makes `-le` or `-ge` true, and both must be
+    // false. That is why it arrives as its own error type.
+    if (error instanceof UnorderedComparisonError) return false;
     if (!(error instanceof ComparisonTypeError)) throw error;
     raiseComparisonFailure(left, right);
   }

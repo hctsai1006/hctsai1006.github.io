@@ -342,6 +342,46 @@ export class ComparisonTypeError extends Error {
 }
 
 /**
+ * Raised when two values are of comparable types but simply do not order.
+ *
+ * NaN is the only value that does this, and it is NOT the same condition as
+ * `ComparisonTypeError`: the conversion SUCCEEDED, so `-lt` must answer False
+ * rather than raise. A single integer cannot express it — `-le` derived as
+ * `sign <= 0` is true whenever `sign` is 0 — so the unorderable case has to
+ * leave `compareValues` by a route the callers can tell apart. MEASURED on
+ * pwsh 7.6.5:
+ *
+ *   $n = [double]::NaN
+ *   $n -eq $n  False    $n -ne $n  True
+ *   $n -lt $n  False    $n -le $n  False
+ *   $n -gt $n  False    $n -ge $n  False    $n -lt 1   False
+ *
+ * All six False (and -ne True) is the IEEE partial order, which is what the
+ * COMPARISON OPERATORS use. The cmdlets use .NET's TOTAL order instead, where
+ * `$n.CompareTo($n)` is 0 and NaN sorts before every number:
+ *
+ *   @(3, $n, 1) | Sort-Object              ->  NaN 1 3
+ *   @(3, $n, 1) | Measure-Object -Minimum  ->  NaN
+ *
+ * So this is the same operators-versus-cmdlets split `compareForSorting`
+ * already exists for, reaching one more value than anyone had noticed.
+ *
+ * WHAT THIS FIXED. Before it, `compareValues(NaN, 1)` returned 0 — NaN was
+ * EQUAL TO EVERY NUMBER — and five of the six operators gave the wrong answer:
+ * `-eq` true, `-ne` false, `-le` true, `-ge` true, and `Sort-Object` left NaN
+ * where it found it.
+ */
+export class UnorderedComparisonError extends Error {
+  constructor(left: PSValue, right: PSValue) {
+    super(
+      `${typeNameOf(left)} and ${typeNameOf(right)} do not order: ` +
+        `"${String(left)}" and "${String(right)}" are convertible but not comparable`,
+    );
+    this.name = 'UnorderedComparisonError';
+  }
+}
+
+/**
  * Convert `b` to the type of `a`, as PowerShell does before comparing.
  * Returns the pair to compare, or throws if the conversion is impossible.
  */
@@ -448,7 +488,17 @@ export function compareValues(a: PSValue, b: PSValue, caseSensitive = false): nu
 
   const [x, y] = coerceToLeft(a, b);
 
-  if (typeof x === 'number' && typeof y === 'number') return x < y ? -1 : x > y ? 1 : 0;
+  if (typeof x === 'number' && typeof y === 'number') {
+    // AFTER coercion, deliberately. Whether NaN is involved depends on the LEFT
+    // operand's type, which is what decides the conversion: measured,
+    // `'NaN' -eq [double]::NaN` is True — the left is a string, so the right
+    // renders as the text "NaN" and two strings compare — while
+    // `[double]::NaN -eq 'NaN'` is False, because there the right converts to a
+    // number and the comparison really is numeric. Testing the raw arguments
+    // would have got the first of those backwards.
+    if (Number.isNaN(x) || Number.isNaN(y)) throw new UnorderedComparisonError(x, y);
+    return x < y ? -1 : x > y ? 1 : 0;
+  }
   if (typeof x === 'bigint' && typeof y === 'bigint') return x < y ? -1 : x > y ? 1 : 0;
   if (typeof x === 'boolean' && typeof y === 'boolean') {
     return x === y ? 0 : x ? 1 : -1;
@@ -489,6 +539,23 @@ export function compareForSorting(a: PSValue, b: PSValue, caseSensitive = false)
   try {
     return compareValues(a, b, caseSensitive);
   } catch (error) {
+    // NaN is where the operators and the cmdlets disagree most sharply. The
+    // operators use IEEE, where NaN orders against nothing and every ordering
+    // is False. The cmdlets use .NET's TOTAL order, where NaN.CompareTo(NaN)
+    // is 0 and NaN sorts FIRST. Measured:
+    //
+    //   @(3, [double]::NaN, 1) | Sort-Object              ->  NaN 1 3
+    //   @(3, [double]::NaN, 1) | Measure-Object -Minimum  ->  NaN
+    //
+    // Falling through to the text fallback below would sort NaN by the string
+    // "NaN", putting it after 1 and 3 — so this needs its own arm, above the
+    // fallback, rather than being folded into it.
+    if (error instanceof UnorderedComparisonError) {
+      const x = Number.isNaN(a as number);
+      const y = Number.isNaN(b as number);
+      if (x && y) return 0;
+      return x ? -1 : 1;
+    }
     if (!(error instanceof ComparisonTypeError)) throw error;
     const collator = caseSensitive ? COLLATOR_SENSITIVE : COLLATOR_INSENSITIVE;
     const result = collator.compare(toPSString(a), toPSString(b));
@@ -505,10 +572,37 @@ export function compareForSorting(a: PSValue, b: PSValue, caseSensitive = false)
  * simply not the same; ordering has no answer to give, so it refuses.
  */
 export function valuesEqual(a: PSValue, b: PSValue, caseSensitive = false): boolean {
+  // ONE OBJECT IS EQUAL TO ITSELF. Without this line it was not: two PSObjects
+  // reach `coerceToLeft`'s opaque guard, which throws `ComparisonTypeError`,
+  // and the catch below turned that into false — so `valuesEqual(a, a)` was
+  // false for the same reference. MEASURED on pwsh 7.6.5:
+  //
+  //   $a = [pscustomobject]@{ Name = 'x' };  $b = [pscustomobject]@{ Name = 'x' }
+  //   $a -eq $a  True      $a -eq $b  False      $a -ne $a  False
+  //   @($a) -contains $a  True        $a -in @($a)  True
+  //
+  // PowerShell uses reference equality here, so DISTINCT objects being unequal
+  // was right and only the identity case was wrong. `-lt` still throws
+  // (`PSObjectCompareTo`), which is why this fixes equality alone and leaves
+  // `compareValues` refusing.
+  //
+  // `===` is the right test rather than a special case for PSObject, and the
+  // edge cases were measured rather than reasoned about: `NaN -eq NaN` is
+  // False in pwsh and `NaN === NaN` is false in JavaScript, so NaN correctly
+  // does NOT short-circuit; `-0.0 -eq 0.0` is True and `-0 === 0` is true; a
+  // string compared with itself under `-ceq` is True. Every case agrees.
+  if (a === b) return true;
+
   try {
     return compareValues(a, b, caseSensitive) === 0;
   } catch (error) {
+    // Both arms are false, for different reasons that are worth keeping apart:
+    // incompatible types are not the same value, and NaN is not equal to
+    // anything including itself. `NaN -eq NaN` is False in pwsh, and because
+    // `NaN === NaN` is false in JavaScript the identity check above correctly
+    // does not intercept it.
     if (error instanceof ComparisonTypeError) return false;
+    if (error instanceof UnorderedComparisonError) return false;
     throw error;
   }
 }
