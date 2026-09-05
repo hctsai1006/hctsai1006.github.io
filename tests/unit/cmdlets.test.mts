@@ -40,8 +40,10 @@ import type {
   BindingResult,
   BoundParameters,
   CommandModule,
+  CompatibilityView,
   InvocationContext,
 } from '../../src/commands/invocation.ts';
+import { tryBindParameters } from '../../src/binding/binder.ts';
 import type { CommandManifest } from '../../src/commands/manifest.ts';
 import {
   OBJECT_CMDLET_INDEX,
@@ -133,6 +135,255 @@ function typeNamesOf(value: PSValue | undefined): readonly string[] {
 // ---------------------------------------------------------------------------
 // Where-Object
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Where-Object parameter sets, bound the way pwsh binds them
+// ---------------------------------------------------------------------------
+
+/**
+ * Every case here was RUN against pwsh 7.6.5 and its answer recorded before the
+ * expectation was written. They go through the real binder, not a hand-built
+ * BoundParameters, because the defect was in the manifest's parameter sets and
+ * a hand-built binding cannot see it.
+ *
+ * Before this change the manifest collapsed 32 sets into one, with FilterScript
+ * and Property BOTH mandatory at position 0. The `ours (before)` notes are what
+ * that produced, measured the same way.
+ */
+describe('Where-Object binds its parameter sets the way pwsh does', () => {
+  const profile: CompatibilityView = {
+    displayVersion: '7.6.5',
+    behavior: <T extends boolean | number | string>(_key: string, fallback: T): T => fallback,
+  };
+
+  const bindArgs = (args: readonly string[]) =>
+    tryBindParameters(args, whereObject.manifest, profile);
+
+  it('binds -Property first and -Value second, not the other way round', () => {
+    // pwsh: @(o{N=2},o{N=5}) | Where-Object N -eq 2   ->  the N=2 object
+    // ours (before): FilterScript='N', Property='2', no Value at all
+    const outcome = bindArgs(['N', '-eq', '2']);
+    assert.ok(outcome.ok, 'must bind');
+    assert.equal(outcome.result.parameters['Property'], 'N');
+    // A string, because -Value is System.Object and the argument arrived as
+    // text. pwsh binds it the same way from a command line.
+    assert.equal(outcome.result.parameters['Value'], '2');
+    assert.equal(outcome.result.parameters['FilterScript'], undefined);
+    assert.equal(outcome.result.parameterSet, 'EqualSet');
+  });
+
+  it('accepts the fully named comparison form', () => {
+    // pwsh: Where-Object -Property N -eq -Value 2  ->  works
+    // ours (before): MissingMandatoryParameter: FilterScript. A valid pwsh
+    // command line was REJECTED, which is the same defect facing the other way.
+    const outcome = bindArgs(['-Property', 'N', '-eq', '-Value', '2']);
+    assert.ok(outcome.ok, 'must bind');
+    assert.equal(outcome.result.parameters['Property'], 'N');
+    assert.equal(outcome.result.parameters['Value'], '2');
+  });
+
+  it('accepts -Property with no operator, which is the truthiness test', () => {
+    // pwsh: @(o{Name='x'},o{Name='y'}) | Where-Object -Property Name  ->  both
+    // -EQ is OPTIONAL in EqualSet, which is why this binds at all.
+    const outcome = bindArgs(['-Property', 'Name']);
+    assert.ok(outcome.ok, 'must bind');
+    assert.equal(outcome.result.parameterSet, 'EqualSet');
+  });
+
+  it('refuses a script block and a property together', () => {
+    // pwsh: AmbiguousParameterSet,...WhereObjectCommand
+    // ours (before): accepted BOTH and quietly filtered on the script block.
+    const outcome = bindArgs(['-FilterScript', '{}', '-Property', 'Name', '-EQ', 'x']);
+    assert.equal(outcome.ok, false);
+    assert.ok(!outcome.ok && outcome.error.kind === 'AmbiguousParameterSet', 'kind');
+  });
+
+  it('refuses two comparison operators', () => {
+    // pwsh: AmbiguousParameterSet -- -EQ and -GT are different sets.
+    // ours (before): FilterScript='Name', Property='x', Value='y'. Three
+    // parameters bound wrongly and a successful exit.
+    const outcome = bindArgs(['Name', '-EQ', 'x', '-GT', 'y']);
+    assert.equal(outcome.ok, false);
+    assert.ok(!outcome.ok && outcome.error.kind === 'AmbiguousParameterSet', 'kind');
+  });
+
+  it('gives -Not its own set, which has no -Value', () => {
+    // pwsh: `Where-Object N -Not` binds; the Not set declares no -Value.
+    const outcome = bindArgs(['N', '-Not']);
+    assert.ok(outcome.ok, 'must bind');
+    assert.equal(outcome.result.parameterSet, 'Not');
+    assert.equal(outcome.result.parameters['Property'], 'N');
+  });
+
+  it('binds -Is against a type name at position 1', () => {
+    // pwsh: `Where-Object Name -Is System.String` -> both objects, so Property
+    // is 'Name' and Value is the type name.
+    const outcome = bindArgs(['Name', '-Is', 'System.String']);
+    assert.ok(outcome.ok, 'must bind');
+    assert.equal(outcome.result.parameters['Property'], 'Name');
+    assert.equal(outcome.result.parameters['Value'], 'System.String');
+  });
+
+  it('declares all 32 sets pwsh declares, with EqualSet the default', () => {
+    // (Get-Command Where-Object).ParameterSets.Count -> 32
+    // (Get-Command Where-Object).DefaultParameterSet -> EqualSet
+    const sets = new Set<string>();
+    for (const p of whereObject.manifest.parameters) {
+      for (const name of Object.keys(p.sets)) sets.add(name);
+    }
+    assert.equal(sets.size, 32);
+    assert.equal(whereObject.manifest.defaultParameterSet, 'EqualSet');
+    assert.ok(sets.has('ScriptBlockSet'));
+    assert.ok(sets.has('CaseSensitiveNotContainsSet'));
+    assert.ok(sets.has('Not'), 'the -Not set is called Not, not NotSet');
+  });
+
+  it('is held out of the session registry, and says so', () => {
+    assert.equal(whereObject.manifest.implementationStatus, 'partial');
+    assert.match(whereObject.manifest.notes ?? '', /PARTIAL/u);
+    // The two limits that earn it, named in the notes rather than implied.
+    assert.match(whereObject.manifest.notes ?? '', /RegExp/u);
+    assert.match(whereObject.manifest.notes ?? '', /-is/u);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Where-Object refuses rather than choosing
+// ---------------------------------------------------------------------------
+
+describe('Where-Object fails by name instead of guessing', () => {
+  const rows = [obj({ Name: 'x', N: 2 })];
+
+  it('reports ValueNotSpecifiedForWhereObject for an operator with no -Value', async () => {
+    // pwsh: Where-Object Name -EQ
+    //   ValueNotSpecifiedForWhereObject,Microsoft.PowerShell.Commands.WhereObjectCommand
+    //   'The specified operator requires both the -Property and -Value parameters.'
+    // ours (before): the operator ran against $null and filtered SILENTLY.
+    const result = await run(whereObject, { Property: 'Name', EQ: true }, rows);
+    assert.deepEqual(result.values, []);
+    assert.equal(result.exitCode, 1);
+    assert.equal(result.errors[0]?.fullyQualifiedErrorId,
+      'ValueNotSpecifiedForWhereObject,Microsoft.PowerShell.Commands.WhereObjectCommand');
+  });
+
+  it('exempts -Not, whose parameter set has no -Value', async () => {
+    // pwsh: `Where-Object N -Not` runs and filters on truthiness. N=2 is truthy,
+    // so -Not keeps nothing.
+    const result = await run(whereObject, { Property: 'N', Not: true }, rows);
+    assert.equal(result.exitCode, 0);
+    assert.deepEqual(result.values, []);
+  });
+
+  it('refuses two operators rather than taking the first', async () => {
+    // The binder rejects this spelling, but a hand-built binding reaches the
+    // body -- and the body used to walk a fixed array and return the FIRST
+    // match, so -GT was discarded without a word.
+    const result = await run(whereObject, { Property: 'N', EQ: true, GT: true, Value: 2 }, rows);
+    assert.equal(result.exitCode, 1);
+    assert.deepEqual(result.values, []);
+    assert.equal(result.errors[0]?.fullyQualifiedErrorId,
+      'UnsupportedParameterCombination,Microsoft.PowerShell.Commands.WhereObjectCommand');
+  });
+
+  it('refuses a script block combined with a property', async () => {
+    const filter = scriptBlock(() => true);
+    const result = await run(whereObject, { FilterScript: filter, Property: 'N' }, rows);
+    assert.equal(result.exitCode, 1);
+    assert.equal(result.errors[0]?.fullyQualifiedErrorId,
+      'UnsupportedParameterCombination,Microsoft.PowerShell.Commands.WhereObjectCommand');
+  });
+
+  it('refuses to pass everything through when nothing was supplied', async () => {
+    // The old body's else-branch was `keep = true`, on the reasoning that the
+    // binder rejects this first. It does -- and a filter that silently becomes
+    // the identity function is the exact shape of failure this file is about.
+    const result = await run(whereObject, {}, rows);
+    assert.equal(result.exitCode, 1);
+    assert.deepEqual(result.values, []);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Where-Object: the measured differences from PowerShell
+// ---------------------------------------------------------------------------
+
+describe('Where-Object -match is JavaScript RegExp, and says so', () => {
+  const one = (value: string): readonly PSValue[] => [obj({ V: value })];
+
+  it('reports the four .NET constructs JavaScript rejects, as an ErrorRecord', async () => {
+    // Each pattern is TRUE in pwsh 7.6.5 and a SyntaxError in JavaScript.
+    // Before this change the SyntaxError escaped applyOperator as a raw JS
+    // exception, so a PowerShell user was shown 'Invalid group'.
+    for (const [pattern, subject] of [
+      ['(?i)abc', 'ABC'],
+      ['(?>a+)b', 'aaab'],
+      ['^[a-z-[aeiou]]$', 'b'],
+      ['a(?#note)b', 'ab'],
+    ] as const) {
+      const result = await run(
+        whereObject,
+        { Property: 'V', Match: true, Value: pattern },
+        one(subject),
+      );
+      assert.equal(result.exitCode, 1, pattern);
+      assert.equal(result.errors[0]?.fullyQualifiedErrorId,
+        'InvalidRegularExpression,Microsoft.PowerShell.Commands.WhereObjectCommand', pattern);
+    }
+  });
+
+  it('gives the JavaScript answer for the patterns that differ silently', async () => {
+    // pwsh says True for every one of these; JavaScript says false. Asserted as
+    // the JS answer ON PURPOSE -- this is a recorded divergence, and a test that
+    // asserted pwsh's answer would fail rather than document it.
+    for (const [pattern, subject] of [
+      ['^\\d+$', '１２３'],
+      ['^\\w+$', 'é'],
+      ['^ab$', 'ab\n'],
+    ] as const) {
+      const result = await run(
+        whereObject,
+        { Property: 'V', Match: true, Value: pattern },
+        one(subject),
+      );
+      assert.equal(result.exitCode, 0, pattern);
+      assert.deepEqual(result.values, [], `${pattern} matches in .NET and not here`);
+    }
+  });
+
+  it('agrees with .NET where it was measured to agree', async () => {
+    // Measured in both: `a.b` does NOT match "a\nb", and named groups work.
+    const dot = await run(whereObject, { Property: 'V', Match: true, Value: 'a.b' }, one('a\nb'));
+    assert.deepEqual(dot.values, []);
+    const named = await run(
+      whereObject,
+      { Property: 'V', Match: true, Value: '(?<x>a)b' },
+      one('ab'),
+    );
+    assert.equal(named.values.length, 1);
+  });
+});
+
+describe('Where-Object orders NaN the way pwsh does', () => {
+  // Measured on pwsh 7.6.5, every one False and no error raised:
+  //   $n = [double]::NaN;  $n -lt 1  $n -le 1  $n -gt 1  $n -ge 1  ->  all False
+  //   @(o{V=NaN}, o{V=1}) | Where-Object V -le 1  ->  ONE object, the V=1 one
+  //   @(o{V=NaN}, o{V=1}) | Where-Object V -lt 1  ->  none
+  const rows = [obj({ Tag: 'nan', V: Number.NaN }), obj({ Tag: 'one', V: 1 })];
+
+  for (const [op, expected] of [
+    ['LT', []],
+    ['LE', ['one']],
+    ['GT', []],
+    ['GE', ['one']],
+  ] as const) {
+    it(`-${op} never matches a NaN and never raises`, async () => {
+      const result = await run(whereObject, { Property: 'V', [op]: true, Value: 1 }, rows);
+      assert.equal(result.exitCode, 0, 'must not raise');
+      assert.deepEqual(result.errors, []);
+      assert.deepEqual(column(result.values, 'Tag'), [...expected]);
+    });
+  }
+});
 
 describe('Where-Object', () => {
   const machines = [
@@ -283,6 +534,7 @@ describe('Select-Object', () => {
         outputTypeNames: [],
         synopsis: 'test double',
         parameterSource: 'none',
+        implementationStatus: 'implemented',
       } satisfies CommandManifest,
       async invoke(context: InvocationContext): Promise<number> {
         for await (const item of context.input) {
