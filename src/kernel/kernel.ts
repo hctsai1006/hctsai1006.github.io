@@ -197,8 +197,39 @@ export interface KernelOptions {
    * The embedder's ports. The kernel itself is in-memory and headless — it
    * neither creates a filesystem nor knows what a dialog is — but it has to be
    * able to HAND one to a command, which it previously could not.
+   *
+   * ONE PORT MEANS ONE CURRENT DIRECTORY, for every terminal and every job.
+   * A `FileSystemPort` closes over a filesystem view, and a view has a
+   * location, so a `Set-Location` in one terminal moves the relative-path
+   * baseline of every other. That is stated rather than hidden because it is
+   * the right answer for a single-session embedder and the wrong one for a
+   * page with two panes; `openFileSystem` is how a page with two panes avoids
+   * it. Supplying both is refused rather than silently resolved.
    */
   readonly fs?: FileSystemPort | null;
+  /**
+   * A filesystem view PER SESSION: share the storage backend, not the location.
+   *
+   * Called once per terminal, and once more for each background pipeline. What
+   * it returns must read and write the same files as every other view — one
+   * `MountTable` over one backend, handed to a fresh `VirtualFileSystem` whose
+   * `cwd` is the `cwd` given here — so the only thing that is NOT shared is
+   * where the session happens to be standing.
+   *
+   * MEASURED in pwsh 7.6.5 on this machine, which is where the background rule
+   * comes from:
+   *
+   *   session location          : C:\Users\...\Temp
+   *   job start location        : C:\Users\...\Temp   (inherited)
+   *   job after its own cd      : C:\                 (moved only itself)
+   *   session location after    : C:\Users\...\Temp   (unchanged)
+   *
+   * A job is a separate runspace: it starts where the session was and its `cd`
+   * does not follow the session home. So a background pipeline gets its own
+   * view, seeded with the terminal's location at the moment it was started, and
+   * the kernel never reads that view back.
+   */
+  readonly openFileSystem?: (session: FileSystemSession) => FileSystemPort;
   readonly preferences?: PreferencesPort | null;
   readonly dialog?: DialogPort | null;
   /**
@@ -248,9 +279,36 @@ export interface KernelOptions {
   readonly onListenerError?: (error: unknown, event: KernelEvent) => void;
 }
 
+/** Which session a filesystem view is being opened for. */
+export interface FileSystemSession {
+  readonly terminalId: TerminalId;
+  /** Where the new view must start. For a job, where the terminal was. */
+  readonly cwd: string;
+  /** True for a background pipeline, which gets a view of its own. */
+  readonly background: boolean;
+}
+
 /** Per-terminal state the kernel owns because the DOM is not reachable. */
 interface TerminalState {
-  cwd: string;
+  /**
+   * The last directory this terminal was TOLD about, not where it is.
+   *
+   * Not a second source of truth, and it used to be one: `TerminalState.cwd`
+   * held a directory while the filesystem port held another, `Get-Location`
+   * read the first and relative-path resolution followed the second, and after
+   * a successful `Set-Location` the two disagreed for the rest of the session.
+   * The authority is now the session's filesystem view and `Kernel.cwd` reads
+   * it live; this is only the watermark that decides whether a `cwd-changed`
+   * still needs to be emitted.
+   */
+  reportedCwd: string;
+  /**
+   * This terminal's own filesystem view, when the embedder supplies a factory.
+   *
+   * Null means there is no per-session view and the kernel-wide `fs` is used —
+   * which is one location shared by everything. See `KernelOptions.fs`.
+   */
+  fs: FileSystemPort | null;
   columns: number;
   rows: number;
   /**
@@ -426,6 +484,7 @@ export class Kernel {
   readonly #profile: CompatibilityView;
   readonly #defaultCwd: string;
   readonly #fs: FileSystemPort | null;
+  readonly #openFileSystem: ((session: FileSystemSession) => FileSystemPort) | null;
   readonly #preferences: PreferencesPort | null;
   readonly #dialog: DialogPort | null;
   readonly #validateEvents: boolean;
@@ -467,6 +526,16 @@ export class Kernel {
         });
       });
     this.#fs = options.fs ?? null;
+    this.#openFileSystem = options.openFileSystem ?? null;
+    if (this.#fs !== null && this.#openFileSystem !== null) {
+      // Two answers to "which filesystem", and picking one silently is how a
+      // session ends up resolving relative paths against a view nothing else
+      // reads. The embedder decides: one shared port, or one view per session.
+      throw new TypeError(
+        'KernelOptions.fs and KernelOptions.openFileSystem are alternatives: ' +
+          'supply a single shared port, or a factory that opens one view per session',
+      );
+    }
     this.#preferences = options.preferences ?? null;
     this.#dialog = options.dialog ?? null;
 
@@ -571,8 +640,35 @@ export class Kernel {
     };
   }
 
+  /**
+   * Where this terminal is, read from the filesystem view that IS the answer.
+   *
+   * Live rather than cached, and that is the fix for having had two current
+   * directories. `Get-Location` reads the process's `context.cwd`, relative
+   * paths resolve against the port, and the two used to be separate states
+   * that disagreed the moment `Set-Location` succeeded: the port moved and
+   * nothing moved the kernel's copy. There is now one authority — the
+   * session's view — and `snapshot.cwd`, `$PWD` and this getter all read it.
+   *
+   * Falls back to the configured default when there is no filesystem at all,
+   * which is every kernel that has not been given one.
+   */
   cwd(terminalId: TerminalId): string {
-    return this.#terminals.get(terminalId)?.cwd ?? this.#defaultCwd;
+    const port = this.#fsFor(terminalId);
+    if (port !== null) {
+      try {
+        return port.location.full;
+      } catch {
+        // A backend that has gone away must not make the current directory
+        // unreadable; the last directory the terminal was told about stands.
+      }
+    }
+    return this.#terminals.get(terminalId)?.reportedCwd ?? this.#defaultCwd;
+  }
+
+  /** This terminal's own view, or the kernel-wide port, or nothing. */
+  #fsFor(terminalId: TerminalId): FileSystemPort | null {
+    return this.#terminals.get(terminalId)?.fs ?? this.#fs;
   }
 
   /**
@@ -843,7 +939,17 @@ export class Kernel {
     let terminal = this.#terminals.get(terminalId);
     if (terminal === undefined) {
       terminal = {
-        cwd: this.#defaultCwd,
+        reportedCwd: this.#defaultCwd,
+        // Opened once per terminal, at the default location. Every view the
+        // factory returns reads the same files; only the location differs.
+        fs:
+          this.#openFileSystem === null
+            ? null
+            : this.#openFileSystem({
+                terminalId,
+                cwd: this.#defaultCwd,
+                background: false,
+              }),
         columns: DEFAULT_COLUMNS,
         rows: DEFAULT_ROWS,
         lastSucceeded: true,
@@ -855,7 +961,11 @@ export class Kernel {
   }
 
   #exec(requestId: RequestId, terminalId: TerminalId, source: string, background: boolean): void {
-    const terminal = this.#terminal(terminalId);
+    this.#terminal(terminalId);
+    // Read ONCE, from the session's view, and used for every snapshot in this
+    // pipeline — so `$PWD`, `Get-Location` and relative resolution cannot
+    // disagree about where the command started.
+    const cwd = this.cwd(terminalId);
     const stages = splitPipeline(source);
     if (stages.length === 0) {
       // NOT a silent return, which is what this was. MEASURED: an `exec` whose
@@ -886,7 +996,7 @@ export class Kernel {
 
     const missing = resolved.find((entry) => entry.module === undefined);
     if (missing !== undefined) {
-      this.#reportUnknownCommand(requestId, terminalId, terminal.cwd, missing.name, missing.stage);
+      this.#reportUnknownCommand(requestId, terminalId, cwd, missing.name, missing.stage);
       return;
     }
 
@@ -911,7 +1021,7 @@ export class Kernel {
         this.#bindOptions(module.manifest),
       );
       if (!outcome.ok) {
-        this.#reportBindingFailure(requestId, terminalId, terminal.cwd, module, entry.stage, outcome.error);
+        this.#reportBindingFailure(requestId, terminalId, cwd, module, entry.stage, outcome.error);
         return;
       }
       bound.push({ stage: entry.stage, module, binding: outcome.result });
@@ -926,7 +1036,7 @@ export class Kernel {
       const snapshot = this.#table.create({
         name: entry.module.manifest.display,
         commandLine: entry.stage,
-        cwd: terminal.cwd,
+        cwd,
         runtime: entry.module.manifest.runtime,
         terminalId,
         requestId,
@@ -947,8 +1057,25 @@ export class Kernel {
     // output can be buffered under one job however many stages it has.
     if (background) this.#jobs.start(groupLeader, source);
 
+    // A background pipeline gets a view of ITS OWN, seeded with the location
+    // the terminal was standing in when the job started, and never read back.
+    // Measured in pwsh 7.6.5: a job starts where the session was, its own
+    // `cd` moves only itself, and the session's location is unchanged after.
+    // Without a factory there is one port for everything, so a job shares the
+    // terminal's location — see `KernelOptions.fs`.
+    const port =
+      background && this.#openFileSystem !== null
+        ? this.#openFileSystem({ terminalId, cwd, background: true })
+        : this.#fsFor(terminalId);
+
     const prepared = bound.map((entry, index) =>
-      this.#prepare(snapshots[index] as ProcessSnapshot, entry.module, entry.binding, groupLeader),
+      this.#prepare(
+        snapshots[index] as ProcessSnapshot,
+        entry.module,
+        entry.binding,
+        groupLeader,
+        port,
+      ),
     );
 
     // CHECKED BEFORE THE WORK STARTS, not after.
@@ -1157,11 +1284,11 @@ export class Kernel {
    * locations belong to whoever owns the port, not here.
    */
   #syncLocation(terminalId: TerminalId): void {
-    const fs = this.#fs;
-    if (fs === null) return;
+    const port = this.#fsFor(terminalId);
+    if (port === null) return;
     let current: string;
     try {
-      current = fs.location.full;
+      current = port.location.full;
     } catch {
       // A port whose `location` getter throws must not cost the pipeline its
       // `exit` events — this runs inside `#drive`'s finally. The directory
@@ -1169,8 +1296,8 @@ export class Kernel {
       return;
     }
     const terminal = this.#terminal(terminalId);
-    if (current === terminal.cwd) return;
-    terminal.cwd = current;
+    if (current === terminal.reportedCwd) return;
+    terminal.reportedCwd = current;
     this.#emit({ kind: 'cwd-changed', terminalId, cwd: current });
   }
 
@@ -1348,6 +1475,7 @@ export class Kernel {
     module: CommandModule,
     binding: BindingResult,
     groupLeader: ProcessGroupId,
+    port: FileSystemPort | null,
   ): Prepared {
     const { pid, requestId, terminalId, background } = snapshot;
     const signal = this.#signals.register(pid, groupLeader);
@@ -1407,7 +1535,9 @@ export class Kernel {
       requireCapability: (capability: Capability) => {
         scoped.require(capability);
       },
-      fs: this.#fs,
+      // The SESSION's view, not a kernel-wide one: which directory a relative
+      // path resolves against is a property of the session that typed it.
+      fs: port,
       preferences: this.#preferences,
       dialog: this.#dialog,
     };

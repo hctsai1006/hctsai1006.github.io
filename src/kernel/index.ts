@@ -177,7 +177,7 @@ export {
   VirtualPolicy,
 } from './capabilities.ts';
 
-export type { KernelEventListener, KernelOptions } from './kernel.ts';
+export type { FileSystemSession, KernelEventListener, KernelOptions } from './kernel.ts';
 export {
   EXIT_COMMAND_NOT_FOUND,
   EXIT_FAILURE,
