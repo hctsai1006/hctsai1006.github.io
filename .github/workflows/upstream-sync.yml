@@ -107,7 +107,10 @@ jobs:
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: '24'
+          # The pinned version, not the newest 24.x. Floating resolved 24.20.0,
+          # whose Unicode is 17.0 against checked-in 16.0.0 extracts, and turned
+          # a required gate red. Same reason as verify.yml.
+          node-version-file: .node-version
           cache: npm
 
       - run: npm ci
@@ -166,6 +169,32 @@ jobs:
             exit "$code"
           fi
 
+      # THE LOCKFILE IS NOT THE WHOLE PROPOSAL.
+      #
+      # compat/profiles/*.json, compat/deltas/*.json and compat/explorer.html
+      # are all GENERATED from the lockfile — a profile's `source.derivedFrom`
+      # embeds `lock.generatedAt` verbatim — and `npm run verify` gates their
+      # freshness. Publishing the lockfile alone therefore produces a pull
+      # request that fails its own required CI the first time there is real
+      # drift, which is the one moment this workflow exists for.
+      #
+      # PR #2 is the evidence: correcting a single stored message in the
+      # verifier required regenerating both profiles, the delta and the explorer
+      # in the same commit. The scheduled path did not do the same thing.
+      #
+      # Regenerated HERE, in the read-only job, so the write-permission job
+      # still runs no dependency code. The --check runs afterwards are the point:
+      # if the regenerated set does not satisfy its own gates, this job fails
+      # rather than proposing something a reviewer cannot merge.
+      - name: regenerate everything derived from the lockfile
+        if: steps.decide.outputs.decision == 'drift'
+        run: |
+          set -euo pipefail
+          npm run profiles
+          npm run explorer
+          npm run profiles -- --check
+          npm run explorer -- --check
+
       - name: is there already a sync pull request open
         id: open
         env:
@@ -192,6 +221,9 @@ jobs:
           name: upstream-truth
           path: |
             compat/upstream/releases.lock.json
+            compat/profiles/
+            compat/deltas/
+            compat/explorer.html
             truth-check.log
           retention-days: 7
           if-no-files-found: error
@@ -215,7 +247,10 @@ jobs:
       # `npm ci` and no cache: tools/upstream-sync.mts imports node builtins only.
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: '24'
+          # The pinned version, not the newest 24.x. Floating resolved 24.20.0,
+          # whose Unicode is 17.0 against checked-in 16.0.0 extracts, and turned
+          # a required gate red. Same reason as verify.yml.
+          node-version-file: .node-version
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -229,7 +264,10 @@ jobs:
           node tools/upstream-sync.mts publish \
             --branch "$SYNC_BRANCH" \
             --message "Sync upstream release truth" \
-            --path compat/upstream/releases.lock.json
+            --path compat/upstream/releases.lock.json \
+            --path compat/profiles \
+            --path compat/deltas \
+            --path compat/explorer.html
 
       - name: reconcile the one pull request
         env:
