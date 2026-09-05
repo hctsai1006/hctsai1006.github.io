@@ -98,8 +98,30 @@ export interface InvocationContext {
  */
 export interface CompatibilityView {
   readonly displayVersion: string;
-  /** Look up a behaviour flag, e.g. `newGuid.defaultVersion`. */
+  /**
+   * Look up a behaviour flag, e.g. `newGuid.defaultVersion`.
+   *
+   * The key MUST be declared by the profile or something it inherits. Absence is
+   * treated as a mistake — almost always a typo — and reported, because the
+   * alternative is a command silently behaving like an older version forever.
+   */
   behavior<T extends boolean | number | string>(key: string, fallback: T): T;
+  /**
+   * Look up a behaviour that is declared ONLY where it applies.
+   *
+   * The difference from `behavior` is what absence MEANS. A profile declares
+   * `switchParameter.New-Guid.Empty.honourExplicitFalse` because upstream PR
+   * #26140 fixed that one parameter on that one cmdlet; it declares nothing for
+   * `Test-Diff -Force` because no upstream PR ever touched it, and measurement
+   * says pwsh 7.6.5 honours an explicit `:$false` there in both lines. So an
+   * undeclared scoped key is a fact — "this pair was never buggy" — not a typo,
+   * and must not be reported as one.
+   *
+   * Keeping the two lookups apart is what lets behaviour keys be command- and
+   * parameter-scoped at all. The engine-wide boolean they replaced applied one
+   * cmdlet's bug to every switch parameter in the binder.
+   */
+  scopedBehavior<T extends boolean | number | string>(key: string, whenUndeclared: T): T;
 }
 
 /**

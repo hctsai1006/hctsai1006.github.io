@@ -24,6 +24,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 import type { CompatibilityView } from '../../src/commands/invocation.ts';
+import { viewOfBehaviors } from '../../src/compatibility/profile-resolver.ts';
 import type { CommandManifest, ParameterMetadata, ParameterSetBinding } from '../../src/commands/manifest.ts';
 import {
   bindParameters,
@@ -43,13 +44,7 @@ function profileView(file: string): CompatibilityView {
     readFileSync(new URL(`../../compat/profiles/${file}`, import.meta.url), 'utf8'),
   );
   const behaviors = (raw as { behaviors?: Record<string, boolean | number | string> }).behaviors ?? {};
-  return {
-    displayVersion: (raw as { displayVersion?: string }).displayVersion ?? '?',
-    behavior<T extends boolean | number | string>(key: string, fallback: T): T {
-      const value = behaviors[key];
-      return (value === undefined ? fallback : value) as T;
-    },
-  };
+  return viewOfBehaviors((raw as { displayVersion?: string }).displayVersion ?? '?', behaviors);
 }
 
 const V76 = profileView('powershell-7.6.5-linux.json');
@@ -445,10 +440,7 @@ describe('validation that depends on the profile', () => {
 
   it('comes from the flag, not from the command name or the version string', () => {
     // The same manifest under a view that only differs in the flag.
-    const off: CompatibilityView = {
-      displayVersion: '7.7.0-preview.4',
-      behavior: <T extends boolean | number | string>(_key: string, fallback: T): T => fallback,
-    };
+    const off: CompatibilityView = viewOfBehaviors('7.7.0-preview.4', {});
     assert.deepEqual(bindParameters(['-Property', ''], formatTable, off).parameters['Property'], ['']);
     assert.equal(V76.behavior('format.property.rejectNullOrEmpty', true), false);
     assert.equal(V77.behavior('format.property.rejectNullOrEmpty', false), true);

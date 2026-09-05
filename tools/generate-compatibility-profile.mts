@@ -38,6 +38,15 @@ import ajvFormats from 'ajv-formats';
 
 import { POWERSHELL_77_CHANGES, BUNDLED_MODULES } from '../compat/deltas/powershell-77-changes.source.mts';
 import type { Change } from '../compat/deltas/powershell-77-changes.source.mts';
+import {
+  assertCurationIsSound,
+  buildBehaviorTables,
+  isEmulated,
+  keysFor,
+  primaryPr,
+  type BehaviorTables,
+  type BehaviorValue,
+} from './compat-curation.mts';
 import { byCodepoint } from './version.mts';
 
 type AjvValidator = ((data: unknown) => boolean) & {
@@ -103,66 +112,6 @@ function readCapturedMetadata(version: string): CapturedMetadata | null {
   return JSON.parse(readFileSync(p, 'utf8')) as CapturedMetadata;
 }
 
-// ---------------------------------------------------------------------------
-// behaviors
-// ---------------------------------------------------------------------------
-
-type BehaviorValue = boolean | number | string | null;
-
-/**
- * The 7.6.5 value for a key, derived from the 7.7 value rather than restated.
- *
- * If both were hand-written they could agree by accident, which would make the
- * two profiles identical and quietly turn the entire compatibility layer into a
- * no-op that still looks like it is working.
- */
-function baselineValueFor(change: Change): BehaviorValue {
-  const v = change.behaviorValue;
-  if (typeof v === 'boolean') return !v;
-  if (change.behaviorKey === 'newGuid.defaultVersion') return 4; // was UUID v4
-  if (typeof v === 'number') return null;
-  return null;
-}
-
-interface BehaviorTables {
-  baseline: Record<string, BehaviorValue>;
-  target: Record<string, BehaviorValue>;
-  docs: Record<string, { summary: string; upstreamPr: number | null; breaking: boolean; since: string }>;
-}
-
-function buildBehaviorTables(changes: readonly Change[], targetVersion: string): BehaviorTables {
-  const baseline: Record<string, BehaviorValue> = {};
-  const target: Record<string, BehaviorValue> = {};
-  const docs: BehaviorTables['docs'] = {};
-
-  for (const c of changes) {
-    if (c.behaviorKey === undefined) continue;
-    const value = c.behaviorValue ?? null;
-
-    // Several upstream PRs can land on one behavior key — the explicit-$false
-    // family is thirteen PRs and one flag. Keep the first citation and require
-    // the value to agree, so a contradiction is a hard error rather than a
-    // last-writer-wins surprise.
-    const existing = target[c.behaviorKey];
-    if (existing !== undefined && existing !== value) {
-      throw new Error(
-        `behavior "${c.behaviorKey}" is given conflicting values (${JSON.stringify(existing)} and ${JSON.stringify(value)}) by different changes`,
-      );
-    }
-
-    target[c.behaviorKey] = value;
-    baseline[c.behaviorKey] = baselineValueFor(c);
-    docs[c.behaviorKey] ??= {
-      summary: c.title,
-      upstreamPr: c.upstreamPr,
-      breaking: c.kind === 'breaking',
-      since: targetVersion,
-    };
-  }
-
-  return { baseline, target, docs };
-}
-
 const sortKeys = <T,>(o: Record<string, T>): Record<string, T> =>
   Object.fromEntries(Object.entries(o).sort(([a], [b]) => byCodepoint(a, b)));
 
@@ -174,8 +123,16 @@ interface BuildProfileArgs {
   release: LockRelease;
   channel: 'lts' | 'preview';
   inherits: string | null;
+  /** EMULATED keys only. This is what a command can read. */
   behaviors: Record<string, BehaviorValue>;
   docs: BehaviorTables['docs'];
+  /**
+   * Every documented upstream difference, emulated or not, with the value for
+   * THIS profile's version. Kept beside `behaviors` rather than inside it so
+   * the two facts — what upstream does, and what we reproduce — cannot be read
+   * as one. Nothing in src/ may consult this; it exists for the explorer.
+   */
+  documentedBehaviors: Record<string, unknown>;
   commands: Record<string, unknown>;
   lockGeneratedAt: string;
 }
@@ -208,6 +165,7 @@ function buildProfile(args: BuildProfileArgs): Record<string, unknown> {
     ...(modules ? { bundledModules: sortKeys({ ...modules }) } : {}),
     behaviors: sortKeys(args.behaviors),
     behaviorDocs: sortKeys(args.docs),
+    documentedBehaviors: sortKeys(args.documentedBehaviors),
     commands: sortKeys(args.commands),
     experimentalFeatures: [],
     engineLimits: {
@@ -231,19 +189,43 @@ function buildDelta(
   changes: readonly Change[],
   generatedAt: string,
 ): Record<string, unknown> {
-  const entries = changes.map((c) => ({
-    kind: c.kind,
-    subject: c.subject,
-    subjectKind: c.subjectKind,
-    title: c.title,
-    ...(c.detail !== undefined ? { detail: c.detail } : {}),
-    impact: c.impact,
-    behaviorKey: c.behaviorKey ?? null,
-    upstreamPr: c.upstreamPr,
-    ...(c.migration !== undefined ? { migration: c.migration } : {}),
-    conformanceFixture: null,
-    implemented: c.implemented,
-  }));
+  const entries = changes.map((c) => {
+    const keys = keysFor(c);
+    return {
+      kind: c.kind,
+      subject: c.subject,
+      subjectKind: c.subjectKind,
+      title: c.title,
+      ...(c.detail !== undefined ? { detail: c.detail } : {}),
+      impact: c.impact,
+      // A single key stays a single key so the explorer's existing lookup keeps
+      // working; `behaviorKeys` carries the whole set for a derived family.
+      behaviorKey: keys.length === 1 ? (keys[0] ?? null) : null,
+      behaviorKeys: [...keys],
+      scope: {
+        command: c.scope?.command ?? null,
+        parameters: [...(c.scope?.parameters ?? [])],
+      },
+      /** What upstream 7.7 does. Recorded whatever we emulate. */
+      documentedValue: c.upstreamValue ?? null,
+      /**
+       * What a command can actually read. Null when nothing is emulated, which
+       * is the whole point of the split: a documented change must be visibly
+       * absent from execution rather than quietly present in it.
+       */
+      emulatedValue: isEmulated(c) ? (c.upstreamValue ?? null) : null,
+      implementation: c.implementation,
+      ...(c.partialityNote !== undefined ? { partialityNote: c.partialityNote } : {}),
+      sources: c.sources.map((s) => ({ pr: s.pr, role: s.role, covers: s.covers })),
+      upstreamPr: primaryPr(c),
+      evidence: [...(c.evidence ?? [])],
+      ...(c.migration !== undefined ? { migration: c.migration } : {}),
+      conformanceFixture: null,
+      // Derived, never authored. The four-state status is the truth; this is the
+      // boolean projection the explorer and the schema already speak.
+      implemented: isEmulated(c),
+    };
+  });
 
   const count = (k: Change['kind']): number => changes.filter((c) => c.kind === k).length;
 
@@ -253,7 +235,9 @@ function buildDelta(
     changed: count('changed'),
     removed: count('removed'),
     fixed: count('fixed'),
-    implemented: changes.filter((c) => c.implemented).length,
+    implemented: changes.filter(isEmulated).length,
+    documented: changes.filter((c) => c.implementation === 'documented').length,
+    partial: changes.filter((c) => c.implementation === 'partial').length,
   };
 
   // A summary that silently omits a kind is worse than no summary: it looks
@@ -305,10 +289,18 @@ function validate(schemaPath: string, doc: unknown, what: string): void {
   }
 }
 
-/** Every behavior key must be documented, and every doc must cite a PR. */
+/**
+ * Every behavior key must be documented, and every doc must cite a PR.
+ *
+ * Now also: nothing may appear in the RUNTIME table that the documented table
+ * does not mark as emulated. That is the belt to `isEmulated`'s braces — if a
+ * later edit reintroduces a path that writes an unemulated key into `behaviors`,
+ * this catches it at generation time rather than at execution time.
+ */
 function assertBehaviorsDocumented(profile: Record<string, unknown>): void {
   const behaviors = profile['behaviors'] as Record<string, unknown>;
   const docs = profile['behaviorDocs'] as Record<string, { upstreamPr?: number | null }>;
+  const documented = profile['documentedBehaviors'] as Record<string, { emulated?: boolean }>;
   const problems: string[] = [];
   for (const key of Object.keys(behaviors)) {
     const doc = docs[key];
@@ -318,6 +310,15 @@ function assertBehaviorsDocumented(profile: Record<string, unknown>): void {
     }
     if (doc.upstreamPr === undefined || doc.upstreamPr === null) {
       problems.push(`behavior "${key}" has no upstream PR citation`);
+    }
+    const record = documented[key];
+    if (record === undefined) {
+      problems.push(`behavior "${key}" is executable but not recorded in documentedBehaviors`);
+    } else if (record.emulated !== true) {
+      problems.push(
+        `behavior "${key}" is readable by a command but documentedBehaviors says it is not ` +
+          'emulated. A change we do not reproduce must not reach execution.',
+      );
     }
   }
   if (problems.length > 0) {
@@ -344,7 +345,15 @@ function collect(): Artifact[] {
     throw new Error('the lockfile does not contain both the LTS and preview releases');
   }
 
-  const { baseline, target, docs } = buildBehaviorTables(POWERSHELL_77_CHANGES, preview.version);
+  // `as const satisfies` narrows each entry to its literal shape, so an entry
+  // that omits an optional property has no such property to read. Widen once.
+  const changes = POWERSHELL_77_CHANGES as readonly Change[];
+
+  // First, because everything downstream trusts these records. This THROWS; it
+  // used to be a stderr warning that exited 0.
+  assertCurationIsSound(changes, REPO);
+
+  const { baseline, target, docs, documented } = buildBehaviorTables(changes, preview.version);
 
   // Command availability, taken from the reference implementation where a
   // capture exists rather than asserted.
@@ -358,18 +367,46 @@ function collect(): Artifact[] {
 
   // Commands the curated changes say 7.7 adds. Their absence in 7.6.5 was
   // independently confirmed by the capture.
+  //
+  // A record scoped to PARAMETERS adds a parameter, not a command:
+  // "-ExcludeProperty added to Format-*" is kind:added, subjectKind:command, and
+  // would otherwise announce Format-Table as a new 7.7 cmdlet. The capture
+  // happened to mask that; `scope.parameters` says it outright.
   const previewCommands: Record<string, unknown> = {};
-  for (const c of POWERSHELL_77_CHANGES) {
+  for (const c of changes) {
     if (c.kind !== 'added' || c.subjectKind !== 'command') continue;
+    if ((c.scope?.parameters ?? []).length > 0) continue;
     for (const name of c.subject.split(',').map((s) => s.trim())) {
       if (ltsCaptured !== null && name in ltsCaptured.commands) continue;
       previewCommands[name] = {
         availability: 'added',
         since: preview.version,
-        notes: `${c.title} (upstream #${c.upstreamPr})`,
+        notes: `${c.title} (upstream #${String(primaryPr(c))})`,
       };
     }
   }
+
+  // The documented table carries the value for THIS profile's version, so the
+  // explorer can show upstream availability and our emulation as two facts on
+  // one row without either being inferred from the other.
+  const documentedFor = (which: 'baseline' | 'target'): Record<string, unknown> =>
+    Object.fromEntries(
+      Object.entries(documented).map(([key, d]) => [
+        key,
+        {
+          summary: d.summary,
+          value: which === 'target' ? d.upstreamValue : d.baselineValue,
+          upstreamValue: d.upstreamValue,
+          baselineValue: d.baselineValue,
+          implementation: d.implementation,
+          emulated: d.emulated,
+          upstreamPr: d.upstreamPr,
+          breaking: d.breaking,
+          since: d.since,
+          scope: { command: d.scope.command, parameters: [...d.scope.parameters] },
+        },
+      ]),
+    );
 
   const ltsProfile = buildProfile({
     release: lts,
@@ -377,6 +414,7 @@ function collect(): Artifact[] {
     inherits: null,
     behaviors: baseline,
     docs,
+    documentedBehaviors: documentedFor('baseline'),
     commands: ltsCommands,
     lockGeneratedAt: lock.generatedAt,
   });
@@ -387,6 +425,7 @@ function collect(): Artifact[] {
     inherits: `powershell/${lts.version}/${PLATFORM}`,
     behaviors: target,
     docs,
+    documentedBehaviors: documentedFor('target'),
     commands: previewCommands,
     lockGeneratedAt: lock.generatedAt,
   });
@@ -396,29 +435,7 @@ function collect(): Artifact[] {
     assertBehaviorsDocumented(p);
   }
 
-  // Two changes citing one PR with different behaviour keys means the curation
-  // is probably wrong: a PR number is the citation, and one citation cannot
-  // support two unrelated claims. Surfaced rather than silently rendered as two
-  // cards showing the same number.
-  const byPr = new Map<number, Set<string>>();
-  // `as const satisfies` narrows each entry to its literal shape, so an entry
-  // that omits the optional behaviorKey has no such property to read. Widen.
-  for (const c of POWERSHELL_77_CHANGES as readonly Change[]) {
-    const keys = byPr.get(c.upstreamPr) ?? new Set<string>();
-    keys.add(c.behaviorKey ?? '(none)');
-    byPr.set(c.upstreamPr, keys);
-  }
-  for (const [pr, keys] of byPr) {
-    if (keys.size > 1) {
-      process.stderr.write(
-        `  warning: upstream #${pr} is cited by changes with different behavior keys ` +
-          `(${[...keys].join(', ')}). Check the curation.
-`,
-      );
-    }
-  }
-
-  const delta = buildDelta(lts, preview, POWERSHELL_77_CHANGES, lock.generatedAt);
+  const delta = buildDelta(lts, preview, changes, lock.generatedAt);
   validate(DELTA_SCHEMA, delta, 'the behavior delta');
 
   // Sanity: the two profiles must actually differ, or the compatibility layer is

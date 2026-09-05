@@ -24,6 +24,7 @@ import type {
 } from '../../src/commands/invocation.ts';
 import type { Capability } from '../../src/commands/manifest.ts';
 import { AuditLog, CapabilityBroker, VirtualPolicy } from '../../src/kernel/capabilities.ts';
+import { viewOfBehaviors } from '../../src/compatibility/profile-resolver.ts';
 
 const TEST_PID = 42;
 
@@ -74,10 +75,7 @@ export class Session {
     const requested: Capability[] = [];
 
     const host: PipelineHost = {
-      profile: {
-        displayVersion: '7.6.5',
-        behavior: <T extends boolean | number | string>(_key: string, fallback: T): T => fallback,
-      },
+      profile: viewOfBehaviors('7.6.5', {}),
       streams,
       native: null,
       cwd: '/home/thc1006',

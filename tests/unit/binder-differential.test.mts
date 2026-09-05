@@ -14,13 +14,22 @@
  *
  * The result, which is the strongest single claim this binder can make:
  *
- *   under the 7.7 profile the binder reproduces pwsh 7.6.5 EXACTLY on all
- *   forty cases, and under the 7.6 profile it differs on exactly one — the
- *   `-Force:$false` case, deliberately, because 7.6's COMMANDS cannot tell
- *   `-Force:$false` from `-Force` even though its binder can.
+ *   under BOTH profiles the binder reproduces pwsh 7.6.5 EXACTLY on all forty
+ *   cases.
  *
- * That single expected divergence is asserted rather than tolerated, so if it
- * ever spreads to a second case the suite says so.
+ * It used to be forty under 7.7 and thirty-nine under 7.6, with the
+ * `-Force:$false` case diverging on purpose: the engine-wide
+ * `switchParameters.honourExplicitFalse` flag made the 7.6 profile bind
+ * Force=true. That divergence was a defect, not a design. `Test-Diff` is a
+ * synthetic advanced function, and none of the ten upstream 7.7 PRs that
+ * corrected explicit `:$false` handling touch anything like it — they each fix
+ * NAMED switches on ONE cmdlet. Measured 2026-09-05, pwsh 7.6.5 binds
+ * `-Force:$false` to False with the key present, exactly as the transcript
+ * below records. Scoping the flag to the pairs upstream actually fixed removed
+ * the divergence and made the claim stronger: forty for forty, both ways.
+ *
+ * The per-cmdlet behaviour that flag was standing in for is proved where it
+ * belongs, in tests/unit/binder-switch-scope.test.mts.
  */
 
 import { describe, it } from 'node:test';
@@ -30,19 +39,13 @@ import { readFileSync } from 'node:fs';
 import type { CompatibilityView } from '../../src/commands/invocation.ts';
 import type { CommandManifest, ParameterMetadata, ParameterSetBinding } from '../../src/commands/manifest.ts';
 import { tryBindParameters } from '../../src/binding/index.ts';
+import { viewOfBehaviors } from '../../src/compatibility/profile-resolver.ts';
 
 function profileView(file: string): CompatibilityView {
   const raw = JSON.parse(
     readFileSync(new URL(`../../compat/profiles/${file}`, import.meta.url), 'utf8'),
   ) as { displayVersion?: string; behaviors?: Record<string, boolean | number | string> };
-  const behaviors = raw.behaviors ?? {};
-  return {
-    displayVersion: raw.displayVersion ?? '?',
-    behavior<T extends boolean | number | string>(key: string, fallback: T): T {
-      const value = behaviors[key];
-      return (value === undefined ? fallback : value) as T;
-    },
-  };
+  return viewOfBehaviors(raw.displayVersion ?? '?', raw.behaviors ?? {});
 }
 
 const V76 = profileView('powershell-7.6.5-linux.json');
@@ -185,19 +188,6 @@ const TRANSCRIPT: readonly (readonly [readonly string[], string])[] = [
   [['-Ex', 'Both'], 'OK|ByPath|Expand=Both'],
 ];
 
-/**
- * The one case where we differ from the reference on purpose.
- *
- * pwsh 7.6.5's binder stores False here, but every 7.6 command reads presence
- * rather than value — verified with `Where-Object -Property A -Not:$false`,
- * which filters exactly like `-Not`, and `Split-Path /a/b/c.txt -Leaf:$false`,
- * which still returns the leaf. The 7.6 profile reproduces what a 7.6 command
- * DOES, which is what a compatibility profile is for.
- */
-const EXPECTED_76_DIVERGENCE = new Map<string, string>([
-  ['-Force:$false', 'OK|ByPath|Force=true'],
-]);
-
 describe('differential against pwsh 7.6.5', () => {
   it('reproduces the reference exactly under the 7.7 profile', () => {
     for (const [args, expected] of TRANSCRIPT) {
@@ -206,25 +196,27 @@ describe('differential against pwsh 7.6.5', () => {
     assert.equal(TRANSCRIPT.length, 40);
   });
 
-  it('differs under the 7.6 profile on exactly one case, and that one on purpose', () => {
+  it('reproduces the reference exactly under the 7.6 profile too, with no exceptions', () => {
+    // There used to be one deliberate divergence here. It came from an
+    // engine-wide switch flag that has been scoped away; see the header. An
+    // empty divergence list is asserted rather than assumed, so a flag that
+    // starts applying to every command again fails HERE, naming the case.
     const diverged: string[] = [];
     for (const [args, expected] of TRANSCRIPT) {
-      const key = args.join(' ');
-      const actual = render(args, V76);
-      if (actual === expected) continue;
-      diverged.push(key);
-      assert.equal(actual, EXPECTED_76_DIVERGENCE.get(key), `unexpected divergence at ${key}`);
+      if (render(args, V76) !== expected) diverged.push(args.join(' '));
     }
-    assert.deepEqual(diverged, ['-Force:$false']);
+    assert.deepEqual(diverged, [], 'the 7.6 profile must not invent a difference upstream lacks');
   });
 
-  it('keeps the typed intent recoverable in the case where it diverges', () => {
-    const outcome = tryBindParameters(['-Force:$false'], TEST_DIFF, V76, {
-      defaultParameterSet: 'ByPath',
-    });
-    assert.equal(outcome.ok, true);
-    if (!outcome.ok) return;
-    assert.equal(outcome.result.parameters['Force'], true);
-    assert.deepEqual(outcome.result.explicitlyFalseSwitches, ['Force']);
+  it('keeps the typed intent recoverable under both profiles', () => {
+    for (const profile of [V76, V77]) {
+      const outcome = tryBindParameters(['-Force:$false'], TEST_DIFF, profile, {
+        defaultParameterSet: 'ByPath',
+      });
+      assert.equal(outcome.ok, true);
+      if (!outcome.ok) return;
+      assert.equal(outcome.result.parameters['Force'], false);
+      assert.deepEqual(outcome.result.explicitlyFalseSwitches, ['Force']);
+    }
   });
 });

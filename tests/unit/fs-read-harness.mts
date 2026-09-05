@@ -35,6 +35,7 @@ import type { Capability } from '../../src/commands/manifest.ts';
 import { collectingStreams } from '../../src/pipeline/streams.ts';
 import type { ErrorRecord } from '../../src/pipeline/streams.ts';
 import type { PSObject, PSValue } from '../../src/pipeline/psobject.ts';
+import { viewOfBehaviors } from '../../src/compatibility/profile-resolver.ts';
 
 /** 2026-03-04T05:06:07Z, the instant the native tests already use. */
 export const TEST_EPOCH_MS = Date.parse('2026-03-04T05:06:07Z');
@@ -135,10 +136,7 @@ export function contextFor(options: RunOptions & { port: FileSystemPort | null }
   const streams = collectingStreams();
   const granted = options.granted;
   const context: InvocationContext = {
-    profile: {
-      displayVersion: '7.6.5',
-      behavior: <T extends boolean | number | string>(_key: string, fallback: T): T => fallback,
-    },
+    profile: viewOfBehaviors('7.6.5', {}),
     streams,
     native: null,
     input: iterate(options.input ?? []),

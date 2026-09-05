@@ -47,6 +47,7 @@ import type { Capability } from '../../src/commands/manifest.ts';
 import { collectingStreams } from '../../src/pipeline/streams.ts';
 import type { ErrorRecord } from '../../src/pipeline/streams.ts';
 import type { PSValue } from '../../src/pipeline/psobject.ts';
+import { viewOfBehaviors } from '../../src/compatibility/profile-resolver.ts';
 
 /** A fixed instant, so nothing in these tests reads a wall clock. */
 export const TEST_EPOCH_MS = Date.parse('2026-03-04T05:06:07Z');
@@ -278,12 +279,7 @@ export async function rig(options: RigOptions = {}): Promise<Rig> {
         options.withFileSystem === false ? null : brokeredFileSystem(vfs, require);
 
       const context: InvocationContext = {
-        profile: {
-          displayVersion: '7.6.5',
-          behavior<T extends boolean | number | string>(_key: string, fallback: T): T {
-            return fallback;
-          },
-        },
+        profile: viewOfBehaviors('7.6.5', {}),
         streams,
         native: null,
         input: emptyInput(),

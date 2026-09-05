@@ -21,6 +21,7 @@ import type { CompatibilityView } from '../../src/commands/invocation.ts';
 import type { CommandManifest } from '../../src/commands/manifest.ts';
 import { ParameterBindingError, bindParameters, tryBindParameters } from '../../src/binding/index.ts';
 import type { BindOptions, ValidationDetail } from '../../src/binding/index.ts';
+import { viewOfBehaviors } from '../../src/compatibility/profile-resolver.ts';
 
 // ---------------------------------------------------------------------------
 // loading
@@ -34,14 +35,7 @@ function profileView(file: string): CompatibilityView {
     displayVersion?: string;
     behaviors?: Record<string, boolean | number | string>;
   };
-  const behaviors = raw.behaviors ?? {};
-  return {
-    displayVersion: raw.displayVersion ?? '?',
-    behavior<T extends boolean | number | string>(key: string, fallback: T): T {
-      const value = behaviors[key];
-      return (value === undefined ? fallback : value) as T;
-    },
-  };
+  return viewOfBehaviors(raw.displayVersion ?? '?', raw.behaviors ?? {});
 }
 
 const V76 = profileView('powershell-7.6.5-linux.json');
@@ -204,15 +198,27 @@ describe('Get-ChildItem, the sixteen-parameter case', () => {
     assert.equal(outcome.result.parameters['Filter'], '*.txt');
   });
 
-  it('shows the switch difference between the two profiles on a real command', () => {
-    for (const [profile, expected] of [
-      [V76, true],
-      [V77, false],
-    ] as const) {
+  it('honours -Force:$false on Get-ChildItem under BOTH profiles, as the reference does', () => {
+    // This test used to assert Force=true under 7.6, and that was measurably
+    // wrong. `Get-ChildItem -Force` is not touched by ANY of the ten upstream
+    // 7.7 PRs that corrected explicit `:$false` handling, and pwsh 7.6.5
+    // honours it — measured 2026-09-05 on a directory holding one hidden and
+    // one visible file:
+    //
+    //   Get-ChildItem -Path $root              -> visible.txt
+    //   Get-ChildItem -Path $root -Force       -> hidden.txt, visible.txt
+    //   Get-ChildItem -Path $root -Force:$false -> visible.txt
+    //   Get-ChildItem -Path $root -Recurse:$false -> does not recurse
+    //
+    // The engine-wide `switchParameters.honourExplicitFalse` flag made the 7.6
+    // profile bind Force=true here, so BrowserShell would have listed hidden
+    // files where the reference implementation lists none. Scoping the flag to
+    // the pairs upstream fixed removes the divergence.
+    for (const profile of [V76, V77]) {
       const outcome = bindReal('Get-ChildItem', ['-Force:$false'], profile);
       assert.equal(outcome.ok, true);
       if (!outcome.ok) return;
-      assert.equal(outcome.result.parameters['Force'], expected);
+      assert.equal(outcome.result.parameters['Force'], false);
       assert.deepEqual(outcome.result.explicitlyFalseSwitches, ['Force']);
     }
   });

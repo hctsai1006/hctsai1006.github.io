@@ -47,7 +47,7 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { parseVersion } from './version.mts';
+import { parseVersion, byCodepoint } from './version.mts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..');
@@ -109,12 +109,29 @@ interface Lockfile {
   discrepancies: Discrepancy[];
 }
 
+interface DocumentedBehavior {
+  summary: string;
+  /** The value for THIS profile's version. */
+  value: boolean | number | string | null;
+  upstreamValue: boolean | number | string | null;
+  baselineValue: boolean | number | string | null;
+  implementation: string;
+  /** True exactly when a command can read the key from `behaviors`. */
+  emulated: boolean;
+  upstreamPr: number;
+  breaking: boolean;
+  scope: { command: string | null; parameters: string[] };
+}
+
 interface Profile {
   profile: string;
   displayVersion: string;
   channel: string;
+  /** What the engine reads. Emulated keys only. */
   behaviors: Record<string, boolean | number | string | null>;
   behaviorDocs: Record<string, { summary: string; upstreamPr: number | null; breaking: boolean }>;
+  /** Every documented upstream difference, emulated or not. */
+  documentedBehaviors: Record<string, DocumentedBehavior>;
   supported: { isSupportedUpstream: boolean; endOfSupport: string | null };
 }
 
@@ -128,7 +145,15 @@ interface Delta {
     detail?: string;
     impact: string;
     behaviorKey: string | null;
+    behaviorKeys: string[];
+    scope: { command: string | null; parameters: string[] };
+    documentedValue: boolean | number | string | null;
+    emulatedValue: boolean | number | string | null;
+    implementation: string;
+    partialityNote?: string;
+    sources: Array<{ pr: number; role: string; covers: string }>;
     upstreamPr: number;
+    evidence: string[];
     migration?: string;
     implemented: boolean;
   }>;
@@ -545,29 +570,44 @@ function renderDisagreements(f: Facts): string {
 }
 
 function renderDelta(lts: Profile, preview: Profile, delta: Delta): string {
-  const keys = Object.keys(preview.behaviors);
+  // EVERY documented difference is listed, not only the ones the engine reads.
+  // The two are separate columns because they are separate facts: what upstream
+  // does, and what BrowserShell reproduces. They used to be one — the generator
+  // wrote every documented change into the runtime table, so a reader could not
+  // tell a demonstrated behaviour from a recorded intention, and neither could a
+  // command.
+  const keys = Object.keys(preview.documentedBehaviors).sort((a, b) => {
+    const ea = preview.documentedBehaviors[a]?.emulated === true ? 0 : 1;
+    const eb = preview.documentedBehaviors[b]?.emulated === true ? 0 : 1;
+    return ea !== eb ? ea - eb : byCodepoint(a, b);
+  });
 
-  // Both the value AND its description come from the selected profile, so the
-  // table cannot say "4" beside a sentence describing v7 and flag 7.6.5 as
-  // breaking for having the behaviour it always had.
   const behaviorRows = keys
     .map((key) => {
-      // A key present in only one profile would stringify to the literal
-      // "undefined" and render as a value. Currently unreachable (the key sets
-      // match) but silent when it stops being so.
-      const ltsValue = key in lts.behaviors ? JSON.stringify(lts.behaviors[key]) : 'not present';
-      const previewValue =
-        key in preview.behaviors ? JSON.stringify(preview.behaviors[key]) : 'not present';
-      const ltsDoc = lts.behaviorDocs[key];
-      const preDoc = preview.behaviorDocs[key];
-      const pr = preDoc?.upstreamPr ?? ltsDoc?.upstreamPr ?? null;
+      const doc = preview.documentedBehaviors[key];
+      const ltsDoc = lts.documentedBehaviors[key];
+      if (doc === undefined) return '';
+      const ltsValue = JSON.stringify(ltsDoc?.value ?? null);
+      const previewValue = JSON.stringify(doc.value);
+      // Whether the ENGINE can read it. `behaviors` is the authority, not the
+      // record's own claim, so a generator that regressed would show here.
+      const live = Object.hasOwn(preview.behaviors, key) || Object.hasOwn(lts.behaviors, key);
+      const mark = live
+        ? `<span class="emu-mark is-emulated">${esc(doc.implementation)}</span>`
+        : '<span class="emu-mark">documented, not emulated</span>';
+      const scope =
+        doc.scope.command === null
+          ? 'engine-wide'
+          : doc.scope.parameters.length > 0
+            ? `${doc.scope.command} -${doc.scope.parameters.join(' -')}`
+            : doc.scope.command;
       return `
-        <tr${preDoc?.breaking === true ? ' class="breaking"' : ''}>
-          <td class="mono key">${esc(key)}</td>
+        <tr${doc.breaking ? ' class="breaking"' : ''}${live ? '' : ' class="not-emulated"'}>
+          <td class="mono key">${esc(key)}<br><span class="scope mono">${esc(scope)}</span></td>
           <td class="mono val" data-lts="${esc(ltsValue)}" data-preview="${esc(previewValue)}">${esc(ltsValue)}</td>
-          <td class="mark-cell">${preDoc?.breaking === true ? '<span class="breaking-mark">breaking</span>' : ''}</td>
-          <td class="doc">${prose(preDoc?.summary ?? '')}</td>
-          <td class="pr">${pr === null ? '' : prLink(pr)}</td>
+          <td class="mark-cell">${doc.breaking ? '<span class="breaking-mark">breaking</span>' : ''}${mark}</td>
+          <td class="doc">${prose(doc.summary)}</td>
+          <td class="pr">${prLink(doc.upstreamPr)}</td>
         </tr>`;
     })
     .join('');
@@ -582,14 +622,32 @@ function renderDelta(lts: Profile, preview: Profile, delta: Delta): string {
           ${c.migration === undefined ? '' : `<p class="change-migration"><b>To migrate.</b> ${prose(c.migration)}</p>`}
           <p class="change-meta">
             <span class="impact">${esc(c.impact === 'none' ? 'no impact' : c.impact.replace(/-/g, ' '))}</span>
-            <span class="emulated${c.implemented ? ' is-emulated' : ''}">${c.implemented ? 'emulated' : 'not emulated'}</span>
+            <span class="emulated${c.implemented ? ' is-emulated' : ''}">${esc(
+              c.implemented ? c.implementation : 'documented, not emulated',
+            )}</span>
+            ${
+              c.implemented
+                ? `<span class="evidence">proved by ${c.evidence.map((e) => `<code class="mono">${esc(e)}</code>`).join(', ')}</span>`
+                : ''
+            }
           </p>
+          ${
+            c.sources.length > 1
+              ? `<ul class="sources">${c.sources
+                  .map(
+                    (src) =>
+                      `<li><span class="src-role">${esc(src.role)}</span> ${prLink(src.pr)} ${prose(src.covers)}</li>`,
+                  )
+                  .join('')}</ul>`
+              : ''
+          }
         </li>`,
     )
     .join('');
 
   const implemented = delta.summary['implemented'] ?? 0;
-  const withKey = delta.changes.filter((c) => c.behaviorKey !== null).length;
+  const withKey = delta.changes.filter((c) => c.behaviorKeys.length > 0).length;
+  const liveKeys = Object.keys(preview.behaviors).length;
 
   return `
   <section class="band band-wide" aria-labelledby="h-delta">
@@ -626,9 +684,12 @@ function renderDelta(lts: Profile, preview: Profile, delta: Delta): string {
           <tbody>${behaviorRows}</tbody>
         </table>
       </div>
-      <p class="table-note">${esc(keys.length)} flags for ${esc(delta.changes.length)} recorded changes:
+      <p class="table-note">${esc(keys.length)} documented flags for ${esc(delta.changes.length)} recorded changes:
         ${esc(delta.changes.length - withKey)} ${pluralise(delta.changes.length - withKey, 'change carries', 'changes carry')}
-        no flag, and some share one.</p>
+        no flag. Of those flags ${esc(liveKeys)} ${pluralise(liveKeys, 'is', 'are')} readable by a command;
+        the rest are recorded here and reach no code path at all. A flag the engine does not
+        implement is not written into the profile the engine boots against — it would otherwise be
+        served as a live execution semantic, which is a claim of fidelity no test supports.</p>
 
       <div class="honesty" id="emulated">
         <p class="honesty-n mono">${esc(implemented)} / ${esc(delta.changes.length)}</p>
@@ -840,6 +901,16 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
 .behaviors .mark-cell{width:6.5em;white-space:nowrap}
 .behaviors .doc{color:var(--ink-2);font-size:.86rem;white-space:normal;min-width:22em}
 .behaviors .pr{text-align:right;white-space:nowrap}
+.behaviors .scope{color:var(--ink-2);font-size:.76rem;font-weight:400}
+.behaviors tr.not-emulated .key,.behaviors tr.not-emulated .val{opacity:.72}
+.emu-mark{display:inline-block;font-size:.7rem;letter-spacing:.02em;padding:.1em .5em;
+  border:1px solid currentColor;border-radius:2px;color:var(--ink-2);white-space:nowrap}
+.emu-mark.is-emulated{color:var(--ok, #1f6f3f);font-weight:600}
+.evidence{color:var(--ink-2);font-size:.78rem}
+.evidence code{font-size:.95em}
+.sources{margin:.4em 0 0;padding-left:1.1em;font-size:.82rem;color:var(--ink-2)}
+.sources .src-role{display:inline-block;min-width:5.5em;font-size:.72rem;letter-spacing:.04em;
+  text-transform:uppercase;color:var(--ink-2)}
 .breaking-mark{font-size:.66rem;letter-spacing:.03em;padding:.1em .45em;
   border:1px solid var(--flag);color:var(--flag)}
 

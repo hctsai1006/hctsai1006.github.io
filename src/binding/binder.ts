@@ -13,15 +13,32 @@
  *
  *  1. `-Force:$false` is NOT mishandled by the 7.6 binder. Real 7.6.5 binds
  *     `$PSBoundParameters['Force']` to a SwitchParameter whose value is False,
- *     with ContainsKey true — exactly what 7.7 does. The 7.6 defect is in the
+ *     with ContainsKey true — exactly what 7.7 does. Re-measured 2026-09-05:
+ *     IsPresent False, ToBool False, key present. The 7.6 defect is in the
  *     COMMAND BODIES, which asked "was it supplied?" instead of "what is it?".
- *     Verified: `Where-Object -Property A -Not:$false` filters identically to
- *     `-Not` in 7.6.5, and `Split-Path /a/b/c.txt -Leaf:$false` still returns
- *     the leaf. We collapse that into the binder — under
- *     `switchParameters.honourExplicitFalse` = false the explicit `$false`
- *     binds TRUE — because this project centralises version-awareness here.
- *     The user's actual intent is never lost: `explicitlyFalseSwitches` on the
- *     result records it under both profiles.
+ *     Verified per cmdlet: `Where-Object -Property A -Not:$false` filters
+ *     identically to `-Not`; `Split-Path /a/b/c.txt -Leaf:$false` still returns
+ *     the leaf; `New-Guid -Empty:$false` still returns the empty GUID;
+ *     `Get-Random -Shuffle:$false` still shuffles.
+ *
+ *     We collapse that into the binder, because this project centralises
+ *     version-awareness here — but SCOPED TO THE PAIRS UPSTREAM ACTUALLY FIXED.
+ *     It used to be one engine-wide `switchParameters.honourExplicitFalse`
+ *     boolean, justified by "thirteen upstream PRs fixed one design mistake".
+ *     Reading the PRs refutes the justification: they are ten PRs, each naming
+ *     specific parameters on ONE cmdlet (#26140 is `-Empty` on New-Guid alone;
+ *     #26474 is four named switches on Split-Path alone). 7.7 still has the old
+ *     behaviour for every switch none of them touched, and the global boolean
+ *     applied one cmdlet's bug to every switch parameter in the engine —
+ *     including `Test-Diff -Force`, where measurement says 7.6.5 honours the
+ *     value. So the flag is now
+ *     `switchParameter.<Command>.<Parameter>.honourExplicitFalse`, derived here
+ *     by the same function the generator derives it with, and a pair no profile
+ *     declares honours the value under BOTH profiles — which is what the
+ *     reference implementation does.
+ *
+ *     The user's actual intent is never lost either way:
+ *     `explicitlyFalseSwitches` on the result records it under both profiles.
  *
  *  2. An array-typed positional parameter does NOT swallow the extra
  *     arguments. `Test-ArrOnly a b c`, where the only positional parameter is
@@ -47,6 +64,7 @@
  */
 
 import type { BindingResult, BoundParameters, CompatibilityView } from '../commands/invocation.ts';
+import { switchBehaviorKey } from '../compatibility/behavior-keys.ts';
 import type { CommandManifest, ParameterMetadata } from '../commands/manifest.ts';
 import type { PSValue } from '../pipeline/psobject.ts';
 
@@ -232,7 +250,17 @@ function bind(
   const unenforced: string[] = [];
   const positional: string[] = [];
 
-  const honourExplicitFalse = profile.behavior('switchParameters.honourExplicitFalse', false);
+  /**
+   * Does THIS command's THIS switch honour an explicit `:$false`?
+   *
+   * Scoped, and asked through `scopedBehavior` rather than `behavior`, because
+   * an undeclared key here is a fact rather than a typo: it means no upstream PR
+   * ever had to fix that pair, so both profiles behave the way the reference
+   * implementation's binder does. `behavior` would report every ordinary switch
+   * on every command as an unknown key.
+   */
+  const honoursExplicitFalse = (parameter: ParameterMetadata): boolean =>
+    profile.scopedBehavior(switchBehaviorKey(manifest.display, parameter.name), true);
   const details = options.validationDetails ?? [];
   const remainingArgumentParameters = new Set(
     (options.valueFromRemainingArguments ?? []).map((name) => name.toLowerCase()),
@@ -384,10 +412,11 @@ function bind(
         });
       }
       const explicit = coerced.value === false;
-      // The whole 7.6/7.7 difference, in one expression. See the header note:
-      // 7.6's real binder also stores false, but every 7.6 command reads
-      // presence, so presence is what 7.6 must be modelled as.
-      check(parameter, honourExplicitFalse ? coerced.value : true, explicit);
+      // The 7.6/7.7 difference, in one expression, for the ONE pair it applies
+      // to. See header note 1: 7.6's real binder also stores false, but the
+      // 7.6 COMMANDS upstream later fixed read presence, so presence is what
+      // those pairs must be modelled as — and only those.
+      check(parameter, honoursExplicitFalse(parameter) ? coerced.value : true, explicit);
       continue;
     }
 

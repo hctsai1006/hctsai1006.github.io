@@ -57,6 +57,7 @@ import { bindParameters, tryBindParameters } from '../../src/binding/index.ts';
 import type { CompatibilityView } from '../../src/commands/invocation.ts';
 import { grantedSession, moduleNamed } from './simulated-harness.mts';
 import type { RunOptions, RunResult } from './simulated-harness.mts';
+import { viewOfBehaviors } from '../../src/compatibility/profile-resolver.ts';
 
 // ---------------------------------------------------------------------------
 // harness
@@ -695,10 +696,7 @@ describe('sudo', () => {
  * so many words.
  */
 describe('binding, from the tokens a user types', () => {
-  const PROFILE: CompatibilityView = {
-    displayVersion: '7.6.5',
-    behavior: <T extends boolean | number | string>(_key: string, fallback: T): T => fallback,
-  };
+  const PROFILE: CompatibilityView = viewOfBehaviors('7.6.5', {});
 
   const capture = JSON.parse(
     readFileSync(new URL('../../compat/upstream/v7.6.5/command-metadata.json', import.meta.url), 'utf8'),

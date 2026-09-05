@@ -34,6 +34,7 @@ import {
 } from '../../src/commands/native/index.ts';
 import type { HistoryEntry, NativeServices } from '../../src/commands/native/index.ts';
 import { NEW_GUID_MANIFEST } from '../../src/commands/native/index.ts';
+import { viewOfBehaviors } from '../../src/compatibility/profile-resolver.ts';
 
 /**
  * The instant every test in this directory uses.
@@ -120,13 +121,7 @@ export function makeHost(options: HostOptions = {}): PipelineHost & {
   const behaviors = options.behaviors ?? {};
   const granted = options.granted;
   return {
-    profile: {
-      displayVersion: options.displayVersion ?? '7.6.5',
-      behavior<T extends boolean | number | string>(key: string, fallback: T): T {
-        const value = behaviors[key];
-        return (value === undefined ? fallback : value) as T;
-      },
-    },
+    profile: viewOfBehaviors(options.displayVersion ?? '7.6.5', behaviors),
     streams,
     errors: streams.collected.error.values,
     native: null,
