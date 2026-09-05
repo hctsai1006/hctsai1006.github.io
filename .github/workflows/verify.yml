@@ -29,6 +29,19 @@ jobs:
       # every workflow file, so the rule cannot rot back the way that argument
       # did.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # FULL HISTORY. `tests/unit/v1-transcripts.test.mts` proves the frozen
+          # archive is the document index.html was at the commit PROVENANCE.md
+          # pins, and it does that by reading that commit -- which a default
+          # shallow clone does not contain. The test failed on CI and passed
+          # locally for exactly that reason.
+          #
+          # The alternative was to compare against a recorded digest instead, so
+          # no history is needed. That is a weaker claim: it proves the archive
+          # has not changed since the digest was written, not that the digest
+          # ever matched the page. Paying for the clone keeps the check the one
+          # the acceptance criterion actually states.
+          fetch-depth: 0
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
