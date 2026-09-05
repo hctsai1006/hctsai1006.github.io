@@ -58,7 +58,7 @@ export {
   unwrap,
 } from './types.ts';
 
-export { MemoryStorage, NullJournal } from './memory.ts';
+export { MemoryStorage, NullJournal, RecordingJournal } from './memory.ts';
 export type { MemoryStorageOptions } from './memory.ts';
 
 export {
@@ -103,6 +103,85 @@ export type {
   SnapshotOptions,
   SnapshotScope,
 } from './snapshot.ts';
+
+/**
+ * The OPFS backend. `bootStorage` still takes any `StorageBackend`; this is the
+ * one whose tree survives the tab, and `mountOpfsStorage` is the boot sequence
+ * for it — see the ordering argument in its docstring for why it is a separate
+ * entry point rather than a flag on `bootStorage`.
+ */
+export {
+  DEFAULT_QUOTA_WARNING_THRESHOLD,
+  LEADER_LOCK,
+  OpfsStorage,
+  createCoordinator,
+  mountOpfsStorage,
+  requestLeadership,
+} from './opfs.ts';
+export type {
+  CoordinatorOptions,
+  Leadership,
+  LockManagerLike,
+  MountOptions,
+  MountReport,
+  OpfsStorageOptions,
+  QuotaWarning,
+  StorageAnnouncement,
+  StorageCoordinator,
+} from './opfs.ts';
+
+export { OpfsStore, decodeSlot, encodeSlot, readFollowerView } from './opfs-store.ts';
+export type {
+  FollowerView,
+  LogStatus,
+  OpfsStoreOptions,
+  RecoveryReport,
+  SlotContents,
+} from './opfs-store.ts';
+
+export { MIGRATIONS, STORE_VERSION, migrateDown, migrateUp, orderMigrations } from './opfs-migrate.ts';
+export type { Migration, MigrationReport } from './opfs-migrate.ts';
+
+export {
+  OpfsJournal,
+  committedPlans,
+  decodePlan,
+  encodePlan,
+  parseWal,
+  walHeader,
+  walRecord,
+} from './opfs-wal.ts';
+export type { WalContents, WalRecord } from './opfs-wal.ts';
+
+export {
+  STORE_DIRECTORY,
+  STORE_FILES,
+  SyncFile,
+  fnv1a32Bytes,
+  fromException,
+  readWithoutLock,
+} from './opfs-platform.ts';
+export type {
+  OpfsDirectory,
+  OpfsFile,
+  OpfsStorageManager,
+  OpfsSyncHandle,
+} from './opfs-platform.ts';
+
+export {
+  STORAGE_OPS,
+  WorkerStorageBackend,
+  serveCoordinatorSharedWorker,
+  serveStorageWorker,
+  workerUnavailable,
+} from './opfs-worker.ts';
+export type {
+  StorageCall,
+  StorageControl,
+  StorageControls,
+  StorageOp,
+  StorageReply,
+} from './opfs-worker.ts';
 
 export {
   BASE_BINARIES,

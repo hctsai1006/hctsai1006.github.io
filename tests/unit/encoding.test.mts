@@ -590,6 +590,18 @@ describe('there is only ONE place that decides an encoding', () => {
     // because src/storage/ belongs to another change in flight.
     'src/storage/memory.ts',
     'src/storage/snapshot.ts',
+    // The OPFS checkpoint and write-ahead log. These are a PRIVATE ON-DISK
+    // FORMAT, not an encoding decision: nothing a user types selects it, and
+    // there is no other correct answer than UTF-8 for a file this code both
+    // writes and reads. The distinction the broker exists to enforce is about
+    // interpreting bytes somebody ELSE produced — a native command's output, a
+    // file the visitor supplied — and neither of these is that.
+    //
+    // Kept on the list rather than routed through the broker, because routing
+    // them would make an internal format depend on a user-facing encoding
+    // policy, which is the coupling that produces the next `oem` bug.
+    'src/storage/opfs-store.ts',
+    'src/storage/opfs-wal.ts',
   ]);
 
   it('no module outside the broker constructs a TextDecoder or TextEncoder', async () => {

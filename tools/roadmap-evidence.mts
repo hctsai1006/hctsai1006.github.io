@@ -185,21 +185,52 @@ const isTypeScript = (rel: string): boolean => TS_EXTENSIONS.some((e) => rel.end
  * would be measuring documentation.
  */
 export function stripComments(text: string): string {
-  const scanner = ts.createScanner(ts.ScriptTarget.Latest, false, ts.LanguageVariant.Standard, text);
+  // COMMENT RANGES COME FROM THE PARSED TREE, not from a hand-driven scanner.
+  //
+  // This used to loop `scanner.scan()` and blank whatever came back as comment
+  // trivia. That silently stopped working at the first template literal with a
+  // substitution: after `TemplateHead` the scanner has to be told to continue
+  // with `reScanTemplateToken`, and a bare `scan()` loop desynchronises there
+  // and never recovers. MEASURED by bisecting src/storage/memory.ts — the
+  // desynchronisation begins at
+  //
+  //     message: `no such file or directory: ${path}`,
+  //
+  // and every comment after it survived stripping. Nearly every source file in
+  // this repository contains such a template, so in practice comments were
+  // barely being stripped at all.
+  //
+  // The visible symptom was a false positive from the absence ratchet: task
+  // 15.1 claims nothing implements MCP, and the pattern `mcp` "occurred" in
+  // src/storage/memory.ts — inside the word `memcpy`, in a comment. A gate that
+  // reports work as landed when it has not is worse than one that misses work,
+  // because it is the one people learn to disbelieve.
+  //
+  // Walking the tree and asking for each token's comment ranges is the API
+  // TypeScript provides for this and has no such state to lose.
+  const source = ts.createSourceFile('x.ts', text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   const out = [...text];
-  let kind = scanner.scan();
-  while (kind !== ts.SyntaxKind.EndOfFileToken) {
-    if (
-      kind === ts.SyntaxKind.SingleLineCommentTrivia ||
-      kind === ts.SyntaxKind.MultiLineCommentTrivia
-    ) {
-      const start = scanner.getTokenStart();
-      const end = scanner.getTokenEnd();
-      for (let i = start; i < end && i < out.length; i += 1) {
-        if (out[i] !== '\n' && out[i] !== '\r') out[i] = ' ';
-      }
+
+  const blank = (start: number, end: number): void => {
+    for (let i = start; i < end && i < out.length; i += 1) {
+      if (out[i] !== '\n' && out[i] !== '\r') out[i] = ' ';
     }
-    kind = scanner.scan();
+  };
+
+  const visit = (node: ts.Node): void => {
+    for (const r of ts.getLeadingCommentRanges(text, node.getFullStart()) ?? []) {
+      blank(r.pos, r.end);
+    }
+    for (const r of ts.getTrailingCommentRanges(text, node.getEnd()) ?? []) {
+      blank(r.pos, r.end);
+    }
+    node.forEachChild(visit);
+  };
+  visit(source);
+  // The scan above reaches tokens, and a file that is nothing but a comment has
+  // none — so the end-of-file token's own leading trivia is asked for too.
+  for (const r of ts.getLeadingCommentRanges(text, source.endOfFileToken.getFullStart()) ?? []) {
+    blank(r.pos, r.end);
   }
   return out.join('');
 }

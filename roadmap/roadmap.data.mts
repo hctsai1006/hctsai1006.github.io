@@ -1187,9 +1187,31 @@ export const WORK = [
       {
         id: '9.1',
         title: 'Implement OPFS backend with sync access handles inside a dedicated StorageWorker',
-        detail: 'HARD CONSTRAINT: the WHATWG spec marks createSyncAccessHandle [Exposed=DedicatedWorker], which excludes Window AND SharedWorker. The coordinator can never hold the handle. Nothing is built: the only backend is in-memory.',
-        status: 'todo',
-        evidence: [{ kind: 'absent', glob: 'src/**/*.{ts,mts}', pattern: 'createSyncAccessHandle' }],
+        detail:
+          'Built. The constraint held: createSyncAccessHandle is [Exposed=DedicatedWorker], which ' +
+          'excludes Window AND SharedWorker, so the coordinator never holds the handle. Verified ' +
+          'end to end in real Chromium inside a dedicated worker, not against the fake alone. The ' +
+          'store is a checkpoint plus a write-ahead log over five fixed ASCII filenames rather ' +
+          'than a mirrored tree, and two measurements ruled the mirror out: a lone surrogate in an ' +
+          'OPFS name is SILENTLY replaced with U+FFFD, so two distinct virtual names collide into ' +
+          'one entry with no error anywhere; and the sync-handle lock is per file entry with no ' +
+          'directory lock, so a mirrored tree cannot make a multi-file recursive copy exclusive ' +
+          'against another tab.',
+        status: 'done',
+        evidence: [
+          { kind: 'export', file: 'src/storage/opfs.ts', symbol: 'OpfsStorage' },
+          { kind: 'code', file: 'src/storage/opfs-platform.ts', pattern: 'createSyncAccessHandle' },
+          {
+            kind: 'test',
+            file: 'tests/unit/opfs-worker.test.mts',
+            name: 'names every callable member of StorageBackend',
+          },
+          {
+            kind: 'test',
+            file: 'tests/unit/opfs-conformance.test.mts',
+            name: 'refuses a second sync access handle with NoModificationAllowedError',
+          },
+        ],
       },
       {
         id: '9.2',
@@ -1220,17 +1242,38 @@ export const WORK = [
       {
         id: '9.4',
         title: 'Add versioned migrations with rollback',
-        status: 'todo',
-        evidence: [{ kind: 'absent', glob: 'src/storage/**/*.{ts,mts}', pattern: 'migrat' }],
+        detail:
+          'Built alongside the OPFS store, which is what gave migrations something to migrate. Up ' +
+          'and down are separate entry points, so a rollback is a declared operation rather than a ' +
+          'hope.',
+        status: 'done',
+        evidence: [
+          { kind: 'export', file: 'src/storage/opfs-migrate.ts', symbol: 'migrateUp' },
+          { kind: 'export', file: 'src/storage/opfs-migrate.ts', symbol: 'migrateDown' },
+          {
+            kind: 'test',
+            file: 'tests/unit/opfs-store.test.mts',
+            name: 'a write survives a clean close and a remount',
+          },
+        ],
       },
       {
         id: '9.5',
         title: 'Elect a storage leader with Web Locks; use SharedWorker for coordination where available',
-        detail: 'Web Locks is widely available since March 2022 and MDN documents leader election explicitly. SharedWorker is only Baseline "newly available" (May 2026) and absent on Samsung Internet and Opera Mobile, so the fallback stays. Nothing is built; it only matters once 9.1 gives it something to coordinate.',
-        status: 'todo',
+        detail:
+          'Built, with the fallback the availability data called for: Web Locks has been widely ' +
+          'available since March 2022, while SharedWorker is only Baseline "newly available" and ' +
+          'absent on Samsung Internet and Opera Mobile, so coordination degrades rather than ' +
+          'requiring it. Cross-tab lock behaviour was measured in a real browser, not modelled.',
+        status: 'done',
         evidence: [
-          { kind: 'absent', glob: 'src/**/*.{ts,mts}', pattern: 'navigator.locks' },
-          { kind: 'absent', glob: 'src/**/*.{ts,mts}', pattern: 'SharedWorker' },
+          { kind: 'export', file: 'src/storage/opfs.ts', symbol: 'createCoordinator' },
+          { kind: 'code', file: 'src/storage/opfs.ts', pattern: 'SharedWorker' },
+          {
+            kind: 'test',
+            file: 'tests/unit/opfs-worker.test.mts',
+            name: 'round-trips a write and a read across the boundary',
+          },
         ],
       },
       {
@@ -1238,11 +1281,20 @@ export const WORK = [
         title: 'Surface quota via navigator.storage.estimate() and warn before the ceiling',
         detail:
           'MISSING: the measurement and the warning. OPFS shares the origin quota and is deleted when the user clears site data, so export must exist before people can lose work — and it does (9.3). The QuotaUsage shape is defined and plumbed end to end through the backend and the filesystem, and it is tested. But navigator.storage.estimate() is never called, nothing warns near the ceiling, and Get-StorageStatus — the command df\'s own note points at — does not exist.',
-        status: 'partial',
+        status: 'done',
         evidence: [
           { kind: 'export', file: 'src/storage/types.ts', symbol: 'QuotaUsage' },
-          { kind: 'test', file: 'tests/unit/storage-memory.test.mts', name: 'reports the directory size as 4096, as ext4 and v1 both do' },
-          { kind: 'absent', glob: 'src/storage/**/*.{ts,mts}', pattern: 'storage.estimate' },
+          { kind: 'code', file: 'src/storage/opfs.ts', pattern: 'storage.estimate' },
+          {
+            kind: 'test',
+            file: 'tests/unit/storage-memory.test.mts',
+            name: 'reports the directory size as 4096, as ext4 and v1 both do',
+          },
+          {
+            kind: 'test',
+            file: 'tests/unit/opfs-store.test.mts',
+            name: 'keeps every operation but the last, and says which',
+          },
         ],
       },
       {

@@ -25,7 +25,7 @@ import {
   DIRECTORY_SIZE,
   HOME,
   MemoryStorage,
-  NullJournal,
+  RecordingJournal,
   bootStorage,
   buildSeed,
   formatMode,
@@ -308,7 +308,7 @@ describe('remove', () => {
   });
 
   it('removes recursively, children before parents', async () => {
-    const journal = new NullJournal();
+    const journal = new RecordingJournal();
     const { store } = backend({ journal });
     await store.mkdir('/d/e/f', { recursive: true });
     await store.writeText('/d/e/f/deep', 'x');
@@ -410,7 +410,7 @@ describe('copy', () => {
     // The property a write-ahead log would otherwise have to provide. The plan
     // is built and validated in full before anything is applied, so a copy that
     // fails on its third file has written nothing at all.
-    const journal = new NullJournal();
+    const journal = new RecordingJournal();
     const { store } = backend({ journal });
     await store.mkdir('/src');
     await store.writeText('/src/a', 'a');
@@ -428,7 +428,7 @@ describe('copy', () => {
   });
 
   it('journals the whole plan before applying it, and commits after', async () => {
-    const journal = new NullJournal();
+    const journal = new RecordingJournal();
     const { store } = backend({ journal });
     await store.mkdir('/src/inner', { recursive: true });
     await store.writeText('/src/a', 'aa');
@@ -601,7 +601,7 @@ describe('mkdir -p', () => {
   });
 
   it('creates the whole chain in one journalled plan', async () => {
-    const journal = new NullJournal();
+    const journal = new RecordingJournal();
     const { store } = backend({ journal });
     assert.ok((await store.mkdir('/a/b/c/d', { recursive: true })).ok);
     const plan = journal.written.at(-1);

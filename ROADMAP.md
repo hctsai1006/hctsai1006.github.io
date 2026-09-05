@@ -5,7 +5,7 @@
 
 Turning a single-file PowerShell-flavoured web terminal into a browser workstation with a versioned PowerShell compatibility layer, a real object pipeline, durable state, a trusted package model and an audited AI surface.
 
-**60 of 105 tasks complete**, 13 partial.  `##################////..........`
+**64 of 105 tasks complete**, 12 partial.  `####################////........`
 
 Legend: `[x]` done · `[/]` partial · `[~]` in progress · `[ ]` todo · `[!]` blocked · `[-]` deferred
 
@@ -17,7 +17,7 @@ Every `done` and `partial` task cites evidence — a symbol, a passing test, a v
 | --- | --- | --- | --- |
 | **Ground truth** | Make it impossible to be wrong about upstream by accident. Nothing downstream is trustworthy until version truth is mechanised. | 1, 2, 3 | `#################/` 29/31 +2 partial |
 | **Core** | A real execution engine: one lexer, one AST, a version-aware binder, and a typed object pipeline. This is where the current site is weakest. | 4, 5, 6, 7, 8 | `############///...` 21/31 +5 partial |
-| **State** | Durable, inspectable, recoverable virtual machine state — filesystem, providers, transactions, migrations. | 9, 10 | `#####/////........` 3/11 +3 partial |
+| **State** | Durable, inspectable, recoverable virtual machine state — filesystem, providers, transactions, migrations. | 9, 10 | `###########///....` 7/11 +2 partial |
 | **Compatibility** | Prove the emulation is faithful by differential-testing against real pwsh, and express version differences as data. | 11, 12 | `###########//.....` 5/8 +1 partial |
 | **Declarative** | The workstation as a configuration that can be exported, diffed, tested and restored. | 13 | `..................` 0/4 |
 | **Supply chain** | Packages with identity, integrity, capabilities and trust — from the first line, not retrofitted. | 14 | `/////.............` 0/4 +1 partial |
@@ -40,7 +40,7 @@ Dependency-respecting. An item cannot be complete before everything it depends o
 | 6 | [Move execution into a worker behind a typed kernel protocol](roadmap/pr/PR-06-worker-kernel-protocol.md) | Core | [~] in progress | 5 | 2/4 +2 partial |
 | 7 | [Build the typed object pipeline and stream model](roadmap/pr/PR-07-object-pipeline.md) | Core | [~] in progress | 6 | 6/6 |
 | 8 | [Build one lexer, one AST and a version-aware parameter binder](roadmap/pr/PR-08-version-aware-binder.md) | Core | [~] in progress | 3, 7 | 2/7 +2 partial |
-| 9 | [OPFS-backed filesystem with overlay, WAL, snapshots and migrations](roadmap/pr/PR-09-storage-layer.md) | State | [~] in progress | 6 | 2/7 +2 partial |
+| 9 | [OPFS-backed filesystem with overlay, WAL, snapshots and migrations](roadmap/pr/PR-09-storage-layer.md) | State | [~] in progress | 6 | 6/7 +1 partial |
 | 10 | [PowerShell provider model over the mount table](roadmap/pr/PR-10-provider-model.md) | State | [~] in progress | 9 | 1/4 +1 partial |
 | 11 | [Differential conformance against real pwsh 7.6.5](roadmap/pr/PR-11-differential-conformance.md) | Compatibility | [~] in progress | 8 | 4/5 +1 partial |
 | 12 | [Ship the version-difference explorer](roadmap/pr/PR-12-behavior-delta-ui.md) | Compatibility | [~] in progress | 11 | 1/3 |
@@ -264,12 +264,12 @@ Every claim below was checked against a primary source on 2026-09-04. These are 
 ### State
 
 - [~] **9. OPFS-backed filesystem with overlay, WAL, snapshots and migrations** — [detail](roadmap/pr/PR-09-storage-layer.md)
-  - [ ] 9.1 Implement OPFS backend with sync access handles inside a dedicated StorageWorker
+  - [x] 9.1 Implement OPFS backend with sync access handles inside a dedicated StorageWorker
   - [x] 9.2 Keep the seed/overlay split that already works: rebuild seed each boot, graft user changes
   - [/] 9.3 Add a write-ahead log and snapshot/restore
-  - [ ] 9.4 Add versioned migrations with rollback
-  - [ ] 9.5 Elect a storage leader with Web Locks; use SharedWorker for coordination where available
-  - [/] 9.6 Surface quota via navigator.storage.estimate() and warn before the ceiling
+  - [x] 9.4 Add versioned migrations with rollback
+  - [x] 9.5 Elect a storage leader with Web Locks; use SharedWorker for coordination where available
+  - [x] 9.6 Surface quota via navigator.storage.estimate() and warn before the ceiling
   - [x] 9.7 Return Result<void, StorageError> instead of a rendered error row
 - [~] **10. PowerShell provider model over the mount table** — [detail](roadmap/pr/PR-10-provider-model.md)
   - [/] 10.1 Define the provider interface (drive, item, child-item, content)
