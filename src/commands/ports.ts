@@ -35,6 +35,7 @@
  */
 
 import type {
+  CopyOptions,
   DirectoryEntry,
   FileStat,
   MkdirOptions,
@@ -77,6 +78,16 @@ export interface FileSystemPort {
   chmod(path: string, mode: number): Promise<Result<FileStat>>;
   utimes(path: string, times: Times, create?: boolean): Promise<Result<FileStat>>;
   rename(from: string, to: string, options?: RenameOptions): Promise<Result<void>>;
+  /**
+   * A whole copy as ONE planned operation.
+   *
+   * Omitting this was a real defect, reported by the work that needed it: the
+   * backend's `copy` is plan/validate/apply, so a recursive copy that fails
+   * part-way has written nothing. A command without it has to loop, and a loop
+   * of single writes gives up exactly that guarantee — nine files copied, the
+   * tenth refused, and eight of them left behind.
+   */
+  copy(from: string, to: string, options?: CopyOptions): Promise<Result<void>>;
 
   remove(path: string, options?: RemoveOptions): Promise<Result<void>>;
 }
@@ -139,6 +150,13 @@ export function brokeredFileSystem(
     chmod: write((path: string, mode: number) => fs.chmod(path, mode)),
     utimes: write((path: string, times: Times, create?: boolean) => fs.utimes(path, times, create)),
     rename: write((from: string, to: string, options?: RenameOptions) => fs.rename(from, to, options)),
+    // A copy READS the source and WRITES the destination, so it needs both. The
+    // gate takes the stricter of the two: a command holding only
+    // `filesystem.read` cannot copy, which is the answer a reader expects.
+    copy: write((from: string, to: string, options?: CopyOptions) => {
+      require('filesystem.read');
+      return fs.copy(from, to, options);
+    }),
 
     remove: gate('filesystem.delete', (path: string, options?: RemoveOptions) =>
       fs.remove(path, options),

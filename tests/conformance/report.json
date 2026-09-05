@@ -27,11 +27,11 @@
     "unimplemented": 8
   },
   "coverage": {
-    "nativeSemanticCommands": 24,
+    "nativeSemanticCommands": 31,
     "commandsWithBehaviouralEvidence": 12,
-    "behaviouralCoveragePercent": 50,
+    "behaviouralCoveragePercent": 38.7,
     "commandsWithMetadataEvidence": 12,
-    "metadataCoveragePercent": 50
+    "metadataCoveragePercent": 38.7
   },
   "perCommand": [
     {
@@ -43,6 +43,27 @@
     },
     {
       "command": "clear-host",
+      "behavioural": 0,
+      "metadata": 0,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "format-list",
+      "behavioural": 0,
+      "metadata": 0,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "format-table",
+      "behavioural": 0,
+      "metadata": 0,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "format-wide",
       "behavioural": 0,
       "metadata": 0,
       "unimplemented": 0,
@@ -105,6 +126,13 @@
       "differences": 0
     },
     {
+      "command": "get-member",
+      "behavioural": 0,
+      "metadata": 0,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
       "command": "get-project",
       "behavioural": 0,
       "metadata": 0,
@@ -140,6 +168,13 @@
       "differences": 0
     },
     {
+      "command": "group-object",
+      "behavioural": 0,
+      "metadata": 0,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
       "command": "help",
       "behavioural": 0,
       "metadata": 0,
@@ -154,9 +189,23 @@
       "differences": 0
     },
     {
+      "command": "new-guid",
+      "behavioural": 0,
+      "metadata": 0,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
       "command": "out-null",
       "behavioural": 0,
       "metadata": 1,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "out-string",
+      "behavioural": 0,
+      "metadata": 0,
       "unimplemented": 0,
       "differences": 0
     },

@@ -34,6 +34,7 @@ import type {
 } from '../commands/invocation.ts';
 import { CapabilityDeniedError } from '../commands/invocation.ts';
 import type { Capability } from '../commands/manifest.ts';
+import type { DialogPort, FileSystemPort, PreferencesPort } from '../commands/ports.ts';
 import type { PSValue } from '../pipeline/psobject.ts';
 import type {
   ErrorRecord,
@@ -183,6 +184,14 @@ export interface KernelOptions {
   readonly policy?: VirtualPolicy;
   readonly audit?: AuditLog;
   /**
+   * The embedder's ports. The kernel itself is in-memory and headless — it
+   * neither creates a filesystem nor knows what a dialog is — but it has to be
+   * able to HAND one to a command, which it previously could not.
+   */
+  readonly fs?: FileSystemPort | null;
+  readonly preferences?: PreferencesPort | null;
+  readonly dialog?: DialogPort | null;
+  /**
    * Check every outgoing event against the structured-clone rules.
    *
    * ON by default. The failure it prevents is asymmetric: a DataCloneError at
@@ -306,6 +315,9 @@ export class Kernel {
   readonly #clock: () => number;
   readonly #profile: CompatibilityView;
   readonly #defaultCwd: string;
+  readonly #fs: FileSystemPort | null;
+  readonly #preferences: PreferencesPort | null;
+  readonly #dialog: DialogPort | null;
   readonly #validateEvents: boolean;
 
   constructor(options: KernelOptions = {}) {
@@ -326,6 +338,9 @@ export class Kernel {
     // directory that does not exist. A test asserts they still agree.
     this.#defaultCwd = options.cwd ?? '/home/thc1006';
     this.#validateEvents = options.validateEvents ?? true;
+    this.#fs = options.fs ?? null;
+    this.#preferences = options.preferences ?? null;
+    this.#dialog = options.dialog ?? null;
 
     // Every process-table change becomes a protocol event. Wiring it once here
     // means no call site can forget to tell the UI that a state changed.
@@ -709,12 +724,9 @@ export class Kernel {
       requireCapability: (capability) => {
         scoped.require(capability);
       },
-      // Null until a host supplies them. The kernel is in-memory and headless;
-      // storage, preferences and dialogs are the embedder's to provide, and a
-      // command that needs one must check rather than assume.
-      fs: null,
-      preferences: null,
-      dialog: null,
+      fs: this.#fs,
+      preferences: this.#preferences,
+      dialog: this.#dialog,
     };
 
     // Not the binder. Until PR-08 exists the kernel hands the raw remainder

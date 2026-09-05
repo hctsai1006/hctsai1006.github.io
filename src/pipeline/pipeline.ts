@@ -53,6 +53,7 @@ import type {
   InvocationContext,
 } from '../commands/invocation.ts';
 import type { Capability } from '../commands/manifest.ts';
+import type { DialogPort, FileSystemPort, PreferencesPort } from '../commands/ports.ts';
 
 // ---------------------------------------------------------------------------
 // cancellation
@@ -282,6 +283,18 @@ export interface PipelineHost {
   /** Ctrl+C. Reaches every stage. */
   readonly signal: AbortSignal;
   requireCapability(capability: Capability): void;
+  /**
+   * The host's ports, handed to every stage.
+   *
+   * These were hard-coded to null here and in the kernel, and `PipelineHost` had
+   * no field to carry them — so `InvocationContext` declared a filesystem that
+   * nothing could ever supply, and no filesystem command could run in a
+   * pipeline. Nullable because a headless run genuinely has none, which a
+   * command must check rather than assume.
+   */
+  readonly fs?: FileSystemPort | null;
+  readonly preferences?: PreferencesPort | null;
+  readonly dialog?: DialogPort | null;
 }
 
 export interface PipelineStage {
@@ -361,12 +374,9 @@ async function* runCommand(
     env: host.env,
     signal,
     requireCapability: (capability: Capability) => host.requireCapability(capability),
-    // Null until a host supplies them. The kernel is in-memory and headless;
-    // storage, preferences and dialogs are the embedder's to provide, and a
-    // command that needs one must check rather than assume.
-    fs: null,
-    preferences: null,
-    dialog: null,
+    fs: host.fs ?? null,
+    preferences: host.preferences ?? null,
+    dialog: host.dialog ?? null,
   };
 
   const running = module.invoke(context, bound).then(
