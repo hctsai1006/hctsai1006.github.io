@@ -90,6 +90,49 @@ export type Capability =
    */
   | 'virtual.policy.elevate';
 
+/**
+ * How much of this command exists HERE — which is a different question from
+ * `Fidelity` and from whether upstream has the command at all.
+ *
+ * Three facts kept getting collapsed into one, and each consumer needs a
+ * different one of them:
+ *
+ *   upstream availability   does real PowerShell have this command, and what
+ *                           are its real parameters?  `parameterSource` and
+ *                           `parameters` answer that, and they answer it about
+ *                           pwsh, not about us.
+ *   implementation status   this field. How much of it did WE build?
+ *   session registration    is it reachable from the prompt right now?
+ *                           `registry.ts` answers that, because it is a
+ *                           property of the running session and not of the
+ *                           declaration.
+ *
+ * Collapsing the first two is how `Sort-Object -Top` ended up in tab
+ * completion: upstream has `-Top`, so the generated manifest lists it, and the
+ * completion engine read that as "you can type this" — but the command body
+ * has never heard of it and the binder rejects it. Collapsing the second and
+ * third is how `Where-Object` was counted as an implemented command while its
+ * manifest could not express its own parameter sets.
+ */
+export type ImplementationStatus =
+  /** Declared in the manifest set; no module implements it. */
+  | 'declared'
+  /**
+   * A module exists, and it is NOT good enough to register by default. The
+   * gap is named in `notes`. Held back rather than deleted, because a partial
+   * implementation is worth testing and worth finishing — it is just not worth
+   * putting in front of a visitor who would be told a wrong answer.
+   */
+  | 'partial'
+  /** A module implements it, and its declared surface is the surface it binds. */
+  | 'implemented'
+  /**
+   * Implemented AND compared against a captured reference-implementation run.
+   * Nothing claims this yet; it exists so that `implemented` cannot quietly
+   * come to mean it.
+   */
+  | 'verified';
+
 /** How dangerous is running this? Drives confirmation and AI approval gates. */
 export type Risk =
   | 'read'
@@ -164,8 +207,31 @@ export interface CommandManifest {
   /**
    * Whether the parameter metadata was captured from a real PowerShell, or is
    * a declaration with nothing behind it yet.
+   *
+   * This describes UPSTREAM. `reference-implementation` means pwsh reported
+   * these parameters; it does NOT mean this engine binds them. Read
+   * `implementationStatus` for that, and `implementedParameters` for the
+   * subset a running command will actually accept.
    */
   parameterSource: 'reference-implementation' | 'declared' | 'none';
+  /** How much of this command exists here. See `ImplementationStatus`. */
+  implementationStatus: ImplementationStatus;
+  /**
+   * The parameter names a module in THIS engine binds, when a module exists
+   * and hand-writes its own surface.
+   *
+   * Absent means "no separate answer": either nothing implements the command,
+   * or its module reads this very manifest and so cannot narrow it. Present and
+   * shorter than `parameters` is the honest common case — upstream
+   * `Sort-Object` has nine parameters and this one binds six.
+   */
+  implementedParameters?: readonly string[];
+  /**
+   * The set the binder falls back to when several fit, as pwsh's
+   * `DefaultParameterSetName` does. Only meaningful for a manifest that
+   * declares named parameter sets.
+   */
+  defaultParameterSet?: string;
 }
 
 /**

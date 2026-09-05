@@ -30,7 +30,9 @@ import type { BoundParameters } from '../invocation.ts';
 import type {
   Capability,
   CommandManifest,
+  ImplementationStatus,
   ParameterMetadata,
+  ParameterSetBinding,
   Risk,
 } from '../manifest.ts';
 
@@ -387,6 +389,20 @@ export interface ParameterOptions {
   mandatory?: boolean;
   valueFromPipeline?: boolean;
   validation?: readonly string[];
+  /**
+   * Named parameter sets, when one flat set genuinely cannot describe the
+   * parameter. Overrides `position`/`mandatory`/`valueFromPipeline`, which then
+   * describe nothing and are ignored.
+   *
+   * The escape hatch exists because collapsing sets is not a simplification, it
+   * is a wrong answer: `Where-Object` declares `FilterScript` and `Property`
+   * both mandatory at position 0, and in one flat set the binder has to pick
+   * one of them by declaration order. It picked `FilterScript`, so
+   * `Where-Object N -eq 2` bound the property name as the filter script and the
+   * value as the property. Measured against pwsh 7.6.5, which binds
+   * Property=N, Value=2.
+   */
+  sets?: Readonly<Record<string, ParameterSetBinding>>;
 }
 
 /**
@@ -405,18 +421,26 @@ export function parameter(
   const mandatory = extra.mandatory ?? false;
   const valueFromPipeline = extra.valueFromPipeline ?? false;
 
+  const sets = extra.sets ?? {
+    [DEFAULT_PARAMETER_SET]: { position, mandatory, valueFromPipeline },
+  };
+  const bindings = Object.values(sets);
+  const positions = bindings
+    .map((binding) => binding.position)
+    .filter((value): value is number => typeof value === 'number');
+
   return {
     name,
     aliases: extra.aliases ?? [],
     type,
     isSwitch: extra.isSwitch ?? type === 'System.Management.Automation.SwitchParameter',
-    sets: { [DEFAULT_PARAMETER_SET]: { position, mandatory, valueFromPipeline } },
-    // Derived from the single set above, and named so they are not mistaken for
+    sets,
+    // Derived from the sets above, and named so they are not mistaken for
     // something pwsh said. With one set, "in any" and "in every" coincide.
-    mandatoryInAnySet: mandatory,
-    mandatoryInEverySet: mandatory,
-    firstPosition: position,
-    valueFromPipelineInAnySet: valueFromPipeline,
+    mandatoryInAnySet: bindings.some((binding) => binding.mandatory),
+    mandatoryInEverySet: bindings.length > 0 && bindings.every((binding) => binding.mandatory),
+    firstPosition: positions.length > 0 ? Math.min(...positions) : null,
+    valueFromPipelineInAnySet: bindings.some((binding) => binding.valueFromPipeline),
     validation: extra.validation ?? [],
     // False, not true: these names were read off `(Get-Command X).Parameters`
     // in pwsh 7.6.5, but the full attribute metadata was not captured through
@@ -441,6 +465,13 @@ export function manifest(spec: {
   outputTypeNames: readonly string[];
   risk?: Risk;
   capabilities?: readonly Capability[];
+  /**
+   * Defaults to `implemented`. A module that declares `partial` is BUILT and
+   * TESTED but kept out of the default registry — see registry.ts. It is not a
+   * soft warning: nothing resolves the name at the prompt.
+   */
+  implementationStatus?: ImplementationStatus;
+  defaultParameterSet?: string;
 }): CommandManifest {
   return {
     name: spec.display.toLowerCase(),
@@ -455,5 +486,14 @@ export function manifest(spec: {
     synopsis: spec.synopsis,
     notes: spec.notes,
     parameterSource: 'declared',
+    implementationStatus: spec.implementationStatus ?? 'implemented',
+    // The names this module binds. Identical to `parameters` here because a
+    // hand-written manifest describes what the body reads — the two only come
+    // apart in the GENERATED manifest, where `parameters` is upstream's answer
+    // and this is ours.
+    implementedParameters: spec.parameters.map((p) => p.name),
+    ...(spec.defaultParameterSet !== undefined
+      ? { defaultParameterSet: spec.defaultParameterSet }
+      : {}),
   };
 }
