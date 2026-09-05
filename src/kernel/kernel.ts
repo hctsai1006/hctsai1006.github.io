@@ -320,7 +320,11 @@ export class Kernel {
     });
     this.#profile = options.profile ?? DEFAULT_PROFILE;
     this.#env = new Map(options.env ?? []);
-    this.#defaultCwd = options.cwd ?? '/home/visitor';
+    // The seed tree's home, not an invented one. These were two different
+    // strings — the kernel started in /home/visitor while the filesystem the
+    // host boots contains /home/thc1006 — so the first `ls` would have run in a
+    // directory that does not exist. A test asserts they still agree.
+    this.#defaultCwd = options.cwd ?? '/home/thc1006';
     this.#validateEvents = options.validateEvents ?? true;
 
     // Every process-table change becomes a protocol event. Wiring it once here

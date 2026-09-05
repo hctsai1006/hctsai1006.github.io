@@ -228,6 +228,48 @@ export function isDescendant(path: string, ancestor: string): boolean {
  * only the second lets a single 4000-character filename through, which every
  * real filesystem rejects.
  */
+/**
+ * Refuse a path a backend was promised it would never see.
+ *
+ * `StorageBackend` documents its input as "already resolved: absolute within
+ * this mount, normalised, no `.` or `..`". It was a comment and nothing else,
+ * and two in-repo callers broke it with data they had not normalised —
+ * `restoreSnapshot`, whose own docstring says a snapshot is a file someone can
+ * hand you, and `installImage`.
+ *
+ * The consequences were not subtle. Inside `MemoryStorage`, reads walk segments
+ * literally while `dirname`/`basename` apply `..`, so the two halves disagreed
+ * about the same string:
+ *
+ *     stat('/a/../b/t')      ENOENT
+ *     writeText('/a/../b/t') ok      <- and the bytes landed at /b/t
+ *
+ * A mutation reported as a failure is the worst shape this can take. And
+ * `writeText('/..')` created a NAMELESS child of the root, because `basename`
+ * of `/..` is the empty string — after which exporting the tree recursed into
+ * the root forever and exhausted the heap.
+ *
+ * So the precondition is enforced where it is documented. `validatePath` still
+ * allows `..`, because `VirtualFileSystem.resolve` runs before normalisation
+ * and `cd ..` has to work.
+ */
+export function requireNormalisedPath(
+  path: string,
+  syscall: StorageSyscall,
+): Result<string> {
+  for (const segment of splitSegments(path)) {
+    if (segment === '.' || segment === '..' || segment === '') {
+      return invalid(
+        path,
+        syscall,
+        `path is not normalised: "${segment}" must be resolved before it reaches a backend`,
+        'not-normalised',
+      );
+    }
+  }
+  return ok(path);
+}
+
 export function validatePath(path: string, syscall: StorageSyscall): Result<string> {
   if (path.length > PATH_MAX) {
     return tooLong(

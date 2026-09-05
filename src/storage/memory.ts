@@ -97,7 +97,9 @@ import type {
   WriteOptions,
   WriteReceipt,
 } from './types.ts';
-import { basename, dirname, isDescendant, splitSegments, validatePath } from './vfs.ts';
+import { basename, dirname, isDescendant, splitSegments, validatePath,
+  requireNormalisedPath,
+} from './vfs.ts';
 
 // ---------------------------------------------------------------------------
 // the tree
@@ -313,6 +315,10 @@ export class MemoryStorage implements StorageBackend {
   async installImage(spec: SeedSpec): Promise<Result<void>> {
     for (const entry of spec.entries) {
       const checked = validatePath(entry.path, 'restore');
+      if (checked.ok) {
+        const normalised = requireNormalisedPath(entry.path, 'restore');
+        if (!normalised.ok) return normalised;
+      }
       if (!checked.ok) return checked;
 
       const segments = splitSegments(entry.path);
@@ -501,6 +507,13 @@ export class MemoryStorage implements StorageBackend {
     if (fault !== null) return fault;
     const checked = validatePath(path, syscall);
     if (!checked.ok) return checked;
+    // The precondition this backend documents, now enforced. Two in-repo
+    // callers broke it with data they had not normalised, and the halves of
+    // this class disagreed about the result: reads walk segments literally
+    // while dirname/basename apply `..`, so writeText('/a/../b/t') succeeded
+    // and landed at /b/t while stat of the same string said ENOENT.
+    const normalised = requireNormalisedPath(path, syscall);
+    if (!normalised.ok) return normalised;
     return null;
   }
 
