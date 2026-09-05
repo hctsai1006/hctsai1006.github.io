@@ -367,16 +367,53 @@ describe('quota', () => {
   it('does not re-walk the tree on every capacity-checked write', async () => {
     // MEASURED before the fix: 8000 writes took 1749 ms with a capacity set and
     // 35 ms without, because `#checkCapacity` walked the whole tree each time.
-    // The bound below is ~20x the fixed cost, so it fails loudly on a
-    // regression without being a stopwatch race.
-    const store = backend({ capacity: 10_000_000 });
-    const started = performance.now();
-    for (let index = 0; index < 8000; index += 1) {
-      await store.writeText(`/f${String(index)}`, 'x'.repeat(10));
+    // A fifty-fold difference, and the claim is about COMPLEXITY — the walk is
+    // O(tree) per write, so the whole loop is O(n squared) — not about latency.
+    //
+    // IT USED TO ASSERT AN ABSOLUTE TIME (`elapsed < 800`) AND IT FLAKED.
+    // Measured on this machine at the commit that introduced it, ten runs of
+    // this file alone, milliseconds:
+    //
+    //     386  418  503  277  397  1567  499  435  357  290
+    //
+    // Two over the bound in five, one at nearly twice it, with nothing wrong.
+    // Under the full suite — seventy files in parallel processes — it is worse.
+    // A gate that fails when the machine is busy is a gate people learn to
+    // re-run, which is the same as not having it.
+    //
+    // So it measures the RATIO instead, which is what the claim was always
+    // about. Both halves run on the same machine at the same load, so the noise
+    // that made the absolute bound useless cancels. The defect makes this ~50;
+    // fixed it is about 1; the bound is 6, which no amount of scheduling noise
+    // reaches and no version of the defect survives.
+    const N = 8000;
+    const body = 'x'.repeat(10);
+
+    const checked = backend({ capacity: 10_000_000 });
+    const checkedStart = performance.now();
+    for (let index = 0; index < N; index += 1) {
+      await checked.writeText(`/f${String(index)}`, body);
     }
-    const elapsed = performance.now() - started;
-    assert.ok(elapsed < 800, `8000 capacity-checked writes took ${elapsed.toFixed(0)} ms`);
-    assert.equal(value(await store.quota()).used, 80_000);
+    const checkedMs = performance.now() - checkedStart;
+
+    const unchecked = backend();
+    const uncheckedStart = performance.now();
+    for (let index = 0; index < N; index += 1) {
+      await unchecked.writeText(`/f${String(index)}`, body);
+    }
+    // A floor of one millisecond, so a run fast enough to measure as zero
+    // divides into a ratio rather than into infinity.
+    const uncheckedMs = Math.max(1, performance.now() - uncheckedStart);
+
+    const ratio = checkedMs / uncheckedMs;
+    assert.ok(
+      ratio < 6,
+      `capacity-checked writes were ${ratio.toFixed(1)}x the unchecked ones ` +
+        `(${checkedMs.toFixed(0)} ms against ${uncheckedMs.toFixed(0)} ms). ` +
+        'The capacity check is walking the tree again.',
+    );
+    assert.equal(value(await checked.quota()).used, 80_000);
+    assert.equal(value(await unchecked.quota()).used, 80_000);
   });
 
   it('keeps the running total honest across every mutation', async () => {
