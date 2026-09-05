@@ -17,14 +17,14 @@
  * WHY THE COMMANDS ARE DEFINED HERE. The properties this fixture exists to
  * prove — a cyclic object surviving, a script block failing to cross, a Ctrl+C
  * interrupting real work — need commands that do those specific things, and no
- * shipped command does. They are registered ALONGSIDE the real registry rather
- * than instead of it, so the same worker also answers `Set-Location`,
- * `Get-Location` and `Get-Content` for the tests that need a real filesystem.
+ * shipped command does. The shipped registry is registered ALONGSIDE them when
+ * a test asks for it (`withRegistry`, implied by `withFilesystem`), so the same
+ * worker also answers `Set-Location`, `Get-Location` and `Get-Content` — and a
+ * test that needs none of that does not pay to load 85 commands.
  */
 
 import { parentPort, workerData } from 'node:worker_threads';
 
-import { ALL_COMMANDS } from '../../src/commands/registry.ts';
 import type { CommandModule, InvocationContext } from '../../src/commands/invocation.ts';
 import type { CommandManifest } from '../../src/commands/manifest.ts';
 import { brokeredFileSystem } from '../../src/commands/ports.ts';
@@ -206,6 +206,17 @@ const COMMANDS: readonly CommandModule[] = [
 interface FixtureConfig {
   readonly withFilesystem?: boolean;
   /**
+   * Register the whole shipped command registry as well as the fixtures.
+   *
+   * OFF by default, and the default is not laziness: importing the registry
+   * pulls in every command and manifests.json, which is most of a worker's
+   * boot. Measured at 370-800 ms per spawn, and this suite spawns one per
+   * test — enough contention to make a wall-clock test elsewhere in the suite
+   * flake. Implied by `withFilesystem`, which needs Set-Location and
+   * Get-Content to be real.
+   */
+  readonly withRegistry?: boolean;
+  /**
    * Make the worker misbehave, so the HOST's decoder has something to refuse.
    *
    *   'garbage' — messages the protocol does not describe, at startup.
@@ -243,7 +254,10 @@ const kernel = new Kernel({
     : {}),
 });
 
-for (const module of ALL_COMMANDS) kernel.register(module);
+if (config.withRegistry === true || config.withFilesystem === true) {
+  const { ALL_COMMANDS } = await import('../../src/commands/registry.ts');
+  for (const module of ALL_COMMANDS) kernel.register(module);
+}
 for (const module of COMMANDS) kernel.register(module);
 
 const transport = eventEmitterTransport(parentPort as unknown as MessageEmitterLike);

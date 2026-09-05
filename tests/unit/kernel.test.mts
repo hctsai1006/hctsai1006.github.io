@@ -1598,6 +1598,85 @@ describe('the status a process exits with is readable when the exit arrives', ()
     // failure is supposed to be visible.
     assert.equal(kernel.jobs.list()[0]?.state, 'Failed');
   });
+
+  it('does not let a background command-not-found rewrite it either', async () => {
+    // Found by an adversarial pass on the fix above: `#teardown` stopped
+    // recording status for a background pipeline, but the two paths that report
+    // a request which never RAN — an unknown command, a binding failure — went
+    // on doing it, and marked their process as foreground while they were at
+    // it. MEASURED before this:
+    //
+    //     after BACKGROUND unknown: $? = false
+    //     its snapshot says background = false
+    const { kernel } = newKernel();
+    kernel.register(emitter('ok', ['done']));
+
+    kernel.send({ kind: 'exec', requestId: 'r1', terminalId: 't1', source: 'ok', background: false });
+    await kernel.drain();
+    assert.equal(kernel.lastSucceeded('t1'), true);
+
+    kernel.send({
+      kind: 'exec',
+      requestId: 'r2',
+      terminalId: 't1',
+      source: 'does-not-exist',
+      background: true,
+    });
+    await kernel.drain();
+
+    assert.equal(kernel.lastSucceeded('t1'), true, 'the job failed; the session did not');
+    const snapshot = [...kernel.processes.list()].find((p) => p.requestId === 'r2');
+    assert.equal(snapshot?.background, true, 'and it was a background process');
+    // The failure has to be visible SOMEWHERE, and a job is where.
+    assert.equal(kernel.jobs.list()[0]?.state, 'Failed');
+  });
+
+  it('does not let a background binding failure rewrite it either', async () => {
+    const { kernel } = newKernel();
+    kernel.register(emitter('ok', ['done']));
+    kernel.register(
+      command(
+        {
+          name: 'strict',
+          display: 'strict',
+          parameterSource: 'declared',
+          parameters: [
+            {
+              name: 'Path',
+              aliases: [],
+              type: 'System.String',
+              isSwitch: false,
+              sets: {
+                __AllParameterSets: { position: 0, mandatory: false, valueFromPipeline: false },
+              },
+              mandatoryInAnySet: false,
+              mandatoryInEverySet: false,
+              firstPosition: 0,
+              valueFromPipelineInAnySet: false,
+              validation: [],
+              verified: false,
+            },
+          ],
+        },
+        async () => 0,
+      ),
+    );
+
+    kernel.send({ kind: 'exec', requestId: 'r1', terminalId: 't1', source: 'ok', background: false });
+    await kernel.drain();
+
+    kernel.send({
+      kind: 'exec',
+      requestId: 'r2',
+      terminalId: 't1',
+      source: 'strict -NoSuchParameter x',
+      background: true,
+    });
+    await kernel.drain();
+
+    assert.equal(kernel.lastSucceeded('t1'), true);
+    assert.equal(kernel.jobs.list()[0]?.state, 'Failed');
+  });
 });
 
 describe('a listener that throws', () => {

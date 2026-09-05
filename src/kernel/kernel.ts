@@ -996,7 +996,7 @@ export class Kernel {
 
     const missing = resolved.find((entry) => entry.module === undefined);
     if (missing !== undefined) {
-      this.#reportUnknownCommand(requestId, terminalId, cwd, missing.name, missing.stage);
+      this.#reportUnknownCommand(requestId, terminalId, cwd, missing.name, missing.stage, background);
       return;
     }
 
@@ -1021,7 +1021,15 @@ export class Kernel {
         this.#bindOptions(module.manifest),
       );
       if (!outcome.ok) {
-        this.#reportBindingFailure(requestId, terminalId, cwd, module, entry.stage, outcome.error);
+        this.#reportBindingFailure(
+          requestId,
+          terminalId,
+          cwd,
+          module,
+          entry.stage,
+          outcome.error,
+          background,
+        );
         return;
       }
       bound.push({ stage: entry.stage, module, binding: outcome.result });
@@ -1185,11 +1193,25 @@ export class Kernel {
               exceptionType: error instanceof Error ? error.name : 'System.Exception',
             }),
           );
-          last.outcome ??= {
+          // OVERWRITTEN, not defaulted. `??=` left a stage that had already
+          // reported its own success in place, and the stage HAS usually
+          // succeeded here: the failure is in the kernel's consumption of what
+          // it produced, not in producing it. So a pipeline whose output could
+          // not be carried across the boundary wrote an error record and then
+          // reported exit 0. MEASURED, with a Format-Table record that the wire
+          // now refuses:
+          //
+          //   ERROR: PipelineFailed,Format-Table | value cannot cross …
+          //   exit: 0
+          //   exit: 0
+          //
+          // `signalled` is preserved because a stage that was stopped was
+          // stopped, whatever went wrong afterwards.
+          last.outcome = {
             exitCode: EXIT_FAILURE,
             succeeded: false,
             nativeExitCode: null,
-            signalled: null,
+            signalled: last.outcome?.signalled ?? null,
           };
         }
       }
@@ -1371,6 +1393,7 @@ export class Kernel {
     cwd: string,
     name: string,
     stage: string,
+    background: boolean,
   ): void {
     const snapshot = this.#table.create({
       name,
@@ -1379,8 +1402,11 @@ export class Kernel {
       runtime: 'semantic',
       terminalId,
       requestId,
-      background: false,
+      background,
     });
+    // A background failure is a JOB that failed, and it has to be visible
+    // somewhere. It used to be visible in the wrong place: the terminal's `$?`.
+    if (background) this.#jobs.start(snapshot.pid, stage);
     this.#table.transition(snapshot.pid, 'running');
     this.#emit({
       kind: 'stream',
@@ -1407,9 +1433,14 @@ export class Kernel {
       nativeExitCode: null,
       signalled: null,
     });
-    this.#recordStatus(terminalId, [
-      { exitCode: EXIT_COMMAND_NOT_FOUND, succeeded: false, nativeExitCode: null, signalled: null },
-    ]);
+    if (background) this.#jobs.finish(snapshot.pid, EXIT_COMMAND_NOT_FOUND, false);
+    // NOT for a background pipeline, for the reason `#teardown` gives: measured
+    // in pwsh 7.6.5, a job that fails leaves the session's `$?` True.
+    else {
+      this.#recordStatus(terminalId, [
+        { exitCode: EXIT_COMMAND_NOT_FOUND, succeeded: false, nativeExitCode: null, signalled: null },
+      ]);
+    }
   }
 
   /**
@@ -1428,6 +1459,7 @@ export class Kernel {
     module: CommandModule,
     stage: string,
     error: ParameterBindingError,
+    background: boolean,
   ): void {
     const snapshot = this.#table.create({
       name: module.manifest.display,
@@ -1436,8 +1468,9 @@ export class Kernel {
       runtime: module.manifest.runtime,
       terminalId,
       requestId,
-      background: false,
+      background,
     });
+    if (background) this.#jobs.start(snapshot.pid, stage);
     this.#table.transition(snapshot.pid, 'running');
     this.#emit({
       kind: 'stream',
@@ -1457,9 +1490,12 @@ export class Kernel {
       nativeExitCode: null,
       signalled: null,
     });
-    this.#recordStatus(terminalId, [
-      { exitCode: EXIT_FAILURE, succeeded: false, nativeExitCode: null, signalled: null },
-    ]);
+    if (background) this.#jobs.finish(snapshot.pid, EXIT_FAILURE, false);
+    else {
+      this.#recordStatus(terminalId, [
+        { exitCode: EXIT_FAILURE, succeeded: false, nativeExitCode: null, signalled: null },
+      ]);
+    }
   }
 
   /**

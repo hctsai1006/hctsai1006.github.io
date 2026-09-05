@@ -684,7 +684,7 @@ describe('a streaming command needs no special case', () => {
     //
     // Here it is a command that writes more than once, and the boundary carries
     // each write as its own event.
-    const h = await spawn();
+    const h = await spawn({ withRegistry: true });
     try {
       const before = h.events.length;
       const streamed = await h.client.run('ping example.com');
@@ -699,6 +699,42 @@ describe('a streaming command needs no special case', () => {
       const piped = await h.client.run('ping example.com | Measure-Object');
       assert.equal(piped.exitCode, 0);
       assert.equal(piped.values.length, 1, 'one summary object out of a streaming source');
+    } finally {
+      await h.dispose();
+    }
+  });
+});
+
+describe('the boundary refuses a value it would have to empty', () => {
+  it('errors on a Format-* record instead of delivering a blank one', async () => {
+    // Found by the pipeline work, confirmed here across a real transport.
+    // `src/formatting/records.ts` puts the whole FormatDocument in
+    // `baseObject` — correct modelling, because pwsh's own format records
+    // carry no readable properties either — and `baseObject` is exactly what
+    // the wire drops. MEASURED before the refusal:
+    //
+    //   after wire: {"typeNames":["…Format.FormatEntryData","System.Object"],
+    //                "properties":{}}
+    //   still typed as a format record = true
+    //
+    // A renderer on this side would identify it and draw nothing, and no error
+    // would be raised anywhere.
+    const h = await spawn({ withRegistry: true });
+    try {
+      const outcome = await h.client.run('Write-Output hello | Format-Table');
+
+      assert.deepEqual(outcome.values, [], 'nothing empty was delivered');
+      assert.equal(outcome.errors.length, 1);
+      const error = outcome.errors[0];
+      assert.match(error?.fullyQualifiedErrorId as string, /^PipelineFailed,Format-Table$/u);
+      assert.match(error?.message as string, /FormatEntryData/u);
+      assert.match(error?.message as string, /baseObject, which the boundary drops/u);
+
+      // And the pipeline says it failed. `??=` used to leave the stage's own
+      // success in place — the stage DID succeed, the kernel could not carry
+      // what it produced — so an error record went past under exit 0.
+      assert.equal(outcome.exitCode, 1);
+      assert.equal(outcome.succeeded, false);
     } finally {
       await h.dispose();
     }
@@ -786,6 +822,59 @@ describe('a same-realm transport cannot reorder the stream either', () => {
     assert.ok(seen.length >= 8, `saw ${seen.length} events`);
     assert.deepEqual([...seen].sort((a, b) => a - b), seen, 'strictly in order');
     assert.deepEqual([...new Set(seen)], seen, 'and each exactly once');
+    client.close();
+  });
+
+  it('settles a request whose whole life happened inside the send', async () => {
+    // FOUND BY AN ADVERSARIAL PASS ON THIS CLIENT, and measured:
+    //
+    //     run() over a same-realm transport: settled
+    //     run() of an unknown command:       hung
+    //     run() of an empty line:            hung
+    //
+    // `run` used to send first and register its bookkeeping second, which works
+    // only while the reply cannot arrive during the send. Across a real Worker
+    // it cannot. Here `post` reaches the kernel synchronously, and a request the
+    // kernel REFUSES — an unknown command, an empty line — emits every event it
+    // will ever emit inside that call, before anything was listening. The
+    // promise then never settled: a hang produced by a transport being faster
+    // than expected, not by anything being wrong with the request.
+    const { host, worker } = directPair();
+    const kernel = new Kernel({ clock: () => 1 });
+    kernel.register(emitter('one', ['a']));
+    serveKernel(kernel, worker);
+    const client = new KernelClient(host, { terminalId: 't1' });
+
+    const ran = await client.run('one');
+    assert.deepEqual(ran.values, ['a']);
+    assert.equal(ran.exitCode, 0);
+
+    const missing = await client.run('does-not-exist');
+    assert.equal(missing.exitCode, 127, 'command not found still ends the request');
+    assert.equal(missing.errors.length, 1);
+
+    const empty = await client.run('   ');
+    assert.deepEqual(empty.rejected, ['source contains no command']);
+    assert.equal(empty.exitCode, null);
+
+    client.close();
+  });
+
+  it('refuses a second run on an id in flight without disturbing the first', async () => {
+    const { host, worker } = directPair();
+    const kernel = new Kernel({ clock: () => 1 });
+    kernel.register(emitter('one', ['a']));
+    serveKernel(kernel, worker);
+    const client = new KernelClient(host, { terminalId: 't1' });
+
+    const pending = client.run('one', { requestId: 'shared' });
+    assert.throws(
+      () => client.run('one', { requestId: 'shared' }),
+      /already has a request in flight/u,
+    );
+    // The refused call must not have consumed the entry the first one is
+    // waiting on — the guard and the registration are the same id.
+    assert.deepEqual((await pending).values, ['a']);
     client.close();
   });
 });

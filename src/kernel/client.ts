@@ -51,13 +51,7 @@
  */
 
 import type { ProcessId, RequestId, TerminalId } from './ids.ts';
-import type {
-  ExitEvent,
-  KernelEvent,
-  KernelRequest,
-  ObjectsEvent,
-  RejectedEvent,
-} from './protocol.ts';
+import type { ExitEvent, KernelEvent, KernelRequest } from './protocol.ts';
 import { decodeKernelEvent } from './protocol.ts';
 import type { VirtualSignal } from './signals.ts';
 import type { KernelTransport } from './transport.ts';
@@ -160,7 +154,6 @@ interface Pending {
   /** Pids the kernel has told us belong to this request. */
   readonly processes: Set<ProcessId>;
   readonly settle: (outcome: ExecOutcome) => void;
-  rejected: readonly string[] | null;
 }
 
 /**
@@ -286,12 +279,29 @@ export class KernelClient {
    */
   exec(source: string, options: ExecOptions = {}): RequestId {
     const requestId = options.requestId ?? this.#newRequestId();
-    if (this.#pending.has(requestId)) {
-      throw new KernelClientError(
-        `requestId '${requestId}' already has a request in flight; a correlation id that ` +
-          'names two executions correlates nothing',
-      );
-    }
+    this.#refuseInFlight(requestId);
+    this.#submit(source, options, requestId);
+    return requestId;
+  }
+
+  /**
+   * A correlation id that names two executions correlates nothing.
+   *
+   * Only about requests still IN FLIGHT here. Reusing the id of one that has
+   * FINISHED is refused too, but by the kernel, which is the side that holds the
+   * whole transcript — and a client that answered for it would be duplicating a
+   * check it can only get wrong.
+   */
+  #refuseInFlight(requestId: RequestId): void {
+    if (!this.#pending.has(requestId)) return;
+    throw new KernelClientError(
+      `requestId '${requestId}' already has a request in flight; a correlation id that ` +
+        'names two executions correlates nothing',
+    );
+  }
+
+  /** The one place an `exec` is put on the wire. `exec` and `run` share it. */
+  #submit(source: string, options: ExecOptions, requestId: RequestId): void {
     this.#used.add(requestId);
     this.#send({
       kind: 'exec',
@@ -300,7 +310,6 @@ export class KernelClient {
       source,
       background: options.background ?? false,
     });
-    return requestId;
   }
 
   /**
@@ -310,8 +319,26 @@ export class KernelClient {
    * request the kernel refused are all outcomes rather than exceptions —
    * `ExecOutcome` says which — because a rejected promise for "the command
    * exited 1" makes every caller write a try/catch that means "read the exit
-   * code". The promise settles for a caller's own mistake only, by throwing
-   * from `exec` before anything is sent.
+   * code". A caller's OWN mistake — a reused id, a closed transport — throws
+   * synchronously, before anything is sent, so it cannot be mistaken for one.
+   *
+   * THE BOOKKEEPING IS REGISTERED BEFORE THE REQUEST IS SENT, and that
+   * ordering is load-bearing rather than tidy. This used to mint the id, send,
+   * and then register — which works only if the reply cannot arrive during the
+   * send. Across a real Worker it cannot. Across a SAME-REALM transport it
+   * can and does: `post` reaches the kernel synchronously, and every event of a
+   * request the kernel refuses is emitted inside that call. MEASURED, with a
+   * directly-wired transport pair:
+   *
+   *     run() over a same-realm transport: settled
+   *     run() of an unknown command:       hung
+   *     run() of an empty line:            hung
+   *
+   * Both of those complete entirely before the old code reached its
+   * `#pending.set`, so nothing was listening when the only events they would
+   * ever produce went past — a promise that never settles, from a transport
+   * that was merely faster than expected. The first line only passed because a
+   * process announces itself a second time when it exits.
    *
    * Completion is decided from the kernel's own events and not from a timer:
    * the kernel creates every process of a pipeline BEFORE running any of them,
@@ -319,21 +346,35 @@ export class KernelClient {
    * and all of them have exited" cannot be satisfied early.
    */
   run(source: string, options: ExecOptions = {}): Promise<ExecOutcome> {
-    return new Promise<ExecOutcome>((resolve) => {
-      const requestId = this.exec(source, options);
-      const pending: Pending = {
-        values: [],
-        errors: [],
-        exits: [],
-        processes: new Set(),
-        rejected: null,
-        settle: (outcome) => resolve(outcome),
-      };
-      this.#pending.set(requestId, pending);
-      // A request sent to a closed transport would otherwise wait forever for
-      // events that cannot arrive.
-      if (this.#closed) this.#settle(requestId, ['the transport is closed']);
+    const requestId = options.requestId ?? this.#newRequestId();
+    this.#refuseInFlight(requestId);
+    if (this.#closed) throw new KernelClientError('the transport is closed');
+
+    // The executor runs synchronously, so `settle` is assigned before the next
+    // statement — which is what lets the entry be complete before anything is
+    // sent.
+    let settle!: (outcome: ExecOutcome) => void;
+    const promise = new Promise<ExecOutcome>((resolve) => {
+      settle = resolve;
     });
+    this.#pending.set(requestId, {
+      values: [],
+      errors: [],
+      exits: [],
+      processes: new Set(),
+      settle,
+    });
+
+    try {
+      // `#submit` and not `exec`, because the in-flight guard has already run
+      // and the entry it would now trip over is the one registered above.
+      this.#submit(source, options, requestId);
+    } catch (error: unknown) {
+      // Nothing was sent, so nothing will ever settle this entry.
+      this.#pending.delete(requestId);
+      throw error;
+    }
+    return promise;
   }
 
   /**
@@ -546,7 +587,6 @@ export class KernelClient {
     if (pending === undefined) return;
     this.#pending.delete(requestId);
     for (const pid of pending.processes) this.#processRequests.delete(pid);
-    pending.rejected = rejected;
 
     const last = pending.exits[pending.exits.length - 1];
     pending.settle({
@@ -574,5 +614,5 @@ export class KernelClient {
  * received, counted in the sequence, and then quietly ignored.
  */
 function assertNever(event: never): void {
-  void (event as ObjectsEvent | RejectedEvent | ExitEvent);
+  void event;
 }
