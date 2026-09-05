@@ -25,7 +25,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { PHASES, WORK, CORRECTIONS } from '../roadmap/roadmap.data.mts';
-import type { Status, Task, WorkItem } from '../roadmap/roadmap.data.mts';
+import type { Evidence, Status, Task, WorkItem } from '../roadmap/roadmap.data.mts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..');
@@ -35,6 +35,7 @@ const PR_DIR = join(REPO, 'roadmap', 'pr');
 const MARKS = {
   done: '[x]',
   'in-progress': '[~]',
+  partial: '[/]',
   todo: '[ ]',
   blocked: '[!]',
   deferred: '[-]',
@@ -43,10 +44,37 @@ const MARKS = {
 const LABELS = {
   done: 'done',
   'in-progress': 'in progress',
+  partial: 'partial',
   todo: 'todo',
   blocked: 'blocked',
   deferred: 'deferred',
 } as const satisfies Record<Status, string>;
+
+/**
+ * How a citation renders. The whole point of recording evidence is that a
+ * reader can check a status without re-deriving the audit, so it has to be
+ * visible in the generated page and not only in the data file.
+ */
+function renderEvidence(ev: Evidence): string {
+  switch (ev.kind) {
+    case 'export':
+      return `\`${ev.file}\` exports \`${ev.symbol}\``;
+    case 'test':
+      return `\`${ev.file}\` — test "${ev.name}"`;
+    case 'json':
+      return `\`${ev.file}\` — \`${ev.path}\``;
+    case 'code':
+      return `\`${ev.file}\` matches \`/${ev.pattern}/\``;
+    case 'script':
+      return `\`npm run ${ev.name}\``;
+    case 'absent':
+      return `nothing under \`${ev.glob}\` matches \`/${ev.pattern}/\``;
+    default: {
+      const bad: never = ev;
+      throw new Error(`unrenderable evidence: ${JSON.stringify(bad)}`);
+    }
+  }
+}
 
 // ---------------------------------------------------------------------------
 // plan validation — a roadmap can be incoherent in ways reading it will not show
@@ -175,17 +203,34 @@ const cell = (s: string): string => s.split('|').join('\\|');
 
 interface Progress {
   done: number;
+  /**
+   * Counted and rendered separately, never folded into `done`. A partial task
+   * is one where part of the named work exists and part does not, and rounding
+   * it either way is how a plan starts lying: up, and the roadmap over-claims;
+   * down, and it repeats the under-claim that made this file wrong.
+   */
+  partial: number;
   total: number;
 }
 
 function taskProgress(tasks: readonly Task[]): Progress {
-  return { done: tasks.filter((t) => t.status === 'done').length, total: tasks.length };
+  return {
+    done: tasks.filter((t) => t.status === 'done').length,
+    partial: tasks.filter((t) => t.status === 'partial').length,
+    total: tasks.length,
+  };
 }
 
+/** `4/9` or, when something is half-built, `4/9 +2 partial`. */
+const count = (p: Progress): string =>
+  `${p.done}/${p.total}${p.partial > 0 ? ` +${p.partial} partial` : ''}`;
+
+/** `#` done, `/` partial, `.` not started. Partial never counts as done. */
 function bar(p: Progress, width = 18): string {
   if (p.total === 0) return '-'.repeat(width);
   const filled = Math.round((p.done / p.total) * width);
-  return '#'.repeat(filled) + '.'.repeat(width - filled);
+  const half = Math.min(width - filled, Math.round((p.partial / p.total) * width));
+  return '#'.repeat(filled) + '/'.repeat(half) + '.'.repeat(width - filled - half);
 }
 
 // ---------------------------------------------------------------------------
@@ -211,9 +256,21 @@ function renderMaster(items: readonly WorkItem[]): string {
       'package model and an audited AI surface.',
   );
   L.push('');
-  L.push(`**${overall.done} of ${overall.total} tasks complete.**  \`${bar(overall, 32)}\``);
+  L.push(
+    `**${overall.done} of ${overall.total} tasks complete**, ${overall.partial} partial.  ` +
+      `\`${bar(overall, 32)}\``,
+  );
   L.push('');
-  L.push('Legend: `[x]` done · `[~]` in progress · `[ ]` todo · `[!]` blocked · `[-]` deferred');
+  L.push(
+    'Legend: `[x]` done · `[/]` partial · `[~]` in progress · `[ ]` todo · `[!]` blocked · ' +
+      '`[-]` deferred',
+  );
+  L.push('');
+  L.push(
+    'Every `done` and `partial` task cites evidence — a symbol, a passing test, a value in a ' +
+      'data file, or a search that finds nothing — and `npm run roadmap:evidence` re-derives ' +
+      'all of it from the tree. See each item page for the citations.',
+  );
   L.push('');
 
   // --- phases -------------------------------------------------------------
@@ -225,7 +282,9 @@ function renderMaster(items: readonly WorkItem[]): string {
     const inPhase = items.filter((i) => i.phase === phase.name);
     const p = taskProgress(inPhase.flatMap((i) => i.tasks));
     const nums = inPhase.map((i) => i.n).join(', ');
-    L.push(`| **${cell(phase.name)}** | ${cell(phase.goal)} | ${nums} | \`${bar(p)}\` ${p.done}/${p.total} |`);
+    L.push(
+      `| **${cell(phase.name)}** | ${cell(phase.goal)} | ${nums} | \`${bar(p)}\` ${count(p)} |`,
+    );
   }
   L.push('');
 
@@ -244,7 +303,7 @@ function renderMaster(items: readonly WorkItem[]): string {
     const deps = item.dependsOn.length > 0 ? item.dependsOn.join(', ') : '—';
     L.push(
       `| ${item.n} | [${cell(item.title)}](roadmap/pr/${prFileName(item)}) | ${cell(item.phase)} | ` +
-        `${MARKS[item.status]} ${LABELS[item.status]} | ${deps} | ${p.done}/${p.total} |`,
+        `${MARKS[item.status]} ${LABELS[item.status]} | ${deps} | ${count(p)} |`,
     );
   }
   L.push('');
@@ -299,7 +358,7 @@ function renderItem(item: WorkItem, items: readonly WorkItem[]): string {
   L.push('');
   L.push(`**Phase** ${item.phase}  `);
   L.push(`**Status** ${MARKS[item.status]} ${LABELS[item.status]}  `);
-  L.push(`**Tasks** ${p.done}/${p.total} \`${bar(p)}\``);
+  L.push(`**Tasks** ${count(p)} \`${bar(p)}\``);
   L.push('');
 
   L.push('## Why');
@@ -328,6 +387,7 @@ function renderItem(item: WorkItem, items: readonly WorkItem[]): string {
   for (const task of item.tasks) {
     L.push(`- ${MARKS[task.status]} **${task.id}** ${task.title}`);
     if (task.detail !== undefined) L.push(`  - ${task.detail}`);
+    for (const ev of task.evidence ?? []) L.push(`  - *evidence:* ${renderEvidence(ev)}`);
   }
   L.push('');
 

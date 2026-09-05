@@ -13,7 +13,43 @@
  * recorded inline rather than quietly fixed — the reasoning is the valuable part.
  */
 
-export type Status = 'done' | 'in-progress' | 'todo' | 'blocked' | 'deferred';
+export type Status = 'done' | 'in-progress' | 'partial' | 'todo' | 'blocked' | 'deferred';
+
+/**
+ * A citation that something else can resolve.
+ *
+ * Statuses in this file were once opinions. On 2026-09-06 the file was consulted
+ * to answer "is everything built?", answered "34 of 104", and was wrong in the
+ * pessimistic direction — a dozen tasks marked `todo` had shipped months
+ * earlier, including TerminalMetrics, the kernel protocol, the Format-*
+ * directives and the Result-based storage API. Nothing was checking, because
+ * every check the roadmap had was about its own internal coherence.
+ *
+ * So a status now costs a citation, and `tools/check-roadmap-evidence.mts`
+ * re-derives every one of them from the tree. See that file for what each kind
+ * proves and, more importantly, for what none of them can.
+ */
+export type Evidence =
+  /** `file` exports `symbol`. Read off the TypeScript AST, not grepped. */
+  | { kind: 'export'; file: string; symbol: string }
+  /** A test with this exact name exists, is not skipped, asserts, and passes. */
+  | { kind: 'test'; file: string; name: string }
+  /** A dotted path into a JSON file resolves to a non-empty value. */
+  | { kind: 'json'; file: string; path: string }
+  /**
+   * `pattern` occurs in `file`, with comments blanked first. Supporting
+   * evidence only: it cannot carry a `done` on its own.
+   */
+  | { kind: 'code'; file: string; pattern: string }
+  /** package.json declares this script. Supporting evidence only. */
+  | { kind: 'script'; name: string }
+  /**
+   * `pattern` matches NOTHING under `glob`. This is how a `todo` states its
+   * claim, and it is the only evidence shape that fails in the direction this
+   * file actually failed: the day the work lands, the search finds something
+   * and the gate goes red until the status is corrected.
+   */
+  | { kind: 'absent'; glob: string; pattern: string };
 
 export interface Task {
   id: string;
@@ -21,6 +57,12 @@ export interface Task {
   /** Why this task exists, when that is not obvious from the title. */
   detail?: string;
   status: Status;
+  /**
+   * Required for `done` (at least one of export/test/json/absent) and for
+   * `partial`. Optional elsewhere, but always verified when present, so a
+   * citation left behind on a task that regressed is caught too.
+   */
+  evidence?: readonly Evidence[];
 }
 
 export interface WorkItem {

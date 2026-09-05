@@ -5,9 +5,11 @@
 
 Turning a single-file PowerShell-flavoured web terminal into a browser workstation with a versioned PowerShell compatibility layer, a real object pipeline, durable state, a trusted package model and an audited AI surface.
 
-**34 of 104 tasks complete.**  `##########......................`
+**34 of 104 tasks complete**, 0 partial.  `##########......................`
 
-Legend: `[x]` done · `[~]` in progress · `[ ]` todo · `[!]` blocked · `[-]` deferred
+Legend: `[x]` done · `[/]` partial · `[~]` in progress · `[ ]` todo · `[!]` blocked · `[-]` deferred
+
+Every `done` and `partial` task cites evidence — a symbol, a passing test, a value in a data file, or a search that finds nothing — and `npm run roadmap:evidence` re-derives all of it from the tree. See each item page for the citations.
 
 ## Phases
 
