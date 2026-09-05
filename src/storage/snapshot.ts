@@ -76,16 +76,26 @@ import type {
 export const SNAPSHOT_FORMAT = 'browsershell.fs.snapshot';
 
 /**
- * Bumped when the ENTRY SHAPE changes, never for a content change.
+ * Bumped when the ENTRY SHAPE or the INTEGRITY ENVELOPE changes, never for a
+ * content change.
  *
- * Version 1 has no tombstones, which is the known limitation of the seed/overlay
- * split recorded in `vfs.ts`: deleting a seed file does not persist. Adding them
- * is a third entry kind and therefore a version 2, and the refusal below is what
- * makes that upgrade safe to make later — a version 1 reader will decline a
- * version 2 file rather than silently ignore its tombstones and resurrect every
- * deleted file.
+ * Version 2 widened what the checksum covers. Version 1 hashed `entries` alone,
+ * which left `scope` unauthenticated — and `scope` is what decides whether an
+ * `s: 1` entry means "restore the metadata, the seed owns the content" or
+ * "materialise this, content included". MEASURED on a version 1 document:
+ * changing the single word `overlay` to `full` in a stored overlay truncated a
+ * 63-byte seed file to 0 bytes, was accepted with `failures: []`, and the two
+ * documents hashed identically (`f0c15aeb === f0c15aeb`). The checksum now
+ * covers every field except itself, so that edit is a refusal.
+ *
+ * Neither version has tombstones, which is the known limitation of the
+ * seed/overlay split recorded in `vfs.ts`: deleting a seed file does not
+ * persist. Adding them is a third entry kind and therefore a later version
+ * still, and the refusal below is what makes that upgrade safe to make — an
+ * older reader declines a newer file rather than silently ignoring its
+ * tombstones and resurrecting every deleted file.
  */
-export const SNAPSHOT_VERSION = 1;
+export const SNAPSHOT_VERSION = 2;
 
 export type SnapshotScope = 'full' | 'overlay';
 
@@ -367,16 +377,41 @@ export async function createSnapshot(
   const walked = await walk(options.root ?? '/');
   if (!walked.ok) return walked;
 
-  const payload = JSON.stringify(entries);
-  return ok({
+  const unsigned = {
     format: SNAPSHOT_FORMAT,
     version: SNAPSHOT_VERSION,
     scope: options.scope,
     createdAt: options.now,
     seedTime,
-    checksum: fnv1a32(payload),
     entries,
     skipped,
+  } as const;
+  return ok({ ...unsigned, checksum: fnv1a32(snapshotPayload(unsigned)) });
+}
+
+/**
+ * Exactly the bytes the checksum covers: the whole document except the
+ * checksum field itself, in a fixed key order.
+ *
+ * Exported because a document is only as trustworthy as the thing that signs
+ * it, and every writer — this file, a test building a fixture, an OPFS backend
+ * later — has to agree on the input. Version 1 hashed `entries` alone; see
+ * `SNAPSHOT_VERSION` for the truncation that bought.
+ *
+ * Still FNV-1a, and still only a corruption check: it is not a MAC, it stops
+ * nobody who edits the file and recomputes it, and it is not claimed to. What
+ * it now does is make an edit that flips one field an obvious refusal rather
+ * than a silent change of meaning.
+ */
+export function snapshotPayload(document: Omit<SnapshotDocument, 'checksum'>): string {
+  return JSON.stringify({
+    format: document.format,
+    version: document.version,
+    scope: document.scope,
+    createdAt: document.createdAt,
+    seedTime: document.seedTime,
+    entries: document.entries,
+    skipped: document.skipped,
   });
 }
 
@@ -491,24 +526,30 @@ export function decodeSnapshot(bytes: Uint8Array): Result<SnapshotDocument> {
 
   const checksum = doc['checksum'];
   if (typeof checksum !== 'string') return refuse('no-checksum', 'the snapshot has no checksum');
-  const actual = fnv1a32(JSON.stringify(entries));
-  if (actual !== checksum) {
-    return refuse(
-      'checksum-mismatch',
-      `the snapshot is corrupt: checksum ${checksum} does not match the entries (${actual})`,
-    );
-  }
 
-  return ok({
+  // Verified over the NORMALISED document, which is also what `createSnapshot`
+  // signs, so the two cannot drift: both go through `snapshotPayload`. A
+  // document whose timestamps are garbage now fails here instead of being
+  // silently rewritten to 0, and a legitimate one round-trips because the
+  // normalisation is the identity on every value `createSnapshot` writes.
+  const unsigned = {
     format: SNAPSHOT_FORMAT,
     version: SNAPSHOT_VERSION,
     scope,
     createdAt: isSaneTime(doc['createdAt']) ? (doc['createdAt'] as number) : 0,
     seedTime: isSaneTime(doc['seedTime']) ? (doc['seedTime'] as number) : null,
-    checksum,
     entries,
     skipped,
-  });
+  } as const;
+  const actual = fnv1a32(snapshotPayload(unsigned));
+  if (actual !== checksum) {
+    return refuse(
+      'checksum-mismatch',
+      `the snapshot is corrupt: checksum ${checksum} does not match the document (${actual})`,
+    );
+  }
+
+  return ok({ ...unsigned, checksum });
 }
 
 export interface RestoreReport {

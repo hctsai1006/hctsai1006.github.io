@@ -33,6 +33,7 @@ import {
   encodeSnapshot,
   fnv1a32,
   restoreSnapshot,
+  snapshotPayload,
   toBase64,
 } from '../../src/storage/index.ts';
 import type {
@@ -64,6 +65,15 @@ function code(result: Result<unknown>): StorageErrorCode | 'ok' {
 function value<T>(result: Result<T>): T {
   assert.ok(result.ok, `expected ok, got ${result.ok ? '' : result.error.message}`);
   return result.value;
+}
+
+/**
+ * Sign a document the way `createSnapshot` does. Version 2 covers the whole
+ * document, not just `entries`, so a fixture that hand-rolls the old hash is
+ * indistinguishable from a tampered file — which is the point.
+ */
+function signed(unsigned: Omit<SnapshotDocument, 'checksum'>): SnapshotDocument {
+  return { ...unsigned, checksum: fnv1a32(snapshotPayload(unsigned)) };
 }
 
 /**
@@ -462,16 +472,15 @@ describe('restoreSnapshot', () => {
         mt: 1_700_000_000_000,
       },
     ];
-    const forged: SnapshotDocument = {
+    const forged = signed({
       format: SNAPSHOT_FORMAT,
       version: SNAPSHOT_VERSION,
       scope: 'full',
       createdAt: 1,
       seedTime: null,
-      checksum: fnv1a32(JSON.stringify(entries)),
       entries,
       skipped: [],
-    };
+    });
 
     const clock = fakeClock().now;
     const first = value(await bootStorage({ clock, seed, overlay: encodeSnapshot(forged) }));
@@ -489,9 +498,12 @@ describe('restoreSnapshot', () => {
     assert.ok(row.c !== undefined, 'and it must carry its content, not just its mode');
 
     // Link three: the boot after that gets the file back rather than dropping it.
-    const second = value(
-      await bootStorage({ clock, seed, overlay: encodeSnapshot({ ...overlay, skipped: [] }) }),
-    );
+    // Passed through UNTOUCHED. `{ ...overlay, skipped: [] }` used to work here
+    // and no longer does: from version 2 the checksum covers `skipped` too, so
+    // editing any field without re-signing is a refusal. The real overlay names
+    // /root as skipped, because a visitor cannot read a root-owned 0o700 tree.
+    assert.deepEqual(overlay.skipped, ['/root']);
+    const second = value(await bootStorage({ clock, seed, overlay: encodeSnapshot(overlay) }));
     assert.deepEqual(second.restore?.dropped, [], 'the user file must not be dropped');
     assert.equal(value(await second.backend.readText(notes)), 'my notes');
   });
@@ -509,16 +521,15 @@ describe('restoreSnapshot', () => {
       { t: 'd', p: '/etc', s: 1, m: 0o755 },
       { t: 'f', p: '/etc/hostname', c: toBase64(new TextEncoder().encode('pwned')), s: 1, m: 0o644 },
     ];
-    const document: SnapshotDocument = {
+    const document = signed({
       format: SNAPSHOT_FORMAT,
       version: SNAPSHOT_VERSION,
       scope: 'full',
       createdAt: 1,
       seedTime: null,
-      checksum: fnv1a32(JSON.stringify(entries)),
       entries,
       skipped: [],
-    };
+    });
     // /tmp is 1777 in the seed, so the write itself genuinely succeeds.
     const report = value(await restoreSnapshot(store, document, { seed, root: '/tmp' }));
     assert.deepEqual(report.failures, []);
@@ -535,16 +546,15 @@ describe('restoreSnapshot', () => {
     // different (and already correct) rule, and would mask this one.
     const readme = `${HOME}/README.md`;
     const entries: SnapshotEntry[] = [{ t: 'f', p: readme, s: 1, m: 0o600, mt: 1_700_000_000_001 }];
-    const document: SnapshotDocument = {
+    const document = signed({
       format: SNAPSHOT_FORMAT,
       version: SNAPSHOT_VERSION,
       scope: 'overlay',
       createdAt: 1,
       seedTime: seed.time,
-      checksum: fnv1a32(JSON.stringify(entries)),
       entries,
       skipped: [],
-    };
+    });
     const clock = fakeClock().now;
     const booted = value(await bootStorage({ clock, seed, overlay: encodeSnapshot(document) }));
     assert.deepEqual(booted.restore?.dropped, []);
@@ -569,16 +579,15 @@ describe('restoreSnapshot', () => {
       { t: 'd', p: '/etc', s: 1, m: 0o755, mt: 1_700_000_000_000 },
       { t: 'f', p: '/etc/motd', c: toBase64(new TextEncoder().encode('hello')), s: 1, m: 0o644, mt: 1_700_000_000_000 },
     ];
-    const document: SnapshotDocument = {
+    const document = signed({
       format: SNAPSHOT_FORMAT,
       version: SNAPSHOT_VERSION,
       scope: 'full',
       createdAt: 1,
       seedTime: null,
-      checksum: fnv1a32(JSON.stringify(entries)),
       entries,
       skipped: [],
-    };
+    });
     assert.ok((await restoreSnapshot(store, document)).ok);
     assert.equal(value(await store.stat('/etc/motd')).origin, 'seed', 'a real seed node stays a seed node');
   });
@@ -669,5 +678,100 @@ describe('copy builds its own target paths', () => {
     const target = `/${'p'.repeat(200)}`;
     assert.equal(code(await store.copy('/a', target, { recursive: true })), 'ENAMETOOLONG');
     assert.equal(await store.exists(target), false, 'and nothing is created');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Third review pass: arm (e). Both pre-existing, both silent data loss.
+// ---------------------------------------------------------------------------
+
+describe('editing a seed file', () => {
+  it('keeps the edit across a reboot, instead of silently reverting it', async () => {
+    // No attacker in this one. `~/README.md` ships in the seed, owned by the
+    // visitor at 0o644, so writing to it succeeds — and then the seed/overlay
+    // contract threw the edit away: the node kept `origin: 'seed'`, so the
+    // overlay recorded its metadata WITHOUT content, and the next boot's
+    // `installImage` put the original bytes back. `failures: []` throughout.
+    const seed = buildSeed();
+    const clock = fakeClock().now;
+    const first = value(await bootStorage({ clock, seed }));
+    const readme = `${HOME}/README.md`;
+    const mine = '# MY OWN EDIT, an hour of work\n';
+    assert.ok((await first.vfs.writeText(readme, mine)).ok);
+    assert.equal(
+      value(await first.backend.stat(readme)).origin,
+      'user',
+      'writing content to a seed file makes it the user’s',
+    );
+
+    const overlay = value(await createSnapshot(first.backend, { scope: 'overlay', now: 2, seed }));
+    const row = overlay.entries.find((entry) => entry.p === readme);
+    assert.ok(row !== undefined && row.c !== undefined, 'the overlay must carry the edited content');
+
+    const second = value(await bootStorage({ clock, seed, overlay: encodeSnapshot(overlay) }));
+    assert.deepEqual(second.restore?.failures, []);
+    assert.equal(value(await second.backend.readText(readme)), mine, 'the edit must survive the reboot');
+  });
+
+  it('still lets a metadata-only change stay a small seed entry', async () => {
+    // The other half of the trade: `chmod` and `utimes` go through `set-meta`
+    // and must NOT claim the file, or every touched seed file would start
+    // carrying its whole content in the overlay.
+    const seed = buildSeed();
+    const clock = fakeClock().now;
+    const booted = value(await bootStorage({ clock, seed }));
+    const readme = `${HOME}/README.md`;
+    assert.ok((await booted.vfs.chmod(readme, 0o600)).ok);
+    assert.equal(value(await booted.backend.stat(readme)).origin, 'seed');
+
+    const overlay = value(await createSnapshot(booted.backend, { scope: 'overlay', now: 2, seed }));
+    const row = overlay.entries.find((entry) => entry.p === readme);
+    assert.ok(row !== undefined);
+    assert.equal(row.s, 1, 'it is still a seed node');
+    assert.equal(row.c, undefined, 'and carries no content');
+    assert.equal(row.m, 0o600, 'only the mode the user changed');
+  });
+});
+
+describe('the checksum covers what the restore acts on', () => {
+  it('refuses a document whose scope was flipped after signing', async () => {
+    // `scope` decides what `s: 1` MEANS — restore the metadata and let the seed
+    // own the content, or materialise this entry with `c ?? empty`. Version 1
+    // hashed `entries` alone, so changing the single word `overlay` to `full`
+    // in a stored overlay was accepted and TRUNCATED every seed file it named.
+    const seed = buildSeed();
+    const clock = fakeClock().now;
+    const booted = value(await bootStorage({ clock, seed }));
+    const readme = `${HOME}/README.md`;
+    const original = value(await booted.backend.readText(readme));
+    assert.ok(original.length > 0);
+    await booted.vfs.utimes(readme, { mtime: 1_650_000_000_000 });
+
+    const overlay = value(await createSnapshot(booted.backend, { scope: 'overlay', now: 2, seed }));
+    assert.ok(overlay.entries.some((entry) => entry.p === readme && entry.s === 1 && entry.c === undefined));
+
+    const tampered = { ...overlay, scope: 'full' as const };
+    const decoded = decodeSnapshot(encodeSnapshot(tampered));
+    assert.ok(!decoded.ok && decoded.error.code === 'EINVAL');
+    assert.ok(!decoded.ok && decoded.error.code === 'EINVAL' && decoded.error.reason === 'checksum-mismatch');
+
+    // And the boot that would have applied it refuses rather than truncating.
+    assert.ok(!(await bootStorage({ clock, seed, overlay: encodeSnapshot(tampered) })).ok);
+    assert.equal(value(await booted.backend.readText(readme)), original);
+  });
+
+  it('gives the two scopes different checksums for identical entries', async () => {
+    const entries: SnapshotEntry[] = [{ t: 'f', p: '/a', s: 1 }];
+    const base = {
+      format: SNAPSHOT_FORMAT,
+      version: SNAPSHOT_VERSION,
+      createdAt: 1,
+      seedTime: null,
+      entries,
+      skipped: [],
+    } as const;
+    const asOverlay = fnv1a32(snapshotPayload({ ...base, scope: 'overlay' }));
+    const asFull = fnv1a32(snapshotPayload({ ...base, scope: 'full' }));
+    assert.notEqual(asOverlay, asFull, 'scope must change the checksum');
   });
 });

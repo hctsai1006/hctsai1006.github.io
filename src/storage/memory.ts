@@ -1078,11 +1078,34 @@ export class MemoryStorage implements StorageBackend {
       if (!this.#can(existing, 'write')) return eacces(path, syscall, 'write');
       const next = append ? concat(existing.data, data) : data;
       byteDelta = next.byteLength - existing.data.byteLength;
+      // WRITING CONTENT TO A SEED FILE MAKES IT THE USER'S.
+      //
+      // Without this the node keeps `origin: 'seed'`, and the seed/overlay
+      // contract then throws the edit away: `createSnapshot` records a seed
+      // node's metadata and NOT its content (the next boot is supposed to
+      // rebuild it), the overlay restore applies mode and mtime only, and
+      // `installImage` puts the original bytes back. MEASURED end to end — a
+      // visitor's rewrite of their own `~/README.md` was gone after one
+      // reload, with `failures: []` and nothing reported.
+      //
+      // `vfs.ts` enumerates the graft rules and names ONE limitation of this
+      // model — deleting a seed file does not persist, because the overlay
+      // records what exists and not what was removed. Losing an EDIT is not on
+      // that list and was never a decision; the rule it comes from ("a seed
+      // file's content comes from this version of the seed") is about the site
+      // updating README.md, not about the user having rewritten it.
+      //
+      // Only content does this. `chmod` and `utimes` go through `set-meta` and
+      // leave origin alone, which is what keeps a seed file's mode change
+      // recordable as the small `s: 1` overlay entry it should be. An explicit
+      // `options.origin` still wins, because that is how `restoreSnapshot`
+      // puts a node back as the seed node it was.
+      const origin = options.origin ?? (existing.origin === 'seed' ? 'user' : undefined);
       steps.push({
         op: 'write',
         path,
         data: next,
-        ...(options.origin === undefined ? {} : { origin: options.origin }),
+        ...(origin === undefined ? {} : { origin }),
       });
       const plan: MutationPlan = { id: this.#nextPlanId(), syscall, steps, byteDelta };
       return this.#commit(plan, path, { path, size: next.byteLength, created: false });

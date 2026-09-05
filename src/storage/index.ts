@@ -92,6 +92,7 @@ export {
   fromBase64,
   importSnapshot,
   restoreSnapshot,
+  snapshotPayload,
   toBase64,
 } from './snapshot.ts';
 export type {
