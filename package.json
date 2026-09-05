@@ -17,6 +17,7 @@
     "verify": "npm run typecheck && npm test && npm run data -- --check && npm run inventory -- --check && npm run manifests -- --check && npm run profiles -- --check && npm run explorer -- --check && npm run roadmap -- --check && npm run check:numbers -- --require-authoritative && npm run check:bytes && npm run width -- --check && npm run truth:verify",
     "typecheck": "tsc --noEmit",
     "test": "node tools/run-tests.mts",
+    "test:summary": "node tools/run-tests.mts --summary test-summary.json",
     "capture:metadata": "pwsh -NoProfile -File tools/capture-pwsh-metadata.ps1",
     "capture:culture": "pwsh -NoProfile -File tools/capture-pwsh-culture.ps1",
     "profiles": "node tools/generate-compatibility-profile.mts",

@@ -425,10 +425,34 @@ export function publishBranch(o: PublishOptions): PublishResult {
   git('config', 'user.name', o.botName);
   git('config', 'user.email', o.botEmail);
 
+  // Ask whether the branch exists BEFORE fetching, and treat the three answers
+  // as three answers.
+  //
+  // The first version of this function fetched and then inferred existence from
+  // whether the remote-tracking ref had appeared. That conflates "the branch is
+  // not there" with "the fetch failed", and the two have opposite safe
+  // behaviours: the first means push, the second means stop. A transient network
+  // failure would have been read as "first run", skipping the authorship guard
+  // below and force-pushing over whatever was actually there.
+  //
+  // `git ls-remote --exit-code` separates them: 0 found, 2 not found, anything
+  // else is a real error.
+  const probe = run('git', ['ls-remote', '--exit-code', '--heads', remote, o.branch], o.cwd);
+  if (probe.status !== 0 && probe.status !== 2) {
+    throw new SyncFailure(
+      `could not ask ${remote} whether ${o.branch} exists (exit ${probe.status ?? 'null'}).\n` +
+        `${(probe.stderr || probe.stdout).trim()}\n` +
+        '  Refusing to force-push against an unknown remote state.',
+    );
+  }
+  const remoteExists = probe.status === 0;
+
   const remoteRef = `refs/remotes/${remote}/${o.branch}`;
-  run('git', ['fetch', '--no-tags', remote, `+refs/heads/${o.branch}:${remoteRef}`], o.cwd);
-  const existing = run('git', ['rev-parse', '--verify', '--quiet', remoteRef], o.cwd);
-  const remoteExists = existing.status === 0 && existing.stdout.trim() !== '';
+  if (remoteExists) {
+    // Now the fetch MUST succeed: the branch is known to be there, so a failure
+    // here is a failure, not an absence.
+    must(run, 'git', ['fetch', '--no-tags', remote, `+refs/heads/${o.branch}:${remoteRef}`], o.cwd);
+  }
 
   if (remoteExists) {
     const author = run('git', ['log', '-1', '--format=%ae', remoteRef], o.cwd).stdout.trim();
@@ -574,6 +598,20 @@ export function reconcile(o: ReconcileOptions): ReconcileResult {
           const text = `${created.stderr}${created.stdout}`;
           if (PR_CREATION_FORBIDDEN.test(text)) {
             throw new SyncFailure(prerequisiteMessage(o.repo));
+          }
+          if (/pull request already exists/i.test(text)) {
+            // Reachable if two runs ever get past the concurrency group — a
+            // manually re-run job, say. GitHub refuses the second create, which
+            // is the outcome to want: one pull request exists and the duplicate
+            // did not happen. Say so instead of leaving a bare 422, and fail
+            // anyway, because a create that did not create is not a success.
+            throw new SyncFailure(
+              'a pull request for this head already exists — two runs raced past the ' +
+                'concurrency group.\n' +
+                '  Nothing was duplicated: GitHub refused the second create. The next ' +
+                'scheduled run will find that pull request and update it in place.\n' +
+                `${text.trim()}`,
+            );
           }
           throw new SyncFailure(
             `gh pr create failed (exit ${created.status ?? 'null'})\n${text.trim()}`,

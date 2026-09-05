@@ -311,6 +311,28 @@ describe('publishBranch', () => {
     assert.equal(git(origin, 'rev-parse', BRANCH).trim(), second.sha);
   });
 
+  it('refuses to push when it cannot tell whether the remote branch exists', () => {
+    // The hole this closes: the first version inferred "the branch does not
+    // exist" from a failed fetch, which is also what a network blip looks like.
+    // Reading a transient failure as "first run" skips the authorship guard and
+    // force-pushes over whatever is really there.
+    const { work } = scratchRepo();
+    writeFileSync(join(work, 'lock.json'), '{"n":9}\n', 'utf8');
+    const pushed: string[][] = [];
+    const runner: Runner = (cmd, args, cwd) => {
+      if (args[0] === 'ls-remote') return { status: 128, stdout: '', stderr: 'could not read from remote' };
+      if (args[0] === 'push') pushed.push([...args]);
+      const r = spawnSync(cmd, [...args], { cwd, encoding: 'utf8' });
+      return { status: r.status, stdout: r.stdout ?? '', stderr: r.stderr ?? '' };
+    };
+    assert.throws(
+      () => publishBranch({ ...publishOpts(work, 'sync 9'), run: runner }),
+      (e: unknown) =>
+        e instanceof SyncFailure && /unknown remote state/.test((e as Error).message),
+    );
+    assert.deepEqual(pushed, [], 'nothing may be pushed when the remote state is unknown');
+  });
+
   it('refuses to force-push over a commit it did not author', () => {
     // --force-with-lease cannot catch this: publishBranch fetches the remote ref
     // immediately beforehand, so a human commit pushed an hour ago satisfies the
@@ -449,6 +471,22 @@ describe('reconcile', () => {
           /settings\/actions/.test(m)
         );
       },
+    );
+  });
+
+  it('says what happened when two runs race past the concurrency group', () => {
+    const gh = fakeGh({
+      'gh pr list': listed([]),
+      'gh pr create': {
+        status: 1,
+        stdout: '',
+        stderr: 'pull request create failed: GraphQL: A pull request already exists for owner:automation/upstream-release-truth.',
+      },
+    });
+    assert.throws(
+      () => reconcile({ ...reconcileOpts, drifted: true, run: gh.runner }),
+      (e: unknown) =>
+        e instanceof SyncFailure && /Nothing was duplicated/.test((e as Error).message),
     );
   });
 
