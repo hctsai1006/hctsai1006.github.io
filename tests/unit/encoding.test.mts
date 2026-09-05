@@ -452,6 +452,30 @@ describe('the broker decides which encoding applies to native output', () => {
     assert.equal(units(broker.decodeNativeOutput(PROBE_BYTES, v765)), 'U+0061 U+FFFD U+007A');
   });
 
+  it('asks the profile for the exact key the 7.7 delta declares', () => {
+    // A behaviour key is a contract between the generator that WRITES it into a
+    // profile and the code path that LOOKS IT UP, and behavior-keys.ts exists
+    // because when each end spells it itself the contract holds by coincidence
+    // and fails silently: the lookup misses, the fallback answers, and the
+    // profile looks populated while changing nothing.
+    //
+    // So the literal is asserted here rather than only imported. The record in
+    // compat/deltas/powershell-77-changes.source.mts declares this key with
+    // upstreamValue true, citing PR #21219.
+    assert.equal(APPLICATION_OUTPUT_ENCODING_KEY, 'application.outputEncodingVariable');
+
+    // And prove the lookup actually happens: a profile that declares the key
+    // false must be obeyed, not merely present.
+    const declaredOff = viewOfBehaviors('7.7.0', {
+      'application.outputEncodingVariable': false,
+    });
+    const broker = new EncodingBroker({
+      consoleOutputEncoding: 'utf8',
+      applicationOutputEncoding: 'latin1',
+    });
+    assert.equal(broker.nativeOutputEncoding(declaredOff), 'utf8');
+  });
+
   it('honours $PSApplicationOutputEncoding under a 7.7 profile', () => {
     // Upstream PR #21219 adds the variable. The behaviour key is
     // application.outputEncodingVariable, declared in the 7.7 delta; a command
