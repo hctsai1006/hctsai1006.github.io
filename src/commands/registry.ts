@@ -41,10 +41,21 @@ import { FS_MANAGE_COMMANDS } from './fs-manage/index.ts';
  * Every command with an implementation and a name to be reached by.
  *
  * A module whose token is shadowed is built and tested but not registered — see
- * SHADOWED_V1_TOKENS for which and why. `sl` is the one: v1 declares it both as
- * an easter egg and as an alias of Set-Location, and its own dispatcher resolved
- * the alias, so the egg has never been reachable. Filtering here rather than
- * deleting the module keeps the decision visible and reversible.
+ * SHADOWED_V1_TOKENS for which and why. `sl` is the one, and the reason stated
+ * here was wrong until it was checked against v1: the claim was that v1's
+ * dispatcher resolved the alias first "so the egg has never been reachable".
+ * The egg fires. v1 resolves `sl` to `set-location`, and `set-location` then
+ * looks at the raw word it was invoked by (legacy/terminal-v1.html:789), so
+ * bare `sl` prints the train and `sl /tmp` changes directory.
+ *
+ * `sl` still belongs to Set-Location here, for the reason that survived the
+ * correction — it is a real alias of a `native-semantic` cmdlet — but the train
+ * is a v1 behaviour this rewrite has NOT reproduced rather than one it decided
+ * against. It cannot be, yet: `InvocationContext` carries no invocation name,
+ * so `set-location` cannot tell bare `sl` from bare `Set-Location`, and in v1
+ * those differ. Filtering here rather than deleting the module keeps the
+ * implementation, its tests and its captured v1 archive as the evidence of what
+ * the behaviour should be when the context can express it.
  */
 export const ALL_COMMANDS: readonly CommandModule[] = [
   ...OBJECT_CMDLETS,

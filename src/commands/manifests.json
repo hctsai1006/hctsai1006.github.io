@@ -6160,7 +6160,8 @@
       "outputTypeNames": [],
       "synopsis": "",
       "notes": "A joke response to a common typo for ls.",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "shadowedBy": "set-location"
     },
     {
       "name": "sort-object",

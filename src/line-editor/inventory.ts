@@ -35,6 +35,11 @@ export interface ManifestLike {
   }[];
   /** `none` means nobody ever captured this command's real parameters. */
   readonly parameterSource: string;
+  /**
+   * Set when this NAME belongs to another command, which is what a visitor
+   * typing it reaches. Such an entry must not be indexed under its own name.
+   */
+  readonly shadowedBy?: string;
 }
 
 /** A name the user can actually type at command position. */
@@ -105,6 +110,14 @@ export class CommandInventory {
     const parameters = new Map<string, readonly ParameterEntry[]>();
 
     for (const m of manifests) {
+      // A SHADOWED entry does not claim its own name. `sl` is the case: it is
+      // an alias of Set-Location, and that is what the registry binds and what
+      // actually runs. Indexing it here as a command of its own made completion
+      // and Get-Help describe the easter egg — badge SIMULATED, empty synopsis
+      // — for a token that runs a native-semantic cmdlet. The manifest says
+      // which command owns the token; this honours it, so the alias loop below
+      // fills the name in for the owner instead.
+      if (m.shadowedBy !== undefined) continue;
       byName.set(m.display.toLowerCase(), {
         name: m.display,
         canonical: m.display,
@@ -129,8 +142,14 @@ export class CommandInventory {
     for (const m of manifests) {
       for (const alias of m.aliases) {
         const key = alias.toLowerCase();
-        // A real command shadows an alias: `sl` is both the joke command and
-        // Set-Location's alias, and the command is what the dispatcher runs.
+        // First writer wins among aliases. This used to carry the claim that "a
+        // real command shadows an alias: `sl` is both the joke command and
+        // Set-Location's alias, and the command is what the dispatcher runs" —
+        // which was wrong twice over. v1's dispatcher resolves the ALIAS (the
+        // train comes from a branch inside set-location, not from a separate
+        // command), and this engine's registry binds `sl` to Set-Location too.
+        // The rule now lives in the manifest as `shadowedBy` and is applied
+        // above, so the two subsystems cannot answer differently again.
         if (byName.has(key)) continue;
         byName.set(key, {
           name: alias,

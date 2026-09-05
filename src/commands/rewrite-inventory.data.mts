@@ -87,34 +87,71 @@ export const REWRITE_COMMANDS: readonly RewriteCommand[] = [
 ];
 
 /**
- * v1 tokens that are NOT commands here, and why.
+ * v1 tokens that resolve to a DIFFERENT command here than the name suggests.
  *
- * The extraction is faithful, which means it can capture a contradiction v1
- * contained. `sl` is the one that exists: v1 lists it as an easter egg in
- * `EGGS` — a steam locomotive, the traditional joke for a mistyped `ls` — and
- * ALSO maps it to `set-location` in `ALIAS`. v1's dispatcher resolves the alias
- * first, so the egg could never fire. It has been dead since it was written.
+ * ── A CORRECTION, FIRST, BECAUSE THIS FILE ASSERTED THE OPPOSITE ──────────
  *
- * One token cannot resolve to two commands. The generator refuses the
- * contradiction rather than letting load order decide it, and this is where the
- * decision lives:
+ * This entry previously read: "v1's dispatcher resolves the alias first, so the
+ * egg could never fire. It has been dead since it was written." THAT IS FALSE,
+ * and the v1 source says so in one line. `legacy/terminal-v1.html:789`, inside
+ * `set-location`'s own `run(a, raw)`:
  *
- *   `sl` is Set-Location. Real PowerShell says so — `Get-Alias sl` is
- *   `Set-Location` — and so did v1, in behaviour if not in intent. A visitor who
- *   types `sl` at a PowerShell prompt means the cmdlet, and `set-location` is
- *   declared `native-semantic`, which is a claim about matching the reference
- *   implementation; dropping one of its real aliases to make room for a joke
- *   would weaken exactly the claim the fidelity taxonomy exists to protect.
+ *     if(String(raw[0]).toLowerCase()==='sl' && raw.length===1) return EGGS.sl();
  *
- * The locomotive is not lost — `src/commands/simulated/` still implements it,
- * and it keeps its tests. It simply has no name to be reached by, which is the
- * state v1 shipped it in. Giving it one would be a change to v1's behaviour
- * dressed up as fidelity to it.
+ * The alias DOES resolve to `set-location` (line 1319) — and `set-location`
+ * then looks at the raw word it was invoked by. So v1 has one coherent
+ * behaviour, not a contradiction:
+ *
+ *     sl          the steam locomotive
+ *     sl /tmp     Set-Location /tmp
+ *     cd          home, because bare `cd` falls through to the empty-target arm
+ *
+ * The egg fires, and always did. The extraction captured `sl` twice because v1
+ * really does record it twice, not because v1 disagreed with itself.
+ *
+ * ── WHAT IS ACTUALLY TRUE HERE ────────────────────────────────────────────
+ *
+ * `sl` is Set-Location. Real PowerShell says so (`Get-Alias sl`), v1 says so,
+ * and `set-location` is declared `native-semantic` — a claim about matching the
+ * reference implementation, which cannot survive one of its real aliases being
+ * taken by something else. That much of the original decision stands.
+ *
+ * What does NOT stand is the conclusion that the locomotive was therefore
+ * nothing. It is a v1 behaviour this rewrite does not yet reproduce, and the
+ * reason is a gap in our own contract rather than a judgement about the joke:
+ *
+ *   `InvocationContext` CARRIES NO INVOCATION NAME. A command cannot ask which
+ *   of its names it was typed as, so `set-location` has no way to distinguish
+ *   bare `sl` from bare `Set-Location` — and in v1 those differ, one printing a
+ *   train and the other going home. Until the context carries it, the branch
+ *   cannot be written where v1 puts it.
+ *
+ * So the train stays implemented and tested in `src/commands/simulated/` —
+ * including against the captured v1 archive, which is the evidence of what it
+ * should print — but it does not own the token, and every surface says so
+ * rather than three of them disagreeing. `shadowedBy` is stamped into the
+ * generated manifest for exactly that reason: before it existed, `Get-Command`
+ * and completion described the joke (badge `SIMULATED`, empty synopsis) while
+ * `Set-Location` was what ran.
  */
-export const SHADOWED_V1_TOKENS: ReadonlyMap<string, string> = new Map([
+export interface ShadowedToken {
+  /** The command a visitor typing this token actually reaches. */
+  owner: string;
+  /** What is shadowed, and what therefore has no name to be reached by. */
+  reason: string;
+}
+
+export const SHADOWED_V1_TOKENS: ReadonlyMap<string, ShadowedToken> = new Map([
   [
     'sl',
-    'An alias of Set-Location in real PowerShell and in v1. v1 also lists it as an ' +
-      'easter egg, which its own dispatcher made unreachable.',
+    {
+      owner: 'set-location',
+      reason:
+        'An alias of Set-Location in real PowerShell and in v1. v1 ALSO prints a steam ' +
+        'locomotive for the bare word, from a branch inside set-location itself ' +
+        '(legacy/terminal-v1.html:789) — a behaviour this rewrite does not yet reproduce ' +
+        'because InvocationContext carries no invocation name, so a command cannot tell ' +
+        'which of its names it was typed as.',
+    },
   ],
 ]);

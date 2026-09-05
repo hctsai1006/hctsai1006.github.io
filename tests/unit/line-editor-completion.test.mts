@@ -28,6 +28,7 @@ import {
   MANIFEST_COMMANDS,
   manifestInventory,
 } from '../../src/line-editor/inventory.ts';
+import { resolveCommand } from '../../src/commands/registry.ts';
 import { TextBuffer } from '../../src/line-editor/text-buffer.ts';
 import { quoteIfNeeded, tokenize } from '../../src/line-editor/tokenize.ts';
 
@@ -186,15 +187,49 @@ describe('command inventory', () => {
     assert.equal(inventory.commands.length, 135);
   });
 
-  it('lets a real command shadow an alias of the same name', () => {
-    // `sl` is both the steam-locomotive joke command and Set-Location's alias.
-    // The dispatcher runs the command, so completion must offer the command.
+  it('offers the command a token actually RUNS, not one that merely shares its name', () => {
+    // This asserted the opposite, on a premise that was wrong twice over: "`sl`
+    // is both the steam-locomotive joke command and Set-Location's alias. The
+    // dispatcher runs the command, so completion must offer the command."
+    //
+    // v1's dispatcher resolves the ALIAS. The train is a branch INSIDE
+    // set-location, keyed on the raw word (legacy/terminal-v1.html:789), not a
+    // separate command. And this engine's registry binds `sl` to Set-Location
+    // too — so completion was describing the joke (badge SIMULATED, empty
+    // synopsis) for a token that runs a native-semantic cmdlet.
+    //
+    // The manifest now carries `shadowedBy`, so there is one answer rather than
+    // one per subsystem. This test is the one that would have caught the drift.
     const sl = inventory.resolve('sl');
-    assert.equal(sl?.kind, 'command');
-    assert.equal(sl?.canonical, 'sl');
+    assert.equal(sl?.kind, 'alias');
+    assert.equal(sl?.canonical, 'Set-Location');
+    assert.notEqual(sl?.synopsis, '', 'and it inherits a real synopsis, not the egg’s empty one');
+
+    // The shadowed entry keeps no name of its own anywhere in the inventory.
+    assert.equal(
+      inventory.commands.filter((c) => c.canonical === 'sl').length,
+      0,
+      'a shadowed name must not appear as its own command',
+    );
+
     assert.equal(inventory.resolve('gci')?.canonical, 'Get-ChildItem');
     assert.equal(inventory.resolve('GCI')?.canonical, 'Get-ChildItem');
     assert.equal(inventory.resolve('no-such-command'), null);
+  });
+
+  it('agrees with the registry about every typeable token', () => {
+    // The general form of the `sl` defect: completion promising one command
+    // while the registry runs another. Checked across the whole inventory, so
+    // the next shadowed token cannot reopen it one name at a time.
+    const disagreements: string[] = [];
+    for (const entry of inventory.commands) {
+      const module = resolveCommand(entry.name);
+      if (module === undefined) continue;
+      if (module.manifest.display !== entry.canonical) {
+        disagreements.push(`${entry.name}: completion says ${entry.canonical}, registry runs ${module.manifest.display}`);
+      }
+    }
+    assert.deepEqual(disagreements, []);
   });
 
   it('resolves a parameter through its alias', () => {

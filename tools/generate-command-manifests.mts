@@ -255,14 +255,26 @@ function build(): { manifests: CommandManifest[]; problems: string[]; stats: Rec
           : entry.params.length > 0
             ? 'declared'
             : 'none',
+      // Stamped so every consumer of manifests.json sees the same answer for a
+      // token whose name belongs to another command. Before this, the registry
+      // ran Set-Location for `sl` while completion, Get-Help and the fidelity
+      // badge all described the easter egg.
+      ...(SHADOWED_V1_TOKENS.has(entry.name)
+        ? { shadowedBy: SHADOWED_V1_TOKENS.get(entry.name)?.owner ?? '' }
+        : {}),
     });
   }
 
   // Invariant 5. A token may not be BOTH a command's own name and another
-  // command's alias. v1 declares `sl` in two places — an easter egg in EGGS and
-  // an alias of set-location in ALIAS — and its dispatcher resolves the alias
-  // first, so the egg can never fire. The extraction captured both faithfully,
-  // and the result was a manifest that claims one token twice.
+  // command's alias, unless the data says which command owns it.
+  //
+  // v1 records `sl` twice — an easter egg in EGGS and an alias of set-location
+  // in ALIAS — and BOTH are live: the alias resolves to set-location, whose own
+  // `run` then checks the raw word and prints the train for the bare form
+  // (legacy/terminal-v1.html:789). An earlier version of this comment claimed
+  // the dispatcher made the egg unreachable. It does not, and the correction
+  // matters: the token is not a contradiction to be discarded but a behaviour
+  // this rewrite has not reproduced yet.
   //
   // Nothing downstream can resolve that: the registry throws, and before the
   // registry existed the kernel's `register` was last-write-wins with no error,

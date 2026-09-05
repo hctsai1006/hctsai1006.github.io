@@ -1,6 +1,25 @@
 /**
  * Set-Location (cd, chdir, sl) — move the shell.
  *
+ * ── ONE v1 BEHAVIOUR THIS DOES NOT REPRODUCE, RECORDED WHERE IT BELONGS ───
+ *
+ * In v1 this command's own `run(a, raw)` opens with
+ *
+ *     if(String(raw[0]).toLowerCase()==='sl' && raw.length===1) return EGGS.sl();
+ *
+ * (`legacy/terminal-v1.html:789`). So `sl` prints a steam locomotive, `sl /tmp`
+ * changes directory, and bare `cd` goes home — three different answers keyed on
+ * WHICH NAME the command was invoked by.
+ *
+ * This cannot be written here yet, and the blocker is ours rather than v1's:
+ * `InvocationContext` carries no invocation name, so nothing reaching this
+ * function can distinguish bare `sl` from bare `Set-Location`. The train is
+ * implemented and tested in `src/commands/simulated/jokes.ts` against the
+ * captured v1 archive — that is the evidence of what it should print — but it
+ * owns no token, and `sl` resolves here. When the context can say how it was
+ * typed, the branch belongs at the top of this command, where v1 puts it.
+ * See `SHADOWED_V1_TOKENS` in `src/commands/rewrite-inventory.data.mts`.
+ *
  * WHAT THE PROBE CORRECTED, and this one is genuinely strange:
  *
  *   THE ERROR FOR A FILE SAYS THE FILE DOES NOT EXIST, AND NAMES THE PATH THE

@@ -166,6 +166,27 @@ export interface CommandManifest {
    * a declaration with nothing behind it yet.
    */
   parameterSource: 'reference-implementation' | 'declared' | 'none';
+  /**
+   * Set when this command's own NAME is an alias of a different command, which
+   * is what a visitor typing it actually reaches. Names the owner.
+   *
+   * This exists because `sl` was described by three subsystems in two different
+   * ways at once. `manifests.json` carried an `sl` command (fidelity
+   * `simulated`, empty synopsis, "a joke response to a common typo for ls") AND
+   * `Set-Location` listing `sl` among its aliases — both faithful to v1, which
+   * records it twice. The registry bound the token to Set-Location while
+   * completion, `Get-Help` and the fidelity badge all described the joke. So
+   * the badge said `SIMULATED` for a token that runs a `native-semantic`
+   * cmdlet, which is precisely the confusion the fidelity taxonomy exists to
+   * prevent.
+   *
+   * A consumer that resolves a typed token MUST skip a shadowed entry, so the
+   * owner's alias wins and one answer reaches the visitor. The entry itself
+   * stays: it is the record of a real v1 behaviour that is implemented, tested
+   * against the captured v1 archive, and currently unreachable — see
+   * `SHADOWED_V1_TOKENS` in `rewrite-inventory.data.mts` for why.
+   */
+  shadowedBy?: string;
 }
 
 /**
