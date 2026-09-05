@@ -344,6 +344,13 @@ export class KernelClient {
    * the kernel creates every process of a pipeline BEFORE running any of them,
    * and events arrive in sequence order, so "at least one process was announced
    * and all of them have exited" cannot be satisfied early.
+   *
+   * THE HONEST LIMIT: a LOST event can leave this pending forever. A `post`
+   * that throws on the worker side — `DataCloneError`, a dead port — takes an
+   * `exit` with it, and no timer here would know the difference between a lost
+   * exit and a command that is still running. What the loss does produce is a
+   * reported gap in the sequence, which is why the ordinal is dense and why
+   * `violations` is worth reading when something never finishes.
    */
   run(source: string, options: ExecOptions = {}): Promise<ExecOutcome> {
     const requestId = options.requestId ?? this.#newRequestId();

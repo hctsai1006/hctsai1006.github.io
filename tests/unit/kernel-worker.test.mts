@@ -879,6 +879,112 @@ describe('a same-realm transport cannot reorder the stream either', () => {
   });
 });
 
+describe('a post that fails does not stop the kernel', () => {
+  it('is reported against the event it could not send, and leaves a visible gap', async () => {
+    // `postMessage` throws `DataCloneError` on a value the algorithm refuses,
+    // and a browser adds Worker states of its own. Before `Kernel.#emit`
+    // contained a listener's failure, one such throw stopped execution
+    // entirely: measured, `listener B saw: []` and `final seq: 1`, with the
+    // process left in `created` forever. The transport's post IS a listener.
+    const kernel = new Kernel({ clock: () => 1 });
+    kernel.register(emitter('one', ['a', 'b', 'c']));
+
+    const sent: unknown[] = [];
+    const failures: { seq: number }[] = [];
+    let refuseNext = false;
+    const worker: KernelTransport = {
+      post: (message) => {
+        if (refuseNext) {
+          refuseNext = false;
+          throw new Error('DataCloneError: could not be cloned');
+        }
+        sent.push(message);
+      },
+      listen: () => () => undefined,
+      close: () => undefined,
+    };
+    serveKernel(kernel, worker, {
+      onPostFailure: (_error, event) => failures.push({ seq: event.seq }),
+    });
+
+    kernel.on((event) => {
+      // Refuse exactly one event, in the middle of the stream.
+      if (event.kind === 'objects' && event.values[0] === 'b') refuseNext = true;
+    });
+
+    kernel.send({ kind: 'exec', requestId: 'r1', terminalId: 't1', source: 'one', background: false });
+    await kernel.drain();
+
+    assert.equal(failures.length, 1, 'the failure was attributed to one event');
+    assert.ok(sent.length > 5, `the rest of the session still went out (${sent.length} messages)`);
+    // The kernel's own numbering is unbroken; what is missing is one message.
+    // That is what makes the loss detectable on the far side rather than
+    // silent, and it is the only thing that can make it detectable.
+    const seqs = sent.map((message) => (message as { seq: number }).seq);
+    assert.equal(seqs.includes(failures[0]?.seq as number), false, 'the refused event never arrived');
+    assert.deepEqual([...seqs].sort((a, b) => a - b), seqs);
+  });
+
+  it('shows up on the receiving side as a reported gap', async () => {
+    const { host, worker } = directPair();
+    const kernel = new Kernel({ clock: () => 1 });
+    kernel.register(emitter('one', ['a']));
+
+    let dropNext = false;
+    const lossy: KernelTransport = {
+      post: (message) => {
+        if (dropNext) {
+          dropNext = false;
+          throw new Error('DataCloneError: could not be cloned');
+        }
+        worker.post(message);
+      },
+      listen: (listener) => worker.listen(listener),
+      close: () => worker.close(),
+    };
+    serveKernel(kernel, lossy, { onPostFailure: () => undefined });
+
+    const violations: ProtocolViolation[] = [];
+    const client = new KernelClient(host, { terminalId: 't1', onViolation: (v) => violations.push(v) });
+    client.on((event) => {
+      if (event.kind === 'process-changed' && event.snapshot.state === 'running') dropNext = true;
+    });
+
+    client.exec('one', { requestId: 'r1' });
+    await kernel.drain();
+
+    assert.equal(violations.length, 1);
+    assert.match(violations[0]?.problems[0] as string, /seq jumped from \d+ to \d+/u);
+    assert.equal(violations[0]?.dropped, false, 'a gap is reported, and what did arrive is kept');
+    client.close();
+  });
+});
+
+describe('a closed transport', () => {
+  it('drops what it is asked to send instead of throwing during teardown', () => {
+    const posted: unknown[] = [];
+    const port: MessageEventTargetLike = {
+      postMessage: (message) => {
+        posted.push(message);
+      },
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    };
+    const transport = eventTargetTransport(port);
+    transport.post('before');
+    transport.close();
+    // Shutdown races with events already in flight, and a real MessagePort
+    // throws once closed — so the alternative is that closing a pane produces a
+    // burst of errors about messages nobody was going to read.
+    assert.doesNotThrow(() => transport.post('after'));
+    assert.deepEqual(posted, ['before']);
+    // And a late subscriber gets a working unsubscribe rather than a listener
+    // that can never fire.
+    assert.doesNotThrow(() => transport.listen(() => undefined)());
+    assert.doesNotThrow(() => transport.close(), 'closing twice is not an error');
+  });
+});
+
 // ---------------------------------------------------------------------------
 // what a browser would use, checked as far as a type checker can check it
 // ---------------------------------------------------------------------------

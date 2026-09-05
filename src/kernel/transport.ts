@@ -131,9 +131,18 @@ export function eventTargetTransport(port: MessageEventTargetLike): KernelTransp
 
   return {
     post(message: unknown): void {
+      // A closed transport DROPS what it is asked to send, and this is the one
+      // place that is the right answer. Closing is how shutdown is expressed,
+      // shutdown races with events already in flight, and a real `MessagePort`
+      // throws once `close()` has been called — so the alternative is that
+      // tearing down a terminal pane produces a burst of errors about messages
+      // nobody was going to read. `serveKernel` would then report every one of
+      // them as a post failure.
+      if (closed) return;
       port.postMessage(message);
     },
     listen(listener: TransportMessageListener): () => void {
+      if (closed) return () => undefined;
       listeners.add(listener);
       if (!started) {
         port.addEventListener('message', onMessage);
@@ -188,9 +197,12 @@ export function eventEmitterTransport(port: MessageEmitterLike): KernelTransport
 
   return {
     post(message: unknown): void {
+      // Dropped after close, for the reason `eventTargetTransport` gives.
+      if (closed) return;
       port.postMessage(message);
     },
     listen(listener: TransportMessageListener): () => void {
+      if (closed) return () => undefined;
       listeners.add(listener);
       if (!attached) {
         port.on('message', onMessage);
