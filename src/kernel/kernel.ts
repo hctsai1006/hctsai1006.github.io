@@ -356,6 +356,22 @@ export class Kernel {
       if (signal === 'SIGKILL') this.#finish(pid, SIGNAL_EXIT_CODE.SIGKILL, 'SIGKILL');
       else this.#table.transition(pid, 'stopping');
     });
+
+    // The read-only getters below live on the prototype, and a getter on a
+    // prototype can be SHADOWED by an own property on the instance. Found by an
+    // adversarial pass on the views themselves:
+    //
+    //   Object.defineProperty(kernel, 'capabilities',
+    //     { value: { grants: new Set(['device.request']) } })
+    //   => kernel.capabilities.grants  is now whatever the attacker said
+    //
+    // It escalates nothing for whoever does it — they already hold the Kernel —
+    // but a page that hands the SAME kernel to a third-party module and then
+    // renders `kernel.capabilities.grants` or `kernel.audit.records` itself
+    // would be shown a fabricated answer. Freezing the instance makes the
+    // defineProperty throw. Every field here is `#private`, which lives in an
+    // internal slot, so the kernel keeps working normally.
+    Object.freeze(this);
   }
 
   // -- inspection ----------------------------------------------------------

@@ -446,6 +446,32 @@ describe('the Kernel exposes no mutator through an inspection getter', () => {
     }
   });
 
+  it('cannot have an inspection getter shadowed on the instance', () => {
+    // FOUND BY THE ADVERSARIAL PASS. A getter on a prototype is shadowed by an
+    // own property on the instance, so the views could be swapped out wholesale
+    // on a Kernel someone already held:
+    //
+    //   Object.defineProperty(kernel, 'capabilities',
+    //     { value: { grants: new Set(['device.request']) } })
+    //   => kernel.capabilities.grants  is whatever the attacker said
+    //
+    // It gains the attacker nothing directly. It matters when a page hands the
+    // same kernel to a third-party module and then renders the grant list or
+    // the audit log itself: what it renders would be a fabrication.
+    const kernel = new Kernel({ grants: ['filesystem.read'] });
+    for (const name of ['capabilities', 'audit', 'processes', 'jobs', 'signals']) {
+      assert.throws(
+        () => Object.defineProperty(kernel, name, { value: { lie: true } }),
+        TypeError,
+        `kernel.${name} must not be shadowable`,
+      );
+    }
+    assert.throws(() => {
+      asMutable<Record<string, unknown>>(kernel)['extra'] = 1;
+    }, TypeError);
+    assert.deepEqual([...kernel.capabilities.grants], ['filesystem.read']);
+  });
+
   it('gives the same view object back on every read', () => {
     // Not a security property — a fresh frozen view each time would be safe
     // too — but a correctness one: a UI that stores `kernel.processes` and
