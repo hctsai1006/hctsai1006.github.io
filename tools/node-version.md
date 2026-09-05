@@ -51,17 +51,48 @@ enforced by RUNNING the code. They are enforced by `tsc --noEmit`, which is why
 `npm run verify` runs the typecheck first, and why a green test run alone is not
 evidence that the types hold.
 
-## Why there is no upper bound
+## The Unicode coupling, and why CI reads `.node-version`
 
-The obvious one is `<25`, and it would be a guess. The one engine coupling this
-repository actually has is Unicode: `src/line-editor/cells.ts` carries
-East_Asian_Width and Hangul_Syllable_Type tables for Unicode 16.0.0, chosen to
-match `process.versions.unicode`, because a character that a 17.0 table calls
-Wide while the engine's own property escapes call it unassigned is a
+`src/line-editor/cells.ts` derives what it can from the engine's own property
+escapes — `\p{Mn}`, `\p{Me}`, `\p{Cf}` — and carries East_Asian_Width and
+Hangul_Syllable_Type as generated tables, because those are not property
+escapes. Both halves have to come from the SAME Unicode release. A character
+the table calls Wide while the engine's escapes call it unassigned is a
 disagreement with no correct answer.
 
-That coupling is already **enforced by a test**: `tests/unit/cell-width.test.mts`
-asserts the table's version equals `process.versions.unicode`, so an engine that
-moves Unicode fails loudly and by name. A version range would be a weaker
-statement of the same fact, and it would also block a future Node that is fine.
-The check that exists is better than the guess that would replace it.
+**A patch release moves Unicode, and that is not hypothetical.** CI floated on
+`node-version: '24'` and resolved **24.20.0, which carries Unicode 17.0**,
+against extracts at 16.0.0. This is what happened:
+
+    node v24.20.0 satisfies >=24.12.0 (unicode 17.0)
+    ✖ keeps the checked-in UCD version and the engine s Unicode version in step
+
+An earlier draft of this file argued that no upper bound was needed because
+"the check that exists is better than the guess that would replace it", and
+that a range "would also block a future Node that is fine". The first half held
+— the check caught it, loudly and by name, which is exactly what it is for. The
+second half was wrong: 24.20.0 is inside `>=24.12.0` and is **not** fine for
+this repository as it stands.
+
+The fix is not an upper bound, which would still be a guess about where the
+next Unicode bump lands. It is that CI reads `.node-version` instead of
+floating, so the engine under test is the engine this repository says it is
+tested on. Upgrading past a Unicode bump is a deliberate change that moves
+three things together: `.node-version`, the UCD extracts under
+`tests/unit/fixtures/`, and the regenerated table.
+
+`tools/check-engine.mts` checks this too, and runs first in `npm run verify`.
+The test already covered it; the point of repeating it is that a named failure
+in the first second tells the next person it is their Node, where a red test
+twenty seconds in reads like their change.
+
+## Why there is still no upper bound
+
+`<25` would not have helped: the version that broke it, 24.20.0, is inside any
+range that admits 24.13.0. An upper bound is a guess about where the next
+Unicode bump lands, and the bump that actually happened was a patch release.
+
+What closes it is the pin plus the two checks — CI runs the named version, and
+both `check-engine` and the cell-width suite refuse an engine whose Unicode
+does not match the extracts. That is a statement about the thing that actually
+couples, rather than about a version number that only correlates with it.

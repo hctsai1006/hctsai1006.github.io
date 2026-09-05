@@ -32,7 +32,7 @@
  *   node tools/check-engine.mts
  */
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -79,6 +79,48 @@ if (older) {
   );
 }
 
+/**
+ * The engine's Unicode version has to match the checked-in UCD extracts.
+ *
+ * `src/line-editor/cells.ts` derives what it can from the engine's own property
+ * escapes — `\p{Mn}`, `\p{Me}`, `\p{Cf}` — and carries East_Asian_Width and
+ * Hangul_Syllable_Type as generated tables, because those are not property
+ * escapes. Both halves must come from the SAME Unicode version: a character
+ * that the table calls Wide while the engine's escapes call it unassigned is a
+ * disagreement with no correct answer.
+ *
+ * This was already checked, in `tests/unit/cell-width.test.mts`, and that check
+ * did its job — CI floated to Node 24.20.0 (Unicode 17.0) against extracts at
+ * 16.0.0 and the suite failed by name. It is repeated HERE because `verify`
+ * runs this first: the difference between "one named failure in the first
+ * second" and "a red test twenty seconds in" is whether the next person
+ * understands it is their Node rather than their change.
+ *
+ * The expected version is read from the fixture FILENAMES, so refreshing the
+ * extracts moves this automatically. It is deliberately not a second constant.
+ */
+const FIXTURES = join(REPO, 'tests', 'unit', 'fixtures');
+const eaw = readdirSync(FIXTURES).find((f) => f.startsWith('EastAsianWidth-'));
+if (eaw === undefined) {
+  fail(`no EastAsianWidth extract in ${FIXTURES}. The width table cannot be checked against the engine.`);
+}
+const ucd = /^EastAsianWidth-(\d+)\.(\d+)\.\d+\./.exec(eaw);
+if (ucd === null) {
+  fail(`cannot read a Unicode version from the extract name "${eaw}".`);
+}
+const engineUnicode = process.versions.unicode;
+const wanted = `${ucd[1] ?? ''}.${ucd[2] ?? ''}`;
+if (engineUnicode !== wanted) {
+  fail(
+    `this Node carries Unicode ${engineUnicode}, and the checked-in UCD extracts are ${wanted}.\n` +
+      '  src/line-editor/cells.ts pairs generated East_Asian_Width tables with the ENGINE\'S own\n' +
+      `  \\p{Mn}/\\p{Me}/\\p{Cf} escapes, so the two must be the same Unicode release — otherwise a\n` +
+      '  character is Wide by the table and unassigned by the engine, which has no right answer.\n' +
+      `  Either run Node ${readFileSync(join(REPO, '.node-version'), 'utf8').trim()} (see .node-version), or\n` +
+      '  refresh tests/unit/fixtures/ from unicode.org and run: node tools/generate-width-table.mts --write',
+  );
+}
+
 process.stdout.write(
-  `  node v${process.versions.node} satisfies ${range} (unicode ${process.versions.unicode})\n`,
+  `  node v${process.versions.node} satisfies ${range}, unicode ${engineUnicode} matches the UCD extracts\n`,
 );

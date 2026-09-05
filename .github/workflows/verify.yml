@@ -32,9 +32,19 @@ jobs:
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          # The tools are .mts run directly by Node's type stripping, which needs
-          # a modern runtime. package.json pins engines to >=24.
-          node-version: '24'
+          # THE PINNED VERSION, not the newest 24.x. This said `'24'` and that
+          # floated: CI resolved 24.20.0 while .node-version says 24.13.0, and
+          # the two ship DIFFERENT UNICODE VERSIONS -- 17.0 against 16.0. The
+          # width table is generated from UCD extracts chosen to match
+          # `process.versions.unicode`, because the other half of that model is
+          # the engine's own \p{Mn}/\p{Me}/\p{Cf} escapes, so a floating engine
+          # silently pairs a 16.0 table with 17.0 escapes.
+          #
+          # It did not go silent -- the cell-width suite failed by name, which is
+          # what it is for -- but a required gate that breaks when a patch
+          # release lands is a gate that will be muted. Reading the pin means CI
+          # tests the engine this repository says it is tested on.
+          node-version-file: .node-version
           cache: npm
 
       - run: npm ci
