@@ -65,10 +65,21 @@ process.stdout.write(`  running ${files.length} test file(s)\n`);
 // Captured rather than inherited, so the summary can be read back. The cost is
 // that output arrives at the end instead of streaming; for a suite that runs in
 // about two seconds that is a fair trade for closing the hole above.
+// NODE_OPTIONS is scrubbed of the flags that make the runner report success
+// without running anything. `NODE_OPTIONS=--test-only` with no `.only` anywhere
+// executed no test body at all and reported `tests 39, pass 39, fail 0,
+// skipped 0, todo 0` — every condition this gate checks, from 1291 real tests
+// none of which ran.
+const SUPPRESSORS = /--test-only|--test-name-pattern(=\S*)?|--test-skip-pattern(=\S*)?/g;
+const scrubbed = (process.env['NODE_OPTIONS'] ?? '').replace(SUPPRESSORS, '').trim();
+if (scrubbed !== (process.env['NODE_OPTIONS'] ?? '').trim()) {
+  process.stdout.write('  ignoring test-suppressing flags in NODE_OPTIONS\n');
+}
+
 const result = spawnSync(
   process.execPath,
   ['--test', '--test-reporter=spec', ...files.map((f) => relative(REPO, resolve(REPO, f)))],
-  { cwd: REPO, encoding: 'utf8' },
+  { cwd: REPO, encoding: 'utf8', env: { ...process.env, NODE_OPTIONS: scrubbed } },
 );
 
 if (result.error !== undefined) {
@@ -82,10 +93,24 @@ if (result.stderr) process.stderr.write(result.stderr);
 
 if (result.status !== 0) process.exit(result.status ?? 1);
 
-/** Read one `ℹ <name> <n>` line out of the spec reporter's summary. */
+/**
+ * Read one `ℹ <name> <n>` line out of the spec reporter's summary.
+ *
+ * The LAST match, not the first. A test file's own stdout is interleaved into
+ * this stream BEFORE the reporter's summary, so a file containing
+ *
+ *     console.log('ℹ tests 1291'); console.log('ℹ pass 1291');
+ *     console.log('ℹ skipped 0');  console.log('ℹ todo 0');
+ *     test.skip('the entire safety net', () => { assert.equal(1, 2); });
+ *
+ * handed this gate exactly the four numbers it wanted while every real test was
+ * skipped, and it exited 0. The reporter writes its summary last, so the final
+ * occurrence is the one that came from the runner rather than from a test.
+ */
 function reported(name: string): number | null {
-  const hit = new RegExp(`^\\s*ℹ ${name} (\\d+)\\s*$`, 'm').exec(output);
-  return hit === null ? null : Number(hit[1]);
+  const all = [...output.matchAll(new RegExp(`^\\s*ℹ ${name} (\\d+)\\s*$`, 'gm'))];
+  const last = all.at(-1);
+  return last === undefined ? null : Number(last[1]);
 }
 
 const tests = reported('tests');

@@ -466,12 +466,25 @@ export function sanitizePSValue(value: PSValue): PSValue {
   if (!isPSObject(value)) return value;
 
   let changed = value.baseObject !== undefined;
-  const properties: Record<string, PSValue> = {};
+  // Built with fromEntries, which DEFINES each key rather than assigning it.
+  // `properties['__proto__'] = x` on a plain object invokes the setter: the key
+  // vanished from Object.keys while getProperty still found it through the
+  // chain — the exact disagreement the ownership fix removed — and the bag's
+  // prototype became attacker-supplied data on the way out of the kernel.
+  // Select-Object already builds its bag with a null prototype for this reason;
+  // rebuilding here undid it one layer later.
+  //
+  // fromEntries rather than Object.create(null) because structuredClone
+  // NORMALISES a null prototype back to Object.prototype, so the guarantee would
+  // not survive the boundary this function exists to prepare for — and the
+  // envelope would stop round-tripping identically.
+  const entries: [string, PSValue][] = [];
   for (const [key, property] of Object.entries(value.properties)) {
     const next = sanitizePSValue(property);
     if (next !== property) changed = true;
-    properties[key] = next;
+    entries.push([key, next]);
   }
+  const properties: Record<string, PSValue> = Object.fromEntries(entries);
   if (!changed) return value;
 
   // Rebuilt without `baseObject`, so the key is ABSENT rather than present and

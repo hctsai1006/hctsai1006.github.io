@@ -60,6 +60,13 @@ interface Entry {
   path: string;
   /** The line ending of the blob in the index: `lf`, `crlf`, `mixed` or `-text`. */
   index: string;
+  /**
+   * The same for the file ON DISK. Reading only the index made this gate pass on
+   * the exact workflow it was written for: the loop is edit, `npm run verify`,
+   * `git add`, commit, and a NUL typed into a tracked file is invisible to the
+   * index until the `git add`. All three historical NULs arrived that way.
+   */
+  working: string;
   /** The `text` attribute git resolved, e.g. `text=auto`, `-text`, or empty. */
   attribute: string;
 }
@@ -86,14 +93,15 @@ function listing(): readonly Entry[] {
       process.exit(3);
     }
     const head = record.slice(0, tab);
-    const match = /^i\/(\S+)\s+w\/\S+\s+attr\/(.*)$/.exec(head.trim());
+    const match = /^i\/(\S+)\s+w\/(\S+)\s+attr\/(.*)$/.exec(head.trim());
     if (match === null) {
       process.stderr.write(`\n  could not parse a git ls-files record: ${JSON.stringify(record)}\n\n`);
       process.exit(3);
     }
     entries.push({
       index: match[1] ?? '',
-      attribute: (match[2] ?? '').trim(),
+      working: match[2] ?? '',
+      attribute: (match[3] ?? '').trim(),
       path: record.slice(tab + 1),
     });
   }
@@ -115,7 +123,7 @@ function main(): void {
   const entries = listing();
   const offences = entries.filter(
     (e) =>
-      e.index === '-text' &&
+      (e.index === '-text' || e.working === '-text') &&
       // Not one that declares itself binary in .gitattributes.
       !e.attribute.includes('-text') &&
       TEXT_EXTENSIONS.has(extensionOf(e.path)),

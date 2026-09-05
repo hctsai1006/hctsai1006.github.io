@@ -100,10 +100,18 @@ const OP_METHOD: Readonly<Record<ArithmeticOp, string>> = {
 function mergeBags(left: PSValue, right: PSValue): PSValue {
   if (!isPSObject(right)) raise(addHashTableToNonHashTableError());
   const leftBag = (left as { properties: Readonly<Record<string, PSValue>> }).properties;
-  const merged: Record<string, PSValue> = { ...leftBag };
+  // Object.create(null): `merged[key] = value` with key '__proto__' on a plain
+  // object invokes the setter, so `@{a=1} + @{__proto__=@{...}}` replaced the
+  // result's prototype with the right operand's data instead of adding a member,
+  // and the duplicate-key guard never fired because Object.hasOwn was false.
+  const merged: Record<string, PSValue> = Object.fromEntries(Object.entries(leftBag));
   for (const [key, value] of Object.entries(right.properties)) {
     if (Object.hasOwn(merged, key)) raise(duplicateHashKeyError(key));
-    merged[key] = value;
+    // defineProperty, not assignment: `merged['__proto__'] = v` invokes the
+    // setter, so `@{a=1} + @{__proto__=@{...}}` replaced the result's prototype
+    // with the right operand's data instead of adding a member — and the
+    // duplicate-key guard above never fired, because Object.hasOwn was false.
+    Object.defineProperty(merged, key, { value, writable: true, enumerable: true, configurable: true });
   }
   return psObject(merged);
 }

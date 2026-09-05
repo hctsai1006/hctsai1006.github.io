@@ -131,10 +131,16 @@ export function matchInfo(match: RegExpExecArray, input: string, map: GroupMap):
   const groups: (string | null)[] = [match[0]];
   for (const jsIndex of map.dotNetOrder) groups.push(match[jsIndex] ?? null);
 
+  // A capture group named `__proto__` is legal in .NET and in JavaScript, and
+  // `named[name] = value` on a plain object assigns through the setter — the
+  // group would vanish from the map and `${__proto__}` in a replacement would
+  // silently expand to nothing. defineProperty below stores it as data.
   const named: Record<string, string> = {};
   for (const [name, jsIndex] of Object.entries(map.names)) {
     const value = match[jsIndex];
-    if (value !== undefined) named[name] = value;
+    if (value !== undefined) {
+      Object.defineProperty(named, name, { value, writable: true, enumerable: true, configurable: true });
+    }
   }
 
   return { value: match[0], index: match.index, length: match[0].length, groups, named, input };
