@@ -239,6 +239,19 @@ export interface SnapshotOptions {
    * which is v1's `fsSer` rule (`if(n.mode!==DEFMODE[n.t]) o.m=n.mode`) and the
    * reason a freshly booted, untouched filesystem serialises to almost nothing.
    * Without it, every seed node is recorded, which is correct but larger.
+   *
+   * IT IS ALSO THE AUTHORITY ON WHICH NODES MAY CLAIM SEED ORIGIN, AND THAT
+   * CHECK IS OFF WITHOUT IT. `WriteOptions.origin` is public, so any caller can
+   * mark its own file as a seed node; believed, the overlay records that file
+   * with no content and the next boot DROPS IT. Passing the seed is what makes
+   * `record` refuse the claim — and omitting it degrades silently, because a
+   * document exported without a seed looks entirely normal.
+   *
+   * PASS IT. `bootStorage` is the worked example on the import side: it hands
+   * the seed to `importSnapshot` for exactly this reason, and it had to be
+   * taught to. There is no production caller of `createSnapshot` yet, so
+   * whoever writes `Export-FileSystem` is the first person this matters to.
+   * `RestoreOptions.seed` carries the same warning for the other direction.
    */
   readonly seed?: SeedSpec;
   /** Where to start. Defaults to the mount root. */
