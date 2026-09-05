@@ -250,6 +250,20 @@ export function typeNameOf(value: PSValue): string {
  * so `(1.5).ToString()` is `1,5` under de-DE while `"$(1.5)"` stays `1.5`. It
  * also differs in kind — `@(1,2).ToString()` is `System.Object[]` and
  * `$null.ToString()` throws. That belongs with the method-call evaluator.
+ *
+ * IT UNRAVELS EXACTLY ONE LEVEL, AND THAT IS THE WHOLE SHAPE OF IT.
+ *
+ * The conversion descends into the top value's members and then stops, asking
+ * each member for its own `ToString()` rather than converting it again. So a
+ * nested PSCustomObject is the empty string, a nested collection is its .NET
+ * type name, and a chain sixty objects deep renders identically to a chain one
+ * object deep. This was measured, not assumed — the earlier implementation
+ * recursed, which was wrong for every jagged array and fatal for cyclic input:
+ *
+ *     toPSString(cyclic)  =>  RangeError: Maximum call stack size exceeded
+ *
+ * built from nothing more exotic than a parent/child link. `nestedPSString`
+ * below carries the measurement table and the reason there is no visited set.
  */
 export const DEFAULT_OFS = ' ';
 
@@ -277,7 +291,81 @@ function formatDateInvariant(value: Date): string {
   );
 }
 
-export function toPSString(value: PSValue, ofs: string = DEFAULT_OFS): string {
+/**
+ * Is this a property bag — the thing `@{...}` is the rendering of — rather than
+ * a wrapped host type that merely carries properties?
+ *
+ * The distinction is what `"$x"` turns on. pwsh renders a PSCustomObject as its
+ * property bag and everything else as that object's own `ToString()`, and the
+ * two are not interchangeable: `"$PSVersionTable"` is
+ * `System.Management.Automation.PSVersionHashTable`, never `@{PSVersion=7.6.5;
+ * …}`. An object with no typeNames at all is treated as a bag, because
+ * `typeNameOf` already reports PSCustomObject for it.
+ */
+export function isPSCustomObject(value: PSValue): value is PSObject {
+  if (!isPSObject(value)) return false;
+  if (value instanceof Date || value instanceof Uint8Array || Array.isArray(value)) return false;
+  return (value.typeNames[0] ?? PS_CUSTOM_OBJECT) === PS_CUSTOM_OBJECT;
+}
+
+/**
+ * One property value or one array element — the slot `"$x"` fills WITHOUT
+ * recursing.
+ *
+ * This is the whole of the cycle fix, and it is a fidelity fix rather than a
+ * guard bolted on: PowerShell's conversion unravels exactly ONE level and then
+ * asks each member for its `ToString()`. Measured on pwsh 7.6.5 (Windows,
+ * host culture zh-TW; the de-DE column is the same, because interpolation is
+ * culture-invariant at every level):
+ *
+ *   $inner = [pscustomobject]@{x=1; y='two'}
+ *   "$inner"                                   @{x=1; y=two}
+ *   "$([pscustomobject]@{n=9; child=$inner})"  @{n=9; child=}        <- EMPTY
+ *   "$([pscustomobject]@{ arr = @(1,2) })"     @{arr=System.Object[]}
+ *   "$([pscustomobject]@{ a = [int[]](1,2) })" @{a=System.Int32[]}
+ *   "$([pscustomobject]@{ a = [byte[]](1,2) })"@{a=System.Byte[]}
+ *   "$([pscustomobject]@{ ht = @{a=1} })"      @{ht=System.Collections.Hashtable}
+ *   "$([pscustomobject]@{ d = $date })"        @{d=03/04/2020 05:06:07}
+ *   "$([pscustomobject]@{ nul = $null })"      @{nul=}
+ *   $j = [object[]]@(1, @(2,3)); "$j"          1 System.Object[]
+ *
+ * A nested PSCustomObject is EMPTY because `PSCustomObject.ToString()` is the
+ * empty string — the same fact `Select-Object -Unique` collapses distinct
+ * custom objects on, which cmdlets.test.mts already records. So the depth-60
+ * chain and the self-referencing object produce the SAME output as each other
+ * and as a one-deep object:
+ *
+ *   $c = [pscustomobject]@{n=1}; $c | Add-Member NoteProperty self $c
+ *   "$c"                                       @{n=1; self=}
+ *   "$($c.self.self)"                          @{n=1; self=}
+ *   chain of 60 nested objects                 @{v=1; down=}
+ *
+ * WHY THERE IS NO VISITED SET, NO DEPTH LIMIT AND NO NODE BUDGET. There is no
+ * recursion left to bound. `toPSString` descends exactly one level and this
+ * function descends none, so the work is O(properties of the top object) and
+ * the stack depth is 2 for every input, cyclic or not. A visited set would have
+ * produced output pwsh never produces; a depth limit would have needed a number
+ * pwsh does not have.
+ *
+ * KNOWN GAP, stated rather than hidden: for a wrapped host type pwsh calls the
+ * real `ToString()` — `[timespan]` renders `01:30:00`, `[version]` renders
+ * `1.2.3`, a FileInfo renders its path — and this returns the type name
+ * instead. Turning a structured value into its canonical text is the
+ * formatter's job and the formatter is a separate component; `timeSpanText` and
+ * `versionText` are exported for it. The type name is what pwsh itself prints
+ * for every host type whose `ToString()` is the type name, which is the case
+ * that actually reaches this engine ($PSVersionTable, a Hashtable, an array).
+ */
+function nestedPSString(value: PSValue): string {
+  if (value instanceof Date) return formatDateInvariant(value);
+  // A collection never unravels twice; it reports its .NET type.
+  if (value instanceof Uint8Array || Array.isArray(value)) return typeNameOf(value);
+  if (isPSObject(value)) return isPSCustomObject(value) ? '' : typeNameOf(value);
+  return scalarPSString(value);
+}
+
+/** The part of `"$x"` that is the same at every level: the primitives. */
+function scalarPSString(value: PSValue): string {
   if (value === null || value === undefined) return '';
   if (typeof value === 'string') return value;
   if (typeof value === 'boolean') return value ? 'True' : 'False';
@@ -289,15 +377,31 @@ export function toPSString(value: PSValue, ofs: string = DEFAULT_OFS): string {
   // negative zero where pwsh answers `-0`. Both measured on pwsh 7.6.5/Linux.
   if (typeof value === 'number') return formatGeneral(value, 15, INVARIANT, true);
   if (typeof value === 'bigint') return value.toString();
+  return String(value);
+}
+
+export function toPSString(value: PSValue, ofs: string = DEFAULT_OFS): string {
   if (value instanceof Date) return formatDateInvariant(value);
   if (value instanceof Uint8Array) return Array.from(value).join(ofs);
-  if (Array.isArray(value)) return value.map((item) => toPSString(item as PSValue, ofs)).join(ofs);
+  // ONE level of unravelling, then `nestedPSString`. `"$([object[]]@(1,@(2,3)))"`
+  // is `1 System.Object[]` in pwsh, not `1 2 3`: the inner array reports its
+  // type rather than being joined a second time. Measured, and it is why the
+  // self-referencing array `$oa = [object[]]@(1,$oa)` renders `1 System.Object[]`
+  // there instead of exhausting a stack here.
+  if (Array.isArray(value)) return value.map((item) => nestedPSString(item as PSValue)).join(ofs);
   if (isPSObject(value)) {
-    return `@{${Object.entries(value.properties)
-      .map(([key, item]) => `${key}=${toPSString(item, ofs)}`)
+    // A wrapped host type is its ToString(), not a property bag. See the gap
+    // recorded on `nestedPSString`.
+    if (!isPSCustomObject(value)) return typeNameOf(value);
+    const keys = Object.keys(value.properties);
+    // `"$([pscustomobject]@{})"` is the EMPTY STRING, not `@{}`. Measured:
+    // `"$e".Length` is 0. A bag with nothing in it renders as nothing.
+    if (keys.length === 0) return '';
+    return `@{${keys
+      .map((key) => `${key}=${nestedPSString(value.properties[key] as PSValue)}`)
       .join('; ')}}`;
   }
-  return String(value);
+  return scalarPSString(value);
 }
 
 // ---------------------------------------------------------------------------

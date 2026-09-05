@@ -43,11 +43,17 @@
  *   1 -eq @(1)                                  ->  False
  *   1 -lt @(2)                                  ->  THROWS, id=ComparisonFailure
  *
- * KNOWN GAP, recorded rather than hidden: the string form PowerShell uses for a
- * collection is `.ToString()` per element, so `'abc' -eq ,@('abc')` is False
- * there (the inner array renders as `System.Object[]`) while `toPSString`
- * recurses and would say True. That needs the culture-dependent `.ToString()`
- * conversion to-string.ts deliberately does not provide.
+ * A GAP THAT USED TO BE RECORDED HERE IS NOW CLOSED. It read: "the string form
+ * PowerShell uses for a collection is `.ToString()` per element, so
+ * `'abc' -eq ,@('abc')` is False there (the inner array renders as
+ * `System.Object[]`) while `toPSString` recurses and would say True." The
+ * diagnosis was right and the conclusion was wrong: `toPSString` recursed
+ * because it had been written to, not because `"$x"` recurses. pwsh unravels
+ * exactly ONE level and then takes each member's `ToString()`, so the inner
+ * array reports `System.Object[]` in `"$x"` too. `toPSString` now does the
+ * same, this comparison answers False like the reference implementation, and
+ * no culture-dependent conversion was needed to get there. See the measurement
+ * table on `nestedPSString` in psobject.ts.
  */
 
 import { toPSString } from '../formatting/to-string.ts';

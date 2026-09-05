@@ -219,7 +219,11 @@ export const TIMESPAN_TYPE_NAMES: readonly string[] = [
  * KNOWN GAP, stated rather than hidden: `"$ts"` in pwsh is `01:02:05.5000000`,
  * while `toPSString` on this object yields `System.TimeSpan`, because
  * to-string.ts prints the type name for any PSObject that is not a
- * PSCustomObject. Rendering a TimeSpan as text is a formatter's job and the
+ * PSCustomObject. That sentence described the intent rather than the code until
+ * the cyclic-value fix: `toPSString` used to print `@{Ticks=…; Days=…}` here,
+ * which is a shape pwsh reserves for a PSCustomObject and never produces for a
+ * TimeSpan. It prints the type name now, and a test holds it there.
+ * Rendering a TimeSpan as text is a formatter's job and the
  * formatter is a separate component, so `timeSpanText` below is exported for it
  * rather than smuggled in as an extra property — a `Text` member that pwsh does
  * not have would make this object's shape a lie about a type it names.
