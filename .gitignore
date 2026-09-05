@@ -6,3 +6,5 @@ dist/
 .DS_Store
 # playwright-mcp scratch (screenshots, snapshots) from design review passes
 .playwright-mcp/
+# machine-readable test counts, written by `node tools/run-tests.mts --summary`
+test-summary.json
