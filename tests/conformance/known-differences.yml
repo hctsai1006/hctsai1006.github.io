@@ -59,12 +59,16 @@ differences:
       CurrentCulture, so this is a real design divergence even where the answers
       agree. It is recorded as `matches` rather than `differs` because it has
       been MEASURED not to change any answer in the corpus: the capture evaluates
-      every case under en-US, under this host's real culture (zh-TW) and under a
+      every case under en-US, under the capture host's own culture and under a
       stress culture with different separators (de-DE), and no COMPARISON case
-      moves. Cases outside comparison do move -- the two culture.* cases and the
-      three date-formatting ones covered by date-formatting-pinned-to-en-us --
-      and none of them is a comparison. Collation outside the Latin script has
-      not been probed and is not claimed.
+      moves. Cases outside comparison do move -- the two culture.* cases and two
+      of the three date-formatting ones covered by date-formatting-pinned-to-en-us
+      -- and none of them is a comparison. Collation outside the Latin script has
+      not been probed and is not claimed. The host-culture pass is worth exactly
+      what the host is: the fixture is now captured in a container whose culture
+      is the invariant one, so that pass no longer contributes a third locale.
+      The de-DE pass is the one that is chosen rather than inherited, and it is
+      the one the claim rests on.
 
   - id: date-formatting-pinned-to-en-us
     kind: deliberate
@@ -76,8 +80,13 @@ differences:
       reason psobject.ts pins its collator: a browser tab has no reliable culture
       to follow and a differential expectation that moves with the runner is not
       an expectation. The reference implementation DOES follow CurrentCulture,
-      and the capture proves it: these three cases are the ones whose results
-      change under the de-DE stress culture, which is why they are named here.
+      and the capture proves it for two of the three: date.format-single-char-is-standard
+      and date.format-day-and-month-names both change under the de-DE stress
+      culture. date.format-meridiem-and-twelve-hour does NOT -- de-DE writes the
+      same AM/PM designators as en-US, so that case cannot distinguish the two
+      cultures at all. It is listed here because it is the same decision in the
+      same function, not because the capture demonstrates it; saying otherwise
+      would be claiming evidence that does not exist.
       Recorded as `matches` rather than `differs` because the capture pins en-US,
       so the answers agree under the conditions the fixture was taken in; the
       divergence is in what the two implementations would do on a German

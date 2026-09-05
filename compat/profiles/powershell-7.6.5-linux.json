@@ -15,7 +15,7 @@
     "dotnetSdk": "10.0.303",
     "sourceCommit": "7acb29279dd64e646d821f75d1cc8ad59455a9a6",
     "snapshotDigest": "sha256:ecf64e4d814489f7410558b25aa4b5945b4af423ac6e7d85841910ebc19adf8c",
-    "derivedFrom": "releases.lock.json generated 2026-09-04T15:40:30.917Z"
+    "derivedFrom": "releases.lock.json generated 2026-09-05T01:59:41.743Z"
   },
   "bundledModules": {
     "Microsoft.PowerShell.Archive": "1.2.6",
@@ -45,79 +45,92 @@
       "summary": "VT Reset sequences appearing mid-string are handled correctly",
       "upstreamPr": 26424,
       "breaking": false,
-      "since": "7.7.0-preview.4"
+      "since": "7.7.0-preview.4",
+      "emulated": false
     },
     "application.outputEncodingVariable": {
       "summary": "Automatic variable controlling how native command output is decoded",
       "upstreamPr": 21219,
       "breaking": false,
-      "since": "7.7.0-preview.4"
+      "since": "7.7.0-preview.4",
+      "emulated": false
     },
     "csv.noTypeInformationObsolete": {
       "summary": "`-NoTypeInformation` is an obsolete no-op; `-IncludeTypeInformation` is evaluated by value",
       "upstreamPr": 26719,
       "breaking": false,
-      "since": "7.7.0-preview.4"
+      "since": "7.7.0-preview.4",
+      "emulated": false
     },
     "exportCsv.appendNoHeaderExclusive": {
       "summary": "`-Append` and `-NoHeader` are now mutually exclusive",
       "upstreamPr": 26472,
       "breaking": false,
-      "since": "7.7.0-preview.4"
+      "since": "7.7.0-preview.4",
+      "emulated": false
     },
     "format.excludeProperty": {
       "summary": "`-ExcludeProperty` parameter added to Format-* cmdlets",
       "upstreamPr": 26514,
       "breaking": false,
-      "since": "7.7.0-preview.4"
+      "since": "7.7.0-preview.4",
+      "emulated": false
     },
     "format.property.rejectNullOrEmpty": {
       "summary": "`ValidateNotNullOrEmpty` added to `-Property`",
       "upstreamPr": 26552,
       "breaking": true,
-      "since": "7.7.0-preview.4"
+      "since": "7.7.0-preview.4",
+      "emulated": true
     },
     "joinPath.extension": {
       "summary": "`-Extension` parameter added",
       "upstreamPr": 26482,
       "breaking": false,
-      "since": "7.7.0-preview.4"
+      "since": "7.7.0-preview.4",
+      "emulated": false
     },
     "newGuid.defaultVersion": {
       "summary": "`New-Guid` emits a time-sortable UUID v7 by default instead of a random UUID v4",
       "upstreamPr": 27033,
       "breaking": true,
-      "since": "7.7.0-preview.4"
+      "since": "7.7.0-preview.4",
+      "emulated": true
     },
     "progress.doubleWidthAware": {
       "summary": "Progress bar renders correctly with double-width Unicode characters",
       "upstreamPr": 26185,
       "breaking": false,
-      "since": "7.7.0-preview.4"
+      "since": "7.7.0-preview.4",
+      "emulated": false
     },
     "switchParameters.honourExplicitFalse": {
       "summary": "Explicit -<Operator>:$false is now honoured rather than treated as present",
       "upstreamPr": 26485,
       "breaking": true,
-      "since": "7.7.0-preview.4"
+      "since": "7.7.0-preview.4",
+      "emulated": true
     },
     "temporaryDirectory.cmdlet": {
       "summary": "`New-TemporaryDirectory` cmdlet added",
       "upstreamPr": 27549,
       "breaking": false,
-      "since": "7.7.0-preview.4"
+      "since": "7.7.0-preview.4",
+      "emulated": false
     },
     "unix.lastWriteTime.dynamicWidth": {
       "summary": "LastWriteTime column width is computed dynamically on Unix",
       "upstreamPr": 24624,
       "breaking": false,
-      "since": "7.7.0-preview.4"
+      "since": "7.7.0-preview.4",
+      "emulated": false
     },
     "validation.throwsArgumentException": {
       "summary": "Not-null-not-empty validation now throws ArgumentException instead of PSArgumentNullException",
       "upstreamPr": 26668,
       "breaking": true,
-      "since": "7.7.0-preview.4"
+      "since": "7.7.0-preview.4",
+      "emulated": true
     }
   },
   "commands": {

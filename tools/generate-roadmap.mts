@@ -83,9 +83,30 @@ function validatePlan(items: readonly WorkItem[]): string[] {
     }
   }
 
+  // A dependency edge is a claim about order, and nothing checked the statuses
+  // along one. An item could be `done` while something it dependsOn was `todo`,
+  // and the published table printed the two in adjacent columns as if that were
+  // a plan.
+  //
+  // What is enforced is COMPLETION, not start: `done` is a claim that the work
+  // finished, and work cannot have finished on top of work that has not. Being
+  // `in-progress` while a dependency is still open is ordinary overlapping work
+  // and is left alone -- three real edges in the current plan are exactly that,
+  // which is why the rendered header below says "cannot be complete before"
+  // rather than the "cannot start before" it used to claim and never checked.
   for (const item of items) {
     for (const dep of item.dependsOn) {
-      if (!byNumber.has(dep)) problems.push(`item ${item.n} depends on ${dep}, which does not exist`);
+      const target = byNumber.get(dep);
+      if (target === undefined) {
+        problems.push(`item ${item.n} depends on ${dep}, which does not exist`);
+        continue;
+      }
+      if (item.status === 'done' && target.status !== 'done') {
+        problems.push(
+          `item ${item.n} is marked done but depends on ${dep}, which is "${target.status}". ` +
+            'A completion claim cannot rest on unfinished work.',
+        );
+      }
     }
   }
 
@@ -211,7 +232,10 @@ function renderMaster(items: readonly WorkItem[]): string {
   // --- suggested order ----------------------------------------------------
   L.push('## Execution order');
   L.push('');
-  L.push('Dependency-respecting. An item cannot start before everything it depends on is done.');
+  L.push(
+    'Dependency-respecting. An item cannot be complete before everything it depends on is — ' +
+      'checked along every edge by `tools/generate-roadmap.mts`. Work in progress may overlap.',
+  );
   L.push('');
   L.push('| # | Item | Phase | Status | Depends on | Tasks |');
   L.push('| --- | --- | --- | --- | --- | --- |');

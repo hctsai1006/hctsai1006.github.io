@@ -120,9 +120,11 @@ import type {
   DotnetChannelFile,
   DotnetIndex,
   DotnetIndexEntry,
+  GhPullRequest,
   GhRelease,
   PowerShellMetadata,
 } from './upstream-schemas.mts';
+import { POWERSHELL_77_CHANGES } from '../compat/deltas/powershell-77-changes.source.mts';
 
 // ajv and ajv-formats are CommonJS. Under Node's ESM loader a default import of
 // a CJS module yields module.exports — which IS the constructor here — but the
@@ -171,6 +173,7 @@ type SourceKind =
   | 'github-metadata'
   | 'github-tag-object'
   | 'github-tag-file'
+  | 'github-pull-request'
   | 'dotnet-release-index'
   | 'dotnet-channel-releases'
   | 'microsoft-learn-docs'
@@ -226,11 +229,37 @@ interface DotnetChannel {
   eolDate: string | null;
 }
 
+/**
+ * A resolved `upstreamPr:` citation.
+ *
+ * compat/deltas/powershell-77-changes.source.mts cites a PR number for every
+ * behaviour it claims 7.7 changes, and generate-compatibility-profile.mts
+ * required the field to be non-null and stopped there. Setting one to 99999999
+ * regenerated the profiles and the published explorer with all eleven gates
+ * green, and `pull/99999999` appeared in the shipped HTML. All 13 real
+ * citations were independently verified to exist and to be merged -- which is
+ * the check the repository never performed. This is that check, done once here
+ * where the authenticated GitHub client and the lockfile already are.
+ */
+interface CitedPullRequest {
+  number: number;
+  title: string;
+  mergeCommitSha: string;
+  mergedAt: string;
+}
+
 interface Lockfile {
   schemaVersion: 1;
   generatedAt: string;
   generator: { tool: string; version: string };
   sources: SourceRecord[];
+  citations: {
+    source: string;
+    /** Only PRs that exist AND are merged. A citation that resolves to neither
+     *  raises an error-severity discrepancy and is absent, so the profile
+     *  generator's assertion fails rather than passing on a fabricated number. */
+    pullRequests: CitedPullRequest[];
+  };
   channels: {
     lts: string;
     ltsPrevious: string[];
@@ -245,6 +274,21 @@ interface Lockfile {
 
 /** The tool could not do its job. Distinct from "did the job, found a problem". */
 class ToolFailure extends Error {}
+
+/**
+ * An HTTP answer we must respect, carrying the status.
+ *
+ * A 404 is not a network problem: it is upstream telling us the thing does not
+ * exist, which for a citation is a FINDING and not a reason to give up. The
+ * status has to survive the throw for the caller to tell the two apart.
+ */
+class HttpError extends ToolFailure {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // fetch plumbing
@@ -347,7 +391,7 @@ async function get(
         res.status === 403 || res.status === 429
           ? '\n  GitHub rate limit? GITHUB_TOKEN is required in CI and on shared networks.'
           : '';
-      throw new ToolFailure(`fetch failed: ${lastProblem} for ${url}${rateLimited}`);
+      throw new HttpError(`fetch failed: ${lastProblem} for ${url}${rateLimited}`, res.status);
     }
     const retryAfter = Number(res.headers.get('retry-after'));
     await sleep(Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 500 * 2 ** (attempt - 1));
@@ -394,6 +438,26 @@ async function getShape<K extends Parameters<typeof narrow>[0]>(
  * predictable false alarm is a gate that gets switched off. Digest only the
  * claims actually consumed.
  */
+/**
+ * A pull-request response embeds the whole repository object, and that object
+ * carries stargazers_count, forks, watchers, open_issues and pushed_at — all of
+ * which tick continuously on PowerShell/PowerShell. Digesting the raw body made
+ * every one of the fourteen citation sources report drift within minutes of
+ * being written, which is the same wolf-crying the releases feed already taught
+ * this file to avoid. Digest only the fields the citation check consumes.
+ */
+const canonicalisePullRequest: Canonicaliser = (body) => {
+  const pr = JSON.parse(body) as Record<string, unknown>;
+  return JSON.stringify([
+    pr['number'],
+    pr['title'],
+    pr['state'],
+    pr['merged_at'],
+    pr['merge_commit_sha'],
+    pr['html_url'],
+  ]);
+};
+
 const canonicaliseDocs: Canonicaliser = (body) => JSON.stringify(parseDocsClaim(body));
 
 const canonicaliseLifecycle: Canonicaliser = (body) =>
@@ -853,6 +917,70 @@ function snapshotOf(r: ReleaseRecord): string {
   return sha256(JSON.stringify([r.tag, r.commitSha, r.publishedAt, r.dotnet, r.channel]));
 }
 
+const CITATION_SOURCE = 'compat/deltas/powershell-77-changes.source.mts';
+
+/**
+ * Resolve every `upstreamPr:` citation in the curated 7.7 change list against
+ * the GitHub pull-request API, once, and record what came back.
+ *
+ * The three outcomes are deliberately different, and each maps to a different
+ * exit code, the same way this tool already separates drift from could-not-run:
+ *
+ *   merged             recorded in the lockfile. generate-compatibility-profile
+ *                      asserts every citation appears here, so a number nobody
+ *                      resolved cannot reach a published profile.
+ *   404, or not merged  an error-severity discrepancy -> exit 1. The citation is
+ *                      wrong; that is a finding, not a failure to check.
+ *   anything else       a ToolFailure -> exit 2. We could not reach GitHub, and
+ *                      "the check did not run" must never look like "the check
+ *                      passed". Falling back to `continue` here is the exact
+ *                      TRAP F this file is organised against.
+ */
+async function resolveCitations(): Promise<Lockfile['citations']> {
+  const cited = [...new Set(POWERSHELL_77_CHANGES.map((c) => c.upstreamPr))].sort((a, b) => a - b);
+  const resolved: CitedPullRequest[] = [];
+
+  for (const number of cited) {
+    const url = `${GH}/pulls/${number}`;
+    let pr: GhPullRequest;
+    try {
+      pr = await getShape(url, 1, 'github-pull-request', 'github-pull-request', canonicalisePullRequest);
+    } catch (error) {
+      if (error instanceof HttpError && error.status === 404) {
+        note({
+          severity: 'error',
+          code: 'cited-pr-does-not-exist',
+          message: `${CITATION_SOURCE} cites upstream PR #${number}, which does not exist. A citation nobody can follow is not a citation.`,
+          actual: number,
+          sources: [url],
+        });
+        continue;
+      }
+      throw error;
+    }
+
+    if (pr.merged_at === null || pr.merge_commit_sha === null) {
+      note({
+        severity: 'error',
+        code: 'cited-pr-not-merged',
+        message: `${CITATION_SOURCE} cites upstream PR #${number} ("${pr.title}"), which is ${pr.state} and has never been merged. It cannot be evidence for a shipped behaviour change.`,
+        actual: pr.state,
+        sources: [pr.html_url],
+      });
+      continue;
+    }
+
+    resolved.push({
+      number: pr.number,
+      title: pr.title,
+      mergeCommitSha: pr.merge_commit_sha,
+      mergedAt: pr.merged_at,
+    });
+  }
+
+  return { source: CITATION_SOURCE, pullRequests: resolved };
+}
+
 async function build(): Promise<Lockfile> {
   const dotnet = await DotnetMetadata.load();
 
@@ -1150,6 +1278,8 @@ async function build(): Promise<Lockfile> {
         : byCodepoint(b.channelVersion, a.channelVersion);
     });
 
+  const citations = await resolveCitations();
+
   return {
     schemaVersion: 1,
     generatedAt: new Date().toISOString(),
@@ -1157,6 +1287,7 @@ async function build(): Promise<Lockfile> {
     sources: [...sources.values()].sort(
       (a, b) => a.precedence - b.precedence || byCodepoint(a.url, b.url),
     ),
+    citations,
     channels: {
       lts: ltsRecord.tag,
       ltsPrevious: previousLts.map((r) => r.tag),

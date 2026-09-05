@@ -26,7 +26,7 @@ Legend: `[x]` done · `[~]` in progress · `[ ]` todo · `[!]` blocked · `[-]` 
 
 ## Execution order
 
-Dependency-respecting. An item cannot start before everything it depends on is done.
+Dependency-respecting. An item cannot be complete before everything it depends on is — checked along every edge by `tools/generate-roadmap.mts`. Work in progress may overlap.
 
 | # | Item | Phase | Status | Depends on | Tasks |
 | --- | --- | --- | --- | --- | --- |

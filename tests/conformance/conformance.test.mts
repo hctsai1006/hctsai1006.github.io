@@ -31,6 +31,20 @@ describe('differential conformance against pwsh 7.6.5', () => {
     // Rendering must have been pinned, or the fixture could contain ANSI escapes
     // that happen to match today and not tomorrow.
     assert.equal(report.capture['outputRendering'], 'PlainText');
+    // The corpus's help.* cases model the help PowerShell SYNTHESISES from a
+    // cmdlet's own metadata. On a host where someone has run Update-Help,
+    // Get-Help returns MamlCommandHelpInfo out of a downloaded XML file
+    // instead, and those cases would record a different answer and blame the
+    // project for the difference. That happened: this repository's Windows host
+    // was Update-Help'd on 2026-09-05 and a recapture there turned three
+    // passing cases into unexplained differences. It is a property of the
+    // capture host, so it is pinned here next to the culture and the rendering
+    // rather than discovered again.
+    assert.equal(
+      report.capture['updatableHelp'],
+      'not-installed',
+      'the fixture was captured on a host with updatable help installed; the help.* cases do not mean what they say there',
+    );
   });
 
   it('actually compared something', () => {
@@ -43,6 +57,34 @@ describe('differential conformance against pwsh 7.6.5', () => {
       report.coverage.commandsWithBehaviouralEvidence >= 7,
       `behavioural evidence for only ${report.coverage.commandsWithBehaviouralEvidence} commands`,
     );
+  });
+
+  it('counts coverage from established credits, never from the corpus label', () => {
+    // The attack this closes: relabelling the `command` field of 28 already
+    // passing cases moved behaviouralCoveragePercent from 50 to 100 with
+    // problems: 0 and every gate green. Coverage is now computed from
+    // `credits`, which a case only gets when the credit can be established
+    // mechanically -- so a label alone must never be able to put a command in
+    // the covered set.
+    const credited = new Set(
+      report.cases
+        .filter((c) => c.outcome === 'match' && c.area !== 'metadata' && c.credits !== null)
+        .map((c) => c.credits),
+    );
+    assert.equal(
+      report.coverage.commandsWithBehaviouralEvidence,
+      report.perCommand.filter((row) => credited.has(row.command)).length,
+      'behavioural coverage disagrees with the set of commands that actually hold a credited match',
+    );
+    for (const c of report.cases) {
+      if (c.creditBasis === 'not-established') {
+        assert.equal(c.credits, null, `${c.id} has an unestablished credit that still counts`);
+      }
+    }
+    // And the reverse: a case whose label was never checkable must be visible,
+    // not silently dropped. Today five cases are in that state; if the list
+    // ever empties the report should say so rather than the field disappearing.
+    assert.ok(Array.isArray(report.uncreditedLabels));
   });
 
   it('pins the three semantics that were wrong before they were measured', () => {

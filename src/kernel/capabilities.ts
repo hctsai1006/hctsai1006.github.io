@@ -120,7 +120,7 @@ export const CAPABILITY_AUDITED: Record<Capability, boolean> = Object.freeze({
  * actually asked for. Relying on either alone leaves a gap that a single wrong
  * line in one manifest opens.
  */
-export const RISK_AUDITED: Record<Risk, boolean> = {
+export const RISK_AUDITED: Record<Risk, boolean> = Object.freeze({
   read: false,
   // Network. Named for what it is from the user's side: it leaves the page.
   'query-external': true,
@@ -128,7 +128,12 @@ export const RISK_AUDITED: Record<Risk, boolean> = {
   destructive: true,
   device: true,
   'privileged-simulation': true,
-};
+  // Frozen like its two siblings above. It was the one capability table that
+  // was not, so anything holding a reference could have flipped
+  // RISK_AUDITED.destructive to false at runtime and silently stopped auditing
+  // every destructive command -- and the audit record is the only thing that
+  // makes the simulated policy engine's claims checkable.
+});
 
 /**
  * What an elevation adds to a grant set. DELIBERATELY EMPTY.
