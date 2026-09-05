@@ -167,6 +167,22 @@ export const CLASSIFICATION: Record<string, Classification> = {
   'sort-object': pipeline,
   'measure-object': pipeline,
   'out-null': pipeline,
+
+  // Added by the rewrite, not present in v1. They were implemented and tested
+  // while being invisible to Get-Command, Get-Help and the fidelity badge,
+  // because manifests.json was generated only from v1's inventory. See
+  // rewrite-inventory.data.mts.
+  'group-object': pipeline,
+  'get-member': pipeline,
+  'new-guid': pipeline,
+
+  // Formatting is the LAST stage of the pipeline: it turns objects into text and
+  // nothing downstream can put them back. native-semantic with no capabilities —
+  // it reads no state and changes none, it only renders what it was handed.
+  'format-table': pipeline,
+  'format-list': pipeline,
+  'format-wide': pipeline,
+  'out-string': pipeline,
   'write-output': pipeline,
   'get-date': pipeline,
   'get-random': pipeline,

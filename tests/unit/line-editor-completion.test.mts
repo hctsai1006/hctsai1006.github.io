@@ -177,9 +177,13 @@ describe('completion context', () => {
 
 describe('command inventory', () => {
   it('is projected from the generated manifests, not a fixture', () => {
-    assert.equal(MANIFEST_COMMANDS.length, 78);
-    // 78 canonical names plus 46 aliases, less the one collision below.
-    assert.equal(inventory.commands.length, 123);
+    // 78 until the rewrite's own commands were declared. manifests.json was
+    // generated from v1's inventory alone, so Group-Object, Get-Member, New-Guid
+    // and the four formatting commands were implemented and invisible to
+    // completion, Get-Command and the fidelity badge alike.
+    assert.equal(MANIFEST_COMMANDS.length, 85);
+    // 85 canonical names plus 51 aliases, less the one collision below.
+    assert.equal(inventory.commands.length, 135);
   });
 
   it('lets a real command shadow an alias of the same name', () => {
@@ -264,7 +268,7 @@ describe('matching', () => {
     // one, so the comparator only applies it when there is a query.
     const all = displaysOf('');
     assert.deepEqual([...all].sort((a, b) => (a.toLowerCase() < b.toLowerCase() ? -1 : 1)), all);
-    assert.equal(all.length, 123);
+    assert.equal(all.length, 135);
   });
 });
 

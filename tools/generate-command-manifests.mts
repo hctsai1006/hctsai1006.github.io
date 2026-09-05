@@ -39,6 +39,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { CLASSIFICATION } from '../src/commands/classification.data.mts';
+import { REWRITE_COMMANDS } from '../src/commands/rewrite-inventory.data.mts';
 import type { Classification } from '../src/commands/classification.data.mts';
 import type { CommandManifest, ParameterMetadata } from '../src/commands/manifest.ts';
 
@@ -177,6 +178,17 @@ function build(): { manifests: CommandManifest[]; problems: string[]; stats: Rec
       aliases: [],
       help: '',
       params: [],
+    })),
+    // Commands the rewrite adds that v1 never had. Generating only from v1's
+    // inventory made every one of them invisible to Get-Command, Get-Help and
+    // the fidelity badge — implemented, tested, and outside the honesty
+    // machinery entirely. See rewrite-inventory.data.mts.
+    ...REWRITE_COMMANDS.map((c) => ({
+      name: c.name,
+      display: c.display,
+      aliases: c.aliases,
+      help: c.help,
+      params: [] as string[],
     })),
   ];
 

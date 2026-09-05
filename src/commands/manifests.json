@@ -713,6 +713,449 @@
       "parameterSource": "none"
     },
     {
+      "name": "format-list",
+      "display": "Format-List",
+      "aliases": [
+        "fl"
+      ],
+      "runtime": "semantic",
+      "fidelity": "native-semantic",
+      "risk": "read",
+      "capabilities": [],
+      "parameters": [
+        {
+          "name": "DisplayError",
+          "aliases": [],
+          "type": "System.Management.Automation.SwitchParameter",
+          "isSwitch": true,
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": false,
+          "validation": [],
+          "verified": true
+        },
+        {
+          "name": "Expand",
+          "aliases": [],
+          "type": "System.String",
+          "isSwitch": false,
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": false,
+          "validation": [
+            "ValidateSetAttribute"
+          ],
+          "verified": true
+        },
+        {
+          "name": "Force",
+          "aliases": [],
+          "type": "System.Management.Automation.SwitchParameter",
+          "isSwitch": true,
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": false,
+          "validation": [],
+          "verified": true
+        },
+        {
+          "name": "GroupBy",
+          "aliases": [],
+          "type": "System.Object",
+          "isSwitch": false,
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": false,
+          "validation": [],
+          "verified": true
+        },
+        {
+          "name": "InputObject",
+          "aliases": [],
+          "type": "System.Management.Automation.PSObject",
+          "isSwitch": false,
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": true
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": true,
+          "validation": [],
+          "verified": true
+        },
+        {
+          "name": "Property",
+          "aliases": [],
+          "type": "System.Object[]",
+          "isSwitch": false,
+          "sets": {
+            "__AllParameterSets": {
+              "position": 0,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": 0,
+          "valueFromPipelineInAnySet": false,
+          "validation": [],
+          "verified": true
+        },
+        {
+          "name": "ShowError",
+          "aliases": [],
+          "type": "System.Management.Automation.SwitchParameter",
+          "isSwitch": true,
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": false,
+          "validation": [],
+          "verified": true
+        },
+        {
+          "name": "View",
+          "aliases": [],
+          "type": "System.String",
+          "isSwitch": false,
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": false,
+          "validation": [],
+          "verified": true
+        }
+      ],
+      "outputTypeNames": [
+        "Microsoft.PowerShell.Commands.Internal.Format.FormatStartData",
+        "Microsoft.PowerShell.Commands.Internal.Format.FormatEntryData",
+        "Microsoft.PowerShell.Commands.Internal.Format.FormatEndData",
+        "Microsoft.PowerShell.Commands.Internal.Format.GroupStartData",
+        "Microsoft.PowerShell.Commands.Internal.Format.GroupEndData"
+      ],
+      "synopsis": "Format the output as a list of properties, one property per line",
+      "parameterSource": "reference-implementation"
+    },
+    {
+      "name": "format-table",
+      "display": "Format-Table",
+      "aliases": [
+        "ft"
+      ],
+      "runtime": "semantic",
+      "fidelity": "native-semantic",
+      "risk": "read",
+      "capabilities": [],
+      "parameters": [
+        {
+          "name": "AutoSize",
+          "aliases": [],
+          "type": "System.Management.Automation.SwitchParameter",
+          "isSwitch": true,
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": false,
+          "validation": [],
+          "verified": true
+        },
+        {
+          "name": "DisplayError",
+          "aliases": [],
+          "type": "System.Management.Automation.SwitchParameter",
+          "isSwitch": true,
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": false,
+          "validation": [],
+          "verified": true
+        },
+        {
+          "name": "Expand",
+          "aliases": [],
+          "type": "System.String",
+          "isSwitch": false,
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": false,
+          "validation": [
+            "ValidateSetAttribute"
+          ],
+          "verified": true
+        },
+        {
+          "name": "Force",
+          "aliases": [],
+          "type": "System.Management.Automation.SwitchParameter",
+          "isSwitch": true,
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": false,
+          "validation": [],
+          "verified": true
+        },
+        {
+          "name": "GroupBy",
+          "aliases": [],
+          "type": "System.Object",
+          "isSwitch": false,
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": false,
+          "validation": [],
+          "verified": true
+        },
+        {
+          "name": "HideTableHeaders",
+          "aliases": [],
+          "type": "System.Management.Automation.SwitchParameter",
+          "isSwitch": true,
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": false,
+          "validation": [],
+          "verified": true
+        },
+        {
+          "name": "InputObject",
+          "aliases": [],
+          "type": "System.Management.Automation.PSObject",
+          "isSwitch": false,
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": true
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": true,
+          "validation": [],
+          "verified": true
+        },
+        {
+          "name": "Property",
+          "aliases": [],
+          "type": "System.Object[]",
+          "isSwitch": false,
+          "sets": {
+            "__AllParameterSets": {
+              "position": 0,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": 0,
+          "valueFromPipelineInAnySet": false,
+          "validation": [],
+          "verified": true
+        },
+        {
+          "name": "RepeatHeader",
+          "aliases": [],
+          "type": "System.Management.Automation.SwitchParameter",
+          "isSwitch": true,
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": false,
+          "validation": [],
+          "verified": true
+        },
+        {
+          "name": "ShowError",
+          "aliases": [],
+          "type": "System.Management.Automation.SwitchParameter",
+          "isSwitch": true,
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": false,
+          "validation": [],
+          "verified": true
+        },
+        {
+          "name": "View",
+          "aliases": [],
+          "type": "System.String",
+          "isSwitch": false,
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": false,
+          "validation": [],
+          "verified": true
+        },
+        {
+          "name": "Wrap",
+          "aliases": [],
+          "type": "System.Management.Automation.SwitchParameter",
+          "isSwitch": true,
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": false,
+          "validation": [],
+          "verified": true
+        }
+      ],
+      "outputTypeNames": [
+        "Microsoft.PowerShell.Commands.Internal.Format.FormatStartData",
+        "Microsoft.PowerShell.Commands.Internal.Format.FormatEntryData",
+        "Microsoft.PowerShell.Commands.Internal.Format.FormatEndData",
+        "Microsoft.PowerShell.Commands.Internal.Format.GroupStartData",
+        "Microsoft.PowerShell.Commands.Internal.Format.GroupEndData"
+      ],
+      "synopsis": "Format the output as a table",
+      "parameterSource": "reference-implementation"
+    },
+    {
+      "name": "format-wide",
+      "display": "Format-Wide",
+      "aliases": [
+        "fw"
+      ],
+      "runtime": "semantic",
+      "fidelity": "native-semantic",
+      "risk": "read",
+      "capabilities": [],
+      "parameters": [],
+      "outputTypeNames": [],
+      "synopsis": "Format objects as a wide table that displays only one property of each object",
+      "parameterSource": "none"
+    },
+    {
       "name": "fortune",
       "display": "fortune",
       "aliases": [],
@@ -2588,6 +3031,142 @@
       "parameterSource": "reference-implementation"
     },
     {
+      "name": "get-member",
+      "display": "Get-Member",
+      "aliases": [
+        "gm"
+      ],
+      "runtime": "semantic",
+      "fidelity": "native-semantic",
+      "risk": "read",
+      "capabilities": [],
+      "parameters": [
+        {
+          "name": "Force",
+          "aliases": [],
+          "type": "System.Management.Automation.SwitchParameter",
+          "isSwitch": true,
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": false,
+          "validation": [],
+          "verified": true
+        },
+        {
+          "name": "InputObject",
+          "aliases": [],
+          "type": "System.Management.Automation.PSObject",
+          "isSwitch": false,
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": true
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": true,
+          "validation": [],
+          "verified": true
+        },
+        {
+          "name": "MemberType",
+          "aliases": [
+            "Type"
+          ],
+          "type": "System.Management.Automation.PSMemberTypes",
+          "isSwitch": false,
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": false,
+          "validation": [],
+          "verified": true
+        },
+        {
+          "name": "Name",
+          "aliases": [],
+          "type": "System.String[]",
+          "isSwitch": false,
+          "sets": {
+            "__AllParameterSets": {
+              "position": 0,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": 0,
+          "valueFromPipelineInAnySet": false,
+          "validation": [
+            "ValidateNotNullOrEmptyAttribute"
+          ],
+          "verified": true
+        },
+        {
+          "name": "Static",
+          "aliases": [],
+          "type": "System.Management.Automation.SwitchParameter",
+          "isSwitch": true,
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": false,
+          "validation": [],
+          "verified": true
+        },
+        {
+          "name": "View",
+          "aliases": [],
+          "type": "System.Management.Automation.PSMemberViewTypes",
+          "isSwitch": false,
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": false,
+          "validation": [],
+          "verified": true
+        }
+      ],
+      "outputTypeNames": [
+        "Microsoft.PowerShell.Commands.MemberDefinition"
+      ],
+      "synopsis": "Get the properties and methods of objects",
+      "parameterSource": "reference-implementation"
+    },
+    {
       "name": "get-process",
       "display": "Get-Process",
       "aliases": [
@@ -3036,6 +3615,160 @@
       "outputTypeNames": [],
       "synopsis": "print lines that match patterns",
       "parameterSource": "none"
+    },
+    {
+      "name": "group-object",
+      "display": "Group-Object",
+      "aliases": [
+        "group"
+      ],
+      "runtime": "semantic",
+      "fidelity": "native-semantic",
+      "risk": "read",
+      "capabilities": [],
+      "parameters": [
+        {
+          "name": "AsHashTable",
+          "aliases": [
+            "AHT"
+          ],
+          "type": "System.Management.Automation.SwitchParameter",
+          "isSwitch": true,
+          "sets": {
+            "HashTable": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": false,
+          "validation": [],
+          "verified": true
+        },
+        {
+          "name": "AsString",
+          "aliases": [],
+          "type": "System.Management.Automation.SwitchParameter",
+          "isSwitch": true,
+          "sets": {
+            "HashTable": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": false,
+          "validation": [],
+          "verified": true
+        },
+        {
+          "name": "CaseSensitive",
+          "aliases": [],
+          "type": "System.Management.Automation.SwitchParameter",
+          "isSwitch": true,
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": false,
+          "validation": [],
+          "verified": true
+        },
+        {
+          "name": "Culture",
+          "aliases": [],
+          "type": "System.String",
+          "isSwitch": false,
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": false,
+          "validation": [],
+          "verified": true
+        },
+        {
+          "name": "InputObject",
+          "aliases": [],
+          "type": "System.Management.Automation.PSObject",
+          "isSwitch": false,
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": true
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": true,
+          "validation": [],
+          "verified": true
+        },
+        {
+          "name": "NoElement",
+          "aliases": [],
+          "type": "System.Management.Automation.SwitchParameter",
+          "isSwitch": true,
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": false,
+          "validation": [],
+          "verified": true
+        },
+        {
+          "name": "Property",
+          "aliases": [],
+          "type": "System.Object[]",
+          "isSwitch": false,
+          "sets": {
+            "__AllParameterSets": {
+              "position": 0,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": 0,
+          "valueFromPipelineInAnySet": false,
+          "validation": [],
+          "verified": true
+        }
+      ],
+      "outputTypeNames": [
+        "System.Collections.Hashtable",
+        "Microsoft.PowerShell.Commands.GroupInfo"
+      ],
+      "synopsis": "Group objects that contain the same value for specified properties",
+      "parameterSource": "reference-implementation"
     },
     {
       "name": "help",
@@ -3643,6 +4376,60 @@
       "parameterSource": "none"
     },
     {
+      "name": "new-guid",
+      "display": "New-Guid",
+      "aliases": [],
+      "runtime": "semantic",
+      "fidelity": "native-semantic",
+      "risk": "read",
+      "capabilities": [],
+      "parameters": [
+        {
+          "name": "Empty",
+          "aliases": [],
+          "type": "System.Management.Automation.SwitchParameter",
+          "isSwitch": true,
+          "sets": {
+            "Empty": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": false,
+          "validation": [],
+          "verified": true
+        },
+        {
+          "name": "InputObject",
+          "aliases": [],
+          "type": "System.String",
+          "isSwitch": false,
+          "sets": {
+            "InputObject": {
+              "position": 0,
+              "mandatory": false,
+              "valueFromPipeline": true
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": 0,
+          "valueFromPipelineInAnySet": true,
+          "validation": [],
+          "verified": true
+        }
+      ],
+      "outputTypeNames": [
+        "System.Guid"
+      ],
+      "synopsis": "Create a GUID",
+      "parameterSource": "reference-implementation"
+    },
+    {
       "name": "new-item",
       "display": "New-Item",
       "aliases": [
@@ -3821,6 +4608,19 @@
       "outputTypeNames": [],
       "synopsis": "Discard pipeline output",
       "parameterSource": "reference-implementation"
+    },
+    {
+      "name": "out-string",
+      "display": "Out-String",
+      "aliases": [],
+      "runtime": "semantic",
+      "fidelity": "native-semantic",
+      "risk": "read",
+      "capabilities": [],
+      "parameters": [],
+      "outputTypeNames": [],
+      "synopsis": "Send objects to the host as a series of strings",
+      "parameterSource": "none"
     },
     {
       "name": "ping",

@@ -32,7 +32,7 @@ import type { CommandModule } from '../../src/commands/invocation.ts';
 import type { Capability, CommandManifest } from '../../src/commands/manifest.ts';
 import { NATIVE_COMMANDS, defaultCatalogue } from '../../src/commands/native/index.ts';
 import { PORTFOLIO_COMMANDS } from '../../src/commands/portfolio/index.ts';
-import { OBJECT_CMDLETS } from '../../src/commands/powershell/index.ts';
+import { ALL_COMMANDS, COMMAND_INDEX } from '../../src/commands/registry.ts';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -48,10 +48,13 @@ const NATIVE_SEMANTIC = MANIFESTS.filter((m) => m.fidelity === 'native-semantic'
 const NEEDS_FILESYSTEM = (m: CommandManifest): boolean =>
   m.capabilities.some((c) => c.startsWith('filesystem.'));
 
-/** Everything implemented anywhere, by lower-case name. */
-const IMPLEMENTED = new Map<string, CommandModule>(
-  [...NATIVE_COMMANDS, ...PORTFOLIO_COMMANDS, ...OBJECT_CMDLETS].map((m) => [m.manifest.name, m]),
-);
+/**
+ * Everything implemented anywhere, from the registry rather than a hand-listed
+ * union of three modules. The hand-listed version did not know about the
+ * formatting or simulated modules, so it reported four implemented commands as
+ * missing the moment those were declared.
+ */
+const IMPLEMENTED: ReadonlyMap<string, CommandModule> = COMMAND_INDEX;
 
 describe('the native-semantic set cannot drift', () => {
   it('implements every native-semantic command that needs no filesystem', () => {
@@ -73,15 +76,20 @@ describe('the native-semantic set cannot drift', () => {
     // live in the sibling registry.
     const scoped = NATIVE_SEMANTIC.filter((m) => !NEEDS_FILESYSTEM(m)).map((m) => m.name).sort();
     assert.deepEqual(scoped, [
-      '$psversiontable', 'clear-host', 'get-advisory', 'get-award', 'get-command',
-      'get-contribution', 'get-date', 'get-help', 'get-history', 'get-location', 'get-project',
-      'get-publication', 'get-random', 'get-source', 'get-timeline', 'help', 'measure-object',
-      'out-null', 'select-object', 'sort-object', 'where-object', 'whoami', 'write-output',
+      '$psversiontable', 'clear-host', 'format-list', 'format-table', 'format-wide',
+      'get-advisory', 'get-award', 'get-command', 'get-contribution', 'get-date',
+      'get-help', 'get-history', 'get-location', 'get-member', 'get-project',
+      'get-publication', 'get-random', 'get-source', 'get-timeline', 'group-object',
+      'help', 'measure-object', 'new-guid', 'out-null', 'out-string', 'select-object',
+      'sort-object', 'where-object', 'whoami', 'write-output',
     ]);
-    // New-Guid is implemented here but has no manifests.json entry: that file is
-    // generated from v1's inventory and v1 had no New-Guid.
+    // New-Guid used to be implemented with no manifests.json entry, because that
+    // file was generated from v1's inventory alone and v1 had no New-Guid. Seven
+    // commands were in that state — implemented, tested, and invisible to
+    // Get-Command, Get-Help and the fidelity badge. rewrite-inventory.data.mts
+    // is the second source that closed it, so the assertion is now the opposite.
     assert.ok(IMPLEMENTED.has('new-guid'));
-    assert.equal(MANIFESTS.find((m) => m.name === 'new-guid'), undefined);
+    assert.ok(MANIFESTS.find((m) => m.name === 'new-guid') !== undefined);
 
     // And the count this directory is on the hook for: twelve system modules
     // plus eight portfolio ones.
@@ -145,14 +153,20 @@ describe('the native-semantic set cannot drift', () => {
 
   it('lets Get-Command report every implemented command', () => {
     const catalogue = new Set(defaultCatalogue().all().map((entry) => entry.manifest.name));
-    const invisible = [...IMPLEMENTED.keys()].filter(
-      (name) => !catalogue.has(name) && name !== 'new-guid',
-    );
-    // Group-Object and Get-Member are the known gap: implemented in
-    // src/commands/powershell/ but absent from the generated manifests.json,
-    // because that file is generated from v1's inventory and v1 had neither.
-    // Named here so the gap is a recorded fact rather than a surprise.
-    assert.deepEqual(invisible.sort(), ['get-member', 'group-object']);
+    // Command NAMES, not the index keys: the registry indexes aliases too, and
+    // `?`, `ft` and `gm` are not things Get-Command lists as separate commands.
+    const invisible = ALL_COMMANDS.map((m) => m.manifest.name)
+      .filter((name) => !catalogue.has(name))
+      .sort();
+
+    // This used to assert ['get-member', 'group-object'] — a recorded gap.
+    // Those two, New-Guid and the four formatting commands were implemented and
+    // absent from manifests.json, because that file was generated from v1's
+    // inventory alone and v1 had none of them. So Get-Command could not report
+    // them, Get-Help could not describe them, and the fidelity badge had nothing
+    // to show. rewrite-inventory.data.mts is the second source that closed it,
+    // and the assertion is now that nothing is invisible.
+    assert.deepEqual(invisible, []);
   });
 });
 
