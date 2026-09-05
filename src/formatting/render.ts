@@ -9,16 +9,24 @@
  * THE FOUR THINGS THAT ARE NOT GUESSABLE
  *
  * 1. A FLOATING-POINT TABLE CELL IS NOT `"$x"`. It is `ToString("F")` — the
- *    culture's default fraction digits, no group separator:
+ *    culture's default fraction digits, no group separator. Measured on pwsh
+ *    7.6.5, LINUX, with CurrentCulture pinned:
  *
  *      culture   1.5 in a table cell   1.5 elsewhere
  *      en-US     1.500                 1.5
- *      zh-TW     1.50                  1.5
+ *      de-DE     1,500                 1,5
+ *      zh-TW     1.500                 1.5
+ *
+ *    This table used to say zh-TW was `1.50`, which was the load-bearing claim
+ *    in culture.ts's argument for hand-maintaining its data. zh-TW's
+ *    NumberDecimalDigits is 3, like en-US's and de-DE's; only the INVARIANT
+ *    culture is 2, and it is not a locale.
  *
  *    Format-LIST and Format-WIDE do not do this; they print 1.5. Only the table
- *    does, and only for floating-point values — an Int32 7 stays `7`. This was
- *    verified against `$v.ToString('F')` for 1.5, 0.0001, 1e21, 1234.5, 2.5,
- *    0.125 and -1.5, and matched on all seven.
+ *    does, and only for floating-point values — an Int32 7 stays `7`, and
+ *    negative zero is the one whole number that is NOT treated as an integer
+ *    (`-0.000` in a table, `-0` in a list). Verified against `$v.ToString('F')`
+ *    for 1.5, 0.0001, 1e21, 1234.5, 2.5, 0.125, -1.5 and negative zero.
  *
  * 2. COLUMN WIDTHS COME FROM EVERY OBJECT, NOT THE FIRST. The folklore is that
  *    Format-Table sizes on the first object and `-AutoSize` is what makes it
@@ -160,11 +168,15 @@ function collectionElement(value: PSValue, culture: CultureData): string {
  *   pwsh: @(1,2,3,4,5)  ->  {1, 2, 3, 4…}
  *   pwsh: @()           ->  {}
  *
- * A DateTime follows the CULTURE here, unlike `"$date"` which does not:
- *   en-US  3/4/2020 5:06:07 AM
+ * A DateTime follows the CULTURE here, unlike `"$date"` which does not.
+ * Measured on pwsh 7.6.5, LINUX, on [datetime]::new(2020,3,4,5,6,7):
+ *   en-US  3/4/2020 5:06:07<U+202F>AM     the separator is NOT a space
  *   de-DE  04.03.2020 05:06:07
- *   zh-TW  2020/3/4 上午 05:06:07
+ *   zh-TW  2020/3/4 上午5:06:07          designator FIRST, no space, one-digit hour
  *   "$x"   03/04/2020 05:06:07     (invariant — see to-string.ts)
+ *
+ * The zh-TW line used to read `2020/3/4 上午 05:06:07`, which is the pattern
+ * a reader would guess from the en-US one rather than the pattern ICU reports.
  */
 export function cellText(
   value: PSValue,
@@ -179,7 +191,16 @@ export function cellText(
     // A JavaScript number cannot say whether it is an Int32 or a whole Double,
     // so `[double]2.0` — which pwsh renders as `2.000` in a table — renders as
     // `2` here. Recorded rather than papered over; see the divergence test.
-    if (Number.isInteger(value) && Math.abs(value) <= INT64_MAX) return String(value);
+    //
+    // NEGATIVE ZERO is excluded from that shortcut, because it is the one whole
+    // number that cannot be an integer type: `Number.isInteger(-0)` is true and
+    // `String(-0)` is `0`, which loses the sign pwsh keeps. Measured on pwsh
+    // 7.6.5, LINUX:
+    //   [pscustomobject]@{V=[double]::NegativeZero} | Format-Table  ->  -0.000
+    //   ... | Format-List                                           ->  -0
+    if (Number.isInteger(value) && !Object.is(value, -0) && Math.abs(value) <= INT64_MAX) {
+      return String(value);
+    }
     if (style === 'table') return formatFixed(value, culture.numberDecimalDigits, culture);
     return formatGeneral(value, 15, culture, true);
   }

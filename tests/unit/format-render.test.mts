@@ -407,6 +407,54 @@ P1 P2 P3 P4
 `,
     );
   });
+
+  it('CAPS the label column so -Width means something', () => {
+    // pwsh 7.6.5, LINUX:
+    //   [pscustomobject]@{Property='a'} | Format-List | Out-String -Width n
+    //     n=5   'P : a'      n=8   'Prop : a'      n=10  'Proper : a'
+    //     n=12  'Property : a'                     n=20  'Property : a'
+    // The label is cut to `width - 4` — room for ` : ` and one column of value
+    // — and cut bare, with no ellipsis, unlike a table cell. This emitted the
+    // full twelve-column `Property : a` at every width, so `-Width 10` produced
+    // two columns of overflow.
+    assert.equal(view([o({ Property: 'a' })], 5, 'list'), '\nP : a\n');
+    assert.equal(view([o({ Property: 'a' })], 8, 'list'), '\nProp : a\n');
+    assert.equal(view([o({ Property: 'a' })], 10, 'list'), '\nProper : a\n');
+    assert.equal(view([o({ Property: 'a' })], 12, 'list'), '\nProperty : a\n');
+    assert.equal(view([o({ Property: 'a' })], 20, 'list'), '\nProperty : a\n');
+  });
+
+  it('caps by DISPLAY width, so a CJK label keeps its columns', () => {
+    // pwsh 7.6.5, LINUX: [pscustomobject]@{'中文字'='a'} at width 10 is
+    // `中文字 : a` — six columns of label, which is exactly the cap.
+    assert.equal(view([o({ 中文字: 'a' })], 10, 'list'), '\n中文字 : a\n');
+  });
+
+  it('wraps the value under a capped label, keeping the break whitespace', () => {
+    // pwsh 7.6.5, LINUX, width 9 on
+    //   [pscustomobject]@{ LongPropertyName = 'value here' }
+    // The label caps to five and the value gets one column, so every character
+    // is its own line and the space between the words survives as a line of
+    // indent plus a space.
+    assert.equal(
+      view([o({ LongPropertyName: 'value here' })], 9, 'list'),
+      '\nLongP : v\n        a\n        l\n        u\n        e\n         \n        h\n        e\n        r\n        e\n',
+    );
+  });
+
+  it('has the same minimum-width cliff the table has', () => {
+    // pwsh 7.6.5, LINUX, at widths 2, 3 and 4 the entry LINES vanish and the
+    // blank-line skeleton stays:
+    //   one object   ''  ''
+    //   two objects  ''  ''  ''
+    // Five is where output starts, which is MIN_TABLE_WIDTH — the same cliff,
+    // at the same width, and this view had none at all.
+    for (const width of [2, 3, 4]) {
+      assert.equal(view([o({ Property: 'a' })], width, 'list'), '\n');
+      assert.equal(view([o({ Property: 'a' }), o({ Property: 'b' })], width, 'list'), '\n\n');
+    }
+    assert.equal(view([o({ Property: 'a' })], MIN_TABLE_WIDTH, 'list'), '\nP : a\n');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -542,21 +590,33 @@ X
   });
 
   it('gives a DateTime its own view, with the FULL pattern and a skeleton', () => {
-    // pwsh: [datetime]'2020-03-04T15:06:07' | Out-String -Stream -Width 60
+    // pwsh 7.6.5, LINUX:
+    //   [datetime]::new(2020,3,4,15,6,7) | Out-String -Width 60
+    //     ''
+    //     'Wednesday, March 4, 2020 3:06:07<U+202F>PM'
+    //     ''
     // Not the general pattern a table cell uses, and not a bare line either.
+    // The separator before PM is U+202F, written as an escape so it is visible.
     assert.equal(
       defaultView([new Date(2020, 2, 4, 15, 6, 7)], 60),
       `
-Wednesday, March 4, 2020 3:06:07 PM
+Wednesday, March 4, 2020 3:06:07\u202fPM
 `,
     );
   });
 
   it('uses the GENERAL date pattern inside a table cell', () => {
-    // pwsh: the same instant, in a cell: 3/4/2020 3:06:07 PM.
-    assert.equal(cellText(new Date(2020, 2, 4, 15, 6, 7), DEFAULT_CULTURE), '3/4/2020 3:06:07 PM');
+    // pwsh 7.6.5, LINUX, the same instant in
+    //   [pscustomobject]@{ D = $d } | Format-Table | Out-String -Width 120
+    //     en-US  3/4/2020 3:06:07<U+202F>PM
+    //     de-DE  04.03.2020 15:06:07
+    //     zh-TW  2020/3/4 下午3:06:07
+    // zh-TW used to be asserted as `2020/3/4 下午 03:06:07` — a space and a
+    // two-digit hour that the culture's real pattern (`yyyy/M/d tth:mm:ss`)
+    // does not have. Every zh-TW date in the corpus was wrong the same way.
+    assert.equal(cellText(new Date(2020, 2, 4, 15, 6, 7), DEFAULT_CULTURE), '3/4/2020 3:06:07\u202fPM');
     assert.equal(cellText(new Date(2020, 2, 4, 15, 6, 7), DE_DE), '04.03.2020 15:06:07');
-    assert.equal(cellText(new Date(2020, 2, 4, 15, 6, 7), ZH_TW), '2020/3/4 下午 03:06:07');
+    assert.equal(cellText(new Date(2020, 2, 4, 15, 6, 7), ZH_TW), '2020/3/4 下午3:06:07');
   });
 });
 
@@ -566,11 +626,28 @@ Wednesday, March 4, 2020 3:06:07 PM
 
 describe('what a cell says', () => {
   it('formats a float in a TABLE with the culture default digits', () => {
-    // pwsh: [pscustomobject]@{V=1.5} | Format-Table  ->  1.500 (en-US)
+    // pwsh 7.6.5, LINUX:
+    //   [pscustomobject]@{V=1.5} | Format-Table | Out-String -Width 120
+    //     en-US  1.500     de-DE  1,500     zh-TW  1.500
+    // zh-TW used to be asserted as 1.50, which is where this project's claim
+    // that .NET and Intl disagree about zh-TW's NumberDecimalDigits came from.
+    // They do not disagree; both say three, and so does Format-Table.
     assert.equal(cellText(1.5, DEFAULT_CULTURE, 'table'), '1.500');
-    assert.equal(cellText(1.5, ZH_TW, 'table'), '1.50');
+    assert.equal(cellText(1.5, ZH_TW, 'table'), '1.500');
+    assert.equal(cellText(1.5, DE_DE, 'table'), '1,500');
     assert.equal(cellText(1234.5, DEFAULT_CULTURE, 'table'), '1234.500');
     assert.equal(cellText(1 / 3, DEFAULT_CULTURE, 'table'), '0.333');
+  });
+
+  it('keeps the sign on negative zero, which is not an integer here', () => {
+    // pwsh 7.6.5, LINUX:
+    //   [pscustomobject]@{V=[double]::NegativeZero} | Format-Table  ->  -0.000
+    //   ... | Format-List                                           ->  -0
+    // `Number.isInteger(-0)` is true and `String(-0)` is `0`, so the whole-number
+    // shortcut used to swallow the sign in both styles.
+    assert.equal(cellText(-0, DEFAULT_CULTURE, 'table'), '-0.000');
+    assert.equal(cellText(-0, DEFAULT_CULTURE, 'plain'), '-0');
+    assert.equal(cellText(0, DEFAULT_CULTURE, 'plain'), '0');
   });
 
   it('formats the same float PLAINLY everywhere else', () => {
@@ -709,6 +786,46 @@ describe('the -Wrap line breaker', () => {
 // ---------------------------------------------------------------------------
 // recorded divergence
 // ---------------------------------------------------------------------------
+
+describe('a stream larger than an argument list', () => {
+  // `array.push(...rows)` passes one ARGUMENT per row, and the argument count is
+  // bounded by the JavaScript engine's stack. On this runtime the wall is just
+  // under 125,000:
+  //   node: const a = []; a.push(...new Array(125_000).fill('x'))
+  //     RangeError: Maximum call stack size exceeded
+  // Every array spread in views.ts was over a row count, so a table of a few
+  // hundred thousand rows threw a RangeError instead of rendering. 130,000 is
+  // the smallest round number past the wall.
+  const ROWS = 130_000;
+
+  it('renders a table of 130,000 rows instead of throwing RangeError', () => {
+    const rows = Array.from({ length: ROWS }, (_, index) => o({ N: index }));
+    const lines = renderDocument(buildDefaultDocument(rows, DEFAULT_CULTURE), {
+      width: 120,
+      culture: DEFAULT_CULTURE,
+    });
+    // '', header, underline, ROWS rows, ''
+    assert.equal(lines.length, ROWS + 4);
+    assert.equal(lines[3], '     0');
+  });
+
+  it('renders a list and a bare stream of the same size', () => {
+    const rows = Array.from({ length: ROWS }, (_, index) => o({ N: index, M: index }));
+    const list = renderDocument(buildViewDocument(rows, viewOptions(DEFAULT_CULTURE), 'list'), {
+      width: 120,
+      culture: DEFAULT_CULTURE,
+    });
+    // '', then two property lines and a blank per entry
+    assert.equal(list.length, 1 + ROWS * 3);
+
+    const raw = Array.from({ length: ROWS }, (_, index) => index as PSValue);
+    const bare = renderDocument(buildDefaultDocument(raw, DEFAULT_CULTURE), {
+      width: 120,
+      culture: DEFAULT_CULTURE,
+    });
+    assert.equal(bare.length, ROWS);
+  });
+});
 
 describe('recorded divergences from pwsh 7.6.5', () => {
   it('cannot tell a whole Double from an Int32, so [double]2.0 loses its F form', () => {

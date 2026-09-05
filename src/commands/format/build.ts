@@ -284,12 +284,18 @@ export function buildWideSection(objects: readonly PSValue[], options: ViewOptio
  * A bare value's line.
  *
  * `"$x"` for everything except a DateTime, which follows the CULTURE here as it
- * does in a table cell:
+ * does in a table cell — the GENERAL pattern, not the full one a bare DateTime
+ * gets through its own view (that path is `customSection` below):
  *
- *   pwsh (zh-TW): [datetime]'2020-03-04T05:06:07' | Out-String
- *     2020/3/4 上午 05:06:07
+ *   the general pattern, zh-TW   2020/3/4 上午5:06:07
+ *   the FULL pattern, zh-TW      2020年3月4日 星期三 上午5:06:07
  *   "$([datetime]'2020-03-04T05:06:07')"
  *     03/04/2020 05:06:07        <- invariant, see to-string.ts
+ *
+ * Both measured on pwsh 7.6.5, LINUX. This comment used to show
+ * `2020/3/4 上午 05:06:07` for a bare `[datetime] | Out-String`, which was wrong
+ * twice over: that path uses the full pattern, and the general one has no space
+ * after the designator and a one-digit hour.
  *
  * Numbers do NOT get the table's `F` treatment: `1.5 | Out-String` is `1.5`,
  * not `1.500`.

@@ -34,7 +34,20 @@
  * Every one of those was checked against pwsh 7.6.5 rather than assumed, and
  * three of them were wrong before that check. The corrections are recorded at
  * each site so the next reader does not re-introduce the guess.
+ *
+ * THE ONE THING THIS FILE IMPORTS, AND WHY IT IS NOT A LAYERING BREAK
+ *
+ * `"$x"` on a double is `.ToString("G15", InvariantCulture)`. There is no
+ * second rule to model, so `toPSString` calls the formatter's `G` rather than
+ * keeping a private copy of it: `src/formatting/numeric.ts` and
+ * `src/formatting/culture.ts` are leaves — numeric imports one TYPE from
+ * culture, culture imports a captured JSON, and neither imports anything from
+ * the pipeline — so nothing here can close a cycle. The copy this replaced had
+ * disagreed with the shared one on three of forty doubles.
  */
+
+import { INVARIANT } from '../formatting/culture.ts';
+import { formatGeneral } from '../formatting/numeric.ts';
 
 /** A value that is not itself a PowerShell object. */
 export type PSPrimitive = null | boolean | number | bigint | string | Date;
@@ -241,32 +254,21 @@ export function typeNameOf(value: PSValue): string {
 export const DEFAULT_OFS = ' ';
 
 /**
- * .NET formats a double as "G15" — fifteen significant digits, not the shortest
- * round-trippable form JavaScript produces. Measured in pwsh 7.6.5:
+ * The invariant date form: `"$(Get-Date '2020-03-04T05:06:07')"` is
+ * `03/04/2020 05:06:07`.
  *
- *     "$(0.1 + 0.2)"  0.3                    "$(1/3)"    0.333333333333333
- *     "$(1.0)"        1                      "$(1e21)"   1E+21
+ * THIS IS NOT A DIFFERENT QUESTION FROM `formatDate(value, 'G', INVARIANT)`.
+ * It is the same one: `MM/dd/yyyy HH:mm:ss` is exactly the invariant culture's
+ * captured `G` pattern, and `"$date"` really is that pattern rather than a
+ * separate PowerShell invention. It is written out here anyway because the
+ * engine sits ABOVE this file in the import graph — src/formatting/datetime.ts
+ * needs `PSDateTime`, which needs this module — so calling it from here would
+ * close a cycle.
+ *
+ * Six lines of duplication is the price, and the price is only worth paying if
+ * a divergence is loud. So it is welded: a test asserts these two agree over
+ * the whole date corpus, and it fails the moment either moves.
  */
-export function formatDouble(value: number): string {
-  if (Number.isNaN(value)) return 'NaN';
-  if (value === Infinity) return 'Infinity';
-  if (value === -Infinity) return '-Infinity';
-  if (value === 0) return '0';
-  if (Number.isInteger(value) && Math.abs(value) < 1e15) return String(value);
-
-  const exponent = Math.floor(Math.log10(Math.abs(value)));
-  if (exponent < -5 || exponent >= 15) {
-    const [mantissa, exp] = value.toExponential(14).split('e') as [string, string];
-    const trimmed = mantissa.includes('.') ? mantissa.replace(/0+$/, '').replace(/\.$/, '') : mantissa;
-    const sign = exp.startsWith('-') ? '-' : '+';
-    return `${trimmed}E${sign}${exp.replace(/^[+-]/, '').padStart(2, '0')}`;
-  }
-
-  const fixed = value.toPrecision(15);
-  return fixed.includes('.') ? fixed.replace(/0+$/, '').replace(/\.$/, '') : fixed;
-}
-
-/** The invariant date form: `"$(Get-Date '2020-03-04T05:06:07')"` is `03/04/2020 05:06:07`. */
 function formatDateInvariant(value: Date): string {
   const p = (n: number, w = 2): string => String(n).padStart(w, '0');
   return (
@@ -279,7 +281,13 @@ export function toPSString(value: PSValue, ofs: string = DEFAULT_OFS): string {
   if (value === null || value === undefined) return '';
   if (typeof value === 'string') return value;
   if (typeof value === 'boolean') return value ? 'True' : 'False';
-  if (typeof value === 'number') return formatDouble(value);
+  // `"$x"` on a double is G15 against the INVARIANT culture — that is the whole
+  // of it, and it is the formatter's `G` with a precision, not a rule of its
+  // own. A second implementation lived here and was wrong twice: it went
+  // exponential at `exponent < -5` where .NET's threshold is `< -4`
+  // (`"$(0.00001)"` is `1E-05`, it answered `0.00001`), and it returned `0` for
+  // negative zero where pwsh answers `-0`. Both measured on pwsh 7.6.5/Linux.
+  if (typeof value === 'number') return formatGeneral(value, 15, INVARIANT, true);
   if (typeof value === 'bigint') return value.toString();
   if (value instanceof Date) return formatDateInvariant(value);
   if (value instanceof Uint8Array) return Array.from(value).join(ofs);

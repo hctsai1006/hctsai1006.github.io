@@ -37,6 +37,7 @@ import {
   wrapLines,
   wrapText,
 } from './render.ts';
+import { truncateToWidth } from './width.ts';
 
 // ---------------------------------------------------------------------------
 // the document
@@ -130,13 +131,40 @@ export interface FormatDocument {
   readonly sections: readonly FormatSection[];
 }
 
+/**
+ * Append every line of `source` to `target`.
+ *
+ * Not `target.push(...source)`, and the difference is not style. A spread
+ * becomes one argument per element, and the argument count is bounded by the
+ * engine's stack:
+ *
+ *   node: const a = []; a.push(...new Array(200_000).fill('x'))
+ *     RangeError: Maximum call stack size exceeded
+ *
+ * Every array spread in this file was over a ROW COUNT, so a table of a few
+ * hundred thousand rows — `1..200000 | Format-Table` — threw instead of
+ * rendering. The threshold is around 125k on this runtime and is not a
+ * documented constant, so it cannot be guarded against by checking a length.
+ */
+function appendAll(target: string[], source: readonly string[]): void {
+  for (const line of source) target.push(line);
+}
+
 /** Interleave a separator between blocks: `[a] [b] [c]` -> `a sep b sep c`. */
 function joinBlocks(blocks: readonly (readonly string[])[], separator: readonly string[]): string[] {
   const out: string[] = [];
   blocks.forEach((block, index) => {
-    if (index > 0) out.push(...separator);
-    out.push(...block);
+    if (index > 0) appendAll(out, separator);
+    appendAll(out, block);
   });
+  return out;
+}
+
+/** `['', ...body, ...tail]` without spreading the body. */
+function skeleton(body: readonly string[], tail: readonly string[] = []): string[] {
+  const out: string[] = [''];
+  appendAll(out, body);
+  appendAll(out, tail);
   return out;
 }
 
@@ -200,7 +228,10 @@ function renderTable(section: TableSection, width: number): string[] {
     const block: string[] = [];
     // The heading is NOT right-trimmed: a null grouping value produces the
     // bare `   : ` heading, trailing space and all, which pwsh really prints.
-    if (group.label !== null) block.push(...wrapLines(group.label, width), '');
+    if (group.label !== null) {
+      appendAll(block, wrapLines(group.label, width));
+      block.push('');
+    }
     // Below five columns pwsh emits the skeleton and nothing else — measured at
     // widths 2, 3 and 4 for one column and for two.
     if (width < MIN_TABLE_WIDTH) return block;
@@ -240,7 +271,7 @@ function renderTable(section: TableSection, width: number): string[] {
     return block;
   });
 
-  return ['', ...joinBlocks(blocks, ['']), ''];
+  return skeleton(joinBlocks(blocks, ['']), ['']);
 }
 
 // ---------------------------------------------------------------------------
@@ -256,16 +287,36 @@ function renderTable(section: TableSection, width: number): string[] {
  *
  * A value never truncates; it wraps, and its continuation lines are indented to
  * line up under the value rather than under the label.
+ *
+ * THE LABEL COLUMN IS CAPPED, WHICH IS WHY `-Width` MEANS ANYTHING HERE.
+ * The natural width wins only while it leaves room for the ` : ` and at least
+ * one column of value, so the cap is `width - 4` and the label is CUT — with no
+ * ellipsis, unlike a table cell. Measured on pwsh 7.6.5, LINUX
+ * (docker pwsh-linux:7.6.5, .NET 10.0.11), on
+ * `[pscustomobject]@{ Property = 'a' } | Format-List | Out-String -Width n`:
+ *
+ *   n=5   `P : a`        n=8   `Prop : a`      n=10  `Proper : a`
+ *   n=12  `Property : a`                       n=20  `Property : a`
+ *
+ * Without the cap this emitted `Property : a` — twelve columns — at every one
+ * of them, so `-Width 10` produced a ten-column terminal's worth of overflow.
+ * The cut is by DISPLAY width, not character count: a label of `中文字` is six
+ * columns and survives a cap of six.
  */
 function renderEntry(entry: readonly ListItem[], width: number): string[] {
-  const labelWidth = entry.reduce((max, item) => Math.max(max, sizingWidth(item.label)), 0);
+  const natural = entry.reduce((max, item) => Math.max(max, sizingWidth(item.label)), 0);
+  const labelWidth = Math.max(1, Math.min(natural, width - 4));
   const indent = labelWidth + 3;
   const valueWidth = Math.max(1, width - indent);
   const out: string[] = [];
   for (const item of entry) {
+    // Empty ellipsis: pwsh cuts the label bare — `Property` at width 10 is
+    // `Proper`, not `Prope…`. A table cell does the opposite, and the two
+    // really are different writers.
+    const label = truncateToWidth(item.label, labelWidth, '');
     const lines = wrapLines(item.value, valueWidth);
     const head = lines[0] ?? '';
-    out.push(`${item.label}${' '.repeat(Math.max(0, labelWidth - sizingWidth(item.label)))} : ${head}`);
+    out.push(`${label}${' '.repeat(Math.max(0, labelWidth - sizingWidth(label)))} : ${head}`);
     for (const line of lines.slice(1)) out.push(' '.repeat(indent) + line);
   }
   return out;
@@ -274,13 +325,28 @@ function renderEntry(entry: readonly ListItem[], width: number): string[] {
 function renderList(section: ListSection, width: number): string[] {
   const blocks = section.groups.map((group) => {
     const block: string[] = [];
-    if (group.label !== null) block.push(...wrapLines(group.label, width), '');
+    if (group.label !== null) {
+      appendAll(block, wrapLines(group.label, width));
+      block.push('');
+    }
     // Each entry is followed by a blank, which is what gives an ungrouped list
     // its trailing blank line without a separate group-end rule.
-    for (const entry of group.entries) block.push(...renderEntry(entry, width), '');
+    //
+    // Below five columns the entry LINES vanish and those blanks do not — the
+    // same cliff the table has, and at the same width. Measured on pwsh 7.6.5,
+    // LINUX, at widths 2, 3 and 4 for one object and for two:
+    //   width 4, one object   ''  ''
+    //   width 4, two objects  ''  ''  ''
+    //   width 5, one object   ''  'P : a'  ''
+    // A label at width 4 would have had zero columns left for its value, so
+    // there is nothing to print and pwsh prints nothing.
+    for (const entry of group.entries) {
+      if (width >= MIN_TABLE_WIDTH) appendAll(block, renderEntry(entry, width));
+      block.push('');
+    }
     return block;
   });
-  return ['', ...joinBlocks(blocks, [''])];
+  return skeleton(joinBlocks(blocks, ['']));
 }
 
 // ---------------------------------------------------------------------------
@@ -311,7 +377,10 @@ function wideWidths(count: number, width: number): number[] {
 function renderWide(section: WideSection, width: number): string[] {
   const blocks = section.groups.map((group) => {
     const block: string[] = [];
-    if (group.label !== null) block.push(...wrapLines(group.label, width), '');
+    if (group.label !== null) {
+      appendAll(block, wrapLines(group.label, width));
+      block.push('');
+    }
 
     const widest = group.items.reduce((max, item) => Math.max(max, sizingWidth(item)), 1);
     const count = Math.max(
@@ -332,7 +401,7 @@ function renderWide(section: WideSection, width: number): string[] {
     }
     return block;
   });
-  return ['', ...joinBlocks(blocks, ['']), ''];
+  return skeleton(joinBlocks(blocks, ['']), ['']);
 }
 
 // ---------------------------------------------------------------------------
@@ -361,28 +430,35 @@ export function renderDocument(document: FormatDocument, options: RenderOptions)
   for (const section of document.sections) {
     switch (section.kind) {
       case 'raw':
-        lines.push(...section.lines);
+        appendAll(lines, section.lines);
         break;
       case 'table':
-        lines.push(...renderTable(section, options.width));
+        appendAll(lines, renderTable(section, options.width));
         break;
       case 'list':
-        lines.push(...renderList(section, options.width));
+        appendAll(lines, renderList(section, options.width));
         break;
       case 'wide':
-        lines.push(...renderWide(section, options.width));
+        appendAll(lines, renderWide(section, options.width));
         break;
       case 'custom':
-        lines.push(
-          '',
-          ...joinBlocks(
-            section.groups.map((group) => [
-              ...(group.label === null ? [] : [...wrapLines(group.label, options.width), '']),
-              ...group.lines,
-            ]),
+        appendAll(
+          lines,
+          skeleton(
+            joinBlocks(
+              section.groups.map((group) => {
+                const block: string[] = [];
+                if (group.label !== null) {
+                  appendAll(block, wrapLines(group.label, options.width));
+                  block.push('');
+                }
+                appendAll(block, group.lines);
+                return block;
+              }),
+              [''],
+            ),
             [''],
           ),
-          '',
         );
         break;
     }

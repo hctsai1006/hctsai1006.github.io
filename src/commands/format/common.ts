@@ -40,14 +40,16 @@ import { buildViewDocument, viewOptions, type ViewOptions } from './build.ts';
  * same reason psobject.ts pins its collator. The default is en-US, which is the
  * culture the conformance fixtures were captured under
  * (`capture.pinnedCulture`).
+ *
+ * AN UNKNOWN NAME PROPAGATES. This used to `catch` and fall back to en-US,
+ * which quietly contradicted the thing culture.ts refuses to do in its own
+ * header: a profile declaring `formatting.culture: fr-FR` got US separators and
+ * a US date order while still calling itself French, and a test asserted that
+ * as correct. Nothing downstream can detect the substitution, so the only place
+ * it can be reported is here.
  */
 export function cultureFor(context: InvocationContext): CultureData {
-  const name = context.profile.behavior('formatting.culture', 'en-US');
-  try {
-    return cultureByName(name);
-  } catch {
-    return DEFAULT_CULTURE;
-  }
+  return cultureByName(context.profile.behavior('formatting.culture', DEFAULT_CULTURE.name));
 }
 
 /** Marks where the built document goes among the passed-through records. */
