@@ -1429,7 +1429,23 @@ export class MemoryStorage implements StorageBackend {
           // whose occupancy does not move.
           byteDelta -= target.data.byteLength;
         }
-        steps.push({ op: 'create-file', path: targetPath, data: node.data.slice(), mode: node.mode });
+        // `origin: 'user'` EXPLICITLY, not left to `#apply`'s default.
+        //
+        // `#apply` only overrides an existing node's origin when the step
+        // carries one, so a copy onto a SEED file left it marked seed — and
+        // then the seed/overlay contract threw the user's data away exactly as
+        // it did for `writeText` before that was fixed. MEASURED: after
+        // `cp ~/mine.md ~/README.md` and one reload, the file was back to the
+        // seed's text, `failures: []`. A copy is a user action whatever it
+        // lands on; a NEW target already became 'user' through the default, so
+        // this only changes the overwrite case and makes the two agree.
+        steps.push({
+          op: 'create-file',
+          path: targetPath,
+          data: node.data.slice(),
+          mode: node.mode,
+          origin: 'user',
+        });
         byteDelta += node.data.byteLength;
         return null;
       }

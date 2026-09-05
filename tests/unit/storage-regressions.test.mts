@@ -31,6 +31,7 @@ import {
   createSnapshot,
   decodeSnapshot,
   encodeSnapshot,
+  exportSnapshot,
   fnv1a32,
   restoreSnapshot,
   snapshotPayload,
@@ -773,5 +774,110 @@ describe('the checksum covers what the restore acts on', () => {
     const asOverlay = fnv1a32(snapshotPayload({ ...base, scope: 'overlay' }));
     const asFull = fnv1a32(snapshotPayload({ ...base, scope: 'full' }));
     assert.notEqual(asOverlay, asFull, 'scope must change the checksum');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Fourth pass. Two of these are the previous pass's fixes being incomplete.
+// ---------------------------------------------------------------------------
+
+describe('every verb that overwrites a seed file claims it', () => {
+  // The previous fix went into `#write` only, so `copy` still lost the data.
+  // MEASURED across all four verbs through a real two-boot cycle: writeText,
+  // appendText and rename survived; copy came back as the seed's text.
+  const verbs = ['writeText', 'appendText', 'copy', 'rename'] as const;
+  for (const verb of verbs) {
+    it(`survives a reboot after ${verb}`, async () => {
+      const seed = buildSeed();
+      const clock = fakeClock().now;
+      const first = value(await bootStorage({ clock, seed }));
+      const readme = `${HOME}/README.md`;
+      const mine = `# VIA ${verb}, an hour of work\n`;
+
+      if (verb === 'writeText') {
+        assert.ok((await first.vfs.writeText(readme, mine)).ok);
+      } else if (verb === 'appendText') {
+        assert.ok((await first.vfs.writeText(readme, '')).ok);
+        assert.ok((await first.vfs.appendText(readme, mine)).ok);
+      } else {
+        assert.ok((await first.vfs.writeText(`${HOME}/mine.md`, mine)).ok);
+        const source = `${HOME}/mine.md`;
+        assert.ok(
+          verb === 'copy'
+            ? (await first.vfs.copy(source, readme, { overwrite: true })).ok
+            : (await first.vfs.rename(source, readme, { overwrite: true })).ok,
+        );
+      }
+
+      assert.equal(value(await first.backend.stat(readme)).origin, 'user', 'the node is the user’s now');
+      const overlay = value(await createSnapshot(first.backend, { scope: 'overlay', now: 2, seed }));
+      const row = overlay.entries.find((entry) => entry.p === readme);
+      assert.ok(row !== undefined && row.c !== undefined, 'the overlay must carry the content');
+
+      const second = value(await bootStorage({ clock, seed, overlay: encodeSnapshot(overlay) }));
+      assert.equal(value(await second.backend.readText(readme)), mine);
+    });
+  }
+});
+
+describe('a contentless file entry is never materialised', () => {
+  it('does not truncate even when the scope flip is re-signed', async () => {
+    // Widening the checksum only raised the cost of the edit to one line:
+    // `snapshotPayload` is exported and FNV-1a is not a MAC, so re-signing is
+    // trivial and the truncation came straight back. The guard that actually
+    // closes it does not depend on the document's integrity at all.
+    const seed = buildSeed();
+    const clock = fakeClock().now;
+    const booted = value(await bootStorage({ clock, seed }));
+    const readme = `${HOME}/README.md`;
+    const original = value(await booted.backend.readText(readme));
+    assert.ok(original.length > 0);
+    await booted.vfs.utimes(readme, { mtime: 1_650_000_000_000 });
+
+    const overlay = value(await createSnapshot(booted.backend, { scope: 'overlay', now: 2, seed }));
+    const row = overlay.entries.find((entry) => entry.p === readme);
+    assert.ok(row !== undefined && row.s === 1 && row.c === undefined);
+
+    const { checksum: _discarded, ...rest } = overlay;
+    const tampered = { ...rest, scope: 'full' as const };
+    const resigned: SnapshotDocument = { ...tampered, checksum: fnv1a32(snapshotPayload(tampered)) };
+    // It decodes — a recomputed checksum is a valid checksum, and this file has
+    // never claimed otherwise.
+    assert.ok(decodeSnapshot(encodeSnapshot(resigned)).ok);
+
+    const after = value(await bootStorage({ clock, seed, overlay: encodeSnapshot(resigned) }));
+    assert.equal(
+      value(await after.backend.readText(readme)),
+      original,
+      'the seed content must be intact, not truncated to empty',
+    );
+  });
+});
+
+describe('the signer and the verifier are the same function', () => {
+  it('round-trips a document this build wrote, whatever the clock did', async () => {
+    // `createSnapshot` signed the raw timestamps and `decodeSnapshot`
+    // normalised before hashing, so a build with a broken clock produced
+    // documents its own decoder called corrupt — sending anyone debugging it
+    // to look for bit rot. `now` and `seed.time` are unconstrained numbers.
+    for (const [label, now, seedTime] of [
+      ['now=1', 1, null],
+      ['now=0', 0, null],
+      ['now=-1', -1, null],
+      ['now=NaN', Number.NaN, null],
+      ['now=Infinity', Number.POSITIVE_INFINITY, null],
+      ['seed.time=0', 1, 0],
+      ['seed.time=-1', 1, -1],
+    ] as const) {
+      const store = backend();
+      const exported = value(
+        await exportSnapshot(store, {
+          scope: 'full',
+          now,
+          ...(seedTime === null ? {} : { seed: { time: seedTime, entries: [] } }),
+        }),
+      );
+      assert.ok(decodeSnapshot(exported).ok, `${label} produced a document this build refuses`);
+    }
   });
 });

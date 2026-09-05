@@ -381,8 +381,8 @@ export async function createSnapshot(
     format: SNAPSHOT_FORMAT,
     version: SNAPSHOT_VERSION,
     scope: options.scope,
-    createdAt: options.now,
-    seedTime,
+    createdAt: saneTime(options.now) ?? 0,
+    seedTime: saneTime(seedTime),
     entries,
     skipped,
   } as const;
@@ -467,6 +467,22 @@ function isSaneTime(value: unknown): boolean {
 }
 
 /**
+ * The one place a timestamp is made presentable, applied by the SIGNER and the
+ * VERIFIER so the two are literally the same function.
+ *
+ * They were not. `decodeSnapshot` normalised before hashing and
+ * `createSnapshot` signed the raw value, and `SnapshotOptions.now` and
+ * `SeedSpec.time` are unconstrained `number`s — so a NaN clock, a negative
+ * one, or a seed time of 0 produced a document THIS BUILD's own decoder then
+ * refused as corrupt. MEASURED: `now=-1`, `now=NaN`, `now=Infinity` and
+ * `seed.time=0` each exported happily and came back "the snapshot is corrupt",
+ * sending anyone debugging a broken clock to look for bit rot instead.
+ */
+function saneTime(value: unknown): number | null {
+  return isSaneTime(value) ? (value as number) : null;
+}
+
+/**
  * Parse and validate. Nothing is written before all three refusals have passed.
  */
 export function decodeSnapshot(bytes: Uint8Array): Result<SnapshotDocument> {
@@ -527,17 +543,16 @@ export function decodeSnapshot(bytes: Uint8Array): Result<SnapshotDocument> {
   const checksum = doc['checksum'];
   if (typeof checksum !== 'string') return refuse('no-checksum', 'the snapshot has no checksum');
 
-  // Verified over the NORMALISED document, which is also what `createSnapshot`
-  // signs, so the two cannot drift: both go through `snapshotPayload`. A
-  // document whose timestamps are garbage now fails here instead of being
-  // silently rewritten to 0, and a legitimate one round-trips because the
-  // normalisation is the identity on every value `createSnapshot` writes.
+  // Verified over the NORMALISED document, and `createSnapshot` signs the
+  // normalised document too — both call `saneTime` and then `snapshotPayload`,
+  // so signer and verifier are the same function rather than two functions
+  // that happen to agree on the values anyone thought to try.
   const unsigned = {
     format: SNAPSHOT_FORMAT,
     version: SNAPSHOT_VERSION,
     scope,
-    createdAt: isSaneTime(doc['createdAt']) ? (doc['createdAt'] as number) : 0,
-    seedTime: isSaneTime(doc['seedTime']) ? (doc['seedTime'] as number) : null,
+    createdAt: saneTime(doc['createdAt']) ?? 0,
+    seedTime: saneTime(doc['seedTime']),
     entries,
     skipped,
   } as const;
@@ -674,7 +689,24 @@ export async function restoreSnapshot(
             : 'seed';
     // Only an OVERLAY leaves seed content to the next boot. A full snapshot may
     // be all that is left after a site-data clear, so it materialises everything.
-    const metadataOnly = document.scope === 'overlay' && claimsSeed;
+    // A FILE entry with no `c` is NEVER materialised, whatever the scope says.
+    //
+    // `createSnapshot` writes `c` for every file it exports — an empty file
+    // gets `c: ""`, not an absent field — so a contentless file entry is
+    // either corrupt or an overlay entry being read under the wrong scope.
+    // Materialising it meant `new Uint8Array(0)`, which turns "the seed owns
+    // this content" into "truncate it": flipping one word in a stored overlay
+    // took a 63-byte seed file to 0 bytes with `failures: []`.
+    //
+    // Widening the checksum in this same commit-series raised the cost of that
+    // edit to one line — `snapshotPayload` is exported and FNV-1a is not a MAC,
+    // so re-signing is trivial, and MEASURED, the re-signed document truncated
+    // the file again. This guard is what actually closes it, and it does not
+    // depend on the integrity of the document at all. Treat such an entry the
+    // way an overlay treats a seed node: metadata only, and `dropped` if the
+    // path is not there.
+    const contentless = entry.t === 'f' && entry.c === undefined;
+    const metadataOnly = (document.scope === 'overlay' && claimsSeed) || contentless;
 
     if (metadataOnly) {
       // Only its metadata is ours to restore, and only if this version's seed
