@@ -28,8 +28,8 @@
  *
  *   3. THE SEAM. `types.ts` already specified that the log's records are
  *      `MutationPlan`s and that they attach at `journal.write`. A mirrored tree
- *      would need its log at a different layer, and the seam that 46 storage
- *      tests already exercise would go unused.
+ *      would need its log at a different layer, and the seam the existing
+ *      storage tests already exercise would go unused.
  *
  * The cost, stated plainly: the working set is in memory, so this design is
  * bounded by RAM rather than by quota. That is not a new limit. `types.ts`
@@ -261,7 +261,7 @@ export interface RecoveryReport {
  *
  * `open` acquires the locks and reads; `recover` interprets; `checkpoint`
  * writes. Nothing here knows what a file is — that is `MemoryStorage`'s job,
- * and keeping the split means the POSIX semantics that 46 regression tests
+ * and keeping the split means the POSIX semantics that the regression suite
  * already pin down are the same semantics in the browser.
  */
 export class OpfsStore {
@@ -311,7 +311,11 @@ export class OpfsStore {
    */
   static async open(options: OpfsStoreOptions): Promise<Result<OpfsStore>> {
     const usage = options.usage ?? ((): QuotaUsage => UNKNOWN_USAGE);
-    const name = options.directory ?? 'browsershell';
+    // `STORE_DIRECTORY`, not a second copy of the string. A LEADER opening one
+    // directory while a FOLLOWER reads another is not a crash — it is a second
+    // tab showing an empty filesystem and a user concluding their files are
+    // gone. `readFollowerView` already used the constant; this was the literal.
+    const name = options.directory ?? STORE_DIRECTORY;
 
     let directory: OpfsDirectory;
     try {

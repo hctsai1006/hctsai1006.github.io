@@ -12,7 +12,8 @@
  * whether `cp -r` onto a file refuses or clobbers, when a directory's mtime
  * moves, what a permission triplet computes, that a plan is validated before a
  * byte is written — is decided in `memory.ts` and pinned by the storage suite,
- * including 46 regression tests each proved load-bearing by reverting its fix.
+ * including every test in `tests/unit/storage-regressions.test.mts`, each proved
+ * load-bearing by reverting its fix and watching it go red.
  * Every one of those decisions has to hold in the browser too. There are
  * exactly two ways to get that: write them again in this file and hope the two
  * agree, or have one implementation. `memory.ts` says which was chosen, and it

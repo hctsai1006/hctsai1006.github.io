@@ -20,6 +20,7 @@ import { FakeOpfs, storePath } from './opfs-fake.mts';
 import {
   MemoryStorage,
   OpfsStore,
+  STORE_DIRECTORY,
   STORE_FILES,
   STORE_VERSION,
   decodePlan,
@@ -31,6 +32,7 @@ import {
   mountOpfsStorage,
   orderMigrations,
   parseWal,
+  readFollowerView,
   WorkerStorageBackend,
   exportSnapshot,
   importSnapshot,
@@ -935,6 +937,33 @@ describe('adversarial: findings against the first draft of the OPFS store', () =
 
     // The leader is untouched by any of it.
     assert.equal(value(await leader.backend.readText('/home/me/shared.txt')), 'from the leader');
+    leader.leadership?.release();
+    leaderStore(leader).close();
+  });
+
+  it('a leader and a follower agree on which directory the store is in', async () => {
+    // Found in the second pass: the default directory was spelled as the
+    // `STORE_DIRECTORY` constant in the follower's reader and as a bare string
+    // literal in `OpfsStore.open`. They happened to match. If they ever stopped
+    // matching, nothing would crash -- a second tab would show an EMPTY
+    // filesystem and the user would conclude their files were gone.
+    //
+    // Asserting on the constant rather than on the literal is what makes the
+    // two impossible to separate.
+    const fake = new FakeOpfs();
+    const locks = new FakeLocks();
+    const leader = await mount(fake, { locks });
+    assert.ok((await leader.backend.writeText('/home/me/proof.txt', 'here')).ok);
+    assert.ok((await leader.backend.checkpoint()).ok);
+    assert.equal(
+      fake.has([STORE_DIRECTORY, STORE_FILES.slotA]),
+      true,
+      'the leader wrote into STORE_DIRECTORY',
+    );
+
+    const view = value(await readFollowerView({ root: fake.root }));
+    assert.ok(view.overlay !== null, 'and the follower reader found it there');
+    assert.equal(view.slot !== null, true);
     leader.leadership?.release();
     leaderStore(leader).close();
   });
