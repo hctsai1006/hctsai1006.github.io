@@ -128,7 +128,7 @@ describe('planPullRequests', () => {
 
   it('closes everything it finds when the drift is gone', () => {
     assert.deepEqual(planPullRequests({ drifted: false, branch: BRANCH, open: [pr(7)] }), [
-      { kind: 'close', number: 7, reason: 'resolved' },
+      { kind: 'close', number: 7, reason: 'resolved', deleteBranch: true },
     ]);
   });
 
@@ -140,9 +140,29 @@ describe('planPullRequests', () => {
     const ops = planPullRequests({ drifted: true, branch: BRANCH, open: [pr(9), pr(7), pr(8)] });
     assert.deepEqual(ops, [
       { kind: 'update', number: 7 },
-      { kind: 'close', number: 8, reason: 'superseded' },
-      { kind: 'close', number: 9, reason: 'superseded' },
+      { kind: 'close', number: 8, reason: 'superseded', deleteBranch: false },
+      { kind: 'close', number: 9, reason: 'superseded', deleteBranch: false },
     ]);
+  });
+
+  it('never deletes the head branch while a pull request is still open on it', () => {
+    // Every open pull request here shares ONE branch. `gh pr close
+    // --delete-branch` on a superseded duplicate would delete the branch that
+    // the pull request this same run had just updated is built on.
+    const ops = planPullRequests({ drifted: true, branch: BRANCH, open: [pr(7), pr(8)] });
+    assert.ok(ops.every((o) => o.kind !== 'close' || !o.deleteBranch));
+  });
+
+  it('deletes the shared branch exactly once, on the final close', () => {
+    const ops = planPullRequests({ drifted: false, branch: BRANCH, open: [pr(7), pr(8), pr(9)] });
+    const deleting = ops.filter((o) => o.kind === 'close' && o.deleteBranch);
+    assert.equal(deleting.length, 1);
+    assert.deepEqual(deleting[0], {
+      kind: 'close',
+      number: 9,
+      reason: 'resolved',
+      deleteBranch: true,
+    });
   });
 
   it('ignores pull requests from any other head, whatever the query returned', () => {
@@ -152,7 +172,9 @@ describe('planPullRequests', () => {
       branch: BRANCH,
       open: [pr(4, 'feat/someone-elses-branch'), pr(5)],
     });
-    assert.deepEqual(ops, [{ kind: 'close', number: 5, reason: 'resolved' }]);
+    assert.deepEqual(ops, [
+      { kind: 'close', number: 5, reason: 'resolved', deleteBranch: true },
+    ]);
   });
 });
 

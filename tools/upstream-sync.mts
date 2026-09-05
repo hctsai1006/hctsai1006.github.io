@@ -178,7 +178,19 @@ export interface OpenPullRequest {
 export type PrOperation =
   | { kind: 'create' }
   | { kind: 'update'; number: number }
-  | { kind: 'close'; number: number; reason: 'resolved' | 'superseded' };
+  | {
+      kind: 'close';
+      number: number;
+      reason: 'resolved' | 'superseded';
+      /**
+       * Every open pull request here shares ONE head branch, so deleting it is
+       * only safe on the very last close, and never while an `update` is keeping
+       * a pull request alive on it. `gh pr close --delete-branch` on a
+       * superseded duplicate would have pulled the branch out from under the
+       * pull request this run had just updated.
+       */
+      deleteBranch: boolean;
+    };
 
 /**
  * Reduce whatever is open down to at most one pull request.
@@ -203,7 +215,16 @@ export function planPullRequests(input: {
     .sort((a, b) => a.number - b.number);
 
   if (!input.drifted) {
-    return mine.map((p): PrOperation => ({ kind: 'close', number: p.number, reason: 'resolved' }));
+    // Nothing is left pointing at the branch afterwards, so the last close
+    // takes it with it. Tomorrow's drift rebuilds it from the base.
+    return mine.map(
+      (p, idx): PrOperation => ({
+        kind: 'close',
+        number: p.number,
+        reason: 'resolved',
+        deleteBranch: idx === mine.length - 1,
+      }),
+    );
   }
 
   const [keep, ...extra] = mine;
@@ -211,7 +232,15 @@ export function planPullRequests(input: {
 
   return [
     { kind: 'update', number: keep.number },
-    ...extra.map((p): PrOperation => ({ kind: 'close', number: p.number, reason: 'superseded' })),
+    ...extra.map(
+      (p): PrOperation => ({
+        kind: 'close',
+        number: p.number,
+        reason: 'superseded',
+        // Never: #keep is still open on this same branch.
+        deleteBranch: false,
+      }),
+    ),
   ];
 }
 
@@ -593,7 +622,11 @@ export function reconcile(o: ReconcileOptions): ReconcileResult {
         if (commented.status !== 0) {
           say(`  could not comment on #${op.number}; closing it anyway.`);
         }
-        const closed = gh('pr', 'close', String(op.number), '--repo', o.repo, '--delete-branch');
+        const closed = gh(
+          'pr', 'close', String(op.number),
+          '--repo', o.repo,
+          ...(op.deleteBranch ? ['--delete-branch'] : []),
+        );
         if (closed.status !== 0) {
           throw new SyncFailure(
             `gh pr close #${op.number} failed (exit ${closed.status ?? 'null'})\n` +
