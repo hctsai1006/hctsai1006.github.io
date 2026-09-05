@@ -73,14 +73,32 @@
  * command can only DELETE. What it deletes is every node whose `origin` is
  * `user`, which is every file and directory the visitor created.
  *
- * The gap, measured rather than assumed: overwriting a seed file does NOT flip
- * its origin. `writeText` on `~/README.md` leaves `stat().origin === 'seed'`,
- * so a seed file the visitor EDITED is not deleted here and keeps its edited
- * content for the rest of the session. `bootStorage` reinstalls the seed image
- * on every boot, so the original content is back on the next reload — which is
- * the same overlay model v1 documents ("使用者刪掉種子檔後重新載入會復原"). That
- * caveat is not left for someone to discover: it goes on the Warning stream
- * every time the command runs.
+ * The gap, measured rather than assumed. This paragraph said the opposite until
+ * the storage layer was corrected under it, and the correction is why the
+ * behaviour below is what it is, so both halves are recorded:
+ *
+ * WRITING CONTENT TO A SEED FILE MAKES IT THE VISITOR'S — `writeText` on
+ * `~/README.md` sets `stat().origin === 'user'`. It has to: `createSnapshot`
+ * records a seed node's metadata and not its content, so while an edited seed
+ * file stayed `seed` the visitor's rewrite was thrown away on the next boot,
+ * silently and with `failures: []`. That was a real defect, and fixing it is
+ * what changed this command.
+ *
+ * The consequence here is that an edited seed file is INDISTINGUISHABLE from a
+ * file the visitor made — which is the truth about it — so the sweep removes
+ * it, and afterwards that path holds nothing at all. `bootStorage` reinstalls
+ * the image on every boot, so the shipped content is back on the next reload;
+ * it does not come back before then, because `FileSystemPort` has no seed
+ * installer (`ports.ts`: "the seed installer [is a] host concern"), and this
+ * command can only delete.
+ *
+ * So the visitor's edit is correctly gone — v1 agrees, its reset drops the
+ * whole overlay — but the shipped copy arrives one reload later than v1's,
+ * which rebuilds the seed in memory on the spot. The command therefore does
+ * NOT get to claim the file is back, and the caveat is not left for someone to
+ * discover: it goes on the Warning stream every time the command runs. Closing
+ * the remaining gap means the host reinstalling the image after a reset, which
+ * is host work and is recorded in the report rather than faked here.
  *
  * ── THE EXPORT ────────────────────────────────────────────────────────────
  *
@@ -117,13 +135,17 @@ const RESTORED = 'File system restored to its initial state.';
 /**
  * The caveat, on the Warning stream so it is seen by default.
  *
- * A visitor who edited a seeded file and reset expecting the original back
- * would otherwise get their own edit and no hint that anything was incomplete,
- * which is a silently wrong answer rather than a missing feature.
+ * Editing a file that came with the page makes it the visitor's, so this
+ * command removes it along with everything else they made, and the path is
+ * then EMPTY until the page reloads and rebuilds the image. A visitor who
+ * reset expecting the shipped copy back would otherwise find the file simply
+ * missing, with nothing said — a silently incomplete answer rather than a
+ * missing feature.
  */
 const SEED_CAVEAT =
-  'Files that came with the image are rebuilt when the page loads, not by this command. ' +
-  'If you edited one, it keeps your version until the next reload.';
+  'Files that came with the page are rebuilt when the page loads, not by this command. ' +
+  'If you edited one, your version was removed with the rest and the original comes back ' +
+  'on the next reload.';
 
 const CONFIRM_TITLE = 'Delete everything you have created here?';
 const CONFIRM_DETAIL =

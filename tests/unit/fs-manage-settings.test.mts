@@ -283,24 +283,38 @@ describe('Reset-FileSystem, once it has been told yes', () => {
     assert.equal(r.vfs.location.path, TEST_HOME);
   });
 
-  it('warns that an EDITED seed file is not restored until the next load', async () => {
-    // Measured against this repository's own storage: overwriting a seed file
-    // does NOT flip its origin, so a sweep by origin cannot find it. The seed
-    // image is reinstalled by `bootStorage` on the next boot, which is what
-    // actually restores it — and a visitor who was not told that would get
-    // their own edit back and no hint that anything was incomplete.
+  it('removes an EDITED seed file and warns that the original returns on reload', async () => {
+    // This test asserted the opposite until the storage layer was corrected
+    // under it, and the inversion is the point rather than an inconvenience.
+    //
+    // It was written against a MEASURED defect: overwriting a seed file left
+    // `origin: 'seed'`, so the sweep could not see it and the visitor's edit
+    // survived a reset. What that same flag also did was throw the edit away
+    // on the next boot — `createSnapshot` records a seed node's metadata and
+    // not its content — so the edit was unreachable by reset AND lost on
+    // reload. Content writes now claim the node, which fixes both.
+    //
+    // So the file is the visitor's, the reset takes it, and the path is empty
+    // until `bootStorage` reinstalls the image. That is the full truth and all
+    // three parts are asserted: gone, said out loud, and reported as removed.
     const r = await rig({
       seed: SEED,
       dialog: new StubDialog({ confirm: true }),
     });
     assert.ok((await r.vfs.writeText(`${TEST_HOME}/README.md`, 'I changed this')).ok);
+    assert.equal(
+      (await r.vfs.stat(`${TEST_HOME}/README.md`) as { value: { origin: string } }).value.origin,
+      'user',
+      'editing a shipped file makes it the visitor’s — this is what the sweep acts on',
+    );
 
     assert.equal(await r.run(RESET_WITH_READ), 0);
 
-    assert.equal(await r.read(`${TEST_HOME}/README.md`), 'I changed this');
+    assert.equal(await r.exists(`${TEST_HOME}/README.md`), false, 'removed, not kept');
+    assert.deepEqual(r.verbose, ['Removed 1 item.']);
     assert.equal(r.warnings.length, 1);
     assert.match(r.warnings[0] ?? '', /rebuilt when the page loads/u);
-    assert.match(r.warnings[0] ?? '', /keeps your version until the next reload/u);
+    assert.match(r.warnings[0] ?? '', /original comes back\s+on the next reload/u);
   });
 
   it('stops on Ctrl+C and says what is still standing', async () => {
