@@ -148,7 +148,37 @@ export interface CompatibilityView {
  * value would force everything to be buffered and would lose the distinction
  * between an object and an error.
  *
- * The number returned is the exit code, which `$LASTEXITCODE` reports.
+ * ---------------------------------------------------------------------------
+ * WHAT THE NUMBER IS, AND WHAT IT IS NOT
+ * ---------------------------------------------------------------------------
+ *
+ * It is the command's STATUS: 0 means it succeeded, and any other value means
+ * it failed. It is NOT `$LASTEXITCODE`, which this docstring used to claim.
+ *
+ * Measured in pwsh 7.6.5, in one session, reading both variables after each
+ * command:
+ *
+ *   (fresh session)                       $LASTEXITCODE is UNSET, $? True
+ *   cmd /c "exit 42"                      $LASTEXITCODE 42, $? False
+ *   Get-Date                              $LASTEXITCODE 42, $? True
+ *   cmd /c "exit 7"; Get-Item nosuch      $LASTEXITCODE  7, $? False
+ *   cmd /c "exit 5"; Write-Error boom     $LASTEXITCODE  5, $? False
+ *   cmd /c "exit 13"; No-Such-Command     $LASTEXITCODE 13, $? False
+ *   & script.ps1  (which does `exit 33`)  $LASTEXITCODE 33, $? False
+ *
+ * A cmdlet NEVER touches `$LASTEXITCODE` — not when it fails, not when it
+ * cannot be found. Only a native program or a script PowerShell launched sets
+ * it, and its previous value survives every cmdlet in between. A cmdlet's
+ * success or failure shows in `$?`, and `$?` is False even when the command
+ * produced output, as long as it wrote an error record:
+ *
+ *   Get-Item 'C:\nope','C:\Windows' -ErrorAction SilentlyContinue
+ *     -> 1 object emitted, $? False
+ *
+ * So the two are modelled separately. The kernel keeps `$?` and
+ * `$LASTEXITCODE` per terminal, derives `$?` from this number AND from whether
+ * anything was written to stream 2, and updates `$LASTEXITCODE` only for a
+ * process whose manifest says a separate runtime executed it.
  */
 export interface CommandModule {
   readonly manifest: CommandManifest;

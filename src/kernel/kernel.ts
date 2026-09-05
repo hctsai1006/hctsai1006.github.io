@@ -21,9 +21,23 @@
  *
  * DELIBERATELY NOT A PARSER. `splitPipeline` and `splitTokens` below are the
  * smallest thing that lets a pipeline exist at all, and they are marked for
- * deletion. Lexing, the AST and version-aware binding belong to the binder, and
- * every parameter rule that leaks in here is one that will have to be removed
- * from two places later.
+ * deletion. Lexing and the AST belong to PR-08, and every parameter rule that
+ * leaks in here is one that will have to be removed from two places later.
+ *
+ * NOT A SECOND ENGINE, any more. This file used to join its stages with a
+ * private `ObjectQueue` whose own comment admitted the buffering was unbounded
+ * — so `pipeline.ts`'s backpressure, early-termination and cancellation tests
+ * covered a path the kernel never took, a fast producer feeding a slow consumer
+ * grew without limit, and the Worker milestone was a rewrite rather than a
+ * change of transport. It now composes `commandStage` and `runPipelineStages`,
+ * which is the engine those tests exercise. The one thing the kernel adds is
+ * that a stage is a PROCESS — its own pid, streams, stdin and signal — which is
+ * what `runPipelineStages`'s per-stage host exists for.
+ *
+ * AND IT CALLS THE BINDER. It used to hand every command a BindingResult with
+ * no parameters and the raw tokens in `remaining`, while `invocation.ts` said
+ * the binder, the commands and the kernel are defined together precisely so
+ * that they are guaranteed to join up. They now do.
  */
 
 import type {
@@ -33,7 +47,7 @@ import type {
   InvocationContext,
 } from '../commands/invocation.ts';
 import { CapabilityDeniedError } from '../commands/invocation.ts';
-import type { Capability } from '../commands/manifest.ts';
+import type { Capability, CommandManifest, Runtime } from '../commands/manifest.ts';
 import type { DialogPort, FileSystemPort, PreferencesPort } from '../commands/ports.ts';
 import type { PSValue } from '../pipeline/psobject.ts';
 import type {
@@ -42,11 +56,28 @@ import type {
   NativeStreams,
   PowerShellStreams,
   ProgressRecord,
+  Sink,
 } from '../pipeline/streams.ts';
-import { CallbackSink, errorRecord } from '../pipeline/streams.ts';
+import { CallbackSink, NullSink, errorRecord } from '../pipeline/streams.ts';
+import type { PipelineHost } from '../pipeline/pipeline.ts';
+import {
+  PipelineCancelledError,
+  commandStage,
+  noInput,
+  runPipelineStages,
+} from '../pipeline/pipeline.ts';
+import type { BindOptions } from '../binding/binder.ts';
+import { tryBindParameters } from '../binding/binder.ts';
+import { ParameterBindingError } from '../binding/errors.ts';
 import type { ProcessGroupId, ProcessId, RequestId, TerminalId } from './ids.ts';
-import type { KernelEvent, KernelRequest } from './protocol.ts';
-import { assertCloneSafe, sanitizePSValue } from './protocol.ts';
+import type { KernelEvent, KernelEventBody } from './protocol.ts';
+import {
+  assertCloneSafe,
+  decodeKernelRequest,
+  sanitizeErrorRecord,
+  sanitizeInformationRecord,
+  sanitizePSValue,
+} from './protocol.ts';
 import { AuditLog, CapabilityBroker, VirtualPolicy } from './capabilities.ts';
 import type { AuditView, CapabilityView, JobView, ProcessView, SignalView } from './inspect.ts';
 import { JobManager } from './process/jobs.ts';
@@ -55,77 +86,55 @@ import { ProcessTable } from './process/table.ts';
 import type { VirtualSignal } from './signals.ts';
 import { SIGNAL_EXIT_CODE, SignalController, isPipelineStopped } from './signals.ts';
 
+/**
+ * Was this a stop rather than a failure?
+ *
+ * Two error types mean it, and the distinction between them is not the
+ * kernel's: `PipelineStoppedError` is a delivered signal, and
+ * `PipelineCancelledError` is the pipeline engine relaying one to a stage that
+ * was parked rather than looping. Both are Ctrl+C to the user.
+ */
+function isStopped(error: unknown): boolean {
+  return isPipelineStopped(error) || error instanceof PipelineCancelledError;
+}
+
 // ---------------------------------------------------------------------------
 // exit codes with meanings
 // ---------------------------------------------------------------------------
 
 /**
- * `command not found`. The shell convention, and what makes `if (!$?)` and
- * `$LASTEXITCODE -eq 127` mean the same here as in bash and in pwsh on Unix.
+ * `command not found`, as a STATUS.
+ *
+ * 127 is the shell convention for a program that could not be found, and it is
+ * kept because a status number needs a value and this one is the one everybody
+ * recognises. What it is NOT is `$LASTEXITCODE`. Measured in pwsh 7.6.5:
+ *
+ *   cmd /c "exit 13"            $LASTEXITCODE 13
+ *   This-Command-Does-Not-Exist $LASTEXITCODE 13, $? False
+ *
+ * The variable does not move. A missing CMDLET is not a missing program, and
+ * this constant's previous docstring claimed the two agreed.
  */
 export const EXIT_COMMAND_NOT_FOUND = 127;
-/** A command threw, or was denied a capability. */
+/** A command threw, was denied a capability, or could not bind. */
 export const EXIT_FAILURE = 1;
 
-// ---------------------------------------------------------------------------
-// the object queue that joins two pipeline stages
-// ---------------------------------------------------------------------------
-
 /**
- * A single-producer, single-consumer channel of pipeline objects.
+ * Does a process of this runtime set `$LASTEXITCODE`?
  *
- * Single-consumer is a real constraint, not a simplification: a pipeline stage
- * has exactly one reader, and two readers would silently split the objects
- * between them. It is enforced by construction — the kernel creates one queue
- * per join and hands its iterable to exactly one stage.
+ * `wasm` and `vm` mean a separate runtime executed the command — real
+ * execution, but not ours — which is the closest thing this engine has to "a
+ * native program PowerShell launched". `semantic` and `browser` are both
+ * cmdlet-shaped: they run here, they write to the six streams, and pwsh's own
+ * answer for a cmdlet is that `$LASTEXITCODE` does not move.
  *
- * Buffering here is unbounded, which is the honest limit of this milestone. The
- * `Sink` contract is async precisely so back-pressure can be added without a
- * signature change; adding it needs the transport's credit protocol, which
- * arrives with the Worker.
+ * Nothing in `manifests.json` is `wasm` or `vm` today — 57 `semantic` and 28
+ * `browser` — so in practice `$LASTEXITCODE` stays unset for a whole session,
+ * which is exactly what a pwsh session that has run no external program shows.
  */
-class ObjectQueue implements AsyncIterable<PSValue> {
-  readonly #buffer: PSValue[] = [];
-  #wake: (() => void) | null = null;
-  #closed = false;
-
-  push(value: PSValue): void {
-    if (this.#closed) return;
-    this.#buffer.push(value);
-    this.#signal();
-  }
-
-  close(): void {
-    this.#closed = true;
-    this.#signal();
-  }
-
-  #signal(): void {
-    const wake = this.#wake;
-    this.#wake = null;
-    wake?.();
-  }
-
-  async *[Symbol.asyncIterator](): AsyncGenerator<PSValue> {
-    for (;;) {
-      while (this.#buffer.length > 0) {
-        yield this.#buffer.shift() as PSValue;
-      }
-      if (this.#closed) return;
-      await new Promise<void>((resolve) => {
-        this.#wake = resolve;
-      });
-    }
-  }
+function setsLastExitCode(runtime: Runtime): boolean {
+  return runtime === 'wasm' || runtime === 'vm';
 }
-
-/** An empty pipeline input: what the first stage of a pipeline receives. */
-const EMPTY_INPUT: AsyncIterable<PSValue> = {
-  async *[Symbol.asyncIterator](): AsyncGenerator<PSValue> {
-    // Intentionally empty. `Get-Process` first in a pipeline gets no input, and
-    // that is different from getting `$null` — which would be one object.
-  },
-};
 
 // ---------------------------------------------------------------------------
 // stdin
@@ -201,6 +210,18 @@ export interface KernelOptions {
    * boundary itself is the thing enforcing the rule.
    */
   readonly validateEvents?: boolean;
+  /**
+   * Extra facts the binder needs that `CommandManifest` does not carry.
+   *
+   * Three of them exist — `defaultParameterSet`, `validationDetails` and
+   * `valueFromRemainingArguments` — and every one is a CAPTURED fact about a
+   * real cmdlet rather than something derivable from the manifest. The kernel
+   * refuses to guess them: with none supplied the binder is still correct for
+   * every command that does not need them, and a command that does gets a
+   * binding error instead of a silently different binding. The embedder that
+   * holds the capture supplies this.
+   */
+  readonly bindOptions?: (manifest: CommandManifest) => BindOptions;
 }
 
 /** Per-terminal state the kernel owns because the DOM is not reachable. */
@@ -208,6 +229,19 @@ interface TerminalState {
   cwd: string;
   columns: number;
   rows: number;
+  /**
+   * `$?`. True in a fresh session, which is what pwsh 7.6.5 reports before
+   * anything has run.
+   */
+  lastSucceeded: boolean;
+  /**
+   * `$LASTEXITCODE`, or null for "never set".
+   *
+   * Null and not 0. Measured: in a fresh pwsh 7.6.5 session the variable does
+   * not exist, and `0` would be indistinguishable from a program that ran and
+   * succeeded.
+   */
+  lastExitCode: number | null;
 }
 
 /** The default terminal geometry, used until the UI sends a `resize`. */
@@ -232,9 +266,18 @@ const DEFAULT_PROFILE: CompatibilityView = {
   },
 };
 
-/** How a stage ended. The last stage's result is the pipeline's. */
+/**
+ * How a stage ended.
+ *
+ * Three separate facts, because pwsh keeps them separate and measurably so:
+ * `exitCode` is the command's status, `succeeded` is `$?` (which is False even
+ * for a command that produced output, if it also wrote an error record), and
+ * `nativeExitCode` is the only one of the three that can move `$LASTEXITCODE`.
+ */
 interface StageResult {
   readonly exitCode: number;
+  readonly succeeded: boolean;
+  readonly nativeExitCode: number | null;
   readonly signalled: VirtualSignal | null;
 }
 
@@ -247,6 +290,36 @@ interface Running {
   readonly background: boolean;
   readonly stdin: StdinPipe;
   readonly closeStreams: () => void;
+}
+
+/**
+ * One stage of a pipeline, as the kernel assembles it.
+ *
+ * A stage is a PROCESS: its own pid, its own six streams, its own stdin, its
+ * own AbortSignal. That is exactly why the kernel could not use
+ * `runPipeline` — one shared `PipelineHost` cannot express it — and exactly
+ * what `runPipelineStages` was added to fix. `outcome` is filled in by the
+ * guard around `invoke`, which is the only thing that knows how the command
+ * ended.
+ */
+interface Prepared {
+  readonly snapshot: ProcessSnapshot;
+  readonly module: CommandModule;
+  readonly binding: BindingResult;
+  readonly host: PipelineHost;
+  readonly signal: AbortSignal;
+  readonly errorSink: Sink<ErrorRecord>;
+  /**
+   * Did anything reach stream 2?
+   *
+   * `$?` is not `exitCode === 0`. Measured in pwsh 7.6.5:
+   * `Get-Item 'C:
+ope','C:\Windows' -ErrorAction SilentlyContinue` emits one
+   * object and still leaves `$?` False. Writing an error record is the fact
+   * that decides it, so the fact has to be recorded.
+   */
+  wroteError: boolean;
+  outcome: StageResult | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -315,6 +388,15 @@ export class Kernel {
   readonly #finished = new Set<ProcessId>();
   /** Requests cancelled before a process existed for them. */
   readonly #cancelled = new Set<RequestId>();
+  /**
+   * Every `exec` requestId this kernel has ever accepted.
+   *
+   * Kept for the life of the session rather than cleared on exit, because a
+   * correlation id has to stay unique against the whole transcript and not just
+   * against what is currently running. It is one string per submitted command
+   * line — the same order of growth as the history the terminal already keeps.
+   */
+  readonly #submitted = new Set<RequestId>();
   readonly #env: Map<string, string>;
   readonly #clock: () => number;
   readonly #profile: CompatibilityView;
@@ -323,6 +405,15 @@ export class Kernel {
   readonly #preferences: PreferencesPort | null;
   readonly #dialog: DialogPort | null;
   readonly #validateEvents: boolean;
+  readonly #bindOptions: (manifest: CommandManifest) => BindOptions;
+  /**
+   * The last sequence number handed out. Never reset, so a consumer that sees
+   * seq N knows it has missed nothing if it has already seen 1..N-1.
+   */
+  #sequence = 0;
+  /** Stamped events waiting to be delivered. See `#emit`. */
+  readonly #outbox: KernelEvent[] = [];
+  #delivering = false;
 
   constructor(options: KernelOptions = {}) {
     this.#clock = options.clock ?? Date.now;
@@ -342,6 +433,7 @@ export class Kernel {
     // directory that does not exist. A test asserts they still agree.
     this.#defaultCwd = options.cwd ?? '/home/thc1006';
     this.#validateEvents = options.validateEvents ?? true;
+    this.#bindOptions = options.bindOptions ?? (() => ({}));
     this.#fs = options.fs ?? null;
     this.#preferences = options.preferences ?? null;
     this.#dialog = options.dialog ?? null;
@@ -356,7 +448,16 @@ export class Kernel {
     // delivered to the AbortController and it is the command's job to notice;
     // a kill a command could ignore would just be SIGTERM with extra steps.
     this.#signals.onSignal((pid, signal) => {
-      if (signal === 'SIGKILL') this.#finish(pid, SIGNAL_EXIT_CODE.SIGKILL, 'SIGKILL');
+      if (signal === 'SIGKILL') {
+        this.#finish(pid, {
+          exitCode: SIGNAL_EXIT_CODE.SIGKILL,
+          succeeded: false,
+          // A killed CMDLET does not move `$LASTEXITCODE` either; a killed
+          // native program on Unix would, and nothing here is one yet.
+          nativeExitCode: null,
+          signalled: 'SIGKILL',
+        });
+      }
       else this.#table.transition(pid, 'stopping');
     });
 
@@ -419,6 +520,16 @@ export class Kernel {
     return this.#broker.audit;
   }
 
+  /**
+   * The highest sequence number emitted so far; 0 before anything is emitted.
+   *
+   * Exposed so a reconnecting consumer can say what it has already seen, and so
+   * a test can assert the counter does not restart.
+   */
+  get sequence(): number {
+    return this.#sequence;
+  }
+
   /** Character cells, not pixels. What `Format-Table` will read. */
   terminalSize(terminalId: TerminalId): { columns: number; rows: number } {
     const terminal = this.#terminals.get(terminalId);
@@ -430,6 +541,32 @@ export class Kernel {
 
   cwd(terminalId: TerminalId): string {
     return this.#terminals.get(terminalId)?.cwd ?? this.#defaultCwd;
+  }
+
+  /**
+   * `$?` for this terminal. True before anything has run.
+   *
+   * SEPARATE from `lastExitCode`, because pwsh keeps them separate and the
+   * difference is measurable. In pwsh 7.6.5, after `cmd /c "exit 7"` a failing
+   * `Get-Item` leaves `$LASTEXITCODE` at 7 and sets `$?` to False; a succeeding
+   * `Get-Date` leaves it at 7 and sets `$?` to True. A cmdlet moves one of the
+   * two and never the other.
+   */
+  lastSucceeded(terminalId: TerminalId): boolean {
+    return this.#terminals.get(terminalId)?.lastSucceeded ?? true;
+  }
+
+  /**
+   * `$LASTEXITCODE` for this terminal, or null for "never set".
+   *
+   * Null and not 0: in a fresh pwsh 7.6.5 session the variable does not exist,
+   * and 0 would be indistinguishable from a program that ran and succeeded.
+   * Nothing in this milestone is a program PowerShell launched, so it stays
+   * null for a whole session — which is what a pwsh session that has run no
+   * external command shows too.
+   */
+  lastExitCode(terminalId: TerminalId): number | null {
+    return this.#terminals.get(terminalId)?.lastExitCode ?? null;
   }
 
   // -- registration --------------------------------------------------------
@@ -461,12 +598,49 @@ export class Kernel {
     };
   }
 
-  #emit(event: KernelEvent): void {
+  /**
+   * The ONE place an event acquires its sequence number.
+   *
+   * Every event already carried a pid; none carried an order. Success travels
+   * keyed by requestId, error and warning by pid, stdout and stderr as bytes,
+   * and four independent streams arriving at one renderer with no common
+   * ordinal can be printed in any order at all — so `command 2>&1` and a
+   * transcript were both unreconstructable. The counter is per KERNEL rather
+   * than per process or per stream, because ordering a stream against itself
+   * was never the thing in doubt.
+   *
+   * Stamped here and nowhere else, which is what makes the numbers dense and
+   * gap-free: a call site that could mint its own would eventually mint two.
+   */
+  #emit(body: KernelEventBody): void {
+    this.#sequence += 1;
+    const event = { ...body, seq: this.#sequence } as KernelEvent;
     if (this.#validateEvents) assertCloneSafe(event, `KernelEvent(${event.kind})`);
-    // Copy first: a listener that unsubscribes on `exit` — the obvious thing
-    // for a "wait for this command" helper to do — would otherwise mutate the
-    // set while it is being iterated.
-    for (const listener of [...this.#listeners]) listener(event);
+
+    // DELIVERED IN SEQUENCE ORDER, which needs a queue rather than a direct
+    // call. A listener is allowed to answer an event by sending a request — a
+    // UI that auto-responds does exactly that — and a request handled inside
+    // the delivery of event N emits event N+1 and delivers it in full before N
+    // reaches the listeners that come after. Measured before this queue existed:
+    //
+    //   delivery order of seq: 1,2,4,3,5,6
+    //
+    // A number whose whole purpose is to say what happened first must not
+    // arrive out of order, or a consumer that simply appends is already wrong.
+    this.#outbox.push(event);
+    if (this.#delivering) return;
+
+    this.#delivering = true;
+    try {
+      for (let next = this.#outbox.shift(); next !== undefined; next = this.#outbox.shift()) {
+        // Copy the listener set first: a listener that unsubscribes on `exit` —
+        // the obvious thing for a "wait for this command" helper to do — would
+        // otherwise mutate it while it is being iterated.
+        for (const listener of [...this.#listeners]) listener(next);
+      }
+    } finally {
+      this.#delivering = false;
+    }
   }
 
   // -- the protocol entry point -------------------------------------------
@@ -478,12 +652,55 @@ export class Kernel {
    * message handler has, and a UI that could `await` a request would grow code
    * that cannot survive the move into a Worker. Callers that need to join —
    * tests, a script runner, an MCP tool — use `drain`.
+   *
+   * `unknown` rather than `KernelRequest`, deliberately. This is the door a
+   * `postMessage` will arrive at, and a message from a page has no compile-time
+   * type — pretending otherwise is what made the old kernel type-ASSERT its
+   * input and act on whatever came through. A caller that wants checking builds
+   * its message as a `KernelRequest` first; the door itself checks at runtime.
    */
-  send(request: KernelRequest): void {
+  send(message: unknown): void {
+    // DECODED, not asserted. The static type is a claim about the sender, and
+    // the sender is about to become a `postMessage` from a page. Everything
+    // below can then rely on the fields being what they say they are, which is
+    // what the type alone never guaranteed at runtime.
+    const decoded = decodeKernelRequest(message);
+    if (!decoded.ok) {
+      const record = (typeof message === 'object' && message !== null
+        ? message
+        : {}) as Record<string, unknown>;
+      const requestId: unknown = record['requestId'];
+      const kind: unknown = record['kind'];
+      this.#emit({
+        kind: 'rejected',
+        requestId: typeof requestId === 'string' ? requestId : null,
+        requestKind: typeof kind === 'string' ? kind : null,
+        problems: decoded.problems,
+      });
+      return;
+    }
+    const request = decoded.value;
+
     switch (request.kind) {
-      case 'exec':
+      case 'exec': {
+        // A requestId is a CORRELATION id, and a correlation id that names two
+        // executions correlates nothing: the second run's objects, errors and
+        // exit would all arrive labelled as the first's. Reusing one is a UI
+        // bug, and a UI bug that silently produces interleaved output is worse
+        // than one that is reported.
+        if (this.#submitted.has(request.requestId)) {
+          this.#emit({
+            kind: 'rejected',
+            requestId: request.requestId,
+            requestKind: 'exec',
+            problems: [`requestId '${request.requestId}' has already been submitted`],
+          });
+          return;
+        }
+        this.#submitted.add(request.requestId);
         this.#exec(request.requestId, request.terminalId, request.source, request.background);
         return;
+      }
       case 'stdin': {
         const running = this.#running.get(request.processId);
         if (running === undefined) return;
@@ -549,7 +766,13 @@ export class Kernel {
   #terminal(terminalId: TerminalId): TerminalState {
     let terminal = this.#terminals.get(terminalId);
     if (terminal === undefined) {
-      terminal = { cwd: this.#defaultCwd, columns: DEFAULT_COLUMNS, rows: DEFAULT_ROWS };
+      terminal = {
+        cwd: this.#defaultCwd,
+        columns: DEFAULT_COLUMNS,
+        rows: DEFAULT_ROWS,
+        lastSucceeded: true,
+        lastExitCode: null,
+      };
       this.#terminals.set(terminalId, terminal);
     }
     return terminal;
@@ -563,6 +786,8 @@ export class Kernel {
     // Resolve every stage BEFORE starting any of them. A pipeline whose third
     // stage does not exist must not run its first two — in a shell that would
     // mean side effects for a command line that was never going to work.
+    // Verified in pwsh 7.6.5: `Prod | This-Command-Does-Not-Exist` leaves
+    // Prod's side-effect log EMPTY.
     const resolved = stages.map((stage) => {
       const tokens = splitTokens(stage);
       const name = tokens[0] ?? '';
@@ -575,26 +800,51 @@ export class Kernel {
       return;
     }
 
+    // BIND every stage before starting any of them, for the same reason and on
+    // the same evidence: `Prod | Get-Item -NoSuchParameter x` in pwsh 7.6.5
+    // also leaves Prod's log empty. The kernel used to hand every command an
+    // essentially empty BindingResult with the raw tokens in `remaining`, which
+    // meant the binder — the component invocation.ts says is defined alongside
+    // the kernel precisely so the two join up — was never called on the path
+    // that actually runs.
+    const bound: {
+      stage: string;
+      module: CommandModule;
+      binding: BindingResult;
+    }[] = [];
+    for (const entry of resolved) {
+      const module = entry.module as CommandModule;
+      const outcome = tryBindParameters(
+        entry.tokens.slice(1),
+        module.manifest,
+        this.#profile,
+        this.#bindOptions(module.manifest),
+      );
+      if (!outcome.ok) {
+        this.#reportBindingFailure(requestId, terminalId, terminal.cwd, module, entry.stage, outcome.error);
+        return;
+      }
+      bound.push({ stage: entry.stage, module, binding: outcome.result });
+    }
+
     // The group leader is the FIRST stage, as in POSIX. Every later stage joins
     // it, so one signal stops the whole pipeline rather than leaving earlier
     // stages producing into a sink nobody reads.
     let leader: ProcessGroupId | null = null;
-    const started: { snapshot: ProcessSnapshot; module: CommandModule; tokens: readonly string[] }[] = [];
-
-    for (const entry of resolved) {
-      const module = entry.module as CommandModule;
+    const snapshots: ProcessSnapshot[] = [];
+    for (const entry of bound) {
       const snapshot = this.#table.create({
-        name: module.manifest.display,
+        name: entry.module.manifest.display,
         commandLine: entry.stage,
         cwd: terminal.cwd,
-        runtime: module.manifest.runtime,
+        runtime: entry.module.manifest.runtime,
         terminalId,
         requestId,
         background,
         ...(leader === null ? {} : { pgid: leader, ppid: leader }),
       });
       leader ??= snapshot.pid;
-      started.push({ snapshot, module, tokens: entry.tokens });
+      snapshots.push(snapshot);
     }
 
     const groupLeader = leader as ProcessId;
@@ -607,35 +857,153 @@ export class Kernel {
     // output can be buffered under one job however many stages it has.
     if (background) this.#jobs.start(groupLeader, source);
 
-    // Queues join the stages. Stage i writes into queue i, stage i+1 reads it.
-    const queues = started.slice(0, -1).map(() => new ObjectQueue());
+    const prepared = bound.map((entry, index) =>
+      this.#prepare(snapshots[index] as ProcessSnapshot, entry.module, entry.binding, groupLeader),
+    );
 
-    const promises = started.map((entry, index) => {
-      const input: AsyncIterable<PSValue> = index === 0 ? EMPTY_INPUT : (queues[index - 1] as ObjectQueue);
-      const downstream = queues[index] ?? null;
-      return this.#runStage(entry.snapshot, entry.module, entry.tokens, input, downstream, groupLeader);
-    });
+    // Synchronously, before the first await. A test that sends a signal on the
+    // line after `send` must find a process that is already running, and the
+    // pipeline generator does not start until it is iterated.
+    for (const stage of prepared) this.#table.transition(stage.snapshot.pid, 'running');
 
-    const all = Promise.all(promises).then((results) => {
+    this.#track(this.#drive(prepared, requestId, terminalId, groupLeader, background));
+
+    // A cancel that arrived before the processes existed still has to land.
+    if (this.#cancelled.has(requestId)) {
+      this.#cancelled.delete(requestId);
+      this.#signals.raiseGroup(groupLeader, 'SIGINT');
+    }
+  }
+
+  /**
+   * Run the composed pipeline and report what happened.
+   *
+   * This is where the kernel stopped having a second execution engine. It used
+   * to join its stages with a private `ObjectQueue` whose own comment admitted
+   * "buffering here is unbounded, which is the honest limit of this milestone"
+   * — so the backpressure, early-termination and cancellation tests in
+   * pipeline.test.mts covered a path the kernel never took, and a fast producer
+   * feeding a slow consumer grew without limit.
+   */
+  async #drive(
+    prepared: readonly Prepared[],
+    requestId: RequestId,
+    terminalId: TerminalId,
+    groupLeader: ProcessGroupId,
+    background: boolean,
+  ): Promise<void> {
+    const stages = prepared.map((entry) => commandStage(this.#guard(entry), entry.binding));
+    const output = runPipelineStages(
+      // Deliberately empty rather than `[null]`: a command first in a pipeline
+      // gets NO input, which is different from getting one null object.
+      noInput(),
+      stages,
+      (_stage, index) => (prepared[index] as Prepared).host,
+    );
+
+    try {
+      for await (const value of output) {
+        // Sanitised HERE and not between stages. The old kernel sanitised on
+        // every stage boundary, which stripped `baseObject` from objects that
+        // had not left the kernel yet — so a command downstream of a producer
+        // could never reach the host value the object model exists to carry.
+        const safe = sanitizePSValue(value);
+        // A background pipeline's output is buffered for `Receive-Job`, because
+        // PowerShell does not print background output to the console and a
+        // terminal that did would interleave it with whatever is being typed.
+        if (background) this.#jobs.record(groupLeader, safe);
+        else this.#emit({ kind: 'objects', requestId, values: [safe] });
+      }
+    } catch (error: unknown) {
+      // A cancellation travels through the channel in both directions, so it
+      // can surface here as well as inside a command. Anything else is a kernel
+      // bug and is attributed to the last stage rather than swallowed.
+      if (!isStopped(error)) {
+        const last = prepared[prepared.length - 1];
+        if (last !== undefined) {
+          const message = error instanceof Error ? error.message : String(error);
+          await last.errorSink.write(
+            errorRecord(message, 'PipelineFailed', last.module.manifest.display, 'NotSpecified', {
+              exceptionType: error instanceof Error ? error.name : 'System.Exception',
+            }),
+          );
+          last.outcome ??= {
+            exitCode: EXIT_FAILURE,
+            succeeded: false,
+            nativeExitCode: null,
+            signalled: null,
+          };
+        }
+      }
+    } finally {
+      // Reported after the output has drained, so the last `objects` event
+      // always precedes the `exit` that follows it — the sequence number is
+      // only worth having if the kernel's own events respect it.
+      for (const entry of prepared) {
+        const outcome = entry.outcome ?? this.#unstarted(entry);
+        this.#finish(entry.snapshot.pid, outcome);
+      }
+
+      // `$?` and `$LASTEXITCODE`, which are two different questions with two
+      // different answers. See `#recordStatus`.
+      this.#recordStatus(
+        terminalId,
+        prepared.map((entry) => entry.outcome ?? this.#unstarted(entry)),
+      );
+
       // A pipeline's exit code is its LAST stage's, in POSIX and in PowerShell
       // alike. Taking the leader's would report success for
-      // `Get-Content missing.txt | Select-Object -First 1` because the reader
+      // `Get-Content missing.txt | Select-Object -First 1`, because the reader
       // is not the stage that failed.
-      const last = results[results.length - 1];
-      if (background && last !== undefined) {
+      const last = prepared[prepared.length - 1]?.outcome ?? undefined;
+      if (background && last !== undefined && last !== null) {
         this.#jobs.finish(groupLeader, last.exitCode, last.signalled !== null);
       }
       if (!background && this.#signals.foregroundGroup(terminalId) === groupLeader) {
         this.#signals.setForeground(terminalId, null);
       }
       this.#cancelled.delete(requestId);
-    });
-    this.#track(all);
+    }
+  }
 
-    // A cancel that arrived before the processes existed still has to land.
-    if (this.#cancelled.has(requestId)) {
-      this.#cancelled.delete(requestId);
-      this.#signals.raiseGroup(groupLeader, 'SIGINT');
+  /**
+   * What to report for a stage whose `invoke` never settled.
+   *
+   * The only way to get here is a SIGKILL, which reaps the process while its
+   * invocation is still running and may never return. `#finish` has already
+   * reported that exit and ignores this one; producing a value anyway keeps the
+   * caller from having to special-case it.
+   */
+  #unstarted(entry: Prepared): StageResult {
+    const signalled = this.#signals.deliveredTo(entry.snapshot.pid) ?? null;
+    const exitCode = signalled === null ? EXIT_FAILURE : SIGNAL_EXIT_CODE[signalled];
+    return {
+      exitCode,
+      succeeded: false,
+      nativeExitCode: setsLastExitCode(entry.module.manifest.runtime) ? exitCode : null,
+      signalled,
+    };
+  }
+
+  /**
+   * Update `$?` and `$LASTEXITCODE` for a terminal, from one pipeline's stages.
+   *
+   * Two different rules, because pwsh has two different rules.
+   *
+   * `$?` is the AND over the pipeline. Measured in pwsh 7.6.5: a failing first
+   * stage feeding a succeeding last stage still leaves `$?` False
+   * (`Get-Item 'C:\nope' -ErrorAction SilentlyContinue | Measure-Object`), so
+   * it is not simply the last stage's answer.
+   *
+   * `$LASTEXITCODE` is the LAST stage that set one, and it is left ALONE when
+   * no stage set one. Measured: `cmd /c "exit 77" | Out-Null` reports 77, and
+   * every cmdlet in between leaves the previous value standing.
+   */
+  #recordStatus(terminalId: TerminalId, results: readonly StageResult[]): void {
+    const terminal = this.#terminal(terminalId);
+    terminal.lastSucceeded = results.every((result) => result.succeeded);
+    for (const result of results) {
+      if (result.nativeExitCode !== null) terminal.lastExitCode = result.nativeExitCode;
     }
   }
 
@@ -683,56 +1051,125 @@ export class Kernel {
       kind: 'stream',
       processId: snapshot.pid,
       which: 'error',
-      payload: errorRecord(
-        `The term '${name}' is not recognized as a name of a cmdlet, function, script file, or executable program.`,
-        'CommandNotFoundException',
-        name,
-        'ObjectNotFound',
-        { exceptionType: 'System.Management.Automation.CommandNotFoundException', targetObject: name },
+      payload: sanitizeErrorRecord(
+        errorRecord(
+          `The term '${name}' is not recognized as a name of a cmdlet, function, script file, or executable program.`,
+          'CommandNotFoundException',
+          name,
+          'ObjectNotFound',
+          {
+            exceptionType: 'System.Management.Automation.CommandNotFoundException',
+            targetObject: name,
+          },
+        ),
       ),
     });
-    this.#finish(snapshot.pid, EXIT_COMMAND_NOT_FOUND, null);
+    // `$?` False, `$LASTEXITCODE` untouched. Measured: after `cmd /c "exit 13"`
+    // a command-not-found leaves the variable at 13.
+    this.#finish(snapshot.pid, {
+      exitCode: EXIT_COMMAND_NOT_FOUND,
+      succeeded: false,
+      nativeExitCode: null,
+      signalled: null,
+    });
+    this.#recordStatus(terminalId, [
+      { exitCode: EXIT_COMMAND_NOT_FOUND, succeeded: false, nativeExitCode: null, signalled: null },
+    ]);
   }
 
-  async #runStage(
+  /**
+   * A stage whose parameters could not be bound.
+   *
+   * The same shape as `#reportUnknownCommand`, and for the same reason: every
+   * `exec` must produce exactly one `exit`, and a pipeline that never ran still
+   * has to say why. The message, the category and the FullyQualifiedErrorId all
+   * come from the binder rather than being re-worded here, because the binder's
+   * are byte-for-byte what pwsh printed for the same input.
+   */
+  #reportBindingFailure(
+    requestId: RequestId,
+    terminalId: TerminalId,
+    cwd: string,
+    module: CommandModule,
+    stage: string,
+    error: ParameterBindingError,
+  ): void {
+    const snapshot = this.#table.create({
+      name: module.manifest.display,
+      commandLine: stage,
+      cwd,
+      runtime: module.manifest.runtime,
+      terminalId,
+      requestId,
+      background: false,
+    });
+    this.#table.transition(snapshot.pid, 'running');
+    this.#emit({
+      kind: 'stream',
+      processId: snapshot.pid,
+      which: 'error',
+      payload: sanitizeErrorRecord({
+        message: error.message,
+        fullyQualifiedErrorId: error.fullyQualifiedErrorId,
+        category: error.category,
+        exceptionType: error.exceptionTypeName,
+        ...(error.parameterName === null ? {} : { targetObject: error.parameterName }),
+      }),
+    });
+    this.#finish(snapshot.pid, {
+      exitCode: EXIT_FAILURE,
+      succeeded: false,
+      nativeExitCode: null,
+      signalled: null,
+    });
+    this.#recordStatus(terminalId, [
+      { exitCode: EXIT_FAILURE, succeeded: false, nativeExitCode: null, signalled: null },
+    ]);
+  }
+
+  /**
+   * Everything one stage needs, built once.
+   *
+   * The success stream is deliberately absent: it IS the next stage's input, so
+   * the pipeline supplies it per stage and whatever is put here is replaced.
+   * That is the shape `PipelineHost` documents, and the reason the kernel can
+   * now hand its stages to the same engine the pipeline tests exercise.
+   */
+  #prepare(
     snapshot: ProcessSnapshot,
     module: CommandModule,
-    tokens: readonly string[],
-    input: AsyncIterable<PSValue>,
-    downstream: ObjectQueue | null,
+    binding: BindingResult,
     groupLeader: ProcessGroupId,
-  ): Promise<StageResult> {
+  ): Prepared {
     const { pid, requestId, terminalId, background } = snapshot;
     const signal = this.#signals.register(pid, groupLeader);
     const stdin = new StdinPipe();
-
-    // Where the success stream goes depends on who is watching. A foreground
-    // pipeline's last stage is the request's result; a background one's is
-    // buffered for `Receive-Job`, because PowerShell does not print background
-    // output to the console and a terminal that did would interleave it with
-    // whatever the user is typing now.
-    const onSuccess = (value: PSValue): void => {
-      const safe = sanitizePSValue(value);
-      if (downstream !== null) {
-        downstream.push(safe);
-        return;
-      }
-      if (background) {
-        this.#jobs.record(groupLeader, safe);
-        return;
-      }
-      this.#emit({ kind: 'objects', requestId, values: [safe] });
-    };
+    // Declared before the sinks so the error sink can record into it. The
+    // fields the sinks do not need are filled in at the end.
+    const prepared = { wroteError: false } as {
+      wroteError: boolean;
+    } & Partial<Prepared>;
 
     const onError = (record: ErrorRecord): void => {
+      prepared.wroteError = true;
       if (background) this.#jobs.recordError(groupLeader, record);
-      this.#emit({ kind: 'stream', processId: pid, which: 'error', payload: record });
+      // Sanitised, not merely checked. `ErrorRecord.targetObject` is a PSValue,
+      // so an error naming the object that failed is a hole exactly as wide as
+      // the success stream's — and it was the ONE stream that only ever got the
+      // clone check, which turned "this error mentions a File handle" into "the
+      // command failed" instead of into a correctly carried error.
+      this.#emit({
+        kind: 'stream',
+        processId: pid,
+        which: 'error',
+        payload: sanitizeErrorRecord(record),
+      });
     };
 
-    const streams = this.#buildStreams(pid, onSuccess, onError);
+    const streams = this.#buildStreams(pid, onError);
     const native = this.#buildNativeStreams(pid, stdin);
 
-    const running: Running = {
+    this.#running.set(pid, {
       pid,
       requestId,
       terminalId,
@@ -740,8 +1177,7 @@ export class Kernel {
       background,
       stdin,
       closeStreams: streams.close,
-    };
-    this.#running.set(pid, running);
+    });
 
     const env = new Map(this.#env);
     // A shell exports these; `Format-Table` and anything that wraps needs them,
@@ -753,15 +1189,14 @@ export class Kernel {
     env.set('PWD', snapshot.cwd);
 
     const scoped = this.#broker.forCommand(module.manifest, pid);
-    const context: InvocationContext = {
+    const host: PipelineHost = {
       profile: this.#profile,
       streams: streams.streams,
       native,
-      input,
       cwd: snapshot.cwd,
       env,
       signal,
-      requireCapability: (capability) => {
+      requireCapability: (capability: Capability) => {
         scoped.require(capability);
       },
       fs: this.#fs,
@@ -769,56 +1204,84 @@ export class Kernel {
       dialog: this.#dialog,
     };
 
-    // Not the binder. Until PR-08 exists the kernel hands the raw remainder
-    // through rather than inventing binding semantics that would then have to
-    // be un-invented in two places.
-    const binding: BindingResult = {
-      parameters: {},
-      parameterSet: '__AllParameterSets',
-      remaining: tokens.slice(1),
+    return Object.assign(prepared, {
+      snapshot,
+      module,
+      binding,
+      host,
+      signal,
+      errorSink: streams.streams.error,
+      outcome: null,
+    }) as Prepared;
+  }
+
+  /**
+   * Wrap a command so its own failure never reaches the channel.
+   *
+   * `commandStage` turns a rejected `invoke` into `channel.fail`, which
+   * propagates the rejection DOWNSTREAM and would make one stage's bug look
+   * like the next stage's. A command failing is not a pipeline failing: pwsh
+   * writes an ErrorRecord on stream 2, sets a non-zero status and carries on.
+   * So the conversion happens here, against this stage's own pid, and the
+   * channel only ever sees a clean close.
+   */
+  #guard(entry: Prepared): CommandModule {
+    const { snapshot, module, signal } = entry;
+    const pid = snapshot.pid;
+    return {
+      manifest: module.manifest,
+      invoke: async (context: InvocationContext, bound: BindingResult): Promise<number> => {
+        let exitCode = EXIT_FAILURE;
+        let signalled: VirtualSignal | null = null;
+        try {
+          exitCode = await module.invoke(context, bound);
+        } catch (error: unknown) {
+          if (isStopped(error) || signal.aborted) {
+            signalled = this.#signals.deliveredTo(pid) ?? 'SIGINT';
+            exitCode = SIGNAL_EXIT_CODE[signalled];
+          } else if (error instanceof CapabilityDeniedError) {
+            await context.streams.error.write(
+              errorRecord(
+                error.message,
+                'CapabilityDenied',
+                module.manifest.display,
+                'PermissionDenied',
+                {
+                  exceptionType: 'System.UnauthorizedAccessException',
+                  targetObject: error.capability,
+                },
+              ),
+            );
+            exitCode = EXIT_FAILURE;
+          } else {
+            const message = error instanceof Error ? error.message : String(error);
+            await context.streams.error.write(
+              errorRecord(message, 'CommandFailed', module.manifest.display, 'NotSpecified', {
+                exceptionType: error instanceof Error ? error.name : 'System.Exception',
+              }),
+            );
+            exitCode = EXIT_FAILURE;
+          }
+        }
+
+        // A command that returned normally but was aborted mid-flight was still
+        // stopped, and reporting 0 for it would make Ctrl+C look like success.
+        if (signalled === null && signal.aborted) {
+          signalled = this.#signals.deliveredTo(pid) ?? 'SIGINT';
+          exitCode = SIGNAL_EXIT_CODE[signalled];
+        }
+
+        entry.outcome = {
+          exitCode,
+          // `$?`: the status AND the error stream AND the signal. Every one of
+          // the three was measured to matter on its own.
+          succeeded: exitCode === 0 && !entry.wroteError && signalled === null,
+          nativeExitCode: setsLastExitCode(module.manifest.runtime) ? exitCode : null,
+          signalled,
+        };
+        return exitCode;
+      },
     };
-
-    this.#table.transition(pid, 'running');
-
-    let exitCode = EXIT_FAILURE;
-    let signalled: VirtualSignal | null = null;
-    try {
-      exitCode = await module.invoke(context, binding);
-    } catch (error: unknown) {
-      if (isPipelineStopped(error) || signal.aborted) {
-        signalled = this.#signals.deliveredTo(pid) ?? 'SIGINT';
-        exitCode = SIGNAL_EXIT_CODE[signalled];
-      } else if (error instanceof CapabilityDeniedError) {
-        await streams.streams.error.write(
-          errorRecord(error.message, 'CapabilityDenied', module.manifest.display, 'PermissionDenied', {
-            exceptionType: 'System.UnauthorizedAccessException',
-            targetObject: error.capability,
-          }),
-        );
-        exitCode = EXIT_FAILURE;
-      } else {
-        const message = error instanceof Error ? error.message : String(error);
-        await streams.streams.error.write(
-          errorRecord(message, 'CommandFailed', module.manifest.display, 'NotSpecified', {
-            exceptionType: error instanceof Error ? error.name : 'System.Exception',
-          }),
-        );
-        exitCode = EXIT_FAILURE;
-      }
-    }
-
-    // A command that returned normally but was aborted mid-flight was still
-    // stopped, and reporting 0 for it would make Ctrl+C look like success.
-    if (signalled === null && signal.aborted) {
-      signalled = this.#signals.deliveredTo(pid) ?? 'SIGINT';
-      exitCode = SIGNAL_EXIT_CODE[signalled];
-    }
-
-    // Close downstream before reporting the exit, so the next stage sees
-    // end-of-input rather than hanging on a producer that has already gone.
-    downstream?.close();
-    this.#finish(pid, exitCode, signalled);
-    return { exitCode, signalled };
   }
 
   /**
@@ -829,7 +1292,8 @@ export class Kernel {
    * will later settle and try to report its own code. The kill happened first
    * and is what the user saw, so the later report must lose.
    */
-  #finish(pid: ProcessId, exitCode: number, signalled: VirtualSignal | null): void {
+  #finish(pid: ProcessId, result: StageResult): void {
+    const { exitCode, signalled } = result;
     if (this.#finished.has(pid)) return;
     const existing = this.#table.get(pid);
     if (existing === undefined) return;
@@ -856,16 +1320,25 @@ export class Kernel {
       processId: pid,
       requestId: snapshot?.requestId ?? existing.requestId,
       exitCode,
+      succeeded: result.succeeded,
+      nativeExitCode: result.nativeExitCode,
       signalled,
     });
   }
 
+  /**
+   * Streams 2..6 plus progress, for one process.
+   *
+   * `success` is a placeholder and is MEANT to be discarded: a command's
+   * success stream IS the next stage's input, so the pipeline replaces it per
+   * stage. Making that explicit here is what stopped the kernel needing its own
+   * plumbing between stages.
+   */
   #buildStreams(
     pid: ProcessId,
-    onSuccess: (value: PSValue) => void,
     onError: (record: ErrorRecord) => void,
   ): { streams: PowerShellStreams; close: () => void } {
-    const success = new CallbackSink<PSValue>(onSuccess);
+    const success = new NullSink<PSValue>();
     const error = new CallbackSink<ErrorRecord>(onError);
     const warning = new CallbackSink<string>((text) => {
       this.#emit({ kind: 'stream', processId: pid, which: 'warning', payload: text });
@@ -877,7 +1350,13 @@ export class Kernel {
       this.#emit({ kind: 'stream', processId: pid, which: 'debug', payload: text });
     });
     const information = new CallbackSink<InformationRecord>((record) => {
-      this.#emit({ kind: 'stream', processId: pid, which: 'information', payload: record });
+      // `InformationRecord.message` is a PSValue too, for the same reason.
+      this.#emit({
+        kind: 'stream',
+        processId: pid,
+        which: 'information',
+        payload: sanitizeInformationRecord(record),
+      });
     });
     const progress = new CallbackSink<ProgressRecord>((record) => {
       this.#emit({ kind: 'stream', processId: pid, which: 'progress', payload: record });
@@ -889,7 +1368,9 @@ export class Kernel {
         // Closing tells a still-running producer that nobody is reading, which
         // is what `Sink.closed` is for — a command emitting a million objects
         // must be able to give up rather than fill memory for a dead terminal.
-        for (const sink of [success, error, warning, verbose, debug, information, progress]) {
+        // `success` is not in the list because it is not ours: the pipeline
+        // owns that end and closes it when the stage is torn down.
+        for (const sink of [error, warning, verbose, debug, information, progress]) {
           sink.close();
         }
       },

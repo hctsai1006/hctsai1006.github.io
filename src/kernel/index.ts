@@ -77,16 +77,20 @@ export { KERNEL_PID } from './ids.ts';
 
 export type {
   CancelRequest,
+  DecodeResult,
   ExecRequest,
   ExitEvent,
   KernelEvent,
+  KernelEventBody,
   KernelEventKind,
   KernelRequest,
   KernelRequestKind,
   KernelStream,
   ObjectsEvent,
   ProcessChangedEvent,
+  RejectedEvent,
   ResizeRequest,
+  Sequenced,
   SignalRequest,
   StderrEvent,
   StdinRequest,
@@ -97,10 +101,12 @@ export {
   assertCloneSafe,
   cloneSafetyProblems,
   CloneUnsafeError,
+  decodeKernelRequest,
   isCloneSafe,
   KERNEL_EVENT_KINDS,
   KERNEL_REQUEST_KINDS,
   KERNEL_STREAMS,
+  REQUEST_LIMITS,
   sanitizePSValue,
 } from './protocol.ts';
 
@@ -112,6 +118,24 @@ export type {
   ProcessView,
   SignalView,
 } from './inspect.ts';
+
+// The WIRE types, which are deliberately not the pipeline's types. `WireValue`
+// declares `baseObject?: never`, so "is a pipeline object" and "can be sent"
+// cannot be one claim -- the split found two values that were only clone-CHECKED
+// and never sanitised on the way out.
+export type {
+  WireErrorRecord,
+  WireInformationRecord,
+  WireLimits,
+  WireObject,
+  WireValue,
+} from './wire.ts';
+export {
+  DEFAULT_WIRE_LIMITS,
+  sanitizeErrorRecord,
+  sanitizeInformationRecord,
+  WireValueError,
+} from './wire.ts';
 
 export type { ProcessSnapshot, ProcessState } from './process/snapshot.ts';
 export { isFailure, isTerminated, PROCESS_STATES } from './process/snapshot.ts';
