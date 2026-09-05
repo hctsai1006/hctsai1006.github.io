@@ -50,11 +50,27 @@ export interface BindingResult {
 }
 
 /**
- * Everything a command is allowed to touch.
+ * Everything a command is allowed to touch — and the exact sense of "allowed".
  *
- * A command never imports a browser API, never reaches the DOM, and never opens
- * a file itself. It asks through this. That is what makes the capability
- * declarations in the manifest enforceable rather than decorative.
+ * A command in this repository never imports a browser API, never reaches the
+ * DOM and never opens a file itself. It asks through this, and every request is
+ * decided by the broker against the command's own manifest, so the capability
+ * declarations there are enforceable rather than decorative.
+ *
+ * THE SENTENCE ABOVE USED TO BEGIN "A command never", WITHOUT "in this
+ * repository", and that was a claim the code cannot keep. Nothing prevents a
+ * module registered with `Kernel.register` from calling `fetch`, opening
+ * IndexedDB or reaching `document` directly: it shares this Worker's global,
+ * needs no import from here, and the broker never hears about it — the audit
+ * log would show nothing, because nothing was asked. For the commands shipped
+ * here it is true and reviewable in a diff. For anything else it is a
+ * convention, not a boundary.
+ *
+ * The enforceable claim is therefore narrower and worth stating exactly: what
+ * comes THROUGH this interface cannot exceed what the manifest declared and the
+ * session granted, and what it did obtain is on the record. Actual isolation —
+ * a separate Worker or sandboxed iframe with a message-only API and no shared
+ * global — is ROADMAP 14.3 and does not exist yet. See `kernel/inspect.ts`.
  */
 export interface InvocationContext {
   /** Which PowerShell version's semantics apply to this invocation. */

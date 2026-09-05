@@ -65,9 +65,19 @@ export type Fidelity =
 export type Runtime = 'semantic' | 'browser' | 'wasm' | 'vm';
 
 /**
- * A permission the command needs. Capabilities are brokered: a command never
- * touches a browser API directly, it asks the kernel, and the kernel decides.
- * Declaring them here is what makes that enforceable rather than aspirational.
+ * A permission the command needs. Capabilities are brokered: a command asks the
+ * kernel and the kernel decides, against this list and against what the session
+ * was granted. Declaring them here is what makes that decision possible rather
+ * than aspirational.
+ *
+ * WHAT THIS IS NOT. It is not a sandbox, and the previous wording — "a command
+ * never touches a browser API directly" — read like one. Nothing stops a module
+ * registered with `Kernel.register` from calling `fetch` or IndexedDB itself:
+ * it shares the Worker's global and needs nothing from here, and the audit log
+ * would record nothing because nothing was asked. Every command in this
+ * repository does go through the broker, and that is checkable in a diff, but
+ * it is a convention rather than a boundary. The boundary needs a separate
+ * Worker or sandboxed iframe with a message-only API — ROADMAP 14.3.
  */
 export type Capability =
   | 'filesystem.read'

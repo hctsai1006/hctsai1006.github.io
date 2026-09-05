@@ -347,14 +347,27 @@ describe('the audit log', () => {
     );
   });
 
-  it('does not restart the sequence after a clear', () => {
+  it('has no way to remove an entry at all', () => {
+    // This test used to be 'does not restart the sequence after a clear', and
+    // it was the ONLY caller of `AuditLog.clear` anywhere in the repository —
+    // a method whose entire effect was to make an append-only log not be one.
+    // It is gone from the class, so the property that matters is now the
+    // stronger one: there is nothing on this object that removes a record.
     const audit = new AuditLog();
     const broker = new CapabilityBroker({ grants: ['filesystem.write'], audit, clock: () => 5 });
     broker.forCommand(manifest(), 1).require('filesystem.write', 'a');
-    audit.clear();
     broker.forCommand(manifest(), 1).require('filesystem.write', 'b');
 
-    assert.deepEqual(audit.records.map((r) => r.sequence), [2]);
+    const mutators = ['clear', 'delete', 'remove', 'truncate', 'splice', 'reset', 'pop', 'shift'];
+    for (const name of mutators) {
+      assert.equal(
+        typeof (audit as unknown as Record<string, unknown>)[name],
+        'undefined',
+        `AuditLog must not expose ${name}`,
+      );
+    }
+    // The sequence is still a counter and still never reused.
+    assert.deepEqual(audit.records.map((r) => r.sequence), [1, 2]);
   });
 
   it('freezes records and tells subscribers about each one', () => {

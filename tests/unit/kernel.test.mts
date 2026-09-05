@@ -47,6 +47,7 @@ import {
 } from '../../src/kernel/kernel.ts';
 import { SIGNAL_EXIT_CODE } from '../../src/kernel/signals.ts';
 import { KERNEL_PID } from '../../src/kernel/ids.ts';
+import { CapabilityBroker } from '../../src/kernel/capabilities.ts';
 
 // ---------------------------------------------------------------------------
 // fixtures
@@ -645,7 +646,11 @@ describe('signals through the kernel', () => {
     assert.deepEqual(objectValues(events), []);
     const job = kernel.jobs.list()[0];
     assert.equal(job?.state, 'Completed');
-    assert.deepEqual(kernel.jobs.receive(job?.id ?? 0).values, ['bg-finished']);
+    // `peek`, not `receive`: the public job view has no destructive read, so
+    // nothing holding a Kernel can empty the buffer before Receive-Job does.
+    assert.deepEqual(kernel.jobs.peek(job?.id ?? 0).values, ['bg-finished']);
+    // And peeking twice still returns it, which is the point of the rename.
+    assert.deepEqual(kernel.jobs.peek(job?.id ?? 0).values, ['bg-finished']);
   });
 
   it('accepts a negative pid as the group, which is how Ctrl+C is sent', async () => {
@@ -822,9 +827,25 @@ describe('capabilities through the kernel', () => {
   it('throws CapabilityDeniedError from requireCapability itself', () => {
     // The kernel catches it, so the throw is asserted directly rather than
     // inferred from the exit code.
-    const { kernel } = newKernel({ grants: [] });
-    const scoped = kernel.capabilities.forCommand(WRITER.manifest, 1);
+    //
+    // It goes through a broker built here rather than through
+    // `kernel.capabilities`, because `forCommand` is no longer on the kernel's
+    // public view: the scoped object it returns writes audit records under a
+    // caller-supplied manifest and pid, and only a real invocation should be
+    // able to attribute a line to a command. The kernel's own wiring of this
+    // path is covered by the two tests above, which read the denial off the
+    // audit log and off the error event the terminal received.
+    const broker = new CapabilityBroker({ grants: [] });
+    const scoped = broker.forCommand(WRITER.manifest, 1);
     assert.throws(() => scoped.require('filesystem.write'), CapabilityDeniedError);
+    // The same decision, reached through the read-only view the kernel does
+    // expose — no audit record, no throw.
+    const { kernel } = newKernel({ grants: [] });
+    assert.equal(
+      kernel.capabilities.evaluate(WRITER.manifest, 'filesystem.write'),
+      'denied:not-granted',
+    );
+    assert.equal(kernel.audit.size, 0);
   });
 });
 

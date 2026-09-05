@@ -24,6 +24,13 @@
  * It is gone: `toPSString` now calls `formatGeneral(value, 15, INVARIANT, true)`
  * from `./numeric.ts`, which is the same function the `-f` operator's `G15`
  * goes through. Anything that wanted `formatDouble` wants that call.
+ *
+ * ONE MORE PROPERTY WORTH KNOWING AT THIS RE-EXPORT: the conversion unravels a
+ * single level and then stops. That is what pwsh does — a nested PSCustomObject
+ * renders as the empty string, a nested collection as its .NET type name — and
+ * it is why a cyclic value renders here instead of exhausting the stack.
+ * Callers that want the deep form want the FORMATTER (`render.ts`), which is a
+ * different question with a different answer.
  */
 
 export { toPSString, DEFAULT_OFS } from '../pipeline/psobject.ts';

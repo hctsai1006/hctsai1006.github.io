@@ -48,6 +48,7 @@ import type { ProcessGroupId, ProcessId, RequestId, TerminalId } from './ids.ts'
 import type { KernelEvent, KernelRequest } from './protocol.ts';
 import { assertCloneSafe, sanitizePSValue } from './protocol.ts';
 import { AuditLog, CapabilityBroker, VirtualPolicy } from './capabilities.ts';
+import type { AuditView, CapabilityView, JobView, ProcessView, SignalView } from './inspect.ts';
 import { JobManager } from './process/jobs.ts';
 import type { ProcessSnapshot } from './process/snapshot.ts';
 import { ProcessTable } from './process/table.ts';
@@ -355,27 +356,63 @@ export class Kernel {
       if (signal === 'SIGKILL') this.#finish(pid, SIGNAL_EXIT_CODE.SIGKILL, 'SIGKILL');
       else this.#table.transition(pid, 'stopping');
     });
+
+    // The read-only getters below live on the prototype, and a getter on a
+    // prototype can be SHADOWED by an own property on the instance. Found by an
+    // adversarial pass on the views themselves:
+    //
+    //   Object.defineProperty(kernel, 'capabilities',
+    //     { value: { grants: new Set(['device.request']) } })
+    //   => kernel.capabilities.grants  is now whatever the attacker said
+    //
+    // It escalates nothing for whoever does it — they already hold the Kernel —
+    // but a page that hands the SAME kernel to a third-party module and then
+    // renders `kernel.capabilities.grants` or `kernel.audit.records` itself
+    // would be shown a fabricated answer. Freezing the instance makes the
+    // defineProperty throw. Every field here is `#private`, which lives in an
+    // internal slot, so the kernel keeps working normally.
+    Object.freeze(this);
   }
 
   // -- inspection ----------------------------------------------------------
 
-  get processes(): ProcessTable {
-    return this.#table;
+  /**
+   * READ-ONLY, AND THE WORD IS MEANT AT RUNTIME.
+   *
+   * These five getters used to return the live managers — the ProcessTable, the
+   * JobManager, the SignalController, the CapabilityBroker and the AuditLog —
+   * so `kernel.capabilities`, `kernel.jobs` and the rest were the kernel's own
+   * mutable state under an inspection heading. Measured against the real class:
+   *
+   *     (kernel.capabilities.grants as Set<Capability>).add('device.request')
+   *     => filesystem.read,device.request
+   *
+   * A holder of a Kernel could grant itself a capability the kernel was never
+   * given, kill a process, drain a job's buffer before Receive-Job saw it, and
+   * both forge and erase audit lines. `readonly` in the signature stopped none
+   * of it, because `readonly` does not survive compilation.
+   *
+   * Each getter now returns a frozen view with the mutators absent — see
+   * `inspect.ts` for what that costs and what it does not buy. The mutating
+   * objects stay behind `#` fields, reachable only from inside this class.
+   */
+  get processes(): ProcessView {
+    return this.#table.view();
   }
 
-  get jobs(): JobManager {
-    return this.#jobs;
+  get jobs(): JobView {
+    return this.#jobs.view();
   }
 
-  get signals(): SignalController {
-    return this.#signals;
+  get signals(): SignalView {
+    return this.#signals.view();
   }
 
-  get capabilities(): CapabilityBroker {
-    return this.#broker;
+  get capabilities(): CapabilityView {
+    return this.#broker.view();
   }
 
-  get audit(): AuditLog {
+  get audit(): AuditView {
     return this.#broker.audit;
   }
 

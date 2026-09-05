@@ -36,7 +36,10 @@
  *
  * A KNOWN RENDERING GAP, recorded once for all of them: `SemanticVersion` and
  * `Version` are PSObjects with a real type chain, so `toPSString` prints the
- * type name where pwsh prints `7.6.5`. Turning a structured value into its
+ * type name where pwsh prints `7.6.5`. The TABLE ITSELF is not a gap — measured,
+ * `"$PSVersionTable"` in pwsh 7.6.5 is
+ * `System.Management.Automation.PSVersionHashTable`, exactly what the type name
+ * rule now yields. Turning a structured value into its
  * canonical text is a formatter's job and the formatter is a separate component
  * (see to-string.ts, which says formatting is the last step); `versionText`
  * below is exported for it.
