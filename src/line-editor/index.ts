@@ -53,8 +53,10 @@ export {
   CommandInventory,
   COMMON_PARAMETERS,
   MANIFEST_COMMANDS,
+  declaredInventory,
   manifestInventory,
   type CommandEntry,
+  type InventoryOptions,
   type ManifestLike,
   type ParameterEntry,
 } from './inventory.ts';

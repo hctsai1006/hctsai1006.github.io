@@ -120,7 +120,13 @@ export function fsWriteManifest(name: string, notes: string): CommandManifest {
         'be printable by Get-Command -Detailed.',
     );
   }
-  return { ...found, notes };
+  // A module exists, so the command is implemented — regardless of what the
+  // generated file says. Stated here rather than read back from `found`,
+  // because the generator derives `implementationStatus` FROM the modules: a
+  // manifest that inherited its own status would be a feedback loop, and the
+  // first stale run would demote every command in this directory to 'declared'
+  // and unregister it.
+  return { ...found, notes, implementationStatus: 'implemented' };
 }
 
 // ---------------------------------------------------------------------------

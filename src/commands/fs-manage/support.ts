@@ -102,7 +102,13 @@ export function fsManageManifest(name: string): CommandManifest {
         'taxonomy exists to state.',
     );
   }
-  return found;
+  // A module exists, so the command is implemented — regardless of what the
+  // generated file says. Stated here rather than read back from `found`,
+  // because the generator derives `implementationStatus` FROM the modules: a
+  // manifest that inherited its own status would be a feedback loop, and the
+  // first stale run would demote every command in this directory to 'declared'
+  // and unregister it.
+  return { ...found, implementationStatus: 'implemented' };
 }
 
 /** Does this command's own manifest ask for the capability? Gate 1, read directly. */

@@ -49,6 +49,7 @@ function manifest(overrides: Partial<CommandManifest> = {}): CommandManifest {
     outputTypeNames: [],
     synopsis: 'Writes content to a file.',
     parameterSource: 'declared',
+    implementationStatus: 'implemented',
     ...overrides,
   };
 }

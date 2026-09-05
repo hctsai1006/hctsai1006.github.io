@@ -104,6 +104,7 @@ function manifest(display: string, parameters: readonly ParameterMetadata[]): Co
     outputTypeNames: [],
     synopsis: 'test fixture',
     parameterSource: 'declared',
+    implementationStatus: 'implemented',
   };
 }
 

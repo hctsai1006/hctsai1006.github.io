@@ -12,6 +12,32 @@
  * parameter names and one bit per parameter (switch or not, because a switch
  * takes no value and therefore never puts the caret in value position). It has
  * no business seeing capabilities, risk or fidelity.
+ *
+ * WHAT THE CLAIM ABOVE DID NOT COVER
+ *
+ * "One list" closed the drift between two hand-maintained lists, and then a
+ * second kind of drift opened underneath it, because one list was being asked
+ * three questions:
+ *
+ *   does upstream PowerShell have this?     manifests.json `parameters`
+ *   did we implement it?                    `implementationStatus`
+ *   can it be typed in this session?        the registry, which is a runtime
+ *                                           fact and lives in registry.ts
+ *
+ * Reading the first as an answer to the third is how completion came to offer
+ * `Sort-Object -Top`, `Measure-Object -AllStats` and `Select-Object -Index`:
+ * upstream has all three, the generated manifest lists them because it
+ * describes upstream, and the binder rejects every one with
+ * NamedParameterNotFound. The generator now writes the second answer too —
+ * `implementedParameters` and `implementationStatus` — and this file defaults
+ * to it.
+ *
+ * The third question is still not answered here, and cannot be: `registry.ts`
+ * is outside the line-editor core (there is a test that asserts nothing here
+ * imports anything but the generated manifests, and that boundary is worth
+ * more than the convenience). A caller that has a session hands its registered
+ * names to the constructor; the default is the closest honest approximation,
+ * which is "everything a module implements".
  */
 
 import manifestsJson from '../commands/manifests.json' with { type: 'json' };
@@ -26,6 +52,10 @@ export interface ManifestLike {
   readonly display: string;
   readonly aliases: readonly string[];
   readonly synopsis: string;
+  /**
+   * UPSTREAM's parameters. Present for a command nothing here implements, and
+   * wider than what the binder accepts for several that are implemented.
+   */
   readonly parameters: readonly {
     readonly name: string;
     readonly aliases: readonly string[];
@@ -35,6 +65,33 @@ export interface ManifestLike {
   }[];
   /** `none` means nobody ever captured this command's real parameters. */
   readonly parameterSource: string;
+  /** `declared` | `partial` | `implemented` | `verified`. See manifest.ts. */
+  readonly implementationStatus?: string;
+  /** The names a module in this engine binds, when it hand-writes its surface. */
+  readonly implementedParameters?: readonly string[];
+}
+
+export interface InventoryOptions {
+  /**
+   * Offer commands nothing implements, and every upstream parameter rather
+   * than the implemented subset.
+   *
+   * Off by default: a completion that offers a name or a flag the binder will
+   * reject has told the user something false, and it is worse than silence
+   * because it looks like confirmation. On for anything DESCRIBING the command
+   * set rather than helping someone type into it — a coverage report, a
+   * roadmap, `Get-Command -All`.
+   */
+  readonly includeUnimplemented?: boolean;
+  /**
+   * The names reachable in THIS session, when the caller knows them.
+   *
+   * The registry is the only thing that does, and it is outside this core. A
+   * caller that has one passes it; without it the inventory falls back to
+   * implementation status, which is the same answer for every command except
+   * one whose token another command shadows.
+   */
+  readonly registeredNames?: Iterable<string>;
 }
 
 /** A name the user can actually type at command position. */
@@ -100,33 +157,89 @@ export class CommandInventory {
   readonly #byName: ReadonlyMap<string, CommandEntry>;
   readonly #parameters: ReadonlyMap<string, readonly ParameterEntry[]>;
 
-  constructor(manifests: readonly ManifestLike[]) {
+  /** Names offered at command position, and why the rest were not. */
+  readonly excluded: ReadonlyMap<string, string>;
+
+  constructor(manifests: readonly ManifestLike[], options: InventoryOptions = {}) {
     const byName = new Map<string, CommandEntry>();
     const parameters = new Map<string, readonly ParameterEntry[]>();
+    const excluded = new Map<string, string>();
 
-    for (const m of manifests) {
+    const everything = options.includeUnimplemented ?? false;
+    const registered =
+      options.registeredNames === undefined
+        ? null
+        : new Set([...options.registeredNames].map((n) => n.toLowerCase()));
+
+    /**
+     * Can this be typed?
+     *
+     * The session's own list wins when there is one. Otherwise implementation
+     * status is the honest stand-in: `declared` means nobody built it and
+     * `partial` means it was built and deliberately held back, and offering
+     * either is offering a name that will not resolve.
+     */
+    const offerable = (m: ManifestLike): true | string => {
+      if (everything) return true;
+      if (registered !== null) {
+        return registered.has(m.name.toLowerCase()) ? true : 'not registered in this session';
+      }
+      // ABSENT is not the same as 'declared'. A host or a test passing its own
+      // manifest-shaped list has no reason to know this field exists, and
+      // treating silence as "unimplemented" would hide every command it
+      // offered. Only an explicit status excludes. The generated manifests
+      // always carry one, so the real path is never the silent one.
+      const status = m.implementationStatus;
+      if (status === 'declared') return 'declared upstream; nothing here implements it';
+      if (status === 'partial') return 'implemented only partially, and held back';
+      return true;
+    };
+
+    const usable = manifests.filter((m) => {
+      const verdict = offerable(m);
+      if (verdict === true) return true;
+      excluded.set(m.name, verdict);
+      return false;
+    });
+
+    for (const m of usable) {
       byName.set(m.display.toLowerCase(), {
         name: m.display,
         canonical: m.display,
         kind: 'command',
         synopsis: m.synopsis,
       });
+      /**
+       * The parameters this engine BINDS, not the ones upstream declares.
+       *
+       * `implementedParameters` is a subset of `parameters` when a module
+       * hand-writes its surface. Measured: upstream `Sort-Object` has nine
+       * parameters and this engine binds six, so `-Top`, `-Bottom` and
+       * `-Culture` were being offered for a binder that answers
+       * NamedParameterNotFound.
+       */
+      const binds =
+        !everything && m.implementedParameters !== undefined
+          ? new Set(m.implementedParameters.map((n) => n.toLowerCase()))
+          : null;
       // A command with no captured parameters gets no common parameters either:
       // claiming `Ls -Verbose` works would be inventing metadata.
-      const declared: ParameterEntry[] = m.parameters.map((p) => ({
-        name: p.name,
-        aliases: p.aliases,
-        isSwitch: p.isSwitch,
-        mandatory: p.mandatory,
-        type: p.type,
-        common: false,
-      }));
+      const declared: ParameterEntry[] = m.parameters
+        .filter((p) => binds === null || binds.has(p.name.toLowerCase()))
+        .map((p) => ({
+          name: p.name,
+          aliases: p.aliases,
+          isSwitch: p.isSwitch,
+          mandatory: p.mandatory,
+          type: p.type,
+          common: false,
+        }));
       const all =
         m.parameterSource === 'none' ? declared : [...declared, ...COMMON_PARAMETERS];
       parameters.set(m.display.toLowerCase(), all);
     }
 
-    for (const m of manifests) {
+    for (const m of usable) {
       for (const alias of m.aliases) {
         const key = alias.toLowerCase();
         // A real command shadows an alias: `sl` is both the joke command and
@@ -143,6 +256,7 @@ export class CommandInventory {
 
     this.#byName = byName;
     this.#parameters = parameters;
+    this.excluded = excluded;
     this.commands = [...byName.values()].sort((a, b) =>
       a.name.toLowerCase() < b.name.toLowerCase()
         ? -1
@@ -198,9 +312,26 @@ export const MANIFEST_COMMANDS: readonly ManifestLike[] = (manifestsJson as unkn
   .commands;
 
 let defaultInventory: CommandInventory | null = null;
+let fullInventory: CommandInventory | null = null;
 
-/** Lazily built so importing the module does not cost the whole projection. */
+/**
+ * The default: what a visitor can actually type.
+ *
+ * Lazily built so importing the module does not cost the whole projection.
+ */
 export function manifestInventory(): CommandInventory {
   defaultInventory ??= new CommandInventory(MANIFEST_COMMANDS);
   return defaultInventory;
+}
+
+/**
+ * Everything declared, implemented or not — for describing the command set
+ * rather than completing into it.
+ *
+ * Separate function rather than a parameter on the one above, so that reaching
+ * for the wider view is a visible decision at the call site.
+ */
+export function declaredInventory(): CommandInventory {
+  fullInventory ??= new CommandInventory(MANIFEST_COMMANDS, { includeUnimplemented: true });
+  return fullInventory;
 }

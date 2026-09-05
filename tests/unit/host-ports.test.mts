@@ -44,6 +44,7 @@ function readingCommand(seen: { path: string | null; text: string | null }): Com
     outputTypeNames: [],
     synopsis: 'Reads one file, for testing that a command can reach storage.',
     parameterSource: 'none',
+    implementationStatus: 'implemented',
   };
   return {
     manifest,
