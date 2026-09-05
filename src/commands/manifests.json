@@ -1956,6 +1956,25 @@
           "verified": true
         },
         {
+          "name": "Detailed",
+          "aliases": [],
+          "type": "System.Management.Automation.SwitchParameter",
+          "isSwitch": true,
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": false,
+          "validation": [],
+          "verified": false
+        },
+        {
           "name": "ExcludeModule",
           "aliases": [],
           "type": "System.String[]",

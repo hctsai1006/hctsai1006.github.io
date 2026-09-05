@@ -44,7 +44,7 @@ import type { PSObject, PSValue } from '../../pipeline/psobject.ts';
 import { throwIfCancelled } from '../../pipeline/pipeline.ts';
 import { errorRecord } from '../../pipeline/streams.ts';
 import type { BindingResult, CommandModule, InvocationContext } from '../invocation.ts';
-import { FIDELITY_BADGE, FIDELITY_MEANING } from '../manifest.ts';
+import { FIDELITY_BADGE, FIDELITY_MEANING, boundParameters } from '../manifest.ts';
 import type { CommandManifest, Fidelity } from '../manifest.ts';
 import {
   INT,
@@ -155,7 +155,10 @@ export function commandTypeNames(commandType: CommandTypeName): readonly string[
 
 /** The one-line syntax `-Syntax` prints, built from the declared parameters. */
 export function syntaxOf(manifestOf: CommandManifest, name: string): string {
-  const parts = manifestOf.parameters.map((p) => {
+  // What this engine BINDS, not what upstream declares. The syntax line is a
+  // prompt to type something, and a syntax line offering `-Top <int>` for a
+  // binder that rejects it is an instruction to get an error.
+  const parts = boundParameters(manifestOf).map((p) => {
     const position = p.firstPosition;
     const head = position === null ? `-${p.name}` : `[-${p.name}]`;
     const body = p.isSwitch ? head : `${head} <${friendlyTypeName(p.type)}>`;

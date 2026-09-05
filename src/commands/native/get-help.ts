@@ -52,6 +52,7 @@ import type { PSObject, PSValue } from '../../pipeline/psobject.ts';
 import { throwIfCancelled } from '../../pipeline/pipeline.ts';
 import { errorRecord } from '../../pipeline/streams.ts';
 import type { BindingResult, CommandModule, InvocationContext } from '../invocation.ts';
+import { boundParameters, upstreamOnlyParameters } from '../manifest.ts';
 import type { CommandManifest, ParameterMetadata } from '../manifest.ts';
 import {
   DEFAULT_PARAMETER_SET,
@@ -205,7 +206,11 @@ export function helpInfo(
       CommonParameters: false,
       details: psObject({ name: m.display, description: m.synopsis }),
       Syntax: syntaxOf(m, m.display),
-      parameters: m.parameters.map(helpParameter),
+      // The parameters this engine binds. `m.parameters` is upstream's list,
+      // and help that documents a parameter the binder rejects is worse than
+      // help that omits it -- the omission is a gap, the documentation is a
+      // wrong instruction. What upstream has and we do not is named in NOTES.
+      parameters: boundParameters(m).map(helpParameter),
       inputTypes: '',
       relatedLinks: '',
       returnValues: m.outputTypeNames.join(', '),
@@ -237,7 +242,19 @@ export function helpInfo(
  */
 function fidelityAlert(m: CommandManifest): PSValue {
   const parts = [`Fidelity: ${m.fidelity}`, `Risk: ${m.risk}`];
+  if (m.implementationStatus !== 'implemented') {
+    parts.push(`Implementation: ${m.implementationStatus}`);
+  }
   if (m.capabilities.length > 0) parts.push(`Capabilities: ${m.capabilities.join(', ')}`);
+  // Said, not merely filtered out. Someone who knows `Sort-Object -Top 5`
+  // should learn here that it is missing rather than at the error.
+  const upstreamOnly = upstreamOnlyParameters(m);
+  if (upstreamOnly.length > 0) {
+    parts.push(
+      'In PowerShell but NOT accepted here: ' +
+        `${upstreamOnly.map((name) => `-${name}`).join(', ')}.`,
+    );
+  }
   if (m.notes !== undefined && m.notes !== '') parts.push(m.notes);
   return parts.join('\n');
 }

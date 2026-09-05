@@ -161,6 +161,37 @@ function parametersFrom(command: CapturedCommand): ParameterMetadata[] {
     .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 }
 
+/**
+ * Captured metadata, plus anything the module declares that pwsh does not have.
+ *
+ * `Get-Command -Detailed` is the case that forced this. It is a deliberate
+ * BrowserShell extension -- pwsh 7.6.5 has no such parameter, the module's own
+ * header says so, and the command really does bind it. Captured metadata
+ * REPLACES the declaration, so `-Detailed` vanished from the manifest while
+ * staying in `implementedParameters`, and the result was a manifest whose
+ * "what we implement" list was not a subset of its "what exists" list. Help
+ * stopped listing a working parameter and completion stopped offering it.
+ *
+ * The extras keep `verified: false`, which is exactly what that flag is for:
+ * these names did not come from the reference implementation, and nothing
+ * should read them as if they had.
+ */
+function withModuleExtras(
+  captured: readonly ParameterMetadata[],
+  declared: readonly ParameterMetadata[] | undefined,
+): ParameterMetadata[] {
+  if (declared === undefined) return [...captured];
+  const known = new Set<string>();
+  for (const p of captured) {
+    known.add(p.name.toLowerCase());
+    for (const alias of p.aliases) known.add(alias.toLowerCase());
+  }
+  const extras = declared
+    .filter((p) => !known.has(p.name.toLowerCase()))
+    .map((p) => ({ ...p, verified: false }) satisfies ParameterMetadata);
+  return [...captured, ...extras].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+}
+
 /** v1's `params` is a flat list of flag names with no type behind it. */
 function declaredParameters(params: readonly string[]): ParameterMetadata[] {
   return params.map((raw) => ({
@@ -258,9 +289,10 @@ function build(): { manifests: CommandManifest[]; problems: string[]; stats: Rec
     // then v1's flat list of flag names. The middle one is new and is what
     // stops `Get-Publication -Full` being reported as a value-taking
     // System.Object; the last one has no types behind it at all.
+    const capturedParameters = hit !== undefined ? parametersFrom(hit) : null;
     const parameters =
-      hit !== undefined
-        ? parametersFrom(hit)
+      capturedParameters !== null
+        ? withModuleExtras(capturedParameters, module?.manifest.parameters)
         : module !== undefined && authored !== undefined && module.manifest.parameters.length > 0
           ? [...module.manifest.parameters]
           : declaredParameters(entry.params);

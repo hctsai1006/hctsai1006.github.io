@@ -235,6 +235,43 @@ export interface CommandManifest {
 }
 
 /**
+ * The parameters a running command will actually accept.
+ *
+ * `manifest.parameters` describes UPSTREAM. Reading it as "what you can type"
+ * is the conflation `ImplementationStatus` exists to break, and help and
+ * syntax are two of the surfaces that were doing it: `Get-Help Sort-Object`
+ * listed -Top, -Bottom and -Culture, and `Get-Command Sort-Object -Syntax`
+ * printed them into the syntax line, for a binder that answers
+ * NamedParameterNotFound.
+ *
+ * Falls back to every parameter when `implementedParameters` is absent, which
+ * is the honest answer for a command whose module reads this manifest rather
+ * than declaring its own surface: nothing narrower is known.
+ */
+export function boundParameters(manifest: CommandManifest): readonly ParameterMetadata[] {
+  const implemented = manifest.implementedParameters;
+  if (implemented === undefined) return manifest.parameters;
+  const wanted = new Set(implemented.map((name) => name.toLowerCase()));
+  return manifest.parameters.filter((p) => wanted.has(p.name.toLowerCase()));
+}
+
+/**
+ * Parameters real PowerShell has and this engine does not accept.
+ *
+ * The complement of the above, and the thing worth SAYING rather than merely
+ * filtering: a user who knows `Sort-Object -Top 5` needs to be told it is
+ * missing here, not left to discover it as a parse error.
+ */
+export function upstreamOnlyParameters(manifest: CommandManifest): readonly string[] {
+  const implemented = manifest.implementedParameters;
+  if (implemented === undefined) return [];
+  const wanted = new Set(implemented.map((name) => name.toLowerCase()));
+  return manifest.parameters
+    .filter((p) => !wanted.has(p.name.toLowerCase()))
+    .map((p) => p.name);
+}
+
+/**
  * The badge shown beside a command in the UI. Kept next to the taxonomy so the
  * two cannot drift: a new fidelity level without a badge would render blank.
  */
