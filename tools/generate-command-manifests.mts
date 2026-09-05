@@ -39,7 +39,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { CLASSIFICATION } from '../src/commands/classification.data.mts';
-import { REWRITE_COMMANDS } from '../src/commands/rewrite-inventory.data.mts';
+import { REWRITE_COMMANDS, SHADOWED_V1_TOKENS } from '../src/commands/rewrite-inventory.data.mts';
 import type { Classification } from '../src/commands/classification.data.mts';
 import type { CommandManifest, ParameterMetadata } from '../src/commands/manifest.ts';
 
@@ -258,11 +258,40 @@ function build(): { manifests: CommandManifest[]; problems: string[]; stats: Rec
     });
   }
 
+  // Invariant 5. A token may not be BOTH a command's own name and another
+  // command's alias. v1 declares `sl` in two places — an easter egg in EGGS and
+  // an alias of set-location in ALIAS — and its dispatcher resolves the alias
+  // first, so the egg can never fire. The extraction captured both faithfully,
+  // and the result was a manifest that claims one token twice.
+  //
+  // Nothing downstream can resolve that: the registry throws, and before the
+  // registry existed the kernel's `register` was last-write-wins with no error,
+  // so whichever module loaded second silently took the name. Refused here
+  // instead, because the answer is a judgement about which command a visitor
+  // means and belongs in the data rather than in load order.
+  const claimedNames = new Set(manifests.map((m) => m.name));
+  for (const manifest of manifests) {
+    for (const alias of manifest.aliases) {
+      const key = alias.toLowerCase();
+      if (claimedNames.has(key) && key !== manifest.name && !SHADOWED_V1_TOKENS.has(key)) {
+        problems.push(
+          `"${key}" is the name of one command and an alias of "${manifest.name}". ` +
+            'One token cannot resolve to two commands; decide which, in the data.',
+        );
+      }
+    }
+  }
+
   // A classification for a command that does not exist is dead weight that will
   // quietly rot, so it is reported too.
   const known = new Set(entries.map((e) => e.name));
   for (const name of Object.keys(CLASSIFICATION)) {
-    if (!known.has(name)) problems.push(`"${name}" is classified but is not in the inventory`);
+    // A shadowed token keeps its classification on purpose: the egg still exists
+    // in v1 and in this tree, and deleting the record of what it is would hide
+    // the decision rather than document it.
+    if (!known.has(name) && !SHADOWED_V1_TOKENS.has(name)) {
+      problems.push(`"${name}" is classified but is not in the inventory`);
+    }
   }
 
   manifests.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));

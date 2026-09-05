@@ -85,3 +85,36 @@ export const REWRITE_COMMANDS: readonly RewriteCommand[] = [
     help: 'Send objects to the host as a series of strings',
   },
 ];
+
+/**
+ * v1 tokens that are NOT commands here, and why.
+ *
+ * The extraction is faithful, which means it can capture a contradiction v1
+ * contained. `sl` is the one that exists: v1 lists it as an easter egg in
+ * `EGGS` — a steam locomotive, the traditional joke for a mistyped `ls` — and
+ * ALSO maps it to `set-location` in `ALIAS`. v1's dispatcher resolves the alias
+ * first, so the egg could never fire. It has been dead since it was written.
+ *
+ * One token cannot resolve to two commands. The generator refuses the
+ * contradiction rather than letting load order decide it, and this is where the
+ * decision lives:
+ *
+ *   `sl` is Set-Location. Real PowerShell says so — `Get-Alias sl` is
+ *   `Set-Location` — and so did v1, in behaviour if not in intent. A visitor who
+ *   types `sl` at a PowerShell prompt means the cmdlet, and `set-location` is
+ *   declared `native-semantic`, which is a claim about matching the reference
+ *   implementation; dropping one of its real aliases to make room for a joke
+ *   would weaken exactly the claim the fidelity taxonomy exists to protect.
+ *
+ * The locomotive is not lost — `src/commands/simulated/` still implements it,
+ * and it keeps its tests. It simply has no name to be reached by, which is the
+ * state v1 shipped it in. Giving it one would be a change to v1's behaviour
+ * dressed up as fidelity to it.
+ */
+export const SHADOWED_V1_TOKENS: ReadonlyMap<string, string> = new Map([
+  [
+    'sl',
+    'An alias of Set-Location in real PowerShell and in v1. v1 also lists it as an ' +
+      'easter egg, which its own dispatcher made unreachable.',
+  ],
+]);

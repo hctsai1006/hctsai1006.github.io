@@ -26,21 +26,36 @@
 
 import type { CommandModule } from './invocation.ts';
 import manifests from './manifests.json' with { type: 'json' };
+import { SHADOWED_V1_TOKENS } from './rewrite-inventory.data.mts';
 
 import { OBJECT_CMDLETS } from './powershell/index.ts';
 import { SIMULATED_COMMANDS } from './simulated/index.ts';
 import { NATIVE_COMMANDS } from './native/index.ts';
 import { PORTFOLIO_COMMANDS } from './portfolio/index.ts';
 import { FORMAT_CMDLETS } from './format/index.ts';
+import { FS_READ_COMMANDS } from './fs-read/index.ts';
+import { FS_WRITE_COMMANDS } from './fs-write/index.ts';
+import { FS_MANAGE_COMMANDS } from './fs-manage/index.ts';
 
-/** Every command with an implementation, in no particular order. */
+/**
+ * Every command with an implementation and a name to be reached by.
+ *
+ * A module whose token is shadowed is built and tested but not registered — see
+ * SHADOWED_V1_TOKENS for which and why. `sl` is the one: v1 declares it both as
+ * an easter egg and as an alias of Set-Location, and its own dispatcher resolved
+ * the alias, so the egg has never been reachable. Filtering here rather than
+ * deleting the module keeps the decision visible and reversible.
+ */
 export const ALL_COMMANDS: readonly CommandModule[] = [
   ...OBJECT_CMDLETS,
   ...SIMULATED_COMMANDS,
   ...NATIVE_COMMANDS,
   ...PORTFOLIO_COMMANDS,
   ...FORMAT_CMDLETS,
-];
+  ...FS_READ_COMMANDS,
+  ...FS_WRITE_COMMANDS,
+  ...FS_MANAGE_COMMANDS,
+].filter((module) => !SHADOWED_V1_TOKENS.has(module.manifest.name));
 
 function buildIndex(): ReadonlyMap<string, CommandModule> {
   const index = new Map<string, CommandModule>();
