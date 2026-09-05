@@ -34,7 +34,10 @@ import {
   KERNEL_STREAMS,
   assertCloneSafe,
   cloneSafetyProblems,
+  decodeKernelRequest,
   isCloneSafe,
+  REQUEST_LIMITS,
+  sanitizeErrorRecord,
   sanitizePSValue,
 } from '../../src/kernel/protocol.ts';
 import type { KernelEvent, KernelRequest, ObjectsEvent } from '../../src/kernel/protocol.ts';
@@ -267,23 +270,38 @@ describe('sanitizePSValue', () => {
     assert.equal(isCloneSafe(sanitizePSValue(nested)), true);
   });
 
-  it('returns the same reference when nothing needed stripping', () => {
+  it('returns a NEW graph even when nothing needed stripping', () => {
+    // This used to return the input by reference "so the common case costs one
+    // walk and no allocation". That is where the shared-subgraph property came
+    // from — by accident — and it meant every guarantee the sanitiser appears to
+    // give held only for inputs that were already clean. See kernel-wire.test.mts
+    // for the properties that replaced it.
     const plain = psObject({ Name: 'x' });
-    assert.equal(sanitizePSValue(plain), plain);
+    const safe = sanitizePSValue(plain);
+    assert.notEqual(safe, plain);
+    assert.deepEqual(safe, plain);
   });
 });
 
 describe('every KernelEvent survives structuredClone', () => {
   /** One of every variant of the union, including all four `stream` shapes. */
   const samples: readonly KernelEvent[] = [
-    { kind: 'objects', requestId: 'r1', values: [psObject({ Name: 'a', Size: 1 }), null, 'text'] },
+    {
+      kind: 'objects',
+      requestId: 'r1',
+      // Through the sanitiser, because that is the only way a PSObject becomes a
+      // WireValue: the two types are deliberately not the same type.
+      values: [sanitizePSValue(psObject({ Name: 'a', Size: 1 })), null, 'text'],
+    },
     { kind: 'stdout', processId: 1, bytes: encoder.encode('out') },
     { kind: 'stderr', processId: 1, bytes: encoder.encode('err') },
     {
       kind: 'stream',
       processId: 1,
       which: 'error',
-      payload: errorRecord('bad', 'Boom', 'Test-Command', 'InvalidData', { targetObject: 'x' }),
+      payload: sanitizeErrorRecord(
+        errorRecord('bad', 'Boom', 'Test-Command', 'InvalidData', { targetObject: 'x' }),
+      ),
     },
     { kind: 'stream', processId: 1, which: 'warning', payload: 'careful' },
     { kind: 'stream', processId: 1, which: 'verbose', payload: 'details' },
@@ -321,6 +339,7 @@ describe('every KernelEvent survives structuredClone', () => {
       },
     },
     { kind: 'exit', processId: 1, requestId: 'r1', exitCode: 0, signalled: null },
+    { kind: 'rejected', requestId: 'r1', requestKind: 'resize', problems: ['columns must be an integer'] },
   ];
 
   it('covers every event kind and every stream', () => {
@@ -351,7 +370,117 @@ describe('every KernelEvent survives structuredClone', () => {
     for (const request of requests) {
       assert.deepEqual(cloneSafetyProblems(request, request.kind), []);
       assert.deepEqual(structuredClone(request), request);
+      // Every well-formed request must also DECODE, or the decoder and the
+      // type have drifted apart and one of them is lying.
+      const decoded = decodeKernelRequest(request);
+      assert.equal(decoded.ok, true, request.kind);
+      if (decoded.ok) assert.deepEqual(decoded.value, request);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// decoding what arrives from outside
+// ---------------------------------------------------------------------------
+
+describe('decodeKernelRequest', () => {
+  it('refuses anything that is not an object with a known kind', () => {
+    for (const bad of [null, 42, 'exec', [], { kind: 7 }, { kind: 'evaluate' }]) {
+      assert.equal(decodeKernelRequest(bad).ok, false, JSON.stringify(bad));
+    }
+  });
+
+  it('collects every problem rather than throwing on the first', () => {
+    // A UI that has to fix its message one field per round trip is a UI that
+    // will stop checking.
+    const decoded = decodeKernelRequest({ kind: 'exec', requestId: '', terminalId: 1, source: null });
+    assert.equal(decoded.ok, false);
+    if (!decoded.ok) {
+      assert.equal(decoded.problems.length, 4);
+      assert.deepEqual(decoded.problems, [
+        'requestId must not be empty',
+        'terminalId must be a string',
+        'source must be a string',
+        'background must be a boolean',
+      ]);
+    }
+  });
+
+  it('refuses a resize that is not a usable geometry', () => {
+    const cases: readonly [string, unknown][] = [
+      ['zero columns', { kind: 'resize', terminalId: 't', columns: 0, rows: 24 }],
+      ['negative rows', { kind: 'resize', terminalId: 't', columns: 80, rows: -1 }],
+      ['fractional', { kind: 'resize', terminalId: 't', columns: 80.5, rows: 24 }],
+      ['NaN', { kind: 'resize', terminalId: 't', columns: Number.NaN, rows: 24 }],
+      ['Infinity', { kind: 'resize', terminalId: 't', columns: 80, rows: Number.POSITIVE_INFINITY }],
+      [
+        'absurd',
+        { kind: 'resize', terminalId: 't', columns: REQUEST_LIMITS.maxColumns + 1, rows: 24 },
+      ],
+    ];
+    for (const [label, message] of cases) {
+      assert.equal(decodeKernelRequest(message).ok, false, label);
+    }
+    assert.equal(
+      decodeKernelRequest({ kind: 'resize', terminalId: 't', columns: 1, rows: 1 }).ok,
+      true,
+    );
+  });
+
+  it('refuses stdin that is not bytes, or is more bytes than one write may carry', () => {
+    assert.equal(
+      decodeKernelRequest({ kind: 'stdin', processId: 1, bytes: 'text', endOfFile: false }).ok,
+      false,
+    );
+    // A duck-typed check would accept this and then enqueue it into a byte stream.
+    assert.equal(
+      decodeKernelRequest({ kind: 'stdin', processId: 1, bytes: { length: 3 }, endOfFile: false }).ok,
+      false,
+    );
+    const oversized = {
+      kind: 'stdin',
+      processId: 1,
+      bytes: new Uint8Array(REQUEST_LIMITS.maxStdinBytes + 1),
+      endOfFile: false,
+    };
+    const decoded = decodeKernelRequest(oversized);
+    assert.equal(decoded.ok, false);
+    if (!decoded.ok) assert.match(decoded.problems[0] as string, /over the .* limit for one write/u);
+  });
+
+  it('refuses an unknown signal name but keeps the negative pid convention', () => {
+    assert.equal(decodeKernelRequest({ kind: 'signal', processId: 1, signal: 'SIGHUP' }).ok, false);
+    assert.equal(decodeKernelRequest({ kind: 'signal', processId: -3, signal: 'SIGINT' }).ok, true);
+  });
+
+  it('refuses an id or a source that is unboundedly long', () => {
+    assert.equal(
+      decodeKernelRequest({
+        kind: 'cancel',
+        requestId: 'x'.repeat(REQUEST_LIMITS.maxIdLength + 1),
+      }).ok,
+      false,
+    );
+    assert.equal(
+      decodeKernelRequest({
+        kind: 'exec',
+        requestId: 'r',
+        terminalId: 't',
+        source: 'x'.repeat(REQUEST_LIMITS.maxSourceLength + 1),
+        background: false,
+      }).ok,
+      false,
+    );
+  });
+
+  it('drops fields the protocol does not define, rather than carrying them through', () => {
+    const decoded = decodeKernelRequest({
+      kind: 'cancel',
+      requestId: 'r1',
+      extra: () => undefined,
+    });
+    assert.equal(decoded.ok, true);
+    if (decoded.ok) assert.deepEqual(decoded.value, { kind: 'cancel', requestId: 'r1' });
   });
 });
 
@@ -840,6 +969,10 @@ describe('everything a real session emits is clone-safe', () => {
       source: 'chatty',
       background: false,
     });
+    // A malformed message is part of what a real session emits, because a real
+    // session is talking to a page. It must come back as an event like any
+    // other, and must survive the boundary like any other.
+    kernel.send({ kind: 'resize', terminalId: 't1', columns: 0, rows: 24 });
     await kernel.drain();
 
     // The kernel validates on the way out; this proves the real algorithm
@@ -861,11 +994,12 @@ describe('everything a real session emits is clone-safe', () => {
     );
   });
 
-  it('refuses to emit an event carrying a host object', async () => {
-    // Validation is on by default, so the failure names the command that built
-    // the value rather than surfacing as a DataCloneError at postMessage. The
-    // success stream is sanitised, so this is forced through a stream that is
-    // not — an ErrorRecord's targetObject.
+  it('carries an ErrorRecord that names a host object, by sanitising it', async () => {
+    // This used to be a command FAILURE: targetObject is a PSValue, the error
+    // stream was only clone-CHECKED rather than sanitised, and so an error that
+    // named the object it was about took the command down with it. The record
+    // now crosses with the host handle stripped, which is what the success
+    // stream had always done.
     const { kernel, events } = newKernel();
     kernel.register(
       command({ name: 'leaky', display: 'leaky' }, async (context) => {
@@ -881,8 +1015,110 @@ describe('everything a real session emits is clone-safe', () => {
     kernel.send({ kind: 'exec', requestId: 'r1', terminalId: 't1', source: 'leaky', background: false });
     await kernel.drain();
 
+    assert.equal(events.find((e) => e.kind === 'exit')?.exitCode, 0);
+    const error = events.find((e) => e.kind === 'stream' && e.which === 'error');
+    assert.ok(error?.kind === 'stream' && error.which === 'error');
+    assert.deepEqual(cloneSafetyProblems(error), []);
+    const target = error.payload.targetObject as { properties: Record<string, unknown> };
+    assert.deepEqual(target.properties, { X: 1 });
+    assert.equal(Object.hasOwn(target, 'baseObject'), false);
+  });
+
+  it('refuses to emit an event carrying a host object', async () => {
+    // Validation is on by default, so the failure names the command that built
+    // the value rather than surfacing as a DataCloneError at postMessage. Every
+    // stream carrying a PSValue is now sanitised, so this is forced through one
+    // that carries text — where a host object can only arrive through a cast,
+    // which is exactly the case the check exists to catch.
+    const { kernel, events } = newKernel();
+    kernel.register(
+      command({ name: 'leaky', display: 'leaky' }, async (context) => {
+        await context.streams.warning.write(new WeakMap() as unknown as string);
+        return 0;
+      }),
+    );
+
+    kernel.send({ kind: 'exec', requestId: 'r1', terminalId: 't1', source: 'leaky', background: false });
+    await kernel.drain();
+
     // The throw is caught by the kernel and reported as a command failure,
     // which is what a bug in a command should look like.
     assert.equal(events.find((e) => e.kind === 'exit')?.exitCode, EXIT_FAILURE);
+  });
+});
+
+describe('requests the kernel will not act on', () => {
+  it('answers a malformed request with a rejection instead of acting or ignoring', () => {
+    const { kernel, events } = newKernel();
+    kernel.register(emitter('greet', ['hello']));
+
+    // Missing `background`, which decides whether Ctrl+C can reach the process.
+    kernel.send({ kind: 'exec', requestId: 'r1', terminalId: 't1', source: 'greet' });
+
+    const rejected = events.find((e) => e.kind === 'rejected');
+    assert.equal(rejected?.requestId, 'r1');
+    assert.equal(rejected?.requestKind, 'exec');
+    assert.deepEqual(rejected?.problems, ['background must be a boolean']);
+    assert.equal(events.some((e) => e.kind === 'process-changed'), false, 'nothing ran');
+  });
+
+  it('reports a rejection with a null requestId when there is nothing to correlate', () => {
+    const { kernel, events } = newKernel();
+    kernel.send('not a request at all');
+    const rejected = events.find((e) => e.kind === 'rejected');
+    assert.equal(rejected?.requestId, null);
+    assert.equal(rejected?.requestKind, null);
+  });
+
+  it('refuses a requestId that has already been submitted', async () => {
+    // A correlation id that names two executions correlates nothing: the second
+    // run's objects, errors and exit would all arrive labelled as the first's.
+    const { kernel, events } = newKernel();
+    kernel.register(emitter('greet', ['hello']));
+
+    const request: KernelRequest = {
+      kind: 'exec',
+      requestId: 'r1',
+      terminalId: 't1',
+      source: 'greet',
+      background: false,
+    };
+    kernel.send(request);
+    kernel.send(request);
+    await kernel.drain();
+
+    const rejected = events.filter((e) => e.kind === 'rejected');
+    assert.equal(rejected.length, 1);
+    assert.match(rejected[0]?.problems[0] as string, /already been submitted/u);
+    assert.equal(events.filter((e) => e.kind === 'exit').length, 1, 'only one execution happened');
+  });
+
+  it('still refuses a reused id after the first execution has exited', async () => {
+    // Uniqueness has to hold against the whole transcript, not just against
+    // what is currently running — otherwise a UI can reuse an id the moment a
+    // command finishes and quietly relabel the previous run's transcript.
+    const { kernel, events } = newKernel();
+    kernel.register(emitter('greet', ['hello']));
+    const request: KernelRequest = {
+      kind: 'exec',
+      requestId: 'r1',
+      terminalId: 't1',
+      source: 'greet',
+      background: false,
+    };
+    kernel.send(request);
+    await kernel.drain();
+    kernel.send(request);
+    await kernel.drain();
+
+    assert.equal(events.filter((e) => e.kind === 'rejected').length, 1);
+    assert.equal(events.filter((e) => e.kind === 'exit').length, 1);
+  });
+
+  it('does not resize a terminal from an invalid geometry', () => {
+    const { kernel } = newKernel();
+    kernel.send({ kind: 'resize', terminalId: 't1', columns: 120, rows: 40 });
+    kernel.send({ kind: 'resize', terminalId: 't1', columns: 0, rows: Number.NaN });
+    assert.deepEqual(kernel.terminalSize('t1'), { columns: 120, rows: 40 });
   });
 });

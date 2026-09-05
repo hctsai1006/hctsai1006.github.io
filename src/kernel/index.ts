@@ -16,6 +16,7 @@ export { KERNEL_PID } from './ids.ts';
 
 export type {
   CancelRequest,
+  DecodeResult,
   ExecRequest,
   ExitEvent,
   KernelEvent,
@@ -25,6 +26,7 @@ export type {
   KernelStream,
   ObjectsEvent,
   ProcessChangedEvent,
+  RejectedEvent,
   ResizeRequest,
   SignalRequest,
   StderrEvent,
@@ -36,12 +38,28 @@ export {
   assertCloneSafe,
   cloneSafetyProblems,
   CloneUnsafeError,
+  decodeKernelRequest,
   isCloneSafe,
   KERNEL_EVENT_KINDS,
   KERNEL_REQUEST_KINDS,
   KERNEL_STREAMS,
+  REQUEST_LIMITS,
   sanitizePSValue,
 } from './protocol.ts';
+
+export type {
+  WireErrorRecord,
+  WireInformationRecord,
+  WireLimits,
+  WireObject,
+  WireValue,
+} from './wire.ts';
+export {
+  DEFAULT_WIRE_LIMITS,
+  sanitizeErrorRecord,
+  sanitizeInformationRecord,
+  WireValueError,
+} from './wire.ts';
 
 export type { ProcessSnapshot, ProcessState } from './process/snapshot.ts';
 export { isFailure, isTerminated, PROCESS_STATES } from './process/snapshot.ts';

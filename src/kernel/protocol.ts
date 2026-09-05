@@ -50,20 +50,30 @@
  * typed arrays (so `Uint8Array` byte channels stay bytes), Array, Map, Set, and
  * plain objects. That is exactly the subset `PSValue` uses, with one caveat:
  * `PSObject.baseObject` holds a host value that is NOT clone-safe by design.
- * `sanitizePSValue` strips it, and the kernel calls that on the way out.
+ *
+ * That caveat is the reason the values in this file are typed `WireValue` and
+ * not `PSValue`. They are two different claims — "this is a pipeline object"
+ * and "this can be sent" — and a single type meaning both is how a closure ends
+ * up typed as if it were data. `wire.ts` holds the wire type and the one
+ * function that converts, and every payload here that could carry a `PSValue`
+ * has been through it.
+ *
+ * ---------------------------------------------------------------------------
+ * BOTH DIRECTIONS
+ * ---------------------------------------------------------------------------
+ *
+ * Events leaving the kernel are checked by `assertCloneSafe`. Requests arriving
+ * at it are DECODED by `decodeKernelRequest`, which is a different thing from
+ * being type-asserted: a static type is a claim about the sender, and the
+ * sender is about to become a `postMessage` from a page.
  */
 
-import type { PSObject, PSValue } from '../pipeline/psobject.ts';
-import { isPSObject } from '../pipeline/psobject.ts';
-import type {
-  ErrorRecord,
-  InformationRecord,
-  ProgressRecord,
-  RedirectableStream,
-} from '../pipeline/streams.ts';
+import type { ProgressRecord, RedirectableStream } from '../pipeline/streams.ts';
 import type { ProcessId, RequestId, TerminalId } from './ids.ts';
 import type { ProcessSnapshot } from './process/snapshot.ts';
 import type { VirtualSignal } from './signals.ts';
+import { VIRTUAL_SIGNALS } from './signals.ts';
+import type { WireErrorRecord, WireInformationRecord, WireValue } from './wire.ts';
 
 // ---------------------------------------------------------------------------
 // streams on the wire
@@ -201,6 +211,187 @@ export const KERNEL_REQUEST_KINDS = [
 ] as const satisfies readonly KernelRequestKind[];
 
 // ---------------------------------------------------------------------------
+// decoding a request that arrived from outside
+// ---------------------------------------------------------------------------
+
+/**
+ * The ceilings a request must respect.
+ *
+ * TRANSPORT limits, not PowerShell semantics. Nothing here was measured against
+ * pwsh and nothing here should be read as a claim about it: a real console's
+ * window size is bounded by the host rather than by the language, and the
+ * reference implementation has no opinion about how long a command line may be.
+ * What these bound is the far side's ability to make the kernel allocate.
+ */
+export const REQUEST_LIMITS = {
+  /** A `requestId` or `terminalId`. Long enough for a uuid and a prefix. */
+  maxIdLength: 256,
+  /** One command line. Longer than any line a terminal can usefully submit. */
+  maxSourceLength: 64 * 1024,
+  /** One `stdin` write. A larger feed arrives as several writes. */
+  maxStdinBytes: 1024 * 1024,
+  minColumns: 1,
+  maxColumns: 10_000,
+  minRows: 1,
+  maxRows: 10_000,
+} as const;
+
+/** What a decode produced, or why it produced nothing. */
+export type DecodeResult<T> =
+  | { readonly ok: true; readonly value: T }
+  | { readonly ok: false; readonly problems: readonly string[] };
+
+/** Shared so a rejected `stdin` does not allocate a buffer to throw away. */
+const EMPTY_BYTES = new Uint8Array(0);
+
+function decodeFailure(...problems: string[]): DecodeResult<never> {
+  return { ok: false, problems };
+}
+
+function decodeId(value: unknown, field: string, problems: string[]): string {
+  if (typeof value !== 'string') {
+    problems.push(`${field} must be a string`);
+    return '';
+  }
+  if (value.length === 0) problems.push(`${field} must not be empty`);
+  else if (value.length > REQUEST_LIMITS.maxIdLength) {
+    problems.push(`${field} is longer than ${REQUEST_LIMITS.maxIdLength} characters`);
+  }
+  return value;
+}
+
+function decodeInteger(value: unknown, field: string, problems: string[]): number {
+  if (typeof value !== 'number' || !Number.isInteger(value)) {
+    problems.push(`${field} must be an integer`);
+    return 0;
+  }
+  return value;
+}
+
+function decodeBoundedInteger(
+  value: unknown,
+  field: string,
+  min: number,
+  max: number,
+  problems: string[],
+): number {
+  const before = problems.length;
+  const n = decodeInteger(value, field, problems);
+  if (problems.length === before && (n < min || n > max)) {
+    problems.push(`${field} must be between ${min} and ${max}, not ${n}`);
+  }
+  return n;
+}
+
+function decodeBoolean(value: unknown, field: string, problems: string[]): boolean {
+  if (typeof value !== 'boolean') {
+    problems.push(`${field} must be a boolean`);
+    return false;
+  }
+  return value;
+}
+
+/**
+ * Turn an arbitrary message into a `KernelRequest`, or say why it is not one.
+ *
+ * The kernel used to TYPE-ASSERT its input and nothing more, which is a claim
+ * about the sender rather than a check on the message. That is fine while the
+ * only sender is the same module in the same realm; it stops being fine the
+ * moment the sender is a `postMessage` from a page, because the type says
+ * nothing at runtime and the first symptom of a malformed message is a NaN
+ * column width or a `bytes.length` read on a string.
+ *
+ * Every field is checked, and every problem is collected rather than the first
+ * one thrown: a UI that has to fix its message one field per round trip is a UI
+ * that will stop checking.
+ *
+ * NOT checked here: whether the ids refer to anything. A `stdin` for a process
+ * that has already exited is a well-formed request about a process that is
+ * gone, and that is the kernel's business rather than the decoder's — as is a
+ * `requestId` that has been used before, which needs the kernel's own history.
+ */
+export function decodeKernelRequest(message: unknown): DecodeResult<KernelRequest> {
+  if (typeof message !== 'object' || message === null) {
+    return decodeFailure('a request must be an object');
+  }
+  const record = message as Record<string, unknown>;
+  const kind: unknown = record['kind'];
+  if (typeof kind !== 'string') return decodeFailure('kind must be a string');
+
+  const problems: string[] = [];
+  switch (kind) {
+    case 'exec': {
+      const requestId = decodeId(record['requestId'], 'requestId', problems);
+      const terminalId = decodeId(record['terminalId'], 'terminalId', problems);
+      const rawSource: unknown = record['source'];
+      let source = '';
+      if (typeof rawSource !== 'string') problems.push('source must be a string');
+      else if (rawSource.length > REQUEST_LIMITS.maxSourceLength) {
+        problems.push(`source is longer than ${REQUEST_LIMITS.maxSourceLength} characters`);
+      } else source = rawSource;
+      const background = decodeBoolean(record['background'], 'background', problems);
+      if (problems.length > 0) return { ok: false, problems };
+      return { ok: true, value: { kind: 'exec', requestId, terminalId, source, background } };
+    }
+    case 'stdin': {
+      const processId = decodeInteger(record['processId'], 'processId', problems);
+      const rawBytes: unknown = record['bytes'];
+      // `instanceof` and not a structural check: a plain object with a `length`
+      // would pass a duck test and then be enqueued into a byte stream.
+      let bytes: Uint8Array = EMPTY_BYTES;
+      if (!(rawBytes instanceof Uint8Array)) problems.push('bytes must be a Uint8Array');
+      else if (rawBytes.length > REQUEST_LIMITS.maxStdinBytes) {
+        problems.push(
+          `bytes is ${rawBytes.length} long, over the ${REQUEST_LIMITS.maxStdinBytes}-byte limit for one write`,
+        );
+      } else bytes = rawBytes;
+      const endOfFile = decodeBoolean(record['endOfFile'], 'endOfFile', problems);
+      if (problems.length > 0) return { ok: false, problems };
+      return { ok: true, value: { kind: 'stdin', processId, bytes, endOfFile } };
+    }
+    case 'signal': {
+      // NEGATIVE is legal and load-bearing: it addresses the group led by the
+      // absolute value, which is `kill()`'s own convention.
+      const processId = decodeInteger(record['processId'], 'processId', problems);
+      const signal: unknown = record['signal'];
+      if (typeof signal !== 'string' || !(VIRTUAL_SIGNALS as readonly string[]).includes(signal)) {
+        problems.push(`signal must be one of ${VIRTUAL_SIGNALS.join(', ')}`);
+      }
+      if (problems.length > 0) return { ok: false, problems };
+      return { ok: true, value: { kind: 'signal', processId, signal: signal as VirtualSignal } };
+    }
+    case 'resize': {
+      const terminalId = decodeId(record['terminalId'], 'terminalId', problems);
+      const columns = decodeBoundedInteger(
+        record['columns'],
+        'columns',
+        REQUEST_LIMITS.minColumns,
+        REQUEST_LIMITS.maxColumns,
+        problems,
+      );
+      const rows = decodeBoundedInteger(
+        record['rows'],
+        'rows',
+        REQUEST_LIMITS.minRows,
+        REQUEST_LIMITS.maxRows,
+        problems,
+      );
+      if (problems.length > 0) return { ok: false, problems };
+      return { ok: true, value: { kind: 'resize', terminalId, columns, rows } };
+    }
+    case 'cancel': {
+      const requestId = decodeId(record['requestId'], 'requestId', problems);
+      if (problems.length > 0) return { ok: false, problems };
+      return { ok: true, value: { kind: 'cancel', requestId } };
+    }
+    default:
+      return decodeFailure(
+        `kind must be one of ${KERNEL_REQUEST_KINDS.join(', ')}, not '${kind}'`,
+      );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // events: kernel -> UI
 // ---------------------------------------------------------------------------
 
@@ -218,7 +409,7 @@ export const KERNEL_REQUEST_KINDS = [
 export interface ObjectsEvent {
   readonly kind: 'objects';
   readonly requestId: RequestId;
-  readonly values: readonly PSValue[];
+  readonly values: readonly WireValue[];
 }
 
 /** Native stdout bytes. Kept as bytes for the reason in `StdinRequest`. */
@@ -247,7 +438,7 @@ export type StreamEvent =
       readonly kind: 'stream';
       readonly processId: ProcessId;
       readonly which: 'error';
-      readonly payload: ErrorRecord;
+      readonly payload: WireErrorRecord;
     }
   | {
       readonly kind: 'stream';
@@ -259,7 +450,7 @@ export type StreamEvent =
       readonly kind: 'stream';
       readonly processId: ProcessId;
       readonly which: 'information';
-      readonly payload: InformationRecord;
+      readonly payload: WireInformationRecord;
     }
   | {
       readonly kind: 'stream';
@@ -297,13 +488,35 @@ export interface ExitEvent {
   readonly signalled: VirtualSignal | null;
 }
 
+/**
+ * A request the kernel would not act on.
+ *
+ * Its own event kind rather than an error on some process's stream, because a
+ * malformed request has no process — that is what makes it malformed. Before
+ * this existed a bad message was either type-asserted into the kernel and acted
+ * on, or silently ignored, and both leave the UI waiting for events that will
+ * never come.
+ *
+ * `requestId` is null when the message did not carry a usable one. There is
+ * nothing else to correlate against in that case, which is exactly why the
+ * problems are spelled out in full rather than summarised.
+ */
+export interface RejectedEvent {
+  readonly kind: 'rejected';
+  readonly requestId: RequestId | null;
+  /** The `kind` field as it arrived, or null when it was not even a string. */
+  readonly requestKind: string | null;
+  readonly problems: readonly string[];
+}
+
 export type KernelEvent =
   | ObjectsEvent
   | StdoutEvent
   | StderrEvent
   | StreamEvent
   | ProcessChangedEvent
-  | ExitEvent;
+  | ExitEvent
+  | RejectedEvent;
 
 export type KernelEventKind = KernelEvent['kind'];
 
@@ -314,6 +527,7 @@ export const KERNEL_EVENT_KINDS = [
   'stream',
   'process-changed',
   'exit',
+  'rejected',
 ] as const satisfies readonly KernelEventKind[];
 
 // ---------------------------------------------------------------------------
@@ -442,53 +656,23 @@ export function assertCloneSafe(value: unknown, label = 'message'): void {
 }
 
 /**
- * Make a `PSValue` safe to send.
+ * The value sanitiser lives in `wire.ts`, next to the type it produces.
  *
- * The only offender is `PSObject.baseObject`, which exists precisely so a
- * command can reach the underlying host value — a File handle, a Response, a
- * DOM-free stand-in for one. That is useful inside the kernel and meaningless
- * outside it, so it is dropped at the boundary rather than being banned from
- * the object model.
- *
- * Returns the SAME reference when nothing needed stripping, so the common case
- * costs one walk and no allocation.
+ * Re-exported here because "how do I make this safe to send" is a question
+ * about the protocol, and a caller should not have to know which file the
+ * boundary happens to be implemented in.
  */
-export function sanitizePSValue(value: PSValue): PSValue {
-  if (Array.isArray(value)) {
-    let changed = false;
-    const items = value.map((item) => {
-      const next = sanitizePSValue(item as PSValue);
-      if (next !== item) changed = true;
-      return next;
-    });
-    return changed ? items : value;
-  }
-  if (!isPSObject(value)) return value;
-
-  let changed = value.baseObject !== undefined;
-  // Built with fromEntries, which DEFINES each key rather than assigning it.
-  // `properties['__proto__'] = x` on a plain object invokes the setter: the key
-  // vanished from Object.keys while getProperty still found it through the
-  // chain — the exact disagreement the ownership fix removed — and the bag's
-  // prototype became attacker-supplied data on the way out of the kernel.
-  // Select-Object already builds its bag with a null prototype for this reason;
-  // rebuilding here undid it one layer later.
-  //
-  // fromEntries rather than Object.create(null) because structuredClone
-  // NORMALISES a null prototype back to Object.prototype, so the guarantee would
-  // not survive the boundary this function exists to prepare for — and the
-  // envelope would stop round-tripping identically.
-  const entries: [string, PSValue][] = [];
-  for (const [key, property] of Object.entries(value.properties)) {
-    const next = sanitizePSValue(property);
-    if (next !== property) changed = true;
-    entries.push([key, next]);
-  }
-  const properties: Record<string, PSValue> = Object.fromEntries(entries);
-  if (!changed) return value;
-
-  // Rebuilt without `baseObject`, so the key is ABSENT rather than present and
-  // undefined — the same rule the envelopes follow.
-  const stripped: PSObject = { typeNames: value.typeNames, properties };
-  return stripped;
-}
+export type {
+  WireErrorRecord,
+  WireInformationRecord,
+  WireLimits,
+  WireObject,
+  WireValue,
+} from './wire.ts';
+export {
+  DEFAULT_WIRE_LIMITS,
+  sanitizeErrorRecord,
+  sanitizeInformationRecord,
+  sanitizePSValue,
+  WireValueError,
+} from './wire.ts';

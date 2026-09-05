@@ -46,7 +46,13 @@ import type {
 import { CallbackSink, errorRecord } from '../pipeline/streams.ts';
 import type { ProcessGroupId, ProcessId, RequestId, TerminalId } from './ids.ts';
 import type { KernelEvent, KernelRequest } from './protocol.ts';
-import { assertCloneSafe, sanitizePSValue } from './protocol.ts';
+import {
+  assertCloneSafe,
+  decodeKernelRequest,
+  sanitizeErrorRecord,
+  sanitizeInformationRecord,
+  sanitizePSValue,
+} from './protocol.ts';
 import { AuditLog, CapabilityBroker, VirtualPolicy } from './capabilities.ts';
 import { JobManager } from './process/jobs.ts';
 import type { ProcessSnapshot } from './process/snapshot.ts';
@@ -311,6 +317,15 @@ export class Kernel {
   readonly #finished = new Set<ProcessId>();
   /** Requests cancelled before a process existed for them. */
   readonly #cancelled = new Set<RequestId>();
+  /**
+   * Every `exec` requestId this kernel has ever accepted.
+   *
+   * Kept for the life of the session rather than cleared on exit, because a
+   * correlation id has to stay unique against the whole transcript and not just
+   * against what is currently running. It is one string per submitted command
+   * line — the same order of growth as the history the terminal already keeps.
+   */
+  readonly #submitted = new Set<RequestId>();
   readonly #env: Map<string, string>;
   readonly #clock: () => number;
   readonly #profile: CompatibilityView;
@@ -439,11 +454,48 @@ export class Kernel {
    * that cannot survive the move into a Worker. Callers that need to join —
    * tests, a script runner, an MCP tool — use `drain`.
    */
-  send(request: KernelRequest): void {
+  send(message: KernelRequest | unknown): void {
+    // DECODED, not asserted. The static type is a claim about the sender, and
+    // the sender is about to become a `postMessage` from a page. Everything
+    // below can then rely on the fields being what they say they are, which is
+    // what the type alone never guaranteed at runtime.
+    const decoded = decodeKernelRequest(message);
+    if (!decoded.ok) {
+      const record = (typeof message === 'object' && message !== null
+        ? message
+        : {}) as Record<string, unknown>;
+      const requestId: unknown = record['requestId'];
+      const kind: unknown = record['kind'];
+      this.#emit({
+        kind: 'rejected',
+        requestId: typeof requestId === 'string' ? requestId : null,
+        requestKind: typeof kind === 'string' ? kind : null,
+        problems: decoded.problems,
+      });
+      return;
+    }
+    const request = decoded.value;
+
     switch (request.kind) {
-      case 'exec':
+      case 'exec': {
+        // A requestId is a CORRELATION id, and a correlation id that names two
+        // executions correlates nothing: the second run's objects, errors and
+        // exit would all arrive labelled as the first's. Reusing one is a UI
+        // bug, and a UI bug that silently produces interleaved output is worse
+        // than one that is reported.
+        if (this.#submitted.has(request.requestId)) {
+          this.#emit({
+            kind: 'rejected',
+            requestId: request.requestId,
+            requestKind: 'exec',
+            problems: [`requestId '${request.requestId}' has already been submitted`],
+          });
+          return;
+        }
+        this.#submitted.add(request.requestId);
         this.#exec(request.requestId, request.terminalId, request.source, request.background);
         return;
+      }
       case 'stdin': {
         const running = this.#running.get(request.processId);
         if (running === undefined) return;
@@ -643,12 +695,17 @@ export class Kernel {
       kind: 'stream',
       processId: snapshot.pid,
       which: 'error',
-      payload: errorRecord(
-        `The term '${name}' is not recognized as a name of a cmdlet, function, script file, or executable program.`,
-        'CommandNotFoundException',
-        name,
-        'ObjectNotFound',
-        { exceptionType: 'System.Management.Automation.CommandNotFoundException', targetObject: name },
+      payload: sanitizeErrorRecord(
+        errorRecord(
+          `The term '${name}' is not recognized as a name of a cmdlet, function, script file, or executable program.`,
+          'CommandNotFoundException',
+          name,
+          'ObjectNotFound',
+          {
+            exceptionType: 'System.Management.Automation.CommandNotFoundException',
+            targetObject: name,
+          },
+        ),
       ),
     });
     this.#finish(snapshot.pid, EXIT_COMMAND_NOT_FOUND, null);
@@ -686,7 +743,17 @@ export class Kernel {
 
     const onError = (record: ErrorRecord): void => {
       if (background) this.#jobs.recordError(groupLeader, record);
-      this.#emit({ kind: 'stream', processId: pid, which: 'error', payload: record });
+      // Sanitised, not merely checked. `ErrorRecord.targetObject` is a PSValue,
+      // so an error naming the object that failed is a hole exactly as wide as
+      // the success stream's — and it was the ONE stream that only ever got the
+      // clone check, which turned "this error mentions a File handle" into "the
+      // command failed" instead of into a correctly carried error.
+      this.#emit({
+        kind: 'stream',
+        processId: pid,
+        which: 'error',
+        payload: sanitizeErrorRecord(record),
+      });
     };
 
     const streams = this.#buildStreams(pid, onSuccess, onError);
@@ -837,7 +904,13 @@ export class Kernel {
       this.#emit({ kind: 'stream', processId: pid, which: 'debug', payload: text });
     });
     const information = new CallbackSink<InformationRecord>((record) => {
-      this.#emit({ kind: 'stream', processId: pid, which: 'information', payload: record });
+      // `InformationRecord.message` is a PSValue too, for the same reason.
+      this.#emit({
+        kind: 'stream',
+        processId: pid,
+        which: 'information',
+        payload: sanitizeInformationRecord(record),
+      });
     });
     const progress = new CallbackSink<ProgressRecord>((record) => {
       this.#emit({ kind: 'stream', processId: pid, which: 'progress', payload: record });
