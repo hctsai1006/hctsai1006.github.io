@@ -29,14 +29,15 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { globSync, readFileSync, readdirSync } from 'node:fs';
+import { join, sep } from 'node:path';
 
 import {
   ARCHIVE,
   FIXTURES,
   INDEX,
   INVENTORY,
+  REPO,
   buildCases,
   corpusFromLiterals,
   lf,
@@ -136,6 +137,57 @@ describe('v1 golden transcripts: the seal', () => {
       files.filter((f) => !f.endsWith('.txt') && f !== 'manifest.json'),
       [],
       'unexpected files in the fixture directory',
+    );
+  });
+});
+
+describe('v1 golden transcripts: the hermetic gate stays hermetic', () => {
+  it('has no test in the hermetic suite that can reach a browser', () => {
+    // `npm run verify` must run where there is no Chromium. One `.test.mts`
+    // file importing Playwright — directly, or through the harness, or through
+    // the capture tool — makes the required gate depend on a 130MB download,
+    // and it fails as an import error that names none of that.
+    //
+    // THIS ASSERTION EXISTS BECAUSE THE FIRST ATTEMPT AT IT DID NOT WORK.
+    // tools/run-browser-tests.mts guarded the same property by filtering its
+    // own glob results for `.test.mts` — a list every entry of which ends in
+    // `.browser.mts`, so it could never match. An adversarial pass dropped a
+    // `leak.test.mts` into tests/browser/ and that gate reported success. This
+    // one reads the files the hermetic runner will actually execute.
+    const hermetic = globSync('tests/**/*.test.mts', { cwd: REPO })
+      .map((f) => f.split(sep).join('/'))
+      .sort();
+    assert.ok(hermetic.length > 40, `only ${String(hermetic.length)} hermetic test files found`);
+    assert.ok(hermetic.includes('tests/unit/v1-transcripts.test.mts'), 'this file was not found');
+
+    // Module SPECIFIERS, extracted and then judged — not a pattern run over the
+    // whole source. Two versions of this test failed on themselves before this
+    // one worked: a regex naming the forbidden modules matched its own
+    // definition, and so did the assertion that quoted `playwright`. The
+    // trailing semicolon is what separates a real import from a mention of one,
+    // and the module names below are never written here as whole literals.
+    const BROWSER_MODULES = ['play' + 'wright', '/browser-' + 'harness.mts', '/capture-' + 'v1.mts'];
+    const importsOf = (source: string): string[] =>
+      [...source.matchAll(/from\s+'([^']+)';/g)].map((m) => m[1] ?? '');
+    const needsBrowser = (source: string): boolean =>
+      importsOf(source).some((s) => BROWSER_MODULES.some((m) => s === m || s.endsWith(m)));
+
+    const offenders = hermetic.filter((f) => needsBrowser(readFileSync(join(REPO, f), 'utf8')));
+    assert.deepEqual(offenders, [], 'these hermetic tests would need a browser to run');
+
+    // Transitively: tools/v1-fixtures.mts is what the hermetic gate imports, so
+    // it must not reach Playwright either. That is the whole reason it is a
+    // separate file from tools/browser-harness.mts.
+    assert.equal(
+      needsBrowser(readFileSync(join(REPO, 'tools', 'v1-fixtures.mts'), 'utf8')),
+      false,
+      'tools/v1-fixtures.mts now needs a browser, so every hermetic test that uses it does too',
+    );
+    // And the check is not vacuous: the browser suite must trip it.
+    assert.equal(
+      needsBrowser(readFileSync(join(REPO, 'tests', 'browser', 'v1-transcripts.browser.mts'), 'utf8')),
+      true,
+      'the browser suite no longer looks like it needs a browser, so this check proves nothing',
     );
   });
 });

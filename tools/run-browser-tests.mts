@@ -25,7 +25,7 @@
 
 import { globSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { dirname, relative, resolve } from 'node:path';
+import { dirname, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -50,12 +50,21 @@ if (empty.length > 0) {
   process.exit(2);
 }
 
-// The browser suite must not be reachable from the hermetic one. If a file ever
-// ends in BOTH `.browser.mts` and `.test.mts` — or someone renames one — the
-// replay would start running inside `npm run verify` on machines with no
-// Chromium, and the hermetic gate would begin failing for a reason that has
-// nothing to do with the change under test.
-const leaked = files.filter((f) => f.endsWith('.test.mts'));
+// The browser suite must not be reachable from the hermetic one. A file under
+// tests/browser/ named `*.test.mts` is picked up by tools/run-tests.mts's glob,
+// so the replay would start launching Chromium inside `npm run verify` on
+// machines that have none.
+//
+// THE FIRST VERSION OF THIS FILTERED `files`, which is the list this glob just
+// produced — every entry of which ends in `.browser.mts` — so it could never
+// match and was a no-op. An adversarial pass dropped a `leak.test.mts` next to
+// the real one and this gate reported success. Scan the DIRECTORY, not the
+// matches.
+//
+// tests/unit/v1-transcripts.test.mts asserts the same property from the other
+// side, over every hermetic test file, which is the check that holds wherever
+// the leaked file happens to live.
+const leaked = globSync('tests/browser/**/*.test.mts', { cwd: REPO }).map((f) => f.split(sep).join('/'));
 if (leaked.length > 0) {
   process.stderr.write(
     `\n  these browser tests would also be picked up by the hermetic suite: ${leaked.join(', ')}\n` +
