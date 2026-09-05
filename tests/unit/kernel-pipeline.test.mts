@@ -548,6 +548,60 @@ describe('trying to defeat the fixes', () => {
     assert.equal(events.filter((event) => event.kind === 'exit').length, 3);
   });
 
+  it('SIGKILL on any stage of a running pipeline stops it rather than deadlocking it', async () => {
+    // Backpressure is only correct if it BLOCKS. A stage parked in `write`
+    // waiting for an acknowledgement that will never come is the difference
+    // between a pipeline that stops and a tab that hangs, so every position in
+    // the chain is killed and the drain has to finish.
+    const sleep = (ms: number): Promise<void> =>
+      new Promise((resolve) => {
+        setTimeout(resolve, ms);
+      });
+
+    for (const target of [1, 2, 3]) {
+      const { kernel } = newKernel();
+      kernel.register(
+        command('produce', async (context) => {
+          for (let index = 0; index < 100; index += 1) {
+            if (context.streams.success.closed || context.signal.aborted) break;
+            await sleep(2);
+            await context.streams.success.write(index);
+          }
+          return 0;
+        }),
+      );
+      for (const name of ['middle', 'tail']) {
+        kernel.register(
+          command(name, async (context) => {
+            for await (const value of context.input) await context.streams.success.write(value);
+            return 0;
+          }),
+        );
+      }
+
+      kernel.send({
+        kind: 'exec',
+        requestId: 'r1',
+        terminalId: 't1',
+        source: 'produce | middle | tail',
+        background: false,
+      });
+      await sleep(20);
+      kernel.send({ kind: 'signal', processId: target, signal: 'SIGKILL' });
+
+      const finished = await Promise.race([
+        kernel.drain().then(() => true),
+        sleep(5000).then(() => false),
+      ]);
+      assert.equal(finished, true, `killing stage ${target} deadlocked the pipeline`);
+      assert.equal(kernel.processes.get(target)?.exitCode, SIGNAL_EXIT_CODE.SIGKILL);
+      for (const pid of [1, 2, 3]) {
+        assert.equal(kernel.processes.get(pid)?.state, 'exited', `pid ${pid} after killing ${target}`);
+      }
+      assert.equal(kernel.lastSucceeded('t1'), false);
+    }
+  });
+
   it('events reach a listener in sequence order even when a listener sends a request', async () => {
     // A UI that answers an event by sending a request is an ordinary thing to
     // write, and it used to break the ordering the sequence number exists for:
