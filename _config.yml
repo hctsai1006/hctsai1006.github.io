@@ -52,3 +52,5 @@ exclude:
   - package-lock.json
   - tsconfig.json
   - ROADMAP.md
+  - .npmrc
+  - .node-version

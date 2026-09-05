@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Browser-hosted PowerShell-compatible workstation. Versioned compatibility profiles over a semantic execution engine.",
   "engines": {
-    "node": ">=24.0.0"
+    "node": ">=24.12.0"
   },
   "scripts": {
     "truth:check": "node tools/verify-release-truth.mts --check",
@@ -14,7 +14,7 @@
     "roadmap": "node tools/generate-roadmap.mts",
     "check:numbers": "node tools/check-numbers.mts",
     "snapshot:authoritative": "node tools/check-numbers.mts --write-snapshot",
-    "verify": "npm run typecheck && npm test && npm run data -- --check && npm run inventory -- --check && npm run manifests -- --check && npm run conformance -- --check && npm run profiles -- --check && npm run explorer -- --check && npm run roadmap -- --check && npm run check:numbers -- --require-authoritative && npm run check:bytes && npm run width -- --check && npm run truth:verify",
+    "verify": "npm run check:engine && npm run typecheck && npm test && npm run data -- --check && npm run inventory -- --check && npm run manifests -- --check && npm run conformance -- --check && npm run profiles -- --check && npm run explorer -- --check && npm run roadmap -- --check && npm run check:numbers -- --require-authoritative && npm run check:bytes && npm run width -- --check && npm run truth:verify",
     "typecheck": "tsc --noEmit",
     "test": "node tools/run-tests.mts",
     "test:summary": "node tools/run-tests.mts --summary test-summary.json",
@@ -28,7 +28,8 @@
     "inventory": "node tools/extract-command-inventory.mts",
     "manifests": "node tools/generate-command-manifests.mts",
     "check:bytes": "node tools/check-source-bytes.mts",
-    "width": "node tools/generate-width-table.mts"
+    "width": "node tools/generate-width-table.mts",
+    "check:engine": "node tools/check-engine.mts"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
