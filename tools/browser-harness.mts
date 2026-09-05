@@ -141,6 +141,42 @@ export async function openV1(
   server: ArchiveServer,
   env: Environment,
 ): Promise<V1Page> {
+  // ONE retry, counted and reported, never swallowed.
+  //
+  // A full capture opens about 1300 pages and a check about 260. Across roughly
+  // 2800 opens while building this, exactly one failed inside openV1 — a
+  // transient launch or navigation error on Windows, not reproducible in three
+  // further attempts. At that rate a single-shot open makes an otherwise
+  // deterministic gate fail for infrastructure reasons a few percent of the
+  // time, and a gate that fails for reasons unrelated to the change under test
+  // is a gate that gets muted.
+  //
+  // It hides nothing. `openRetries()` is read back by tools/capture-v1.mts and
+  // printed, so a machine where this fires constantly says so instead of
+  // quietly taking twice as long. And it cannot hide a WRONG page: every case
+  // is captured twice and the two runs compared.
+  try {
+    return await openOnce(browser, server, env);
+  } catch (first) {
+    retries += 1;
+    lastRetryReason = first instanceof Error ? first.message : String(first);
+    return openOnce(browser, server, env);
+  }
+}
+
+let retries = 0;
+let lastRetryReason: string | null = null;
+
+/** How many opens had to be retried, and why the last one did. */
+export function openRetries(): { count: number; lastReason: string | null } {
+  return { count: retries, lastReason: lastRetryReason };
+}
+
+async function openOnce(
+  browser: Browser,
+  server: ArchiveServer,
+  env: Environment,
+): Promise<V1Page> {
   const context = await browser.newContext({
     reducedMotion: 'reduce',
     locale: env.locale,

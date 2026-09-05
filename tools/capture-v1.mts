@@ -45,6 +45,11 @@
  *   node tools/capture-v1.mts             capture and write
  *   node tools/capture-v1.mts --check     re-capture and diff, exit 1 on drift
  *   node tools/capture-v1.mts --only <s>  capture a subset (REFUSED with --check)
+ *   node tools/capture-v1.mts --no-sensitivity
+ *                                       skip the four variant probes; six times
+ *                                       faster, and REFUSED before writing,
+ *                                       because the manifest it would produce
+ *                                       says nothing in v1 reads a clock
  */
 
 import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync, existsSync } from 'node:fs';
@@ -53,7 +58,7 @@ import { pathToFileURL } from 'node:url';
 
 import type { Browser } from 'playwright';
 
-import { launchBrowser, openV1, serveArchive } from './browser-harness.mts';
+import { launchBrowser, openRetries, openV1, serveArchive } from './browser-harness.mts';
 import type { ArchiveServer } from './browser-harness.mts';
 import {
   ARCHIVE,
@@ -704,9 +709,10 @@ async function main(): Promise<void> {
     process.stderr.write('\n  --only cannot be combined with --check.\n\n');
     process.exit(2);
   }
+  const skipSensitivity = argv.includes('--no-sensitivity');
 
   const report = await runCapture({
-    probeSensitivity: !check && !argv.includes('--no-sensitivity'),
+    probeSensitivity: !check && !skipSensitivity,
     ...(only === undefined ? {} : { only }),
     // Only on a terminal. A carriage-returned progress line in a CI log is one
     // very long line that hides everything printed before it.
@@ -752,9 +758,24 @@ async function main(): Promise<void> {
       `  ${String(m.cases.length)} v1 transcripts replayed and identical ` +
         `(${String(m.counts['rows'] ?? 0)} rows, ${String(m.unstable.length)} unstable).\n`,
     );
+    reportRetries();
     return;
   }
 
+  // `--no-sensitivity` is six times faster and produces a manifest in which
+  // every clockSensitive/seedSensitive/timezoneSensitive/localeSensitive flag is
+  // false — a document that says, wrongly, that nothing in v1 reads a clock.
+  // The hermetic gate pins those sets and would catch it, but a fixture set
+  // that has to be caught downstream is one that should not have been written.
+  if (skipSensitivity) {
+    process.stderr.write(
+      '\n  --no-sensitivity skips the probes that decide which commands depend on the\n' +
+        '  clock, the seed, the timezone and the locale, so every one of those flags\n' +
+        '  would be written as false. Refusing to record that as the answer.\n' +
+        '  Use it with --only while iterating; drop it to capture.\n\n',
+    );
+    process.exit(2);
+  }
   writeFixtures(report, only !== undefined);
   process.stdout.write(
     `  wrote ${relative(REPO, FIXTURES)}\n` +
@@ -770,6 +791,24 @@ async function main(): Promise<void> {
   for (const u of m.unstable) {
     process.stdout.write(`    unstable: ${u.slug} — ${u.reason}: ${u.detail}\n`);
   }
+  reportRetries();
+}
+
+/**
+ * Say out loud when a page open had to be retried.
+ *
+ * The retry exists because one open in roughly 2800 failed transiently, and a
+ * gate that opens 260 pages cannot be single-shot at that rate. Printing the
+ * count is what keeps it a mitigation rather than a place where a real problem
+ * goes quiet: a machine where this fires on every second case is telling you
+ * something, and silence would not.
+ */
+function reportRetries(): void {
+  const { count, lastReason } = openRetries();
+  if (count === 0) return;
+  process.stdout.write(
+    `  ${String(count)} page open(s) needed a retry; the last failed with: ${lastReason ?? '?'}\n`,
+  );
 }
 
 // Run only when this file is the entry point. `file://` + a Windows path is not
