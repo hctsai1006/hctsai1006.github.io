@@ -1,0 +1,4657 @@
+{
+  "pwsh": "7.6.5",
+  "capturedBy": "tools/capture-lexer-fixtures.ps1",
+  "cases": [
+    {
+      "source": "Write-Output 'single'",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Write-Output",
+          "start": 0,
+          "end": 12,
+          "value": "Write-Output"
+        },
+        {
+          "kind": "StringLiteral",
+          "text": "'single'",
+          "start": 13,
+          "end": 21,
+          "value": "single"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Write-Output \"double\"",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Write-Output",
+          "start": 0,
+          "end": 12,
+          "value": "Write-Output"
+        },
+        {
+          "kind": "StringExpandable",
+          "text": "\"double\"",
+          "start": 13,
+          "end": 21,
+          "value": "double"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Write-Output 'it''s'",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Write-Output",
+          "start": 0,
+          "end": 12,
+          "value": "Write-Output"
+        },
+        {
+          "kind": "StringLiteral",
+          "text": "'it''s'",
+          "start": 13,
+          "end": 20,
+          "value": "it's"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Write-Output \"say \"\"hi\"\"\"",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Write-Output",
+          "start": 0,
+          "end": 12,
+          "value": "Write-Output"
+        },
+        {
+          "kind": "StringExpandable",
+          "text": "\"say \"\"hi\"\"\"",
+          "start": 13,
+          "end": 25,
+          "value": "say \"hi\""
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Write-Output '$notvar'",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Write-Output",
+          "start": 0,
+          "end": 12,
+          "value": "Write-Output"
+        },
+        {
+          "kind": "StringLiteral",
+          "text": "'$notvar'",
+          "start": 13,
+          "end": 22,
+          "value": "$notvar"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Write-Output \"a`tb\"",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Write-Output",
+          "start": 0,
+          "end": 12,
+          "value": "Write-Output"
+        },
+        {
+          "kind": "StringExpandable",
+          "text": "\"a`tb\"",
+          "start": 13,
+          "end": 19,
+          "value": "a\tb"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Write-Output 'a`tb'",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Write-Output",
+          "start": 0,
+          "end": 12,
+          "value": "Write-Output"
+        },
+        {
+          "kind": "StringLiteral",
+          "text": "'a`tb'",
+          "start": 13,
+          "end": 19,
+          "value": "a`tb"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Write-Output \"a`nb\"",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Write-Output",
+          "start": 0,
+          "end": 12,
+          "value": "Write-Output"
+        },
+        {
+          "kind": "StringExpandable",
+          "text": "\"a`nb\"",
+          "start": 13,
+          "end": 19,
+          "value": "a\nb"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Write-Output \"esc `$literal\"",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Write-Output",
+          "start": 0,
+          "end": 12,
+          "value": "Write-Output"
+        },
+        {
+          "kind": "StringExpandable",
+          "text": "\"esc `$literal\"",
+          "start": 13,
+          "end": 28,
+          "value": "esc $literal"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Write-Output \"back``tick\"",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Write-Output",
+          "start": 0,
+          "end": 12,
+          "value": "Write-Output"
+        },
+        {
+          "kind": "StringExpandable",
+          "text": "\"back``tick\"",
+          "start": 13,
+          "end": 25,
+          "value": "back`tick"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Write-Output \"pre`0post\"",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Write-Output",
+          "start": 0,
+          "end": 12,
+          "value": "Write-Output"
+        },
+        {
+          "kind": "StringExpandable",
+          "text": "\"pre`0post\"",
+          "start": 13,
+          "end": 24,
+          "value": "pre\u0000post"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Write-Output \"pre`apost\"",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Write-Output",
+          "start": 0,
+          "end": 12,
+          "value": "Write-Output"
+        },
+        {
+          "kind": "StringExpandable",
+          "text": "\"pre`apost\"",
+          "start": 13,
+          "end": 24,
+          "value": "pre\u0007post"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Write-Output \"pre`bpost\"",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Write-Output",
+          "start": 0,
+          "end": 12,
+          "value": "Write-Output"
+        },
+        {
+          "kind": "StringExpandable",
+          "text": "\"pre`bpost\"",
+          "start": 13,
+          "end": 24,
+          "value": "pre\bpost"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Write-Output \"pre`epost\"",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Write-Output",
+          "start": 0,
+          "end": 12,
+          "value": "Write-Output"
+        },
+        {
+          "kind": "StringExpandable",
+          "text": "\"pre`epost\"",
+          "start": 13,
+          "end": 24,
+          "value": "pre\u001bpost"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Write-Output \"pre`fpost\"",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Write-Output",
+          "start": 0,
+          "end": 12,
+          "value": "Write-Output"
+        },
+        {
+          "kind": "StringExpandable",
+          "text": "\"pre`fpost\"",
+          "start": 13,
+          "end": 24,
+          "value": "pre\fpost"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Write-Output \"pre`rpost\"",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Write-Output",
+          "start": 0,
+          "end": 12,
+          "value": "Write-Output"
+        },
+        {
+          "kind": "StringExpandable",
+          "text": "\"pre`rpost\"",
+          "start": 13,
+          "end": 24,
+          "value": "pre\rpost"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Write-Output \"pre`vpost\"",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Write-Output",
+          "start": 0,
+          "end": 12,
+          "value": "Write-Output"
+        },
+        {
+          "kind": "StringExpandable",
+          "text": "\"pre`vpost\"",
+          "start": 13,
+          "end": 24,
+          "value": "pre\u000bpost"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Write-Output \"pre`qpost\"",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Write-Output",
+          "start": 0,
+          "end": 12,
+          "value": "Write-Output"
+        },
+        {
+          "kind": "StringExpandable",
+          "text": "\"pre`qpost\"",
+          "start": 13,
+          "end": 24,
+          "value": "preqpost"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Write-Output \"pre`Apost\"",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Write-Output",
+          "start": 0,
+          "end": 12,
+          "value": "Write-Output"
+        },
+        {
+          "kind": "StringExpandable",
+          "text": "\"pre`Apost\"",
+          "start": 13,
+          "end": 24,
+          "value": "preApost"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Write-Output \"pre` post\"",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Write-Output",
+          "start": 0,
+          "end": 12,
+          "value": "Write-Output"
+        },
+        {
+          "kind": "StringExpandable",
+          "text": "\"pre` post\"",
+          "start": 13,
+          "end": 24,
+          "value": "pre post"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Write-Output \"pre`'post\"",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Write-Output",
+          "start": 0,
+          "end": 12,
+          "value": "Write-Output"
+        },
+        {
+          "kind": "StringExpandable",
+          "text": "\"pre`'post\"",
+          "start": 13,
+          "end": 24,
+          "value": "pre'post"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Write-Output 'pre`tpost'",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Write-Output",
+          "start": 0,
+          "end": 12,
+          "value": "Write-Output"
+        },
+        {
+          "kind": "StringLiteral",
+          "text": "'pre`tpost'",
+          "start": 13,
+          "end": 24,
+          "value": "pre`tpost"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Write-Output 'pre``post'",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Write-Output",
+          "start": 0,
+          "end": 12,
+          "value": "Write-Output"
+        },
+        {
+          "kind": "StringLiteral",
+          "text": "'pre``post'",
+          "start": 13,
+          "end": 24,
+          "value": "pre``post"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Write-Output \"`u{41}\"",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Write-Output",
+          "start": 0,
+          "end": 12,
+          "value": "Write-Output"
+        },
+        {
+          "kind": "StringExpandable",
+          "text": "\"`u{41}\"",
+          "start": 13,
+          "end": 21,
+          "value": "A"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Write-Output \"`u{1F600}\"",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Write-Output",
+          "start": 0,
+          "end": 12,
+          "value": "Write-Output"
+        },
+        {
+          "kind": "StringExpandable",
+          "text": "\"`u{1F600}\"",
+          "start": 13,
+          "end": 24,
+          "value": "😀"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "f a`tb",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Generic",
+          "text": "a`tb",
+          "start": 2,
+          "end": 6,
+          "value": "a\tb"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "f a`nb",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Generic",
+          "text": "a`nb",
+          "start": 2,
+          "end": 6,
+          "value": "a\nb"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "f a` b",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Generic",
+          "text": "a` b",
+          "start": 2,
+          "end": 6,
+          "value": "a b"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "f a``b",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Generic",
+          "text": "a``b",
+          "start": 2,
+          "end": 6,
+          "value": "a`b"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "f a`$b",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Generic",
+          "text": "a`$b",
+          "start": 2,
+          "end": 6,
+          "value": "a$b"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "f a`qb",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Generic",
+          "text": "a`qb",
+          "start": 2,
+          "end": 6,
+          "value": "aqb"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "f a\"b\"c",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Generic",
+          "text": "a\"b\"c",
+          "start": 2,
+          "end": 7,
+          "value": "abc"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "f a'b'c",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Generic",
+          "text": "a'b'c",
+          "start": 2,
+          "end": 7,
+          "value": "abc"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "f \"a\"b",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "StringExpandable",
+          "text": "\"a\"",
+          "start": 2,
+          "end": 5,
+          "value": "a"
+        },
+        {
+          "kind": "Identifier",
+          "text": "b",
+          "start": 5,
+          "end": 6
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "f a#b",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Generic",
+          "text": "a#b",
+          "start": 2,
+          "end": 5,
+          "value": "a#b"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "f a #b",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Identifier",
+          "text": "a",
+          "start": 2,
+          "end": 3
+        },
+        {
+          "kind": "Comment",
+          "text": "#b",
+          "start": 4,
+          "end": 6
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "f a`",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Generic",
+          "text": "a`",
+          "start": 2,
+          "end": 4,
+          "value": "a`"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "f a,b",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Identifier",
+          "text": "a",
+          "start": 2,
+          "end": 3
+        },
+        {
+          "kind": "Comma",
+          "text": ",",
+          "start": 3,
+          "end": 4
+        },
+        {
+          "kind": "Identifier",
+          "text": "b",
+          "start": 4,
+          "end": 5
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "f a;b",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Identifier",
+          "text": "a",
+          "start": 2,
+          "end": 3
+        },
+        {
+          "kind": "Semi",
+          "text": ";",
+          "start": 3,
+          "end": 4
+        },
+        {
+          "kind": "Identifier",
+          "text": "b",
+          "start": 4,
+          "end": 5
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "f a|b",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Identifier",
+          "text": "a",
+          "start": 2,
+          "end": 3
+        },
+        {
+          "kind": "Pipe",
+          "text": "|",
+          "start": 3,
+          "end": 4
+        },
+        {
+          "kind": "Identifier",
+          "text": "b",
+          "start": 4,
+          "end": 5
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "f a>b",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Generic",
+          "text": "a>b",
+          "start": 2,
+          "end": 5,
+          "value": "a>b"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "f a<b",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Generic",
+          "text": "a<b",
+          "start": 2,
+          "end": 5,
+          "value": "a<b"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "f a=b",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Generic",
+          "text": "a=b",
+          "start": 2,
+          "end": 5,
+          "value": "a=b"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "f a+b",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Generic",
+          "text": "a+b",
+          "start": 2,
+          "end": 5,
+          "value": "a+b"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "f a.b",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Generic",
+          "text": "a.b",
+          "start": 2,
+          "end": 5,
+          "value": "a.b"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "f a*b",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Generic",
+          "text": "a*b",
+          "start": 2,
+          "end": 5,
+          "value": "a*b"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "f a:b",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Generic",
+          "text": "a:b",
+          "start": 2,
+          "end": 5,
+          "value": "a:b"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "f a@b",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Generic",
+          "text": "a@b",
+          "start": 2,
+          "end": 5,
+          "value": "a@b"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "f a!b",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Generic",
+          "text": "a!b",
+          "start": 2,
+          "end": 5,
+          "value": "a!b"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "f a[b",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Generic",
+          "text": "a[b",
+          "start": 2,
+          "end": 5,
+          "value": "a[b"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "f a]b",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Generic",
+          "text": "a]b",
+          "start": 2,
+          "end": 5,
+          "value": "a]b"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "f a~b",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Generic",
+          "text": "a~b",
+          "start": 2,
+          "end": 5,
+          "value": "a~b"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "f !ab",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Generic",
+          "text": "!ab",
+          "start": 2,
+          "end": 5,
+          "value": "!ab"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "f %ab",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Generic",
+          "text": "%ab",
+          "start": 2,
+          "end": 5,
+          "value": "%ab"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "f *ab",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Generic",
+          "text": "*ab",
+          "start": 2,
+          "end": 5,
+          "value": "*ab"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "f +ab",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Generic",
+          "text": "+ab",
+          "start": 2,
+          "end": 5,
+          "value": "+ab"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "f .ab",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Generic",
+          "text": ".ab",
+          "start": 2,
+          "end": 5,
+          "value": ".ab"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "f /ab",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Generic",
+          "text": "/ab",
+          "start": 2,
+          "end": 5,
+          "value": "/ab"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "f :ab",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Generic",
+          "text": ":ab",
+          "start": 2,
+          "end": 5
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "f =ab",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Generic",
+          "text": "=ab",
+          "start": 2,
+          "end": 5,
+          "value": "=ab"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "f ?ab",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Generic",
+          "text": "?ab",
+          "start": 2,
+          "end": 5,
+          "value": "?ab"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "f [ab",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Generic",
+          "text": "[ab",
+          "start": 2,
+          "end": 5,
+          "value": "[ab"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "f ^ab",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Generic",
+          "text": "^ab",
+          "start": 2,
+          "end": 5,
+          "value": "^ab"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "f _ab",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Identifier",
+          "text": "_ab",
+          "start": 2,
+          "end": 5
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "f ~ab",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Generic",
+          "text": "~ab",
+          "start": 2,
+          "end": 5,
+          "value": "~ab"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "f \\ab",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Generic",
+          "text": "\\ab",
+          "start": 2,
+          "end": 5,
+          "value": "\\ab"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Write-Output --path=\"a b\"",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Write-Output",
+          "start": 0,
+          "end": 12,
+          "value": "Write-Output"
+        },
+        {
+          "kind": "Generic",
+          "text": "--path=\"a b\"",
+          "start": 13,
+          "end": 25,
+          "value": "--path=a b"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Write-Output a'b",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Write-Output",
+          "start": 0,
+          "end": 12,
+          "value": "Write-Output"
+        },
+        {
+          "kind": "Generic",
+          "text": "a'b",
+          "start": 13,
+          "end": 16,
+          "value": "ab"
+        }
+      ],
+      "errors": [
+        "TerminatorExpectedAtEndOfString"
+      ]
+    },
+    {
+      "source": "--Path",
+      "tokens": [
+        {
+          "kind": "MinusMinus",
+          "text": "--",
+          "start": 0,
+          "end": 2
+        },
+        {
+          "kind": "Identifier",
+          "text": "Path",
+          "start": 2,
+          "end": 6
+        }
+      ],
+      "errors": [
+        "MissingExpressionAfterOperator",
+        "UnexpectedToken"
+      ]
+    },
+    {
+      "source": "Get-Item --Path",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Get-Item",
+          "start": 0,
+          "end": 8,
+          "value": "Get-Item"
+        },
+        {
+          "kind": "Generic",
+          "text": "--Path",
+          "start": 9,
+          "end": 15,
+          "value": "--Path"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "-Path",
+      "tokens": [
+        {
+          "kind": "Parameter",
+          "text": "-Path",
+          "start": 0,
+          "end": 5
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Get-Item -Path",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Get-Item",
+          "start": 0,
+          "end": 8,
+          "value": "Get-Item"
+        },
+        {
+          "kind": "Parameter",
+          "text": "-Path",
+          "start": 9,
+          "end": 14
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "1+1",
+      "tokens": [
+        {
+          "kind": "Number",
+          "text": "1",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Plus",
+          "text": "+",
+          "start": 1,
+          "end": 2
+        },
+        {
+          "kind": "Number",
+          "text": "1",
+          "start": 2,
+          "end": 3
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Get-Item 1+1",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Get-Item",
+          "start": 0,
+          "end": 8,
+          "value": "Get-Item"
+        },
+        {
+          "kind": "Generic",
+          "text": "1+1",
+          "start": 9,
+          "end": 12,
+          "value": "1+1"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "a-b",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "a-b",
+          "start": 0,
+          "end": 3,
+          "value": "a-b"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Get-Item a-b",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Get-Item",
+          "start": 0,
+          "end": 8,
+          "value": "Get-Item"
+        },
+        {
+          "kind": "Generic",
+          "text": "a-b",
+          "start": 9,
+          "end": 12,
+          "value": "a-b"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "3",
+      "tokens": [
+        {
+          "kind": "Number",
+          "text": "3",
+          "start": 0,
+          "end": 1
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Get-Item 3",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Get-Item",
+          "start": 0,
+          "end": 8,
+          "value": "Get-Item"
+        },
+        {
+          "kind": "Number",
+          "text": "3",
+          "start": 9,
+          "end": 10
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "a.b",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "a.b",
+          "start": 0,
+          "end": 3,
+          "value": "a.b"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Get-Item a.b",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Get-Item",
+          "start": 0,
+          "end": 8,
+          "value": "Get-Item"
+        },
+        {
+          "kind": "Generic",
+          "text": "a.b",
+          "start": 9,
+          "end": 12,
+          "value": "a.b"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "a*b",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "a*b",
+          "start": 0,
+          "end": 3,
+          "value": "a*b"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Get-Item a*b",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Get-Item",
+          "start": 0,
+          "end": 8,
+          "value": "Get-Item"
+        },
+        {
+          "kind": "Generic",
+          "text": "a*b",
+          "start": 9,
+          "end": 12,
+          "value": "a*b"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "a=b",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "a=b",
+          "start": 0,
+          "end": 3,
+          "value": "a=b"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Get-Item a=b",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Get-Item",
+          "start": 0,
+          "end": 8,
+          "value": "Get-Item"
+        },
+        {
+          "kind": "Generic",
+          "text": "a=b",
+          "start": 9,
+          "end": 12,
+          "value": "a=b"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "C:\\path\\to",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "C:\\path\\to",
+          "start": 0,
+          "end": 10,
+          "value": "C:\\path\\to"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Get-Item C:\\path\\to",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Get-Item",
+          "start": 0,
+          "end": 8,
+          "value": "Get-Item"
+        },
+        {
+          "kind": "Generic",
+          "text": "C:\\path\\to",
+          "start": 9,
+          "end": 19,
+          "value": "C:\\path\\to"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "/usr/bin",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "/usr/bin",
+          "start": 0,
+          "end": 8,
+          "value": "/usr/bin"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Get-Item /usr/bin",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Get-Item",
+          "start": 0,
+          "end": 8,
+          "value": "Get-Item"
+        },
+        {
+          "kind": "Generic",
+          "text": "/usr/bin",
+          "start": 9,
+          "end": 17,
+          "value": "/usr/bin"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "a;b",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "a",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Semi",
+          "text": ";",
+          "start": 1,
+          "end": 2
+        },
+        {
+          "kind": "Identifier",
+          "text": "b",
+          "start": 2,
+          "end": 3
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Get-Item a;b",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Get-Item",
+          "start": 0,
+          "end": 8,
+          "value": "Get-Item"
+        },
+        {
+          "kind": "Identifier",
+          "text": "a",
+          "start": 9,
+          "end": 10
+        },
+        {
+          "kind": "Semi",
+          "text": ";",
+          "start": 10,
+          "end": 11
+        },
+        {
+          "kind": "Identifier",
+          "text": "b",
+          "start": 11,
+          "end": 12
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "@x",
+      "tokens": [
+        {
+          "kind": "SplattedVariable",
+          "text": "@x",
+          "start": 0,
+          "end": 2
+        }
+      ],
+      "errors": [
+        "SplattingNotPermitted"
+      ]
+    },
+    {
+      "source": "Get-Item @x",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Get-Item",
+          "start": 0,
+          "end": 8,
+          "value": "Get-Item"
+        },
+        {
+          "kind": "SplattedVariable",
+          "text": "@x",
+          "start": 9,
+          "end": 11
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "a:b",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "a:b",
+          "start": 0,
+          "end": 3,
+          "value": "a:b"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Get-Item a:b",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Get-Item",
+          "start": 0,
+          "end": 8,
+          "value": "Get-Item"
+        },
+        {
+          "kind": "Generic",
+          "text": "a:b",
+          "start": 9,
+          "end": 12,
+          "value": "a:b"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "!x",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "!x",
+          "start": 0,
+          "end": 2,
+          "value": "!x"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Get-Item !x",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Get-Item",
+          "start": 0,
+          "end": 8,
+          "value": "Get-Item"
+        },
+        {
+          "kind": "Generic",
+          "text": "!x",
+          "start": 9,
+          "end": 11,
+          "value": "!x"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "2+2",
+      "tokens": [
+        {
+          "kind": "Number",
+          "text": "2",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Plus",
+          "text": "+",
+          "start": 1,
+          "end": 2
+        },
+        {
+          "kind": "Number",
+          "text": "2",
+          "start": 2,
+          "end": 3
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Write-Output 2+2",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Write-Output",
+          "start": 0,
+          "end": 12,
+          "value": "Write-Output"
+        },
+        {
+          "kind": "Generic",
+          "text": "2+2",
+          "start": 13,
+          "end": 16,
+          "value": "2+2"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Write-Output ${weird name}",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Write-Output",
+          "start": 0,
+          "end": 12,
+          "value": "Write-Output"
+        },
+        {
+          "kind": "Variable",
+          "text": "${weird name}",
+          "start": 13,
+          "end": 26
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Write-Output $env:PATH",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Write-Output",
+          "start": 0,
+          "end": 12,
+          "value": "Write-Output"
+        },
+        {
+          "kind": "Variable",
+          "text": "$env:PATH",
+          "start": 13,
+          "end": 22
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Write-Output $global:x",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Write-Output",
+          "start": 0,
+          "end": 12,
+          "value": "Write-Output"
+        },
+        {
+          "kind": "Variable",
+          "text": "$global:x",
+          "start": 13,
+          "end": 22
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Write-Output $_.Name",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Write-Output",
+          "start": 0,
+          "end": 12,
+          "value": "Write-Output"
+        },
+        {
+          "kind": "Variable",
+          "text": "$_",
+          "start": 13,
+          "end": 15
+        },
+        {
+          "kind": "Dot",
+          "text": ".",
+          "start": 15,
+          "end": 16
+        },
+        {
+          "kind": "Identifier",
+          "text": "Name",
+          "start": 16,
+          "end": 20
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "$x",
+      "tokens": [
+        {
+          "kind": "Variable",
+          "text": "$x",
+          "start": 0,
+          "end": 2
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "$x?",
+      "tokens": [
+        {
+          "kind": "Variable",
+          "text": "$x?",
+          "start": 0,
+          "end": 3
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "$_",
+      "tokens": [
+        {
+          "kind": "Variable",
+          "text": "$_",
+          "start": 0,
+          "end": 2
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Write-Output \"$(1+1)\"",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Write-Output",
+          "start": 0,
+          "end": 12,
+          "value": "Write-Output"
+        },
+        {
+          "kind": "StringExpandable",
+          "text": "\"$(1+1)\"",
+          "start": 13,
+          "end": 21,
+          "value": "$(1+1)"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Write-Output $(Get-Date)",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Write-Output",
+          "start": 0,
+          "end": 12,
+          "value": "Write-Output"
+        },
+        {
+          "kind": "DollarParen",
+          "text": "$(",
+          "start": 13,
+          "end": 15
+        },
+        {
+          "kind": "Generic",
+          "text": "Get-Date",
+          "start": 15,
+          "end": 23,
+          "value": "Get-Date"
+        },
+        {
+          "kind": "RParen",
+          "text": ")",
+          "start": 23,
+          "end": 24
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Write-Output @(1,2,3)",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Write-Output",
+          "start": 0,
+          "end": 12,
+          "value": "Write-Output"
+        },
+        {
+          "kind": "AtParen",
+          "text": "@(",
+          "start": 13,
+          "end": 15
+        },
+        {
+          "kind": "Number",
+          "text": "1",
+          "start": 15,
+          "end": 16
+        },
+        {
+          "kind": "Comma",
+          "text": ",",
+          "start": 16,
+          "end": 17
+        },
+        {
+          "kind": "Number",
+          "text": "2",
+          "start": 17,
+          "end": 18
+        },
+        {
+          "kind": "Comma",
+          "text": ",",
+          "start": 18,
+          "end": 19
+        },
+        {
+          "kind": "Number",
+          "text": "3",
+          "start": 19,
+          "end": 20
+        },
+        {
+          "kind": "RParen",
+          "text": ")",
+          "start": 20,
+          "end": 21
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Write-Output @{a=1}",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Write-Output",
+          "start": 0,
+          "end": 12,
+          "value": "Write-Output"
+        },
+        {
+          "kind": "AtCurly",
+          "text": "@{",
+          "start": 13,
+          "end": 15
+        },
+        {
+          "kind": "Identifier",
+          "text": "a",
+          "start": 15,
+          "end": 16
+        },
+        {
+          "kind": "Equals",
+          "text": "=",
+          "start": 16,
+          "end": 17
+        },
+        {
+          "kind": "Number",
+          "text": "1",
+          "start": 17,
+          "end": 18
+        },
+        {
+          "kind": "RCurly",
+          "text": "}",
+          "start": 18,
+          "end": 19
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Write-Output \"prefix$($x.Length)suffix\"",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Write-Output",
+          "start": 0,
+          "end": 12,
+          "value": "Write-Output"
+        },
+        {
+          "kind": "StringExpandable",
+          "text": "\"prefix$($x.Length)suffix\"",
+          "start": 13,
+          "end": 39,
+          "value": "prefix$($x.Length)suffix"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Write-Output @\"\nline1\nline2\n\"@",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Write-Output",
+          "start": 0,
+          "end": 12,
+          "value": "Write-Output"
+        },
+        {
+          "kind": "HereStringExpandable",
+          "text": "@\"\nline1\nline2\n\"@",
+          "start": 13,
+          "end": 30,
+          "value": "line1\nline2"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Write-Output @'\nline1\nline2\n'@",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Write-Output",
+          "start": 0,
+          "end": 12,
+          "value": "Write-Output"
+        },
+        {
+          "kind": "HereStringLiteral",
+          "text": "@'\nline1\nline2\n'@",
+          "start": 13,
+          "end": 30,
+          "value": "line1\nline2"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "@\"\na\n\"@",
+      "tokens": [
+        {
+          "kind": "HereStringExpandable",
+          "text": "@\"\na\n\"@",
+          "start": 0,
+          "end": 7,
+          "value": "a"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "@\"\n\n\"@",
+      "tokens": [
+        {
+          "kind": "HereStringExpandable",
+          "text": "@\"\n\n\"@",
+          "start": 0,
+          "end": 6,
+          "value": ""
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "@\"\na\nb\n\"@",
+      "tokens": [
+        {
+          "kind": "HereStringExpandable",
+          "text": "@\"\na\nb\n\"@",
+          "start": 0,
+          "end": 9,
+          "value": "a\nb"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "@\"\na\"b\n\"@",
+      "tokens": [
+        {
+          "kind": "HereStringExpandable",
+          "text": "@\"\na\"b\n\"@",
+          "start": 0,
+          "end": 9,
+          "value": "a\"b"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "@\"\n$x\n\"@",
+      "tokens": [
+        {
+          "kind": "HereStringExpandable",
+          "text": "@\"\n$x\n\"@",
+          "start": 0,
+          "end": 8,
+          "value": "$x"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "@\"\n`t\n\"@",
+      "tokens": [
+        {
+          "kind": "HereStringExpandable",
+          "text": "@\"\n`t\n\"@",
+          "start": 0,
+          "end": 8,
+          "value": "\t"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "@'\na\n'@",
+      "tokens": [
+        {
+          "kind": "HereStringLiteral",
+          "text": "@'\na\n'@",
+          "start": 0,
+          "end": 7,
+          "value": "a"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "@'\n$x\n'@",
+      "tokens": [
+        {
+          "kind": "HereStringLiteral",
+          "text": "@'\n$x\n'@",
+          "start": 0,
+          "end": 8,
+          "value": "$x"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "@'\n`t\n'@",
+      "tokens": [
+        {
+          "kind": "HereStringLiteral",
+          "text": "@'\n`t\n'@",
+          "start": 0,
+          "end": 8,
+          "value": "`t"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "@'\na'b\n'@",
+      "tokens": [
+        {
+          "kind": "HereStringLiteral",
+          "text": "@'\na'b\n'@",
+          "start": 0,
+          "end": 9,
+          "value": "a'b"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "@\"\na\nb",
+      "tokens": [
+        {
+          "kind": "HereStringExpandable",
+          "text": "@\"\na\nb",
+          "start": 0,
+          "end": 6,
+          "value": "a\nb"
+        }
+      ],
+      "errors": [
+        "TerminatorExpectedAtEndOfString"
+      ]
+    },
+    {
+      "source": "cmd --% a b c",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "cmd",
+          "start": 0,
+          "end": 3
+        },
+        {
+          "kind": "Generic",
+          "text": "--%",
+          "start": 4,
+          "end": 7,
+          "value": "--%"
+        },
+        {
+          "kind": "Generic",
+          "text": "a b c",
+          "start": 8,
+          "end": 13,
+          "value": "a b c"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "cmd --% a | b",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "cmd",
+          "start": 0,
+          "end": 3
+        },
+        {
+          "kind": "Generic",
+          "text": "--%",
+          "start": 4,
+          "end": 7,
+          "value": "--%"
+        },
+        {
+          "kind": "Generic",
+          "text": "a ",
+          "start": 8,
+          "end": 10,
+          "value": "a "
+        },
+        {
+          "kind": "Pipe",
+          "text": "|",
+          "start": 10,
+          "end": 11
+        },
+        {
+          "kind": "Identifier",
+          "text": "b",
+          "start": 12,
+          "end": 13
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "cmd --% a ; b",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "cmd",
+          "start": 0,
+          "end": 3
+        },
+        {
+          "kind": "Generic",
+          "text": "--%",
+          "start": 4,
+          "end": 7,
+          "value": "--%"
+        },
+        {
+          "kind": "Generic",
+          "text": "a ; b",
+          "start": 8,
+          "end": 13,
+          "value": "a ; b"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "cmd --% a && b",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "cmd",
+          "start": 0,
+          "end": 3
+        },
+        {
+          "kind": "Generic",
+          "text": "--%",
+          "start": 4,
+          "end": 7,
+          "value": "--%"
+        },
+        {
+          "kind": "Generic",
+          "text": "a ",
+          "start": 8,
+          "end": 10,
+          "value": "a "
+        },
+        {
+          "kind": "AndAnd",
+          "text": "&&",
+          "start": 10,
+          "end": 12
+        },
+        {
+          "kind": "Identifier",
+          "text": "b",
+          "start": 13,
+          "end": 14
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "cmd --% a\nb",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "cmd",
+          "start": 0,
+          "end": 3
+        },
+        {
+          "kind": "Generic",
+          "text": "--%",
+          "start": 4,
+          "end": 7,
+          "value": "--%"
+        },
+        {
+          "kind": "Generic",
+          "text": "a",
+          "start": 8,
+          "end": 9,
+          "value": "a"
+        },
+        {
+          "kind": "NewLine",
+          "text": "\n",
+          "start": 9,
+          "end": 10
+        },
+        {
+          "kind": "Identifier",
+          "text": "b",
+          "start": 10,
+          "end": 11
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "cmd --% \"quoted $x\"",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "cmd",
+          "start": 0,
+          "end": 3
+        },
+        {
+          "kind": "Generic",
+          "text": "--%",
+          "start": 4,
+          "end": 7,
+          "value": "--%"
+        },
+        {
+          "kind": "Generic",
+          "text": "\"quoted $x\"",
+          "start": 8,
+          "end": 19,
+          "value": "\"quoted $x\""
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "cmd --% a > out.txt",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "cmd",
+          "start": 0,
+          "end": 3
+        },
+        {
+          "kind": "Generic",
+          "text": "--%",
+          "start": 4,
+          "end": 7,
+          "value": "--%"
+        },
+        {
+          "kind": "Generic",
+          "text": "a > out.txt",
+          "start": 8,
+          "end": 19,
+          "value": "a > out.txt"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "echo --% $x",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "echo",
+          "start": 0,
+          "end": 4
+        },
+        {
+          "kind": "Generic",
+          "text": "--%",
+          "start": 5,
+          "end": 8,
+          "value": "--%"
+        },
+        {
+          "kind": "Generic",
+          "text": "$x",
+          "start": 9,
+          "end": 11,
+          "value": "$x"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "cmd arg --% rest here",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "cmd",
+          "start": 0,
+          "end": 3
+        },
+        {
+          "kind": "Identifier",
+          "text": "arg",
+          "start": 4,
+          "end": 7
+        },
+        {
+          "kind": "Generic",
+          "text": "--%",
+          "start": 8,
+          "end": 11,
+          "value": "--%"
+        },
+        {
+          "kind": "Generic",
+          "text": "rest here",
+          "start": 12,
+          "end": 21,
+          "value": "rest here"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Write-Output --%",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Write-Output",
+          "start": 0,
+          "end": 12,
+          "value": "Write-Output"
+        },
+        {
+          "kind": "Generic",
+          "text": "--%",
+          "start": 13,
+          "end": 16,
+          "value": "--%"
+        },
+        {
+          "kind": "Generic",
+          "text": "",
+          "start": 16,
+          "end": 16,
+          "value": ""
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "cmd --% /c \"echo $x\" | more",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "cmd",
+          "start": 0,
+          "end": 3
+        },
+        {
+          "kind": "Generic",
+          "text": "--%",
+          "start": 4,
+          "end": 7,
+          "value": "--%"
+        },
+        {
+          "kind": "Generic",
+          "text": "/c \"echo $x\" ",
+          "start": 8,
+          "end": 21,
+          "value": "/c \"echo $x\" "
+        },
+        {
+          "kind": "Pipe",
+          "text": "|",
+          "start": 21,
+          "end": 22
+        },
+        {
+          "kind": "Identifier",
+          "text": "more",
+          "start": 23,
+          "end": 27
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Get-ChildItem @params",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Get-ChildItem",
+          "start": 0,
+          "end": 13,
+          "value": "Get-ChildItem"
+        },
+        {
+          "kind": "SplattedVariable",
+          "text": "@params",
+          "start": 14,
+          "end": 21
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Get-ChildItem @params -Force",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Get-ChildItem",
+          "start": 0,
+          "end": 13,
+          "value": "Get-ChildItem"
+        },
+        {
+          "kind": "SplattedVariable",
+          "text": "@params",
+          "start": 14,
+          "end": 21
+        },
+        {
+          "kind": "Parameter",
+          "text": "-Force",
+          "start": 22,
+          "end": 28
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "f @a",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "SplattedVariable",
+          "text": "@a",
+          "start": 2,
+          "end": 4
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "f @(1)",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "AtParen",
+          "text": "@(",
+          "start": 2,
+          "end": 4
+        },
+        {
+          "kind": "Number",
+          "text": "1",
+          "start": 4,
+          "end": 5
+        },
+        {
+          "kind": "RParen",
+          "text": ")",
+          "start": 5,
+          "end": 6
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "f @{}",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "AtCurly",
+          "text": "@{",
+          "start": 2,
+          "end": 4
+        },
+        {
+          "kind": "RCurly",
+          "text": "}",
+          "start": 4,
+          "end": 5
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Get-ChildItem > out.txt",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Get-ChildItem",
+          "start": 0,
+          "end": 13,
+          "value": "Get-ChildItem"
+        },
+        {
+          "kind": "Redirection",
+          "text": ">",
+          "start": 14,
+          "end": 15
+        },
+        {
+          "kind": "Generic",
+          "text": "out.txt",
+          "start": 16,
+          "end": 23,
+          "value": "out.txt"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Get-ChildItem >> out.txt",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Get-ChildItem",
+          "start": 0,
+          "end": 13,
+          "value": "Get-ChildItem"
+        },
+        {
+          "kind": "Redirection",
+          "text": ">>",
+          "start": 14,
+          "end": 16
+        },
+        {
+          "kind": "Generic",
+          "text": "out.txt",
+          "start": 17,
+          "end": 24,
+          "value": "out.txt"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Get-ChildItem 2> err.txt",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Get-ChildItem",
+          "start": 0,
+          "end": 13,
+          "value": "Get-ChildItem"
+        },
+        {
+          "kind": "Redirection",
+          "text": "2>",
+          "start": 14,
+          "end": 16
+        },
+        {
+          "kind": "Generic",
+          "text": "err.txt",
+          "start": 17,
+          "end": 24,
+          "value": "err.txt"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Get-ChildItem 2>&1",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Get-ChildItem",
+          "start": 0,
+          "end": 13,
+          "value": "Get-ChildItem"
+        },
+        {
+          "kind": "Redirection",
+          "text": "2>&1",
+          "start": 14,
+          "end": 18
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Get-ChildItem *> all.txt",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Get-ChildItem",
+          "start": 0,
+          "end": 13,
+          "value": "Get-ChildItem"
+        },
+        {
+          "kind": "Redirection",
+          "text": "*>",
+          "start": 14,
+          "end": 16
+        },
+        {
+          "kind": "Generic",
+          "text": "all.txt",
+          "start": 17,
+          "end": 24,
+          "value": "all.txt"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Get-ChildItem 3>&1 4>&1",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Get-ChildItem",
+          "start": 0,
+          "end": 13,
+          "value": "Get-ChildItem"
+        },
+        {
+          "kind": "Redirection",
+          "text": "3>&1",
+          "start": 14,
+          "end": 18
+        },
+        {
+          "kind": "Redirection",
+          "text": "4>&1",
+          "start": 19,
+          "end": 23
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Get-Content < in.txt",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Get-Content",
+          "start": 0,
+          "end": 11,
+          "value": "Get-Content"
+        },
+        {
+          "kind": "RedirectInStd",
+          "text": "<",
+          "start": 12,
+          "end": 13
+        },
+        {
+          "kind": "Generic",
+          "text": "in.txt",
+          "start": 14,
+          "end": 20,
+          "value": "in.txt"
+        }
+      ],
+      "errors": [
+        "RedirectionNotSupported"
+      ]
+    },
+    {
+      "source": "Get-ChildItem 1>&2",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Get-ChildItem",
+          "start": 0,
+          "end": 13,
+          "value": "Get-ChildItem"
+        },
+        {
+          "kind": "Redirection",
+          "text": "1>&2",
+          "start": 14,
+          "end": 18
+        }
+      ],
+      "errors": [
+        "RedirectionNotSupported"
+      ]
+    },
+    {
+      "source": "x > f",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "x",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Redirection",
+          "text": ">",
+          "start": 2,
+          "end": 3
+        },
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 4,
+          "end": 5
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "x >> f",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "x",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Redirection",
+          "text": ">>",
+          "start": 2,
+          "end": 4
+        },
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 5,
+          "end": 6
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "x 1> f",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "x",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Redirection",
+          "text": "1>",
+          "start": 2,
+          "end": 4
+        },
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 5,
+          "end": 6
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "x 2> f",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "x",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Redirection",
+          "text": "2>",
+          "start": 2,
+          "end": 4
+        },
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 5,
+          "end": 6
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "x 3> f",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "x",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Redirection",
+          "text": "3>",
+          "start": 2,
+          "end": 4
+        },
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 5,
+          "end": 6
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "x 4> f",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "x",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Redirection",
+          "text": "4>",
+          "start": 2,
+          "end": 4
+        },
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 5,
+          "end": 6
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "x 5> f",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "x",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Redirection",
+          "text": "5>",
+          "start": 2,
+          "end": 4
+        },
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 5,
+          "end": 6
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "x 6> f",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "x",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Redirection",
+          "text": "6>",
+          "start": 2,
+          "end": 4
+        },
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 5,
+          "end": 6
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "x *> f",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "x",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Redirection",
+          "text": "*>",
+          "start": 2,
+          "end": 4
+        },
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 5,
+          "end": 6
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "x 2>&1",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "x",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Redirection",
+          "text": "2>&1",
+          "start": 2,
+          "end": 6
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "x 3>&1",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "x",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Redirection",
+          "text": "3>&1",
+          "start": 2,
+          "end": 6
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "x 4>&1",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "x",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Redirection",
+          "text": "4>&1",
+          "start": 2,
+          "end": 6
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "x 5>&1",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "x",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Redirection",
+          "text": "5>&1",
+          "start": 2,
+          "end": 6
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "x 6>&1",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "x",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Redirection",
+          "text": "6>&1",
+          "start": 2,
+          "end": 6
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "x *>&1",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "x",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Redirection",
+          "text": "*>&1",
+          "start": 2,
+          "end": 6
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "x 1>&2",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "x",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Redirection",
+          "text": "1>&2",
+          "start": 2,
+          "end": 6
+        }
+      ],
+      "errors": [
+        "RedirectionNotSupported"
+      ]
+    },
+    {
+      "source": "x 1>&1",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "x",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Redirection",
+          "text": "1>&1",
+          "start": 2,
+          "end": 6
+        }
+      ],
+      "errors": [
+        "RedirectionNotSupported"
+      ]
+    },
+    {
+      "source": "x < f",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "x",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "RedirectInStd",
+          "text": "<",
+          "start": 2,
+          "end": 3
+        },
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 4,
+          "end": 5
+        }
+      ],
+      "errors": [
+        "RedirectionNotSupported"
+      ]
+    },
+    {
+      "source": "x 7> f",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "x",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Generic",
+          "text": "7>",
+          "start": 2,
+          "end": 4,
+          "value": "7>"
+        },
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 5,
+          "end": 6
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "x 2>> f",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "x",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Redirection",
+          "text": "2>>",
+          "start": 2,
+          "end": 5
+        },
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 6,
+          "end": 7
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "a | b",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "a",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Pipe",
+          "text": "|",
+          "start": 2,
+          "end": 3
+        },
+        {
+          "kind": "Identifier",
+          "text": "b",
+          "start": 4,
+          "end": 5
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "a && b",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "a",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "AndAnd",
+          "text": "&&",
+          "start": 2,
+          "end": 4
+        },
+        {
+          "kind": "Identifier",
+          "text": "b",
+          "start": 5,
+          "end": 6
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "a || b",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "a",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "OrOr",
+          "text": "||",
+          "start": 2,
+          "end": 4
+        },
+        {
+          "kind": "Identifier",
+          "text": "b",
+          "start": 5,
+          "end": 6
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "a ; b",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "a",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Semi",
+          "text": ";",
+          "start": 2,
+          "end": 3
+        },
+        {
+          "kind": "Identifier",
+          "text": "b",
+          "start": 4,
+          "end": 5
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Start-Sleep 1 &",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Start-Sleep",
+          "start": 0,
+          "end": 11,
+          "value": "Start-Sleep"
+        },
+        {
+          "kind": "Number",
+          "text": "1",
+          "start": 12,
+          "end": 13
+        },
+        {
+          "kind": "Ampersand",
+          "text": "&",
+          "start": 14,
+          "end": 15
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "$x -eq 1",
+      "tokens": [
+        {
+          "kind": "Variable",
+          "text": "$x",
+          "start": 0,
+          "end": 2
+        },
+        {
+          "kind": "Ieq",
+          "text": "-eq",
+          "start": 3,
+          "end": 6
+        },
+        {
+          "kind": "Number",
+          "text": "1",
+          "start": 7,
+          "end": 8
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "$x -like \"a*\"",
+      "tokens": [
+        {
+          "kind": "Variable",
+          "text": "$x",
+          "start": 0,
+          "end": 2
+        },
+        {
+          "kind": "Ilike",
+          "text": "-like",
+          "start": 3,
+          "end": 8
+        },
+        {
+          "kind": "StringExpandable",
+          "text": "\"a*\"",
+          "start": 9,
+          "end": 13,
+          "value": "a*"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "1..10",
+      "tokens": [
+        {
+          "kind": "Number",
+          "text": "1",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "DotDot",
+          "text": "..",
+          "start": 1,
+          "end": 3
+        },
+        {
+          "kind": "Number",
+          "text": "10",
+          "start": 3,
+          "end": 5
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "$a,$b",
+      "tokens": [
+        {
+          "kind": "Variable",
+          "text": "$a",
+          "start": 0,
+          "end": 2
+        },
+        {
+          "kind": "Comma",
+          "text": ",",
+          "start": 2,
+          "end": 3
+        },
+        {
+          "kind": "Variable",
+          "text": "$b",
+          "start": 3,
+          "end": 5
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "-5",
+      "tokens": [
+        {
+          "kind": "Number",
+          "text": "-5",
+          "start": 0,
+          "end": 2
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "-",
+      "tokens": [
+        {
+          "kind": "Minus",
+          "text": "-",
+          "start": 0,
+          "end": 1
+        }
+      ],
+      "errors": [
+        "MissingExpressionAfterOperator"
+      ]
+    },
+    {
+      "source": "-Name:value",
+      "tokens": [
+        {
+          "kind": "Parameter",
+          "text": "-Name:",
+          "start": 0,
+          "end": 6
+        },
+        {
+          "kind": "Identifier",
+          "text": "value",
+          "start": 6,
+          "end": 11
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "-Force:$false",
+      "tokens": [
+        {
+          "kind": "Parameter",
+          "text": "-Force:",
+          "start": 0,
+          "end": 7
+        },
+        {
+          "kind": "Variable",
+          "text": "$false",
+          "start": 7,
+          "end": 13
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "f -p:a",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Parameter",
+          "text": "-p:",
+          "start": 2,
+          "end": 5
+        },
+        {
+          "kind": "Identifier",
+          "text": "a",
+          "start": 5,
+          "end": 6
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "f -p:\"a b\"",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "f",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Parameter",
+          "text": "-p:",
+          "start": 2,
+          "end": 5
+        },
+        {
+          "kind": "StringExpandable",
+          "text": "\"a b\"",
+          "start": 5,
+          "end": 10,
+          "value": "a b"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "1kb",
+      "tokens": [
+        {
+          "kind": "Number",
+          "text": "1kb",
+          "start": 0,
+          "end": 3
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "0x1F",
+      "tokens": [
+        {
+          "kind": "Number",
+          "text": "0x1F",
+          "start": 0,
+          "end": 4
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "1.5e3",
+      "tokens": [
+        {
+          "kind": "Number",
+          "text": "1.5e3",
+          "start": 0,
+          "end": 5
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "1d",
+      "tokens": [
+        {
+          "kind": "Number",
+          "text": "1d",
+          "start": 0,
+          "end": 2
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "2 -shl 3",
+      "tokens": [
+        {
+          "kind": "Number",
+          "text": "2",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Shl",
+          "text": "-shl",
+          "start": 2,
+          "end": 6
+        },
+        {
+          "kind": "Number",
+          "text": "3",
+          "start": 7,
+          "end": 8
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "$x -ceq 1",
+      "tokens": [
+        {
+          "kind": "Variable",
+          "text": "$x",
+          "start": 0,
+          "end": 2
+        },
+        {
+          "kind": "Ceq",
+          "text": "-ceq",
+          "start": 3,
+          "end": 7
+        },
+        {
+          "kind": "Number",
+          "text": "1",
+          "start": 8,
+          "end": 9
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "$x -inotmatch 1",
+      "tokens": [
+        {
+          "kind": "Variable",
+          "text": "$x",
+          "start": 0,
+          "end": 2
+        },
+        {
+          "kind": "Inotmatch",
+          "text": "-inotmatch",
+          "start": 3,
+          "end": 13
+        },
+        {
+          "kind": "Number",
+          "text": "1",
+          "start": 14,
+          "end": 15
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "$x -notcontains 1",
+      "tokens": [
+        {
+          "kind": "Variable",
+          "text": "$x",
+          "start": 0,
+          "end": 2
+        },
+        {
+          "kind": "Inotcontains",
+          "text": "-notcontains",
+          "start": 3,
+          "end": 15
+        },
+        {
+          "kind": "Number",
+          "text": "1",
+          "start": 16,
+          "end": 17
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "$a -join $b",
+      "tokens": [
+        {
+          "kind": "Variable",
+          "text": "$a",
+          "start": 0,
+          "end": 2
+        },
+        {
+          "kind": "Join",
+          "text": "-join",
+          "start": 3,
+          "end": 8
+        },
+        {
+          "kind": "Variable",
+          "text": "$b",
+          "start": 9,
+          "end": 11
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "$a -f $b",
+      "tokens": [
+        {
+          "kind": "Variable",
+          "text": "$a",
+          "start": 0,
+          "end": 2
+        },
+        {
+          "kind": "Format",
+          "text": "-f",
+          "start": 3,
+          "end": 5
+        },
+        {
+          "kind": "Variable",
+          "text": "$b",
+          "start": 6,
+          "end": 8
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "$a -is $b",
+      "tokens": [
+        {
+          "kind": "Variable",
+          "text": "$a",
+          "start": 0,
+          "end": 2
+        },
+        {
+          "kind": "Is",
+          "text": "-is",
+          "start": 3,
+          "end": 6
+        },
+        {
+          "kind": "Variable",
+          "text": "$b",
+          "start": 7,
+          "end": 9
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "$a -isnot $b",
+      "tokens": [
+        {
+          "kind": "Variable",
+          "text": "$a",
+          "start": 0,
+          "end": 2
+        },
+        {
+          "kind": "IsNot",
+          "text": "-isnot",
+          "start": 3,
+          "end": 9
+        },
+        {
+          "kind": "Variable",
+          "text": "$b",
+          "start": 10,
+          "end": 12
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "$a -as $b",
+      "tokens": [
+        {
+          "kind": "Variable",
+          "text": "$a",
+          "start": 0,
+          "end": 2
+        },
+        {
+          "kind": "As",
+          "text": "-as",
+          "start": 3,
+          "end": 6
+        },
+        {
+          "kind": "Variable",
+          "text": "$b",
+          "start": 7,
+          "end": 9
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "$a -band $b",
+      "tokens": [
+        {
+          "kind": "Variable",
+          "text": "$a",
+          "start": 0,
+          "end": 2
+        },
+        {
+          "kind": "Band",
+          "text": "-band",
+          "start": 3,
+          "end": 8
+        },
+        {
+          "kind": "Variable",
+          "text": "$b",
+          "start": 9,
+          "end": 11
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "$a -bnot $b",
+      "tokens": [
+        {
+          "kind": "Variable",
+          "text": "$a",
+          "start": 0,
+          "end": 2
+        },
+        {
+          "kind": "Bnot",
+          "text": "-bnot",
+          "start": 3,
+          "end": 8
+        },
+        {
+          "kind": "Variable",
+          "text": "$b",
+          "start": 9,
+          "end": 11
+        }
+      ],
+      "errors": [
+        "UnexpectedToken"
+      ]
+    },
+    {
+      "source": "Get-Date # trailing comment",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Get-Date",
+          "start": 0,
+          "end": 8,
+          "value": "Get-Date"
+        },
+        {
+          "kind": "Comment",
+          "text": "# trailing comment",
+          "start": 9,
+          "end": 27
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "<# block #> Get-Date",
+      "tokens": [
+        {
+          "kind": "Comment",
+          "text": "<# block #>",
+          "start": 0,
+          "end": 11
+        },
+        {
+          "kind": "Generic",
+          "text": "Get-Date",
+          "start": 12,
+          "end": 20,
+          "value": "Get-Date"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "# whole line",
+      "tokens": [
+        {
+          "kind": "Comment",
+          "text": "# whole line",
+          "start": 0,
+          "end": 12
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Write-Output \"unterminated",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Write-Output",
+          "start": 0,
+          "end": 12,
+          "value": "Write-Output"
+        },
+        {
+          "kind": "StringExpandable",
+          "text": "\"unterminated",
+          "start": 13,
+          "end": 26,
+          "value": "unterminated"
+        }
+      ],
+      "errors": [
+        "TerminatorExpectedAtEndOfString"
+      ]
+    },
+    {
+      "source": "Write-Output 'unterminated",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Write-Output",
+          "start": 0,
+          "end": 12,
+          "value": "Write-Output"
+        },
+        {
+          "kind": "StringLiteral",
+          "text": "'unterminated",
+          "start": 13,
+          "end": 26,
+          "value": "unterminated"
+        }
+      ],
+      "errors": [
+        "TerminatorExpectedAtEndOfString"
+      ]
+    },
+    {
+      "source": "Get-ChildItem -Path",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Get-ChildItem",
+          "start": 0,
+          "end": 13,
+          "value": "Get-ChildItem"
+        },
+        {
+          "kind": "Parameter",
+          "text": "-Path",
+          "start": 14,
+          "end": 19
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Get-ChildItem |",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Get-ChildItem",
+          "start": 0,
+          "end": 13,
+          "value": "Get-ChildItem"
+        },
+        {
+          "kind": "Pipe",
+          "text": "|",
+          "start": 14,
+          "end": 15
+        }
+      ],
+      "errors": [
+        "EmptyPipeElement"
+      ]
+    },
+    {
+      "source": "Get-Content 'my fi",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Get-Content",
+          "start": 0,
+          "end": 11,
+          "value": "Get-Content"
+        },
+        {
+          "kind": "StringLiteral",
+          "text": "'my fi",
+          "start": 12,
+          "end": 18,
+          "value": "my fi"
+        }
+      ],
+      "errors": [
+        "TerminatorExpectedAtEndOfString"
+      ]
+    },
+    {
+      "source": "Get-ChildItem | Sort-Object Name",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Get-ChildItem",
+          "start": 0,
+          "end": 13,
+          "value": "Get-ChildItem"
+        },
+        {
+          "kind": "Pipe",
+          "text": "|",
+          "start": 14,
+          "end": 15
+        },
+        {
+          "kind": "Generic",
+          "text": "Sort-Object",
+          "start": 16,
+          "end": 27,
+          "value": "Sort-Object"
+        },
+        {
+          "kind": "Identifier",
+          "text": "Name",
+          "start": 28,
+          "end": 32
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Get-ChildItem -Path /home -Recurse | Where-Object { $_.Length -gt 10 }",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Get-ChildItem",
+          "start": 0,
+          "end": 13,
+          "value": "Get-ChildItem"
+        },
+        {
+          "kind": "Parameter",
+          "text": "-Path",
+          "start": 14,
+          "end": 19
+        },
+        {
+          "kind": "Generic",
+          "text": "/home",
+          "start": 20,
+          "end": 25,
+          "value": "/home"
+        },
+        {
+          "kind": "Parameter",
+          "text": "-Recurse",
+          "start": 26,
+          "end": 34
+        },
+        {
+          "kind": "Pipe",
+          "text": "|",
+          "start": 35,
+          "end": 36
+        },
+        {
+          "kind": "Generic",
+          "text": "Where-Object",
+          "start": 37,
+          "end": 49,
+          "value": "Where-Object"
+        },
+        {
+          "kind": "LCurly",
+          "text": "{",
+          "start": 50,
+          "end": 51
+        },
+        {
+          "kind": "Variable",
+          "text": "$_",
+          "start": 52,
+          "end": 54
+        },
+        {
+          "kind": "Dot",
+          "text": ".",
+          "start": 54,
+          "end": 55
+        },
+        {
+          "kind": "Identifier",
+          "text": "Length",
+          "start": 55,
+          "end": 61
+        },
+        {
+          "kind": "Igt",
+          "text": "-gt",
+          "start": 62,
+          "end": 65
+        },
+        {
+          "kind": "Number",
+          "text": "10",
+          "start": 66,
+          "end": 68
+        },
+        {
+          "kind": "RCurly",
+          "text": "}",
+          "start": 69,
+          "end": 70
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Write-Output 'a|b'",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Write-Output",
+          "start": 0,
+          "end": 12,
+          "value": "Write-Output"
+        },
+        {
+          "kind": "StringLiteral",
+          "text": "'a|b'",
+          "start": 13,
+          "end": 18,
+          "value": "a|b"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Write-Output \"a|b\" | sort",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Write-Output",
+          "start": 0,
+          "end": 12,
+          "value": "Write-Output"
+        },
+        {
+          "kind": "StringExpandable",
+          "text": "\"a|b\"",
+          "start": 13,
+          "end": 18,
+          "value": "a|b"
+        },
+        {
+          "kind": "Pipe",
+          "text": "|",
+          "start": 19,
+          "end": 20
+        },
+        {
+          "kind": "Identifier",
+          "text": "sort",
+          "start": 21,
+          "end": 25
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "  gci   -Path  /home ",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "gci",
+          "start": 2,
+          "end": 5
+        },
+        {
+          "kind": "Parameter",
+          "text": "-Path",
+          "start": 8,
+          "end": 13
+        },
+        {
+          "kind": "Generic",
+          "text": "/home",
+          "start": 15,
+          "end": 20,
+          "value": "/home"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "  ",
+      "tokens": [],
+      "errors": []
+    },
+    {
+      "source": "",
+      "tokens": [],
+      "errors": []
+    },
+    {
+      "source": "Get-Random -Minimum -5 -Maximum 10",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Get-Random",
+          "start": 0,
+          "end": 10,
+          "value": "Get-Random"
+        },
+        {
+          "kind": "Parameter",
+          "text": "-Minimum",
+          "start": 11,
+          "end": 19
+        },
+        {
+          "kind": "Generic",
+          "text": "-5",
+          "start": 20,
+          "end": 22,
+          "value": "-5"
+        },
+        {
+          "kind": "Parameter",
+          "text": "-Maximum",
+          "start": 23,
+          "end": 31
+        },
+        {
+          "kind": "Number",
+          "text": "10",
+          "start": 32,
+          "end": 34
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Get-ChildItem -Path a,b",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Get-ChildItem",
+          "start": 0,
+          "end": 13,
+          "value": "Get-ChildItem"
+        },
+        {
+          "kind": "Parameter",
+          "text": "-Path",
+          "start": 14,
+          "end": 19
+        },
+        {
+          "kind": "Identifier",
+          "text": "a",
+          "start": 20,
+          "end": 21
+        },
+        {
+          "kind": "Comma",
+          "text": ",",
+          "start": 21,
+          "end": 22
+        },
+        {
+          "kind": "Identifier",
+          "text": "b",
+          "start": 22,
+          "end": 23
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "Get-Content 'a''b' \"c`\"d\"",
+      "tokens": [
+        {
+          "kind": "Generic",
+          "text": "Get-Content",
+          "start": 0,
+          "end": 11,
+          "value": "Get-Content"
+        },
+        {
+          "kind": "StringLiteral",
+          "text": "'a''b'",
+          "start": 12,
+          "end": 18,
+          "value": "a'b"
+        },
+        {
+          "kind": "StringExpandable",
+          "text": "\"c`\"d\"",
+          "start": 19,
+          "end": 25,
+          "value": "c\"d"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "source": "a | b && c ; d > e 2>&1",
+      "tokens": [
+        {
+          "kind": "Identifier",
+          "text": "a",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "kind": "Pipe",
+          "text": "|",
+          "start": 2,
+          "end": 3
+        },
+        {
+          "kind": "Identifier",
+          "text": "b",
+          "start": 4,
+          "end": 5
+        },
+        {
+          "kind": "AndAnd",
+          "text": "&&",
+          "start": 6,
+          "end": 8
+        },
+        {
+          "kind": "Identifier",
+          "text": "c",
+          "start": 9,
+          "end": 10
+        },
+        {
+          "kind": "Semi",
+          "text": ";",
+          "start": 11,
+          "end": 12
+        },
+        {
+          "kind": "Identifier",
+          "text": "d",
+          "start": 13,
+          "end": 14
+        },
+        {
+          "kind": "Redirection",
+          "text": ">",
+          "start": 15,
+          "end": 16
+        },
+        {
+          "kind": "Identifier",
+          "text": "e",
+          "start": 17,
+          "end": 18
+        },
+        {
+          "kind": "Redirection",
+          "text": "2>&1",
+          "start": 19,
+          "end": 23
+        }
+      ],
+      "errors": []
+    }
+  ]
+}
