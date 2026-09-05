@@ -23,6 +23,9 @@ import { CapabilityDeniedError } from '../../src/commands/invocation.ts';
 import type { CommandModule, InvocationContext } from '../../src/commands/invocation.ts';
 import type { CommandManifest } from '../../src/commands/manifest.ts';
 import type { PSValue } from '../../src/pipeline/psobject.ts';
+// The seed's home, imported rather than repeated: the kernel default and the
+// filesystem it boots into were two different strings, and nothing compared them.
+import { HOME as DEFAULT_HOME } from '../../src/storage/seed.ts';
 import { psObject, psWrap } from '../../src/pipeline/psobject.ts';
 import { errorRecord } from '../../src/pipeline/streams.ts';
 import {
@@ -508,7 +511,11 @@ describe('running a command end to end', () => {
     kernel.send({ kind: 'exec', requestId: 'r1', terminalId: 't1', source: 'probe', background: false });
     await kernel.drain();
 
-    assert.deepEqual(seen, ['132x43', '/home/visitor']);
+    // The seed tree's home. This asserted '/home/visitor' until the storage and
+    // kernel branches were compared: the filesystem the host boots contains
+    // /home/thc1006 and not /home/visitor, so the shell was starting in a
+    // directory that does not exist.
+    assert.deepEqual(seen, ['132x43', DEFAULT_HOME]);
     assert.deepEqual(kernel.terminalSize('t1'), { columns: 132, rows: 43 });
     assert.deepEqual(kernel.terminalSize('never-seen'), { columns: 80, rows: 24 });
   });
