@@ -183,8 +183,79 @@ describe('ranking', () => {
       engine.recall({ now: NOW, cwd: '/work/app' }).map((m) => m.source),
       ['build here', 'build above', 'build elsewhere'],
     );
-    // Paths are compared the way the emulated filesystem compares them.
-    assert.equal(engine.recall({ now: NOW, cwd: '\\WORK\\App\\' })[0]?.source, 'build here');
+    // A trailing slash is not a different directory, under any rule.
+    assert.equal(engine.recall({ now: NOW, cwd: '/work/app/' })[0]?.source, 'build here');
+  });
+
+  it('compares paths the way the filesystem actually does, which is exactly', () => {
+    // This suite asserted the opposite -- that `\WORK\App\` matched `/work/app`
+    // -- under the comment "paths are compared the way the emulated filesystem
+    // compares them". It is not how it compares them. MEASURED against this
+    // repository's own storage:
+    //
+    //   mkdir /tmp/Docs; stat /tmp/docs      -> not found
+    //   mkdir /tmp/docs alongside /tmp/Docs  -> CREATED; /tmp holds both
+    //   mkdir '/tmp/we\ird'                  -> created a file NAMED `we\ird`
+    //   stat '/tmp\a'                        -> not found; `\` is not a separator
+    //
+    // This emulates Ubuntu. `Docs` and `docs` are two directories and a
+    // backslash is an ordinary character in a name, so folding case and
+    // rewriting separators merged directories that genuinely differ. The
+    // symptom is not an error: it is history recalling a command from a
+    // directory the user has never been in, ranked as if it were local.
+    const engine = engineWith(
+      { source: 'build upper', cwd: '/work/Docs', ago: MINUTE },
+      { source: 'build lower', cwd: '/work/docs', ago: MINUTE },
+    );
+
+    assert.equal(engine.recall({ now: NOW, cwd: '/work/Docs' })[0]?.source, 'build upper');
+    assert.equal(engine.recall({ now: NOW, cwd: '/work/docs' })[0]?.source, 'build lower');
+
+    // A backslash is part of the NAME, so `\work\Docs` is a third directory
+    // unrelated to both -- which means neither entry gets an affinity bonus and
+    // they score EQUALLY. Asserting an order here would be asserting a
+    // tie-break, and the point is that there is a tie: under the old rule this
+    // path matched `/work/docs` outright.
+    const unrelated = engine.recall({ now: NOW, cwd: '\\work\\Docs' });
+    assert.equal(unrelated.length, 2);
+    assert.equal(
+      unrelated[0]?.score,
+      unrelated[1]?.score,
+      'an unrelated cwd favours neither, because it matches neither',
+    );
+    assert.ok(
+      (unrelated[0]?.score ?? 0) < (engine.recall({ now: NOW, cwd: '/work/Docs' })[0]?.score ?? 0),
+      'and both score below the entry whose directory really is the current one',
+    );
+  });
+
+  it('deduplicates the command name but not its arguments', () => {
+    // PowerShell resolves command NAMES case-insensitively, so `Get-Date` and
+    // `get-date` are one line -- pinned by the test above. Arguments are not:
+    // on a case-sensitive filesystem `cat README` and `cat readme` name
+    // different files, and the whole line used to fold, so they were one entry
+    // and recall could return the wrong one.
+    const engine = engineWith(
+      { source: 'cat README', ago: 2 * MINUTE },
+      { source: 'cat readme', ago: MINUTE },
+      { source: 'Cat README', ago: MINUTE },
+    );
+
+    const ranked = engine.recall({ now: NOW });
+    assert.equal(ranked.length, 2, 'two files, two entries');
+
+    // The group's `source` is the best-scoring OCCURRENCE, so it carries the
+    // capitalisation actually typed -- `Cat README` here, because it is the
+    // most recent of the two that folded together. That is the same property
+    // the inline-prediction suite pins; the group key and the displayed text
+    // are deliberately not the same string.
+    assert.deepEqual(ranked.map((m) => m.source).sort(), ['Cat README', 'cat readme']);
+    assert.equal(
+      ranked.find((m) => m.source === 'Cat README')?.occurrences,
+      2,
+      '`cat README` and `Cat README` are one line: only the command name folds',
+    );
+    assert.equal(ranked.find((m) => m.source === 'cat readme')?.occurrences, 1, 'a different file');
   });
 
   it('prefers the recent, with an hour half-life', () => {

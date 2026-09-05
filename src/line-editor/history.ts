@@ -171,13 +171,55 @@ const ORIGIN_TIER: Readonly<Record<HistoryOrigin, number>> = {
 };
 
 /**
- * Compare two paths the way this shell compares them: separator-insensitive and
- * case-insensitive, because the emulated filesystem is, and because a history
- * entry recorded as `C:/Users/x` must still match a cwd of `C:\Users\x\`.
+ * Compare two paths the way this shell compares them: EXACTLY, apart from a
+ * trailing slash.
+ *
+ * This used to lower-case the path and rewrite `\` to `/`, justified as
+ * "because the emulated filesystem is [case-insensitive], and because a history
+ * entry recorded as `C:/Users/x` must still match a cwd of `C:\Users\x\`".
+ * BOTH HALVES WERE FALSE, and both were measured against this repository's own
+ * storage rather than argued about:
+ *
+ *   mkdir /tmp/Docs; stat /tmp/docs      -> not found
+ *   mkdir /tmp/docs alongside /tmp/Docs  -> CREATED; /tmp holds both
+ *   mkdir '/tmp/we\ird'                  -> created a file NAMED `we\ird`
+ *   stat '/tmp\a'                        -> not found; `\` is not a separator
+ *
+ * The mount is `/`, not `C:`. This emulates Ubuntu, where a path is a sequence
+ * of bytes: `Docs` and `docs` are two directories, and a backslash is an
+ * ordinary character in a name.
+ *
+ * So the old normalisation merged two real directories into one, and merged a
+ * directory literally called `we\ird` with the path `we/ird`. Neither shows up
+ * as an error — it comes out as history recalling a command from somewhere the
+ * user has never been, ranked as though it came from where they are.
+ *
+ * The trailing-slash trim stays: `/tmp` and `/tmp/` are the same directory
+ * under any rule, and a cwd may or may not carry one.
  */
 function normalizePath(path: string): string {
-  const unified = path.replace(/\\/g, '/').toLowerCase();
-  return unified.length > 1 && unified.endsWith('/') ? unified.slice(0, -1) : unified;
+  return path.length > 1 && path.endsWith('/') ? path.slice(0, -1) : path;
+}
+
+/**
+ * The key two history lines are the SAME line under.
+ *
+ * PowerShell resolves command names case-insensitively — `Get-ChildItem` and
+ * `get-childitem` are one command — so the name folds. Nothing after it does:
+ * the filesystem is case-sensitive (measured above), so `cat README` and
+ * `cat readme` name different files and merging them recalls the wrong one.
+ * The whole line used to fold, so they were one entry.
+ *
+ * Parameter names are case-insensitive too, so `ls -Recurse` and `ls -recurse`
+ * stay two groups where PowerShell would call them one. That is deliberate:
+ * telling a parameter from a value needs the binder, and this errs toward
+ * keeping two entries that could be one rather than merging two that are not.
+ * A redundant history line is untidy; a merged one is a wrong answer.
+ */
+function groupKey(source: string): string {
+  const match = /^(\s*)(\S+)([\s\S]*)$/.exec(source);
+  if (match === null) return source;
+  return `${match[1] ?? ''}${(match[2] ?? '').toLowerCase()}${match[3] ?? ''}`;
 }
 
 /** 1 for the same directory, 0.5 for an ancestor/descendant, 0 for unrelated. */
@@ -320,10 +362,15 @@ export class HistoryEngine {
 
       const originWeight = weights.origin[entry.origin];
       const blend = this.#blend(entry, options.now, cwd, weights);
-      const existing = groups.get(lower);
+      // SEARCHING and GROUPING are different questions and used to share one
+      // string. Matching a prefix stays case-insensitive, because a person
+      // typing `get-c` means to find `Get-ChildItem`. Deciding two lines are
+      // the SAME line does not: see `groupKey`.
+      const key = groupKey(entry.source);
+      const existing = groups.get(key);
 
       if (existing === undefined) {
-        groups.set(lower, {
+        groups.set(key, {
           best: entry,
           bestBlend: blend,
           occurrences: 1,
