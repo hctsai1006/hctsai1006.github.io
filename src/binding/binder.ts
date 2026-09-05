@@ -64,7 +64,6 @@
  */
 
 import type { BindingResult, BoundParameters, CompatibilityView } from '../commands/invocation.ts';
-import { switchBehaviorKey } from '../compatibility/behavior-keys.ts';
 import type { CommandManifest, ParameterMetadata } from '../commands/manifest.ts';
 import type { PSValue } from '../pipeline/psobject.ts';
 
@@ -89,6 +88,7 @@ import {
   parameterSetNames,
   resolveParameterName,
 } from './parameters.ts';
+import { applyParameterPatches, switchHonoursExplicitFalse, type ParameterPatchSet } from './patches.ts';
 import { rulesFor, unenforceable, validate } from './validation.ts';
 import type { ValidationDetail } from './validation.ts';
 
@@ -128,6 +128,20 @@ export interface BindOptions {
    * the default here.
    */
   readonly allowRemainingArguments?: boolean;
+  /**
+   * The resolved profile's `commands.<Name>.parameterPatches`.
+   *
+   * How a version DIFFERS from the captured 7.6.5 metadata, without capturing a
+   * second manifest set or forking the command. See `patches.ts`; the schema
+   * and the resolver's merge have carried this shape for a while and nothing
+   * applied it until now.
+   *
+   * It arrives here rather than through `CompatibilityView` on purpose:
+   * `invocation.ts` keeps that view narrow so a command asks "is this behaviour
+   * on?" and never "which version am I?", and a parameter patch changes what
+   * BINDING accepts, which no command body should be able to see.
+   */
+  readonly parameterPatches?: ParameterPatchSet;
 }
 
 /**
@@ -151,6 +165,15 @@ export interface BindingSuccess extends BindingResult {
    * without its arguments and therefore not enforced. Empty is the good case.
    */
   readonly unenforcedValidation: readonly string[];
+  /**
+   * Profile parameter patches that could not be honoured, with the reason.
+   *
+   * Almost always a patch naming a parameter the captured metadata does not
+   * have, which this project will not invent. Reported rather than dropped: a
+   * silently ignored patch is a profile that looks like it is doing something
+   * it is not.
+   */
+  readonly unappliedPatches: readonly string[];
 }
 
 export type BindingOutcome =
@@ -174,6 +197,51 @@ export interface ParameterToken {
  * verified, not defensive: a bare `-` binds as a value, `-5` binds as the
  * number, and `--Path` binds as the string.
  */
+/**
+ * An argument the binder is about to bind, already classified.
+ *
+ * WHY THIS EXISTS. The binder used to take `readonly string[]` and re-derive
+ * "is this a parameter name?" with `parseParameterToken`. Once the AST exists
+ * that is a SECOND answer to a question the lexer has already answered, and the
+ * two disagree on a case measured in pwsh 7.6.5:
+ *
+ *     function Test-Q { param([switch]$Force, [Parameter(Position=0)][string]$Path) }
+ *     Test-Q -Force     ->  bound=[Force]   Path=[]
+ *     Test-Q '-Force'   ->  bound=[Path]    Path=[-Force]
+ *
+ * A QUOTED `-Force` is an argument, not a switch. The lexer knows — it emits
+ * StringLiteral rather than Parameter — and a `string[]` throws that away, so
+ * the string path binds the switch and the reference implementation does not.
+ *
+ * Passing this instead of a string carries the lexer's answer through intact.
+ * `text` is kept on the parameter form because a parameter token can still be
+ * consumed as a VALUE: measured, `Test-Pos -Path -abc` binds the string `-abc`.
+ */
+export type BindArgument =
+  | {
+      readonly kind: 'parameter';
+      readonly name: string;
+      /** The `value` half of `-Name:value`, or null when there was no colon. */
+      readonly attached: string | null;
+      /** As written, for when this token is consumed as another parameter's value. */
+      readonly text: string;
+    }
+  | { readonly kind: 'value'; readonly text: string };
+
+/**
+ * Classify a raw string, for callers that have not been through the parser.
+ *
+ * `src/kernel/kernel.ts` is the remaining one; its own comment marks its
+ * splitter for deletion. Anything holding a `CommandAst` should use
+ * `bindCommandArguments` in `from-ast.ts` instead, which cannot lose the
+ * quoting.
+ */
+export function bindArgumentOf(token: string): BindArgument {
+  const parsed = parseParameterToken(token);
+  if (parsed === null) return { kind: 'value', text: token };
+  return { kind: 'parameter', name: parsed.name, attached: parsed.attached, text: token };
+}
+
 export function parseParameterToken(token: string): ParameterToken | null {
   if (!token.startsWith('-') || token.length === 1) return null;
   const next = token[1];
@@ -198,9 +266,24 @@ interface BoundValue {
   readonly explicitFalseSwitch: boolean;
 }
 
+/**
+ * Raw strings, or arguments the parser has already classified.
+ *
+ * Both are accepted so the string callers keep working while the AST callers
+ * get the quoting-preserving path. A `string[]` is classified here, once, by
+ * `bindArgumentOf`; a `BindArgument[]` is used as given.
+ */
+export type BindInput = readonly string[] | readonly BindArgument[];
+
+function classify(args: BindInput): readonly BindArgument[] {
+  return args.map((argument) =>
+    typeof argument === 'string' ? bindArgumentOf(argument) : argument,
+  );
+}
+
 /** Bind, or throw a `ParameterBindingError`. */
 export function bindParameters(
-  args: readonly string[],
+  args: BindInput,
   manifest: CommandManifest,
   profile: CompatibilityView,
   options: BindOptions = {},
@@ -212,13 +295,13 @@ export function bindParameters(
 
 /** Bind, returning the failure instead of throwing it. */
 export function tryBindParameters(
-  args: readonly string[],
+  args: BindInput,
   manifest: CommandManifest,
   profile: CompatibilityView,
   options: BindOptions = {},
 ): BindingOutcome {
   try {
-    return { ok: true, result: bind(args, manifest, profile, options) };
+    return { ok: true, result: bind(classify(args), manifest, profile, options) };
   } catch (error) {
     if (error instanceof ParameterBindingError) return { ok: false, error };
     throw error;
@@ -226,12 +309,25 @@ export function tryBindParameters(
 }
 
 function bind(
-  args: readonly string[],
+  args: readonly BindArgument[],
+  // Reassigned once, by `applyParameterPatches` below. Deliberately not a new
+  // name: every line after that point must see the PATCHED manifest, and a
+  // second binding called `manifest` sitting in scope is how one of them
+  // eventually reads the unpatched one.
+  // eslint-disable-next-line prefer-const
   manifest: CommandManifest,
   profile: CompatibilityView,
   options: BindOptions,
 ): BindingSuccess {
   const command = manifest.display;
+
+  // Profile parameter patches are applied FIRST, so everything below — name
+  // resolution, parameter sets, mandatory checks, validation — sees the
+  // version's real surface rather than the captured 7.6.5 one. Applying them
+  // later would mean each of those had to remember to ask.
+  const patched = applyParameterPatches(manifest, options.parameterPatches);
+  const unappliedPatches = patched.unapplied;
+  manifest = patched.manifest;
 
   // A manifest with no declared parameters cannot bind anything, and erroring
   // on every token would break the simulated pass-through commands (`ls -la`,
@@ -240,9 +336,10 @@ function bind(
     return {
       parameters: {},
       parameterSet: ALL_PARAMETER_SETS,
-      remaining: [...args],
+      remaining: args.map((argument) => argument.text),
       explicitlyFalseSwitches: [],
       unenforcedValidation: [],
+      unappliedPatches: [],
     };
   }
 
@@ -260,7 +357,7 @@ function bind(
    * on every command as an unknown key.
    */
   const honoursExplicitFalse = (parameter: ParameterMetadata): boolean =>
-    profile.scopedBehavior(switchBehaviorKey(manifest.display, parameter.name), true);
+    switchHonoursExplicitFalse(manifest, parameter, profile, options.parameterPatches);
   const details = options.validationDetails ?? [];
   const remainingArgumentParameters = new Set(
     (options.valueFromRemainingArguments ?? []).map((name) => name.toLowerCase()),
@@ -342,12 +439,11 @@ function bind(
 
   // ---- phase 1: named parameters, left to right -------------------------
   for (let index = 0; index < args.length; index += 1) {
-    const token = args[index];
-    if (token === undefined) continue;
+    const parsed = args[index];
+    if (parsed === undefined) continue;
 
-    const parsed = parseParameterToken(token);
-    if (parsed === null) {
-      positional.push(token);
+    if (parsed.kind === 'value') {
+      positional.push(parsed.text);
       continue;
     }
 
@@ -437,7 +533,9 @@ function bind(
       });
     }
     index += 1;
-    record(parameter, [next]);
+    // `.text` and not `.name`: a parameter-shaped token consumed as a value
+    // binds AS WRITTEN. Measured, `Test-Pos -Path -abc` binds the string `-abc`.
+    record(parameter, [next.text]);
   }
 
   // ---- phase 2: narrow the parameter sets --------------------------------
@@ -588,5 +686,6 @@ function bind(
     remaining: leftover,
     explicitlyFalseSwitches,
     unenforcedValidation: unenforced,
+    unappliedPatches,
   };
 }

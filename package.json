@@ -24,6 +24,7 @@
     "capture:metadata": "pwsh -NoProfile -File tools/capture-pwsh-metadata.ps1",
     "capture:culture": "pwsh -NoProfile -File tools/capture-pwsh-culture.ps1",
     "capture:conformance": "pwsh -NoProfile -File tools/generate-conformance-fixtures.ps1",
+    "capture:lexer": "pwsh -NoProfile -File tools/capture-lexer-fixtures.ps1",
     "conformance": "node tools/conformance.mts",
     "profiles": "node tools/generate-compatibility-profile.mts",
     "explorer": "node tools/generate-compat-explorer.mts",

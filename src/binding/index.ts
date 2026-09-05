@@ -8,14 +8,23 @@
  */
 
 export {
+  bindArgumentOf,
   bindParameters,
   tryBindParameters,
   parseParameterToken,
+  type BindArgument,
+  type BindInput,
   type BindOptions,
   type BindingOutcome,
   type BindingSuccess,
   type ParameterToken,
 } from './binder.ts';
+
+export {
+  bindCommand,
+  bindCommandArguments,
+  tryBindCommand,
+} from './from-ast.ts';
 
 export {
   ParameterBindingError,
@@ -52,6 +61,15 @@ export {
   setsOf,
   type ParameterResolution,
 } from './parameters.ts';
+
+export {
+  ParameterPatchError,
+  applyParameterPatches,
+  switchHonoursExplicitFalse,
+  type ParameterPatch,
+  type ParameterPatchSet,
+  type PatchReport,
+} from './patches.ts';
 
 export {
   parseValidationRule,
