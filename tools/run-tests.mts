@@ -32,12 +32,29 @@
  * not a reason to believe this already does it.
  */
 
-import { globSync } from 'node:fs';
+import { globSync, mkdirSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { dirname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+
+/**
+ * `--summary <path>` writes the counts this file already reads back, as JSON.
+ *
+ * Not decoration. The pull request that introduced this runner stated "Tests |
+ * 589, all passing" in its body; the run it was describing executed 592, and the
+ * suite is at 1878 now. A count typed into prose is wrong the day after it is
+ * typed, and nothing anywhere notices. Anything that wants to state a number now
+ * reads it from here — see `renderBody` in tools/upstream-sync.mts, which omits
+ * the sentence entirely rather than guess when this artifact is absent.
+ */
+const summaryPath = ((): string | null => {
+  const argv = process.argv.slice(2);
+  const i = argv.indexOf('--summary');
+  const value = i >= 0 ? argv[i + 1] : argv.find((a) => a.startsWith('--summary='))?.slice(10);
+  return value === undefined || value === '' ? null : resolve(REPO, value);
+})();
 
 /** Every pattern must match at least one file, so a stale pattern is loud. */
 const PATTERNS = ['tests/**/*.test.mts'] as const;
@@ -152,6 +169,23 @@ if (skipped > 0 || todo > 0) {
       '  in the commit — a suite cannot report success for work it did not do.\n\n',
   );
   process.exit(2);
+}
+
+// Written only on the success path, and only after every gate above. A summary
+// artifact recording a run that did not really pass would be a worse lie than
+// the hand-written number it replaces.
+if (summaryPath !== null) {
+  mkdirSync(dirname(summaryPath), { recursive: true });
+  writeFileSync(
+    summaryPath,
+    JSON.stringify(
+      { files: files.length, tests, pass, fail: reported('fail') ?? 0, skipped, todo },
+      null,
+      2,
+    ) + '\n',
+    'utf8',
+  );
+  process.stdout.write(`  wrote ${relative(REPO, summaryPath)}\n`);
 }
 
 process.exit(0);

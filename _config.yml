@@ -42,6 +42,10 @@ exclude:
   - compat/
   - roadmap/
   - legacy/
+  # Committed snapshots of external authorities, read by the checks in tools/.
+  # Nothing about them is meant to be a URL, and a new top-level directory
+  # becomes one by default under this build type.
+  - snapshots/
 
   # Build and project files.
   - package.json

@@ -18,14 +18,19 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      # Pinned to the current major of GitHub's own first-party actions,
-      # verified against the releases API rather than assumed. Third-party
-      # actions would be pinned to a commit sha instead; this repo's package
-      # model applies the same distinction between a trusted first-party source
-      # and everything else.
-      - uses: actions/checkout@v7
+      # Pinned to a full commit sha, with the release tag alongside for humans.
+      #
+      # This file previously argued that a first-party action could be pinned to
+      # its major tag because it came from a trusted source. Provenance is not
+      # the property that matters: a tag is a mutable pointer, and `@v7` naming a
+      # different tree tomorrow produces no diff anywhere in this repository. The
+      # question a pin answers is "is this the code I reviewed", and only a
+      # commit sha answers it. tests/unit/workflows.test.mts enforces this on
+      # every workflow file, so the rule cannot rot back the way that argument
+      # did.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           # The tools are .mts run directly by Node's type stripping, which needs
           # a modern runtime. package.json pins engines to >=24.
@@ -40,9 +45,15 @@ jobs:
       # claimed to run every gate the repo has. That is the exact failure the
       # rest of this repository is built to prevent, so the list lives in
       # package.json and nowhere else.
+      #
+      # `npm run verify` is now hermetic. It used to end in `truth:check`, a live
+      # query against api.github.com and builds.dotnet.microsoft.com, which meant
+      # a required gate could go red because a shared runner IP had exhausted its
+      # rate budget — a failure with nothing to do with the change under test. It
+      # now ends in `truth:verify`, which proves the committed lockfile is
+      # schema-valid, untampered, internally coherent and free of error-severity
+      # discrepancies, and says out loud that it did not ask upstream anything.
+      # Asking upstream is upstream-sync.yml's job, on a schedule, where a rate
+      # limit is information rather than a blocked pull request.
       - name: verify
-        env:
-          # Not optional. The anonymous GitHub budget is 60/hr per IP and is
-          # shared across every runner on the host, so it is routinely exhausted.
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run verify
