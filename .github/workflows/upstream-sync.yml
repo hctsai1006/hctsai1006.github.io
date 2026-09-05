@@ -107,7 +107,10 @@ jobs:
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: '24'
+          # The pinned version, not the newest 24.x. Floating resolved 24.20.0,
+          # whose Unicode is 17.0 against checked-in 16.0.0 extracts, and turned
+          # a required gate red. Same reason as verify.yml.
+          node-version-file: .node-version
           cache: npm
 
       - run: npm ci
@@ -166,6 +169,53 @@ jobs:
             exit "$code"
           fi
 
+      # THE LOCKFILE IS NOT THE WHOLE PROPOSAL.
+      #
+      # compat/profiles/*.json, compat/deltas/*.json and compat/explorer.html
+      # are all GENERATED from the lockfile — a profile's `source.derivedFrom`
+      # embeds `lock.generatedAt` verbatim — and `npm run verify` gates their
+      # freshness. Publishing the lockfile alone therefore produces a pull
+      # request that fails its own required CI the first time there is real
+      # drift, which is the one moment this workflow exists for.
+      #
+      # PR #2 is the evidence: correcting a single stored message in the
+      # verifier required regenerating both profiles, the delta and the explorer
+      # in the same commit. The scheduled path did not do the same thing.
+      #
+      # Regenerated HERE, in the read-only job, so the write-permission job
+      # still runs no dependency code. The --check runs afterwards are the point:
+      # if the regenerated set does not satisfy its own gates, this job fails
+      # rather than proposing something a reviewer cannot merge.
+      # MANIFESTS ARE IN THIS SET, and the reason is the sharp edge here.
+      #
+      # `manifests.json` embeds `parameterReference` from the lockfile's
+      # `channels.lts`, and reads its parameter metadata from
+      # compat/upstream/v<lts>/command-metadata.json. A routine upstream PATCH
+      # release moves that. Measured against a v7.6.6 with no capture:
+      # 31 commands lost their measured metadata, 341 parameters became 183,
+      # and the generator exited 0.
+      #
+      # So the generator now REFUSES a declared LTS it has no capture for, and
+      # this step fails with that message rather than proposing a pull request
+      # that quietly deletes 158 measured parameters. When upstream's LTS moves,
+      # a human captures the new one — there is no automatic answer, because the
+      # measurement has to be taken on a real pwsh of that version.
+      #
+      # `npm run conformance` is deliberately NOT here: it reads the lockfile
+      # only to check that the corpus target is still an LTS release, so an LTS
+      # bump makes it fail rather than go stale. Failing is the right answer and
+      # regenerating cannot produce it.
+      - name: regenerate everything derived from the lockfile
+        if: steps.decide.outputs.decision == 'drift'
+        run: |
+          set -euo pipefail
+          npm run manifests
+          npm run profiles
+          npm run explorer
+          npm run manifests -- --check
+          npm run profiles -- --check
+          npm run explorer -- --check
+
       - name: is there already a sync pull request open
         id: open
         env:
@@ -192,6 +242,10 @@ jobs:
           name: upstream-truth
           path: |
             compat/upstream/releases.lock.json
+            src/commands/manifests.json
+            compat/profiles/
+            compat/deltas/
+            compat/explorer.html
             truth-check.log
           retention-days: 7
           if-no-files-found: error
@@ -215,11 +269,41 @@ jobs:
       # `npm ci` and no cache: tools/upstream-sync.mts imports node builtins only.
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: '24'
+          # The pinned version, not the newest 24.x. Floating resolved 24.20.0,
+          # whose Unicode is 17.0 against checked-in 16.0.0 extracts, and turned
+          # a required gate red. Same reason as verify.yml.
+          node-version-file: .node-version
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: upstream-truth
+
+      # ASSERT THE FILES LANDED WHERE THEY ARE ABOUT TO BE STAGED FROM.
+      #
+      # upload-artifact roots the archive at the least common ancestor of the
+      # paths it was given. That is currently the workspace, but only because
+      # `truth-check.log` sits at the root; drop it and the ancestor becomes
+      # `compat/`, every path shifts up one level, and `git add compat/profiles`
+      # below would stage nothing while succeeding. The proposal would then ship
+      # the lockfile alone again — the exact defect this set of paths exists to
+      # fix, reintroduced silently by an artifact-packing rule nobody was
+      # thinking about.
+      #
+      # So the assumption is checked rather than relied on.
+      - name: the downloaded artifact has the shape the publish step assumes
+        run: |
+          set -euo pipefail
+          missing=0
+          for f in compat/upstream/releases.lock.json \
+                   src/commands/manifests.json \
+                   compat/explorer.html \
+                   truth-check.log; do
+            [ -f "$f" ] || { echo "::error::expected $f from the artifact, not found"; missing=1; }
+          done
+          for d in compat/profiles compat/deltas; do
+            [ -d "$d" ] || { echo "::error::expected directory $d from the artifact, not found"; missing=1; }
+          done
+          [ "$missing" -eq 0 ]
 
       - name: publish the workflow-owned branch
         id: publish
@@ -229,7 +313,11 @@ jobs:
           node tools/upstream-sync.mts publish \
             --branch "$SYNC_BRANCH" \
             --message "Sync upstream release truth" \
-            --path compat/upstream/releases.lock.json
+            --path compat/upstream/releases.lock.json \
+            --path src/commands/manifests.json \
+            --path compat/profiles \
+            --path compat/deltas \
+            --path compat/explorer.html
 
       - name: reconcile the one pull request
         env:

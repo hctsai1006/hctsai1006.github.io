@@ -401,6 +401,15 @@ export interface PublishResult {
   sha: string | null;
   /** True when an existing remote branch was overwritten. */
   forced: boolean;
+  /**
+   * True when the branch already carried this exact proposal, so nothing was
+   * committed or pushed and the existing head was kept.
+   *
+   * DISTINCT FROM `changed: false`, which means there is nothing to propose at
+   * all. Here there IS a proposal and it is already published; the open pull
+   * request stays open and untouched.
+   */
+  alreadyProposed: boolean;
 }
 
 /**
@@ -475,16 +484,65 @@ export function publishBranch(o: PublishOptions): PublishResult {
     // Reachable and not an error: `truth:check` reports exit 1 for an
     // error-severity discrepancy as well as for drift, and a discrepancy alone
     // leaves the lockfile byte-identical. There is nothing to propose.
-    return { changed: false, sha: null, forced: false };
+    return { changed: false, sha: null, forced: false, alreadyProposed: false };
+  }
+
+  // IS THIS THE SAME PROPOSAL WE ALREADY PUBLISHED?
+  //
+  // The staged diff above answers "does this differ from MAIN", which stays
+  // true for as long as main has not accepted the proposal — every day,
+  // forever. It says nothing about whether the branch already carries this
+  // exact content, and without that question the loop was:
+  //
+  //     commit -> new sha -> force-push -> repeat tomorrow
+  //
+  // A commit object embeds author and committer dates, so an identical tree on
+  // an identical parent still produces a different sha. Reviewed externally and
+  // reproduced against throwaway repositories: sameTree true, sameParent true,
+  // sameHeadSha FALSE, second run changed=true and forced=true.
+  //
+  // Two things broke because of it. The pull request churned for no reason, and
+  // each churn creates a `synchronize` event — which under current Actions
+  // behaviour queues an approval-required run rather than nothing. And the
+  // closed-PR veto compares a closed pull request's head sha against the sha we
+  // just built, so a rejected proposal came back the next day wearing a new sha
+  // and slipped past its own veto.
+  //
+  // The tree is the proposal. Comparing trees asks the question the veto and
+  // the churn both actually needed answered.
+  const stagedTree = git('write-tree').trim();
+  if (remoteExists) {
+    const publishedTree = run('git', ['rev-parse', `${remoteRef}^{tree}`], o.cwd).stdout.trim();
+    if (publishedTree !== '' && publishedTree === stagedTree) {
+      const head = run('git', ['rev-parse', remoteRef], o.cwd).stdout.trim();
+      return { changed: true, sha: head || null, forced: false, alreadyProposed: true };
+    }
   }
 
   git('commit', '-m', o.message);
   const sha = git('rev-parse', 'HEAD').trim();
 
   if (o.push !== false) {
-    git('push', '--force', remote, `${o.branch}:refs/heads/${o.branch}`);
+    // COMPARE AND SWAP, not an unconditional force.
+    //
+    // The author check above is a real guard and stays, but it is a check, not
+    // a lock: it runs before the push, and nothing stops the branch moving in
+    // between. `--force-with-lease=<ref>:<expected>` makes the update
+    // conditional on the remote still being exactly what we fetched, and an
+    // empty expected value requires the branch not to exist yet — which is the
+    // correct assertion for the create case rather than a blind force.
+    //
+    // A lease rejection ENDS the run. Retrying with `--force` would be the
+    // whole guarantee thrown away at the only moment it was doing work.
+    const expected = remoteExists ? run('git', ['rev-parse', remoteRef], o.cwd).stdout.trim() : '';
+    git(
+      'push',
+      `--force-with-lease=refs/heads/${o.branch}:${expected}`,
+      remote,
+      `${o.branch}:refs/heads/${o.branch}`,
+    );
   }
-  return { changed: true, sha, forced: remoteExists };
+  return { changed: true, sha, forced: remoteExists, alreadyProposed: false };
 }
 
 // ---------------------------------------------------------------------------

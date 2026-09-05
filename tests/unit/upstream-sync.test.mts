@@ -28,6 +28,7 @@ import {
   publishBranch,
   reconcile,
   SyncFailure,
+  realRunner,
 } from '../../tools/upstream-sync.mts';
 import type { CommandResult, OpenPullRequest, Runner } from '../../tools/upstream-sync.mts';
 
@@ -527,5 +528,168 @@ describe('reconcile', () => {
     };
     const r = reconcile({ ...reconcileOpts, drifted: true, headSha: 'newsha', run: runner });
     assert.deepEqual(r.performed, ['create']);
+  });
+});
+
+describe('the same proposal is published once, not once a day', () => {
+  it('keeps the existing head when the tree has not changed', () => {
+    // The staged diff answers "does this differ from MAIN", which stays true
+    // for as long as main has not accepted the proposal. It says nothing about
+    // whether the branch already carries this content. A commit object embeds
+    // author and committer dates, so an identical tree on an identical parent
+    // still produces a different sha — so the old code committed and
+    // force-pushed on every run, for ever, for a proposal nobody had changed.
+    const { work, origin } = scratchRepo();
+    writeFileSync(join(work, 'lock.json'), '{"n":1}\n', 'utf8');
+
+    const first = publishBranch(publishOpts(work, 'sync 1'));
+    assert.equal(first.changed, true);
+    assert.equal(first.alreadyProposed, false);
+    const publishedSha = git(origin, 'rev-parse', BRANCH).trim();
+    assert.equal(publishedSha, first.sha);
+
+    // A second run, same drift, same content. Nothing about the proposal moved.
+    //
+    // Back to main first, because that is what the workflow does: every run is
+    // a fresh checkout of the base branch. Reusing the tree the previous run
+    // left behind is what a developer does, not what CI does — and it hides the
+    // defect entirely, because `checkout -B` would reset the branch to ITSELF
+    // and the staged diff would come back empty for the wrong reason.
+    git(work, 'checkout', 'main');
+    writeFileSync(join(work, 'lock.json'), '{"n":1}\n', 'utf8');
+    const second = publishBranch(publishOpts(work, 'sync 1 again'));
+    assert.equal(second.alreadyProposed, true, 'recognised as already published');
+    assert.equal(second.forced, false, 'and therefore nothing was force-pushed');
+    assert.equal(
+      git(origin, 'rev-parse', BRANCH).trim(),
+      publishedSha,
+      'the remote head is untouched, so no synchronize event and no new approval-required run',
+    );
+    assert.equal(second.sha, publishedSha, 'and it reports the head that stands');
+  });
+
+  it('still publishes when the proposal itself changes', () => {
+    // The counterpart: idempotence must not become inertness.
+    const { work, origin } = scratchRepo();
+    writeFileSync(join(work, 'lock.json'), '{"n":1}\n', 'utf8');
+    const first = publishBranch(publishOpts(work, 'sync 1'));
+
+    git(work, 'checkout', 'main');
+    writeFileSync(join(work, 'lock.json'), '{"n":2}\n', 'utf8');
+    const second = publishBranch(publishOpts(work, 'sync 2'));
+
+    assert.equal(second.alreadyProposed, false);
+    assert.equal(second.changed, true);
+    assert.notEqual(second.sha, first.sha);
+    assert.equal(git(origin, 'rev-parse', BRANCH).trim(), second.sha);
+    // Still exactly one commit ahead of main, not two.
+    assert.equal(git(work, 'rev-list', '--count', `main..${BRANCH}`).trim(), '1');
+  });
+});
+
+describe('the branch is updated by compare-and-swap, not by blind force', () => {
+  it('sends a lease naming the sha it fetched', () => {
+    // The author check is a check, not a lock: it runs before the push and
+    // nothing stops the branch moving in between. The lease makes the update
+    // conditional on the remote still being exactly what was fetched.
+    const { work } = scratchRepo();
+    writeFileSync(join(work, 'lock.json'), '{"n":1}\n', 'utf8');
+    const first = publishBranch(publishOpts(work, 'sync 1'));
+
+    const pushes: string[][] = [];
+    git(work, 'checkout', 'main');
+    writeFileSync(join(work, 'lock.json'), '{"n":2}\n', 'utf8');
+    publishBranch({
+      ...publishOpts(work, 'sync 2'),
+      run: (cmd, args, cwd) => {
+        if (cmd === 'git' && args[0] === 'push') pushes.push([...args]);
+        return realRunner(cmd, args, cwd);
+      },
+    });
+
+    assert.equal(pushes.length, 1, 'exactly one push');
+    const lease = pushes[0]?.find((a) => a.startsWith('--force-with-lease='));
+    assert.ok(lease !== undefined, `expected a lease, got: ${JSON.stringify(pushes[0])}`);
+    assert.equal(
+      lease,
+      `--force-with-lease=refs/heads/${BRANCH}:${String(first.sha)}`,
+      'the lease names the sha that was fetched, so a branch that moved is refused',
+    );
+    assert.ok(!pushes[0]?.includes('--force'), 'and never a bare --force');
+  });
+
+  it('requires the branch not to exist when creating it', () => {
+    // An empty expected value is the correct assertion for the create case:
+    // "this branch is not there". A bare force would happily overwrite one that
+    // appeared between the existence probe and the push.
+    const { work } = scratchRepo();
+    writeFileSync(join(work, 'lock.json'), '{"n":1}\n', 'utf8');
+
+    const pushes: string[][] = [];
+    publishBranch({
+      ...publishOpts(work, 'sync 1'),
+      run: (cmd, args, cwd) => {
+        if (cmd === 'git' && args[0] === 'push') pushes.push([...args]);
+        return realRunner(cmd, args, cwd);
+      },
+    });
+
+    assert.equal(
+      pushes[0]?.find((a) => a.startsWith('--force-with-lease=')),
+      `--force-with-lease=refs/heads/${BRANCH}:`,
+    );
+  });
+});
+
+describe('the lease is a lock, not a label', () => {
+  it('refuses to push when the branch moved between the fetch and the push', () => {
+    // THE WINDOW THE LEASE EXISTS FOR, exercised rather than asserted.
+    //
+    // Checking that `--force-with-lease=` appears in the argv proves the flag is
+    // spelled correctly and nothing else. The author check already runs BEFORE
+    // the push, so the case that matters is a branch that moves after the fetch
+    // and after the check — and by the same bot, so the authorship guard has
+    // nothing to say about it. This drives the remote forward at exactly that
+    // moment and asserts the push is refused rather than overwriting it.
+    const { work, origin } = scratchRepo();
+    writeFileSync(join(work, 'lock.json'), '{"n":1}\n', 'utf8');
+    publishBranch(publishOpts(work, 'sync 1'));
+
+    // A second clone, standing in for another writer holding the same identity.
+    const intruder = mkdtempSync(join(tmpdir(), 'upstream-sync-intruder-'));
+    git(intruder, 'clone', origin, '.');
+    git(intruder, 'config', 'user.name', 'github-actions[bot]');
+    git(intruder, 'config', 'user.email', BOT);
+    git(intruder, 'checkout', BRANCH);
+    writeFileSync(join(intruder, 'lock.json'), '{"n":"intruder"}\n', 'utf8');
+    git(intruder, 'commit', '-am', 'landed while the workflow was thinking');
+
+    let moved = false;
+    git(work, 'checkout', 'main');
+    writeFileSync(join(work, 'lock.json'), '{"n":2}\n', 'utf8');
+
+    assert.throws(
+      () =>
+        publishBranch({
+          ...publishOpts(work, 'sync 2'),
+          run: (cmd, args, cwd) => {
+            // Move the remote forward in the instant before the push leaves.
+            if (cmd === 'git' && args[0] === 'push' && !moved) {
+              moved = true;
+              git(intruder, 'push', 'origin', BRANCH);
+            }
+            return realRunner(cmd, args, cwd);
+          },
+        }),
+      /stale info|rejected|failed to push/i,
+      'a branch that moved after the fetch must not be overwritten',
+    );
+
+    assert.equal(moved, true, 'the race was actually staged');
+    assert.equal(
+      git(origin, 'log', '-1', '--format=%s', BRANCH).trim(),
+      'landed while the workflow was thinking',
+      'and the commit that landed first is still there',
+    );
   });
 });

@@ -532,6 +532,31 @@ const canonicaliseReleases: Canonicaliser = (body) => {
  * Excluding them keeps the comparator a total order over what remains, and the
  * exclusion is reported rather than silent (TRAP F).
  */
+/**
+ * Is this release still supported, and how close is the edge?
+ *
+ * Extracted as a pure function so the BOUNDARY can be tested. It used to be
+ * three lines inline behind `Date.now()`, and the bug it carried was invisible
+ * for exactly that reason: nothing could ask it about a specific instant.
+ *
+ * `expired` is a timestamp comparison. `daysLeft` is a rounded number for
+ * humans and for the horizon test, and is deliberately NOT what decides
+ * support — a display rounding deciding a support question is what reported a
+ * release out of support up to twelve hours early.
+ */
+export function classifySupport(
+  supportedUntil: string,
+  now: number,
+  horizonDays: number,
+): { expired: boolean; approaching: boolean; daysLeft: number; remainingMs: number } | null {
+  const deadline = Date.parse(`${supportedUntil}T00:00:00Z`);
+  if (!Number.isFinite(deadline)) return null;
+  const remainingMs = deadline - now;
+  const expired = remainingMs <= 0;
+  const daysLeft = Math.round(remainingMs / 86_400_000);
+  return { expired, approaching: !expired && daysLeft <= horizonDays, daysLeft, remainingMs };
+}
+
 function newestFirst(releases: readonly GhRelease[]): GhRelease[] {
   const rankable: Array<{ release: GhRelease; parsed: ParsedVersion }> = [];
   const unrankable: string[] = [];
@@ -1093,17 +1118,34 @@ async function build(): Promise<Lockfile> {
   // An LTS that is about to expire is the single most actionable thing this tool
   // can surface: it is the moment a "supported" default silently stops being one.
   const HORIZON_DAYS = 180;
+  // ONE `now` for the whole classification pass. Reading the clock per record
+  // lets a run that straddles midnight classify two releases against two
+  // different days, which is a disagreement with no correct answer and is
+  // invisible in the output.
+  const now = Date.now();
   for (const rec of [ltsRecord, ...previousLts]) {
     if (rec.supportedUntil === null) continue;
-    const daysLeft = Math.round(
-      (Date.parse(`${rec.supportedUntil}T00:00:00Z`) - Date.now()) / 86_400_000,
-    );
-    if (Number.isFinite(daysLeft) && daysLeft <= HORIZON_DAYS) {
+    // EXPIRY IS A TIMESTAMP COMPARISON. It used to be `Math.round(...) <= 0`,
+    // which is a DISPLAY rounding deciding a support question, and it declared
+    // a release out of support up to twelve hours early. MEASURED against the
+    // deadline this same line computes, 2026-11-10T00:00:00Z:
+    //
+    //   2026-11-09T12:00:00.000Z   43,200,000 ms left   daysLeft 1   supported
+    //   2026-11-09T12:00:00.001Z   43,199,999 ms left   daysLeft 0   EXPIRED  <- wrong
+    //   2026-11-09T23:59:59.999Z            1 ms left   daysLeft 0   EXPIRED  <- wrong
+    //
+    // `lts-out-of-support` is severity `error`, so being early by half a day is
+    // a red required gate for a profile that is still supported. Rounded days
+    // are kept, but only for the horizon test and the human-readable countdown.
+    const support = classifySupport(rec.supportedUntil, now, HORIZON_DAYS);
+    if (support === null) continue;
+    const { expired } = support;
+    if (expired || support.approaching) {
       note({
-        severity: daysLeft <= 0 ? 'error' : 'warning',
-        code: daysLeft <= 0 ? 'lts-out-of-support' : 'lts-approaching-eol',
+        severity: expired ? 'error' : 'warning',
+        code: expired ? 'lts-out-of-support' : 'lts-approaching-eol',
         message:
-          daysLeft <= 0
+          expired
             ? `${rec.tag} reached end of support on ${rec.supportedUntil}. It must not be offered as a supported profile.`
             : // NO COUNTDOWN IN HERE. `daysLeft` is derived from Date.now(), and this
               // message is stored in the lockfile and compared, so embedding it made
@@ -1704,14 +1746,22 @@ async function main(): Promise<void> {
   process.exitCode = hasError ? 1 : 0;
 }
 
-main().catch((err: unknown) => {
+// RUN ONLY AS THE ENTRY POINT. This used to be a bare `main()`, so merely
+// IMPORTING this file executed the whole tool -- including its network calls.
+// That is why the boundary bug in `classifySupport` went untested: nothing
+// could import the function to ask it about a specific instant without also
+// running a live upstream check. `import.meta.main` is true only when Node
+// started this file, which is what makes the pure parts testable.
+if (import.meta.main) {
+  main().catch((err: unknown) => {
   const fatal = err instanceof ToolFailure;
   process.stderr.write(`\n  ${TOOL}: ${(err as Error).message}\n\n`);
   // 2 = could not do the job (network, rate limit, upstream shape change).
   // 3 = a bug in this file. Distinguishing them matters: one is upstream's
   //     problem and one is ours.
   process.exitCode = fatal ? 2 : 3;
-  if (!fatal && err instanceof Error && err.stack !== undefined) {
-    process.stderr.write(err.stack + '\n\n');
-  }
-});
+    if (!fatal && err instanceof Error && err.stack !== undefined) {
+      process.stderr.write(err.stack + '\n\n');
+    }
+  });
+}
