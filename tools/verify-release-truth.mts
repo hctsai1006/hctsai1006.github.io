@@ -82,15 +82,25 @@
  * NextReleaseTag, which names a tag that does not exist yet.
  *
  * Usage:
- *   node tools/verify-release-truth.mts --check   verify the committed lockfile
- *                                                 still matches reality
- *   node tools/verify-release-truth.mts --write   regenerate the lockfile
- *   node tools/verify-release-truth.mts --json    machine-readable report
+ *   node tools/verify-release-truth.mts --check    verify the committed lockfile
+ *                                                  still matches reality (network)
+ *   node tools/verify-release-truth.mts --write    regenerate the lockfile (network)
+ *   node tools/verify-release-truth.mts --offline  verify the committed lockfile is
+ *                                                  coherent and untampered (no network)
+ *   node tools/verify-release-truth.mts --json     machine-readable report
+ *
+ * --check and --offline answer different questions, which is why both exist:
+ * --check is the scheduled observer's question ("has upstream moved?") and needs
+ * the network; --offline is required CI's question ("is the artifact we committed
+ * a coherent, untampered, error-free record?") and must never need it. Putting a
+ * live-network gate in required CI made an unrelated `403 rate limit exceeded`
+ * fail pull requests that touched nothing near it.
  *
  * Exit codes are distinct on purpose so CI can tell the cases apart:
  *   0  clean
  *   1  drift, or an error-severity discrepancy (upstream moved / sources disagree)
- *   2  the tool could not do its job (network, rate limit, shape change)
+ *   2  the tool could not do its job (network, rate limit, shape change, or a
+ *      lockfile that is missing, malformed, hand-edited or internally incoherent)
  *   3  an unexpected internal error (a bug in this file)
  *
  * Env: GITHUB_TOKEN — optional locally (60 req/hr per IP), REQUIRED in CI and on
@@ -1297,10 +1307,126 @@ function report(lock: Lockfile): void {
 }
 
 // ---------------------------------------------------------------------------
+// offline verification
+// ---------------------------------------------------------------------------
+
+/**
+ * Everything that can be proved about the committed lockfile WITHOUT the network.
+ *
+ * Why this mode exists
+ * --------------------
+ * `--check` is a live-network check, and it was wired into `npm run verify`,
+ * which is the gate every pull request has to pass. That put a required CI gate
+ * at the mercy of `api.github.com`: an anonymous or shared-IP rate limit returns
+ * 403, the tool correctly reports "I could not do my job" with exit 2, and a pull
+ * request that changed nothing near this code goes red. A gate that fails for
+ * reasons unrelated to the change under test gets re-run, then ignored, then
+ * removed. It has to be hermetic to stay required.
+ *
+ * The split is by question, not by strictness:
+ *
+ *   --offline  is the committed lockfile a coherent, untampered artifact that
+ *              records no error?              (hermetic — belongs in PR CI)
+ *   --check    does the committed lockfile still match live upstream?
+ *              (network — belongs in the scheduled observer)
+ *
+ * What this mode CANNOT see is stated in its own output rather than left for a
+ * reader to infer. The failure this repository keeps re-learning is a check that
+ * reports success for work it did not do; a quiet offline mode would be exactly
+ * that, one level up.
+ */
+function verifyOffline(asJson: boolean): void {
+  if (!existsSync(LOCKFILE)) {
+    throw new ToolFailure(`no lockfile at ${LOCKFILE}\n  run: npm run truth:write`);
+  }
+
+  let committed: Lockfile;
+  try {
+    committed = JSON.parse(readFileSync(LOCKFILE, 'utf8')) as Lockfile;
+  } catch (cause) {
+    throw new ToolFailure(
+      `the committed lockfile is not valid JSON: ${(cause as Error).message}\n` +
+        '  It was hand-edited or truncated. Regenerate it: npm run truth:write',
+    );
+  }
+
+  validateAgainstSchema(committed, 'the committed lockfile');
+
+  // Same integrity gate as --check, and for the same reason: a schema-valid hand
+  // edit is tampering, not drift, and must not be reported as either "clean" or
+  // "upstream moved".
+  const tampered = committed.releases.filter((r) => snapshotOf(r) !== r.snapshotDigest);
+  if (tampered.length > 0) {
+    throw new ToolFailure(
+      `the committed lockfile was edited by hand: ${tampered.map((r) => r.tag).join(', ')} ` +
+        'no longer match the recorded snapshotDigest.\n' +
+        '  Regenerate it: npm run truth:write',
+    );
+  }
+
+  // Internal coherence. `channels` names tags; every name that is supposed to
+  // denote a RELEASED thing must appear in `releases`.
+  //
+  // `next` is deliberately excluded. It comes from PowerShell's own
+  // metadata.json `NextReleaseTag`, which by construction names a tag that does
+  // not exist yet — requiring it here would fail on every correct lockfile.
+  const known = new Set(committed.releases.map((r) => r.tag));
+  const mustExist: Array<[string, string]> = [
+    ['channels.lts', committed.channels.lts],
+    ['channels.preview', committed.channels.preview],
+    ...committed.channels.ltsPrevious.map(
+      (t, i): [string, string] => [`channels.ltsPrevious[${i}]`, t],
+    ),
+    ...(committed.channels.edge === null
+      ? []
+      : ([['channels.edge', committed.channels.edge]] as Array<[string, string]>)),
+  ];
+  const dangling = mustExist.filter(([, tag]) => !known.has(tag));
+  if (dangling.length > 0) {
+    throw new ToolFailure(
+      'the committed lockfile is internally incoherent — these channels name tags with no ' +
+        `release record:\n${dangling.map(([w, t]) => `    ${w} = ${t}`).join('\n')}\n` +
+        '  Regenerate it: npm run truth:write',
+    );
+  }
+
+  if (asJson) process.stdout.write(JSON.stringify(committed, null, 2) + '\n');
+  else report(committed);
+
+  const errors = committed.discrepancies.filter((d) => d.severity === 'error');
+  const ageDays = Math.floor(
+    (Date.now() - new Date(committed.generatedAt).getTime()) / 86_400_000,
+  );
+
+  if (!asJson) {
+    process.stdout.write(
+      `  offline: the committed lockfile is schema-valid, untampered and internally\n` +
+        `  coherent. Recorded ${Number.isFinite(ageDays) ? `${ageDays} day(s) ago` : 'at an unparseable time'}.\n` +
+        '\n' +
+        '  NOT checked here, because this mode never opens a socket: whether upstream\n' +
+        '  still matches it. That is the scheduled observer\'s job (--check).\n\n',
+    );
+  }
+
+  if (errors.length > 0) {
+    process.stderr.write(
+      `\n  ${errors.length} error-severity discrepancy/discrepancies are recorded in the ` +
+        'committed lockfile:\n' +
+        errors.map((d) => `    [${d.code}] ${d.message}`).join('\n') +
+        '\n\n',
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  process.exitCode = 0;
+}
+
+// ---------------------------------------------------------------------------
 // main
 // ---------------------------------------------------------------------------
 
-const KNOWN_FLAGS = new Set(['--check', '--write', '--json']);
+const KNOWN_FLAGS = new Set(['--check', '--write', '--offline', '--json']);
 
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
@@ -1314,8 +1440,26 @@ async function main(): Promise<void> {
   }
   const write = argv.includes('--write');
   const asJson = argv.includes('--json');
+  const offline = argv.includes('--offline');
   if (write && argv.includes('--check')) {
     throw new ToolFailure('--check and --write are mutually exclusive; --write would skip the check entirely');
+  }
+  // Silently ignoring a mode flag is how an operator ends up believing a
+  // hermetic run proved something it never touched, or the reverse.
+  if (offline && write) {
+    throw new ToolFailure('--offline and --write are mutually exclusive; --write must reach upstream');
+  }
+  if (offline && argv.includes('--check')) {
+    throw new ToolFailure(
+      '--offline and --check are mutually exclusive; they answer different questions.\n' +
+        '  --offline: is the committed lockfile coherent and untampered? (no network)\n' +
+        '  --check:   does it still match live upstream?                (network)',
+    );
+  }
+
+  if (offline) {
+    verifyOffline(asJson);
+    return;
   }
 
   const lock = await build();
