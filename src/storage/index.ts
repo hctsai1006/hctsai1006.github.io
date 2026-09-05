@@ -92,6 +92,7 @@ export {
   fromBase64,
   importSnapshot,
   restoreSnapshot,
+  snapshotPayload,
   toBase64,
 } from './snapshot.ts';
 export type {
@@ -181,7 +182,11 @@ export async function bootStorage(options: BootOptions): Promise<Result<BootRepo
 
   let restore: RestoreReport | null = null;
   if (options.overlay !== undefined) {
-    const grafted = await importSnapshot(backend, options.overlay);
+    // The seed goes with it: it is the authority on which paths may claim
+    // `s: 1`, and without it a crafted overlay can mark the visitor's own
+    // files as seed nodes and have the boot after this one drop them. See
+    // `RestoreOptions.seed`.
+    const grafted = await importSnapshot(backend, options.overlay, { seed });
     if (!grafted.ok) return grafted;
     restore = grafted.value;
   }

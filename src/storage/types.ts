@@ -607,6 +607,34 @@ export interface SeedSpec {
  *
  * Nothing in that list reaches a command.
  */
+/**
+ * ---------------------------------------------------------------------------
+ * CONCURRENCY CONTRACT: ONE OPERATION AT A TIME PER MOUNT
+ * ---------------------------------------------------------------------------
+ *
+ * A mount runs ONE mutating operation at a time, and THE BACKEND SERIALISES —
+ * callers do not have to. Overlapping calls are legal, well-defined and
+ * ordered: each one re-validates against the tree its predecessor left, so the
+ * loser of a race gets the ordinary POSIX refusal (EEXIST, ENOENT, ENOSPC) and
+ * never a corrupt tree or a thrown exception.
+ *
+ * This is a contract and not an implementation note because the target is a
+ * `StorageWorker` handling `postMessage`, where every async handler runs
+ * concurrently by construction. Without it, measured on the memory backend:
+ * two appends to one file lost one, two `exclusive` writes both won, two
+ * `mkdir` calls both won, capacity 10 accepted two 8-byte writes, and removing
+ * a subtree and its parent at once threw `plan referenced a missing node` out
+ * of an API whose entire signature promises a `Result`.
+ *
+ * Reads are NOT serialised and do not need to be. A read walks the tree and
+ * returns within one synchronous section, and the apply phase of a mutation is
+ * synchronous too (see `MutationPlan`), so no read can observe a half-applied
+ * plan. Serialising them would only add a way to deadlock a mutation that
+ * stats its own result.
+ *
+ * A backend that cannot serialise internally must say so; every caller in this
+ * repo is written against the guarantee.
+ */
 export interface StorageBackend {
   /** A stable name for this backend, used in EROFS and diagnostics. */
   readonly name: string;
@@ -709,20 +737,38 @@ export interface StorageBackend {
  * the tree dies with it and there is nothing to recover to. A WAL over memory
  * would be a log nothing could ever read.
  *
- * The other thing a WAL buys is atomicity against CONCURRENT readers, and that
- * one does not apply either, but for a reason about this code and not about
- * JavaScript: `MemoryStorage` mutates only inside synchronous critical sections
- * with no `await` between the last validation and the last write. Saying that in
- * a comment is worth nothing, so the design makes it structural instead —
- * every multi-step operation is PLAN, VALIDATE, then APPLY:
+ * The other thing a WAL buys is atomicity against CONCURRENT operations, and
+ * that one needs TWO properties, not one. This file used to claim only the
+ * first, and claim it too broadly:
  *
- *     const plan = planRecursiveCopy(from, to);   // walks, allocates nothing
- *     if (!plan.ok) return plan;                  // nothing has been touched
- *     applyPlan(plan.value);                      // synchronous, total
+ *   1. APPLY IS SYNCHRONOUS. Every multi-step operation is PLAN, VALIDATE, then
+ *      APPLY:
  *
- * so a `cp -r` that fails on its ninth file leaves the destination EXACTLY as it
- * was, with no partial tree to clean up. That is tested directly, and it is the
- * property a WAL would otherwise have to provide.
+ *          const plan = planRecursiveCopy(from, to);  // walks, allocates nothing
+ *          if (!plan.ok) return plan;                 // nothing has been touched
+ *          applyPlan(plan.value);                     // synchronous, total
+ *
+ *      so a `cp -r` that fails on its ninth file leaves the destination EXACTLY
+ *      as it was, with no partial tree to clean up. GNU cp does NOT give you
+ *      this — MEASURED, coreutils 8.32: `cp -r src/. dst/` refusing on `zzz`
+ *      had already created `aaa`. Planning the refusal is what makes this
+ *      backend stronger than the reference, and it is tested directly.
+ *
+ *   2. NO SECOND OPERATION RUNS IN THE GAP. `#commit` awaits
+ *      `journal.write(plan)` BETWEEN the last validation and the apply — it has
+ *      to, because that await is the OPFS attachment point — so the plan-to-
+ *      apply window is a real suspension point, not a synchronous section. The
+ *      earlier version of this comment asserted there was no `await` there and
+ *      was simply wrong: with two operations in flight, two appends to one file
+ *      silently lost one, two `exclusive` writes both succeeded, and removing a
+ *      subtree and its parent at once threw out of a Result API.
+ *
+ *      The fix is not to make `#commit` synchronous. It is a promise-chain
+ *      mutex on every mutating entry point, so a mount runs ONE operation at a
+ *      time and the second one re-validates against the tree the first left
+ *      behind. See `StorageBackend` for the contract that states this.
+ *
+ * Both properties together are what a WAL would otherwise have to provide.
  *
  * OPFS cannot do that. Its apply phase is a sequence of `await`s over durable
  * handles; it can be interrupted between any two, and what it leaves behind
@@ -758,6 +804,20 @@ export interface MutationStep {
  * front-to-back without reordering.
  */
 export interface MutationPlan {
+  /**
+   * Identity that SURVIVES SERIALISATION. Unique per backend instance.
+   *
+   * A durable journal writes the plan to storage and reads it back as a
+   * different object, so a `pending()` built on `Array.includes` — reference
+   * identity — reports every replayed plan as still uncommitted and re-applies
+   * work that already happened. Comparing on this field is what makes
+   * write/commit/pending mean the same thing before and after a round trip.
+   *
+   * Derived from the backend name and a counter, not a clock or a random
+   * source: this file's determinism rule is that two identical runs produce
+   * identical bytes, and a plan id ends up inside a journal's own records.
+   */
+  readonly id: string;
   readonly syscall: StorageSyscall;
   readonly steps: readonly MutationStep[];
   /** Net change in bytes stored, for the quota check that runs before apply. */

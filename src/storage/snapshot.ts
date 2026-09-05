@@ -64,6 +64,7 @@ import type {
   NodeOrigin,
   Result,
   SeedSpec,
+  StatKind,
   StorageBackend,
   StorageError,
 } from './types.ts';
@@ -75,16 +76,26 @@ import type {
 export const SNAPSHOT_FORMAT = 'browsershell.fs.snapshot';
 
 /**
- * Bumped when the ENTRY SHAPE changes, never for a content change.
+ * Bumped when the ENTRY SHAPE or the INTEGRITY ENVELOPE changes, never for a
+ * content change.
  *
- * Version 1 has no tombstones, which is the known limitation of the seed/overlay
- * split recorded in `vfs.ts`: deleting a seed file does not persist. Adding them
- * is a third entry kind and therefore a version 2, and the refusal below is what
- * makes that upgrade safe to make later — a version 1 reader will decline a
- * version 2 file rather than silently ignore its tombstones and resurrect every
- * deleted file.
+ * Version 2 widened what the checksum covers. Version 1 hashed `entries` alone,
+ * which left `scope` unauthenticated — and `scope` is what decides whether an
+ * `s: 1` entry means "restore the metadata, the seed owns the content" or
+ * "materialise this, content included". MEASURED on a version 1 document:
+ * changing the single word `overlay` to `full` in a stored overlay truncated a
+ * 63-byte seed file to 0 bytes, was accepted with `failures: []`, and the two
+ * documents hashed identically (`f0c15aeb === f0c15aeb`). The checksum now
+ * covers every field except itself, so that edit is a refusal.
+ *
+ * Neither version has tombstones, which is the known limitation of the
+ * seed/overlay split recorded in `vfs.ts`: deleting a seed file does not
+ * persist. Adding them is a third entry kind and therefore a later version
+ * still, and the refusal below is what makes that upgrade safe to make — an
+ * older reader declines a newer file rather than silently ignoring its
+ * tombstones and resurrecting every deleted file.
  */
-export const SNAPSHOT_VERSION = 1;
+export const SNAPSHOT_VERSION = 2;
 
 export type SnapshotScope = 'full' | 'overlay';
 
@@ -250,6 +261,35 @@ function seedExpectations(spec: SeedSpec | undefined): Map<string, SeedExpectati
 }
 
 /**
+ * Every path this build's seed OWNS, and what kind it puts there.
+ *
+ * Not just the spec's own entries: `installImage` creates a missing ancestor
+ * of a seed entry as a seed DIRECTORY, so `/usr/share` can be a seed node that
+ * the spec never names. Leaving those out would demote real seed directories
+ * to 'user' on every restore, which is the bug this map exists to avoid while
+ * closing the forged-claim hole.
+ *
+ * An explicit entry always wins over an inferred ancestor.
+ */
+function seedKinds(spec: SeedSpec | undefined): Map<string, StatKind> | null {
+  if (spec === undefined) return null;
+  const map = new Map<string, StatKind>();
+  map.set('/', 'directory');
+  // Explicit entries first, so an inferred ancestor can never overwrite one.
+  for (const entry of spec.entries) map.set(entry.path, entry.kind);
+  for (const entry of spec.entries) {
+    const segments = entry.path.split('/').filter((segment) => segment !== '');
+    segments.pop();
+    let walked = '';
+    for (const segment of segments) {
+      walked = `${walked}/${segment}`;
+      if (!map.has(walked)) map.set(walked, 'directory');
+    }
+  }
+  return map;
+}
+
+/**
  * Walk the tree through the interface and build the document.
  *
  * A subtree the caller cannot read is SKIPPED and named, not an error. That is
@@ -337,16 +377,41 @@ export async function createSnapshot(
   const walked = await walk(options.root ?? '/');
   if (!walked.ok) return walked;
 
-  const payload = JSON.stringify(entries);
-  return ok({
+  const unsigned = {
     format: SNAPSHOT_FORMAT,
     version: SNAPSHOT_VERSION,
     scope: options.scope,
     createdAt: options.now,
     seedTime,
-    checksum: fnv1a32(payload),
     entries,
     skipped,
+  } as const;
+  return ok({ ...unsigned, checksum: fnv1a32(snapshotPayload(unsigned)) });
+}
+
+/**
+ * Exactly the bytes the checksum covers: the whole document except the
+ * checksum field itself, in a fixed key order.
+ *
+ * Exported because a document is only as trustworthy as the thing that signs
+ * it, and every writer — this file, a test building a fixture, an OPFS backend
+ * later — has to agree on the input. Version 1 hashed `entries` alone; see
+ * `SNAPSHOT_VERSION` for the truncation that bought.
+ *
+ * Still FNV-1a, and still only a corruption check: it is not a MAC, it stops
+ * nobody who edits the file and recomputes it, and it is not claimed to. What
+ * it now does is make an edit that flips one field an obvious refusal rather
+ * than a silent change of meaning.
+ */
+export function snapshotPayload(document: Omit<SnapshotDocument, 'checksum'>): string {
+  return JSON.stringify({
+    format: document.format,
+    version: document.version,
+    scope: document.scope,
+    createdAt: document.createdAt,
+    seedTime: document.seedTime,
+    entries: document.entries,
+    skipped: document.skipped,
   });
 }
 
@@ -443,26 +508,48 @@ export function decodeSnapshot(bytes: Uint8Array): Result<SnapshotDocument> {
     entries.push(row);
   }
 
-  const checksum = doc['checksum'];
-  if (typeof checksum !== 'string') return refuse('no-checksum', 'the snapshot has no checksum');
-  const actual = fnv1a32(JSON.stringify(entries));
-  if (actual !== checksum) {
-    return refuse(
-      'checksum-mismatch',
-      `the snapshot is corrupt: checksum ${checksum} does not match the entries (${actual})`,
-    );
+  // The list of subtrees the export could not read. It used to be hard-coded
+  // to `[]` right here, which threw away the one field that says "this backup
+  // is not everything" — an importer could never learn their `/root` or their
+  // 0o000 directory had been left out, and would restore a partial tree
+  // believing it was whole. Absent is tolerated (it means nothing was skipped);
+  // present but malformed is refused, because guessing is how the information
+  // got lost the first time.
+  const rawSkipped = doc['skipped'];
+  let skipped: readonly string[] = [];
+  if (rawSkipped !== undefined) {
+    if (!Array.isArray(rawSkipped) || rawSkipped.some((row) => typeof row !== 'string')) {
+      return refuse('bad-skipped', 'the snapshot skipped list is not an array of paths');
+    }
+    skipped = rawSkipped as readonly string[];
   }
 
-  return ok({
+  const checksum = doc['checksum'];
+  if (typeof checksum !== 'string') return refuse('no-checksum', 'the snapshot has no checksum');
+
+  // Verified over the NORMALISED document, which is also what `createSnapshot`
+  // signs, so the two cannot drift: both go through `snapshotPayload`. A
+  // document whose timestamps are garbage now fails here instead of being
+  // silently rewritten to 0, and a legitimate one round-trips because the
+  // normalisation is the identity on every value `createSnapshot` writes.
+  const unsigned = {
     format: SNAPSHOT_FORMAT,
     version: SNAPSHOT_VERSION,
     scope,
     createdAt: isSaneTime(doc['createdAt']) ? (doc['createdAt'] as number) : 0,
     seedTime: isSaneTime(doc['seedTime']) ? (doc['seedTime'] as number) : null,
-    checksum,
     entries,
-    skipped: [],
-  });
+    skipped,
+  } as const;
+  const actual = fnv1a32(snapshotPayload(unsigned));
+  if (actual !== checksum) {
+    return refuse(
+      'checksum-mismatch',
+      `the snapshot is corrupt: checksum ${checksum} does not match the document (${actual})`,
+    );
+  }
+
+  return ok({ ...unsigned, checksum });
 }
 
 export interface RestoreReport {
@@ -489,6 +576,24 @@ export interface RestoreReport {
 export interface RestoreOptions {
   /** Where to put restored nodes. Defaults to the mount root. */
   readonly root?: string;
+  /**
+   * This build's seed, and the AUTHORITY on which paths may claim `s: 1`.
+   *
+   * A snapshot is a file someone can hand you, and `s: 1` is a claim inside it.
+   * Believed unchecked, a crafted full-scope document marks the user's own
+   * files as seed nodes; the next overlay export then omits their content
+   * (a seed node's content is the next boot's job to rebuild), the next boot
+   * finds no such path in the real seed, and the file lands in `dropped`. The
+   * user's own data, deleted two boots later, by one flag.
+   *
+   * `bootStorage` always passes it, so the route a hostile file actually
+   * travels is checked. A caller that omits it and restores into a store with
+   * no seed installed has NO evidence either way and takes the claim at face
+   * value — that is the disaster-recovery shape (a full snapshot is all that
+   * survived a site-data clear), where dropping origin would make the very
+   * next overlay carry the entire seed back again.
+   */
+  readonly seed?: SeedSpec;
 }
 
 /**
@@ -509,6 +614,7 @@ export async function restoreSnapshot(
   options: RestoreOptions = {},
 ): Promise<Result<RestoreReport>> {
   const prefix = options.root ?? '/';
+  const seeded = seedKinds(options.seed);
   let restored = 0;
   const dropped: string[] = [];
   const conflicts: string[] = [];
@@ -535,10 +641,40 @@ export async function restoreSnapshot(
     const path = prefix === '/' ? entry.p : `${prefix}${entry.p}`;
     const existing = await backend.stat(path);
     const wantedKind = entry.t === 'd' ? 'directory' : 'file';
-    const origin: NodeOrigin = entry.s === 1 ? 'seed' : 'user';
+    // `s: 1` is a CLAIM, not a fact. See `RestoreOptions.seed` for what it
+    // costs to believe one. Two authorities, in order:
+    //
+    //   1. the seed spec, when the caller supplied one. It is the only
+    //      authority that works before `installImage` has run, and it is what
+    //      `bootStorage` passes;
+    //   2. failing that, what the mount already holds — a genuine seed node,
+    //      put there by `installImage` before this graft.
+    //
+    // With neither, there is no evidence, and the claim stands. The failure
+    // direction is chosen: an unrecognised claim degrades to 'user', which at
+    // worst carries content in an overlay that did not need it. The other
+    // direction loses the file.
+    const claimsSeed = entry.s === 1;
+    // `path`, NOT `entry.p`. Under a `root` prefix the node lands somewhere the
+    // seed does not own, and keying the lookup on the document's own path
+    // granted `origin: 'seed'` to it: restoring a document that legitimately
+    // claims `/etc/hostname` with `root: '/tmp'` produced a seed-origin
+    // `/tmp/etc/hostname`. With no prefix the two strings are identical, so
+    // this costs the boot path nothing.
+    const seedKind = seeded?.get(path);
+    const origin: NodeOrigin =
+      !claimsSeed
+        ? 'user'
+        : seeded !== null
+          ? seedKind === wantedKind
+            ? 'seed'
+            : 'user'
+          : existing.ok && existing.value.origin !== 'seed'
+            ? 'user'
+            : 'seed';
     // Only an OVERLAY leaves seed content to the next boot. A full snapshot may
     // be all that is left after a site-data clear, so it materialises everything.
-    const metadataOnly = document.scope === 'overlay' && entry.s === 1;
+    const metadataOnly = document.scope === 'overlay' && claimsSeed;
 
     if (metadataOnly) {
       // Only its metadata is ours to restore, and only if this version's seed

@@ -31,6 +31,7 @@ import {
   fromBase64,
   importSnapshot,
   restoreSnapshot,
+  snapshotPayload,
   toBase64,
 } from '../../src/storage/index.ts';
 import type {
@@ -54,9 +55,16 @@ function failureReason(outcome: Result<unknown>): string {
   return outcome.error.code === 'EINVAL' ? outcome.error.reason : '';
 }
 
-/** Re-sign a mutated document so only the field under test is wrong. */
+/**
+ * Re-sign a mutated document so only the field under test is wrong.
+ *
+ * Must go through `snapshotPayload`: from version 2 the checksum covers the
+ * whole document, so hand-hashing `entries` alone would leave the checksum
+ * wrong too and every test here would start passing for the wrong reason.
+ */
 function sign(document: SnapshotDocument, entries: readonly SnapshotEntry[]): SnapshotDocument {
-  return { ...document, entries, checksum: fnv1a32(JSON.stringify(entries)) };
+  const { checksum: _old, ...rest } = { ...document, entries };
+  return { ...rest, checksum: fnv1a32(snapshotPayload(rest)) };
 }
 
 const ENCODER = new TextEncoder();
