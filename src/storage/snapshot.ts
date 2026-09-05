@@ -64,6 +64,7 @@ import type {
   NodeOrigin,
   Result,
   SeedSpec,
+  StatKind,
   StorageBackend,
   StorageError,
 } from './types.ts';
@@ -245,6 +246,35 @@ function seedExpectations(spec: SeedSpec | undefined): Map<string, SeedExpectati
   for (const entry of spec.entries) {
     if (entry.mode === undefined) continue;
     map.set(entry.path, { mode: entry.mode, mtime: spec.time });
+  }
+  return map;
+}
+
+/**
+ * Every path this build's seed OWNS, and what kind it puts there.
+ *
+ * Not just the spec's own entries: `installImage` creates a missing ancestor
+ * of a seed entry as a seed DIRECTORY, so `/usr/share` can be a seed node that
+ * the spec never names. Leaving those out would demote real seed directories
+ * to 'user' on every restore, which is the bug this map exists to avoid while
+ * closing the forged-claim hole.
+ *
+ * An explicit entry always wins over an inferred ancestor.
+ */
+function seedKinds(spec: SeedSpec | undefined): Map<string, StatKind> | null {
+  if (spec === undefined) return null;
+  const map = new Map<string, StatKind>();
+  map.set('/', 'directory');
+  // Explicit entries first, so an inferred ancestor can never overwrite one.
+  for (const entry of spec.entries) map.set(entry.path, entry.kind);
+  for (const entry of spec.entries) {
+    const segments = entry.path.split('/').filter((segment) => segment !== '');
+    segments.pop();
+    let walked = '';
+    for (const segment of segments) {
+      walked = `${walked}/${segment}`;
+      if (!map.has(walked)) map.set(walked, 'directory');
+    }
   }
   return map;
 }
@@ -443,6 +473,22 @@ export function decodeSnapshot(bytes: Uint8Array): Result<SnapshotDocument> {
     entries.push(row);
   }
 
+  // The list of subtrees the export could not read. It used to be hard-coded
+  // to `[]` right here, which threw away the one field that says "this backup
+  // is not everything" — an importer could never learn their `/root` or their
+  // 0o000 directory had been left out, and would restore a partial tree
+  // believing it was whole. Absent is tolerated (it means nothing was skipped);
+  // present but malformed is refused, because guessing is how the information
+  // got lost the first time.
+  const rawSkipped = doc['skipped'];
+  let skipped: readonly string[] = [];
+  if (rawSkipped !== undefined) {
+    if (!Array.isArray(rawSkipped) || rawSkipped.some((row) => typeof row !== 'string')) {
+      return refuse('bad-skipped', 'the snapshot skipped list is not an array of paths');
+    }
+    skipped = rawSkipped as readonly string[];
+  }
+
   const checksum = doc['checksum'];
   if (typeof checksum !== 'string') return refuse('no-checksum', 'the snapshot has no checksum');
   const actual = fnv1a32(JSON.stringify(entries));
@@ -461,7 +507,7 @@ export function decodeSnapshot(bytes: Uint8Array): Result<SnapshotDocument> {
     seedTime: isSaneTime(doc['seedTime']) ? (doc['seedTime'] as number) : null,
     checksum,
     entries,
-    skipped: [],
+    skipped,
   });
 }
 
@@ -489,6 +535,24 @@ export interface RestoreReport {
 export interface RestoreOptions {
   /** Where to put restored nodes. Defaults to the mount root. */
   readonly root?: string;
+  /**
+   * This build's seed, and the AUTHORITY on which paths may claim `s: 1`.
+   *
+   * A snapshot is a file someone can hand you, and `s: 1` is a claim inside it.
+   * Believed unchecked, a crafted full-scope document marks the user's own
+   * files as seed nodes; the next overlay export then omits their content
+   * (a seed node's content is the next boot's job to rebuild), the next boot
+   * finds no such path in the real seed, and the file lands in `dropped`. The
+   * user's own data, deleted two boots later, by one flag.
+   *
+   * `bootStorage` always passes it, so the route a hostile file actually
+   * travels is checked. A caller that omits it and restores into a store with
+   * no seed installed has NO evidence either way and takes the claim at face
+   * value — that is the disaster-recovery shape (a full snapshot is all that
+   * survived a site-data clear), where dropping origin would make the very
+   * next overlay carry the entire seed back again.
+   */
+  readonly seed?: SeedSpec;
 }
 
 /**
@@ -509,6 +573,7 @@ export async function restoreSnapshot(
   options: RestoreOptions = {},
 ): Promise<Result<RestoreReport>> {
   const prefix = options.root ?? '/';
+  const seeded = seedKinds(options.seed);
   let restored = 0;
   const dropped: string[] = [];
   const conflicts: string[] = [];
@@ -535,10 +600,34 @@ export async function restoreSnapshot(
     const path = prefix === '/' ? entry.p : `${prefix}${entry.p}`;
     const existing = await backend.stat(path);
     const wantedKind = entry.t === 'd' ? 'directory' : 'file';
-    const origin: NodeOrigin = entry.s === 1 ? 'seed' : 'user';
+    // `s: 1` is a CLAIM, not a fact. See `RestoreOptions.seed` for what it
+    // costs to believe one. Two authorities, in order:
+    //
+    //   1. the seed spec, when the caller supplied one. It is the only
+    //      authority that works before `installImage` has run, and it is what
+    //      `bootStorage` passes;
+    //   2. failing that, what the mount already holds — a genuine seed node,
+    //      put there by `installImage` before this graft.
+    //
+    // With neither, there is no evidence, and the claim stands. The failure
+    // direction is chosen: an unrecognised claim degrades to 'user', which at
+    // worst carries content in an overlay that did not need it. The other
+    // direction loses the file.
+    const claimsSeed = entry.s === 1;
+    const seedKind = seeded?.get(entry.p);
+    const origin: NodeOrigin =
+      !claimsSeed
+        ? 'user'
+        : seeded !== null
+          ? seedKind === wantedKind
+            ? 'seed'
+            : 'user'
+          : existing.ok && existing.value.origin !== 'seed'
+            ? 'user'
+            : 'seed';
     // Only an OVERLAY leaves seed content to the next boot. A full snapshot may
     // be all that is left after a site-data clear, so it materialises everything.
-    const metadataOnly = document.scope === 'overlay' && entry.s === 1;
+    const metadataOnly = document.scope === 'overlay' && claimsSeed;
 
     if (metadataOnly) {
       // Only its metadata is ours to restore, and only if this version's seed

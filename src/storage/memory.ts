@@ -195,8 +195,19 @@ export class NullJournal implements MutationJournal {
     return ok(undefined);
   }
 
+  /**
+   * Written but not committed, compared on `plan.id` and NOT on the object.
+   *
+   * `Array.includes` is reference identity, and the whole point of a durable
+   * journal is that it hands back a plan it read off disk — a different object
+   * with the same content. Under reference identity every replayed plan reads
+   * as still pending, so recovery re-applies work that already happened. This
+   * implementation is memory-only, but it is the one an OPFS journal is
+   * written against, so it has to model the round trip correctly.
+   */
   async pending(): Promise<Result<readonly MutationPlan[]>> {
-    return ok(this.#written.filter((plan) => !this.#committed.includes(plan)));
+    const committed = new Set(this.#committed.map((plan) => plan.id));
+    return ok(this.#written.filter((plan) => !committed.has(plan.id)));
   }
 
   get written(): readonly MutationPlan[] {
@@ -279,6 +290,40 @@ export class MemoryStorage implements StorageBackend {
   readonly #rootOwner: string;
   #root: MemoryDirectory;
 
+  /**
+   * The mutex. See the concurrency contract on `StorageBackend`.
+   *
+   * A promise chain rather than a lock object because there is nothing to lock
+   * against: JavaScript has one thread, and what has to be prevented is a
+   * SECOND operation starting while the first is suspended at
+   * `await journal.write(plan)` — the one await that sits between the last
+   * validation and the apply, and cannot be removed because it is the point an
+   * OPFS write-ahead log attaches to.
+   *
+   * Never rejects: every link is capped with a swallow so one operation's
+   * failure cannot poison the queue for the next. The caller still sees the
+   * rejection, through the promise `#serialise` returns.
+   */
+  #queue: Promise<void> = Promise.resolve();
+
+  /**
+   * Counter behind `MutationPlan.id`. Not a clock and not a random source —
+   * this file's determinism rule is that two identical runs produce identical
+   * output, and a plan id ends up inside a durable journal's records.
+   */
+  #plans = 0;
+
+  /**
+   * Running total of stored file bytes, maintained by `#apply`.
+   *
+   * MEASURED: recomputing this by walking the tree on every capacity-checked
+   * mutation cost 4381 ms for 8000 writes with a capacity set, against 35 ms
+   * with no capacity, because the walk is O(tree) per write and the tree grows.
+   * The walk still exists as `#usedBytes()` and is the authority after the two
+   * operations that bypass `#apply` — `reset` and `installImage`.
+   */
+  #used = 0;
+
   constructor(options: MemoryStorageOptions) {
     this.#clock = options.clock;
     this.#user = options.user ?? 'thc1006';
@@ -292,10 +337,33 @@ export class MemoryStorage implements StorageBackend {
     this.#root = this.#newDirectory(DEFAULT_DIRECTORY_MODE, this.#rootOwner, this.#rootOwner, 'seed');
   }
 
+  /**
+   * Run `operation` after every mutation already queued on this mount.
+   *
+   * Reads deliberately do NOT go through here. A read walks and returns inside
+   * one synchronous section and `#apply` is synchronous too, so a read can
+   * never see a half-applied plan; routing reads through the queue would only
+   * create a way for `mkdir` to deadlock on the `stat` it does to build its
+   * own return value.
+   */
+  #serialise<T>(operation: () => Promise<T>): Promise<T> {
+    const run = this.#queue.then(operation);
+    this.#queue = run.then(noop, noop);
+    return run;
+  }
+
+  #nextPlanId(): string {
+    this.#plans += 1;
+    return `${this.name}-${String(this.#plans)}`;
+  }
+
   /** Throw away everything. `Reset-FileSystem`, and the boot path before seeding. */
   async reset(): Promise<Result<void>> {
-    this.#root = this.#newDirectory(DEFAULT_DIRECTORY_MODE, this.#rootOwner, this.#rootOwner, 'seed');
-    return ok(undefined);
+    return this.#serialise(async () => {
+      this.#root = this.#newDirectory(DEFAULT_DIRECTORY_MODE, this.#rootOwner, this.#rootOwner, 'seed');
+      this.#used = 0;
+      return ok(undefined);
+    });
   }
 
   get user(): string {
@@ -313,6 +381,10 @@ export class MemoryStorage implements StorageBackend {
    * fixed timestamp, which is what lets the snapshot store only deviations.
    */
   async installImage(spec: SeedSpec): Promise<Result<void>> {
+    return this.#serialise(() => this.#installImageLocked(spec));
+  }
+
+  async #installImageLocked(spec: SeedSpec): Promise<Result<void>> {
     for (const entry of spec.entries) {
       const checked = validatePath(entry.path, 'restore');
       if (checked.ok) {
@@ -380,6 +452,10 @@ export class MemoryStorage implements StorageBackend {
       node.birthtime = spec.time;
       parent.children.set(name, node);
     }
+    // The image is built by direct tree construction rather than through
+    // `#apply`, so the running total has nothing to have counted. Recompute
+    // once, here, where it is boot-time and O(tree) is free.
+    this.#used = this.#usedBytes();
     return ok(undefined);
   }
 
@@ -596,6 +672,18 @@ export class MemoryStorage implements StorageBackend {
   // quota
   // -------------------------------------------------------------------------
 
+  /**
+   * The authoritative walk. Called after `reset` and `installImage`, which are
+   * the only two mutations that do not go through `#apply`, and by the test
+   * that asserts the running total has not drifted from the truth.
+   *
+   * The loop is not a style preference. `stack.push(...node.children.values())`
+   * spreads every child into an argument list, and MEASURED, that is
+   * `RangeError: Maximum call stack size exceeded` at 130k entries in one
+   * directory — an exception thrown straight out of `quota()`, whose signature
+   * says it returns a `Result`. A directory that wide is reachable: nothing in
+   * this backend caps `children.size`.
+   */
   #usedBytes(): number {
     let total = 0;
     const stack: MemoryNode[] = [this.#root];
@@ -603,14 +691,14 @@ export class MemoryStorage implements StorageBackend {
       const node = stack.pop();
       if (node === undefined) break;
       if (node.kind === 'file') total += node.data.byteLength;
-      else stack.push(...node.children.values());
+      else for (const child of node.children.values()) stack.push(child);
     }
     return total;
   }
 
   async quota(): Promise<Result<QuotaUsage>> {
     return ok({
-      used: this.#usedBytes(),
+      used: this.#used,
       quota: this.#capacity,
       // The memory backend's bytes are its own. OPFS reports `true` here
       // because it shares the origin quota with IndexedDB and Cache Storage,
@@ -622,7 +710,7 @@ export class MemoryStorage implements StorageBackend {
 
   #checkCapacity(plan: MutationPlan, path: string): Err<StorageError> | null {
     if (this.#capacity === null || plan.byteDelta <= 0) return null;
-    const used = this.#usedBytes();
+    const used = this.#used;
     if (used + plan.byteDelta <= this.#capacity) return null;
     return err({
       code: 'ENOSPC',
@@ -653,7 +741,26 @@ export class MemoryStorage implements StorageBackend {
     const written = await this.#journal.write(plan);
     if (!written.ok) return written;
 
-    this.#apply(plan);
+    // THE SUSPENSION POINT. The await above is the only gap between the last
+    // validation and the first write, and it is the reason every mutating
+    // entry point runs under `#serialise` — without it a second operation
+    // starts here, mutates the tree, and this plan applies against a shape it
+    // never validated against.
+    const failed = this.#apply(plan);
+    // Deliberately NOT committed on failure: an uncommitted plan is exactly
+    // what `journal.pending()` is for, so a durable backend can decide at mount
+    // whether to replay or discard it.
+    //
+    // STATED PLAINLY: a plan that fails PART WAY through apply leaves the tree
+    // partially updated. That is not a hole in the atomicity claim, because
+    // with the mutex in place a plan can only be stale if it was built against
+    // a different tree — which, through this class's public API, cannot
+    // happen; every plan is built and applied inside one critical section. The
+    // reachable route is a durable journal replaying a plan from a previous
+    // process, and cleaning that up is exactly the job the journal exists for.
+    // What must never happen, and no longer does, is a THROW: recovery code
+    // needs a value it can branch on.
+    if (failed !== null) return failed;
 
     const committed = await this.#journal.commit(plan);
     if (!committed.ok) return committed;
@@ -661,49 +768,83 @@ export class MemoryStorage implements StorageBackend {
   }
 
   /**
-   * Execute a validated plan. Total by construction.
+   * Execute a validated plan. Synchronous, and the only writer of `#used`.
    *
-   * Throws on an inconsistency rather than returning a Result, because reaching
-   * here with a bad step is a bug in the planner, not a condition a caller can
-   * do anything about. `types.ts` draws the same line: expected failures are
-   * Results, broken invariants throw.
+   * It RETURNS an `Err` rather than throwing, and that is a change from what
+   * this comment used to say. The old version threw on any inconsistency on
+   * the grounds that reaching here with a bad step is a planner bug and not a
+   * caller's problem. Two things make that wrong:
+   *
+   *   - it was reachable. Before the mutex, `remove('/d/e')` and `remove('/d')`
+   *     in flight together threw `plan referenced a missing node` straight out
+   *     of `remove`, whose signature promises a `Result`, having already
+   *     applied part of the plan.
+   *   - it stays reachable by design. `MutationJournal.pending()` exists so a
+   *     durable backend can REPLAY a plan it read back off disk at mount. That
+   *     plan was validated against a tree that may no longer exist, and the
+   *     recovery path needs an answer it can branch on, not an exception.
+   *
+   * The refusals below are also the second line against the copy defect: the
+   * planner now resolves the existing node at every target path, so a
+   * `create-file` can no longer be handed a directory — and if it ever is
+   * again, it says so instead of dropping the subtree.
    */
-  #apply(plan: MutationPlan): void {
+  #apply(plan: MutationPlan): Err<StorageError> | null {
     const now = this.#clock();
+    const syscall = plan.syscall;
+
     for (const step of plan.steps) {
       const parentPath = dirname(step.path);
       const name = basename(step.path);
 
       if (step.op === 'remove') {
-        const parent = this.#resolveDirectory(parentPath);
-        parent.children.delete(name);
-        parent.mtime = now;
-        parent.ctime = now;
+        const parent = this.#locateDirectory(parentPath, syscall);
+        if (!parent.ok) return parent;
+        const going = parent.value.children.get(name);
+        if (going === undefined) return enoent(step.path, syscall);
+        if (going.kind === 'file') this.#used -= going.data.byteLength;
+        parent.value.children.delete(name);
+        parent.value.mtime = now;
+        parent.value.ctime = now;
         continue;
       }
 
       if (step.op === 'move') {
-        if (step.from === undefined) throw new Error(`a move step has no source: ${step.path}`);
-        const sourceParent = this.#resolveDirectory(dirname(step.from));
-        const moving = sourceParent.children.get(basename(step.from));
-        if (moving === undefined) throw new Error(`move source vanished: ${step.from}`);
-        sourceParent.children.delete(basename(step.from));
-        sourceParent.mtime = now;
-        sourceParent.ctime = now;
-        const targetParent = this.#resolveDirectory(parentPath);
-        targetParent.children.set(name, moving);
-        targetParent.mtime = now;
-        targetParent.ctime = now;
+        if (step.from === undefined) {
+          return einval(step.path, syscall, `a move step has no source: ${step.path}`, 'move-without-source');
+        }
+        const sourceParent = this.#locateDirectory(dirname(step.from), syscall);
+        if (!sourceParent.ok) return sourceParent;
+        const moving = sourceParent.value.children.get(basename(step.from));
+        if (moving === undefined) return enoent(step.from, syscall);
+        const targetParent = this.#locateDirectory(parentPath, syscall);
+        if (!targetParent.ok) return targetParent;
+        sourceParent.value.children.delete(basename(step.from));
+        sourceParent.value.mtime = now;
+        sourceParent.value.ctime = now;
+        targetParent.value.children.set(name, moving);
+        targetParent.value.mtime = now;
+        targetParent.value.ctime = now;
         // ctime, not mtime: a rename changes the inode's metadata, not the
-        // file's contents, and `ls -lt` must not reorder on a move.
+        // file's contents, and `ls -lt` must not reorder on a move. No byte
+        // accounting either — a move relocates bytes, it does not add them.
         moving.ctime = now;
         continue;
       }
 
       if (step.op === 'create-directory') {
-        const parent = this.#resolveDirectory(parentPath);
-        if (parent.children.has(name)) continue;
-        parent.children.set(
+        const parent = this.#locateDirectory(parentPath, syscall);
+        if (!parent.ok) return parent;
+        const existing = parent.value.children.get(name);
+        if (existing !== undefined) {
+          // Merging into a directory that is already there is the normal case
+          // for `cp -r` and `mkdir -p`, and it keeps the target's own mode.
+          // A FILE there is not mergeable and must never be silently kept
+          // while the steps below try to create children inside it.
+          if (existing.kind !== 'directory') return enotdir(step.path, syscall, name);
+          continue;
+        }
+        parent.value.children.set(
           name,
           this.#newDirectory(
             step.mode ?? DEFAULT_DIRECTORY_MODE,
@@ -712,38 +853,50 @@ export class MemoryStorage implements StorageBackend {
             step.origin ?? 'user',
           ),
         );
-        parent.mtime = now;
-        parent.ctime = now;
+        parent.value.mtime = now;
+        parent.value.ctime = now;
         continue;
       }
 
       if (step.op === 'create-file' || step.op === 'write') {
-        const parent = this.#resolveDirectory(parentPath);
-        const existing = parent.children.get(name);
-        if (existing !== undefined && existing.kind === 'file') {
-          existing.data = step.data ?? new Uint8Array(0);
+        const parent = this.#locateDirectory(parentPath, syscall);
+        if (!parent.ok) return parent;
+        const data = step.data ?? new Uint8Array(0);
+        const existing = parent.value.children.get(name);
+        if (existing !== undefined) {
+          // The defect this refusal closes: the old branch reused the node only
+          // when it was a file and otherwise called `children.set(name, file)`,
+          // which replaced a whole destination DIRECTORY with a file and
+          // returned ok. MEASURED, GNU coreutils 8.32 refuses the same shape:
+          //   cp: cannot overwrite directory 'dst/x' with non-directory
+          if (existing.kind !== 'file') return eisdir(step.path, syscall);
+          this.#used += data.byteLength - existing.data.byteLength;
+          existing.data = data;
           existing.mtime = now;
           existing.ctime = now;
           if (step.origin !== undefined) existing.origin = step.origin;
           continue;
         }
-        parent.children.set(
+        this.#used += data.byteLength;
+        parent.value.children.set(
           name,
           this.#newFile(
-            step.data ?? new Uint8Array(0),
+            data,
             step.mode ?? DEFAULT_FILE_MODE,
             this.#user,
             this.#group,
             step.origin ?? 'user',
           ),
         );
-        parent.mtime = now;
-        parent.ctime = now;
+        parent.value.mtime = now;
+        parent.value.ctime = now;
         continue;
       }
 
       // set-meta
-      const node = this.#resolveNode(step.path);
+      const found = this.#locateNode(step.path, syscall);
+      if (!found.ok) return found;
+      const node = found.value;
       if (step.mode !== undefined) {
         node.mode = step.mode;
         node.ctime = now;
@@ -755,25 +908,31 @@ export class MemoryStorage implements StorageBackend {
       }
       if (step.origin !== undefined) node.origin = step.origin;
     }
+    return null;
   }
 
-  #resolveDirectory(path: string): MemoryDirectory {
-    const node = this.#resolveNode(path);
-    if (node.kind !== 'directory') {
-      throw new Error(`plan applied against a non-directory: ${path}`);
-    }
-    return node;
+  #locateDirectory(path: string, syscall: StorageSyscall): Result<MemoryDirectory> {
+    const node = this.#locateNode(path, syscall);
+    if (!node.ok) return node;
+    if (node.value.kind !== 'directory') return enotdir(path, syscall, basename(path));
+    return ok(node.value);
   }
 
-  #resolveNode(path: string): MemoryNode {
+  /**
+   * Walk a plan step's path with no permission checks — the plan already
+   * passed them — but with a real answer when the tree has moved underneath.
+   */
+  #locateNode(path: string, syscall: StorageSyscall): Result<MemoryNode> {
     let node: MemoryNode = this.#root;
+    let walked = '';
     for (const segment of splitSegments(path)) {
-      if (node.kind !== 'directory') throw new Error(`plan walked through a file: ${path}`);
+      if (node.kind !== 'directory') return enotdir(path, syscall, walked || '/');
       const next = node.children.get(segment);
-      if (next === undefined) throw new Error(`plan referenced a missing node: ${path}`);
+      walked = `${walked}/${segment}`;
+      if (next === undefined) return enoent(path, syscall);
       node = next;
     }
-    return node;
+    return ok(node);
   }
 
   // -------------------------------------------------------------------------
@@ -785,13 +944,18 @@ export class MemoryStorage implements StorageBackend {
     data: Uint8Array,
     options: WriteOptions = {},
   ): Promise<Result<WriteReceipt>> {
-    const guarded = this.#guardWrite(path, 'write');
-    if (guarded !== null) return guarded;
-    return this.#write(path, data, options, 'write', false);
+    return this.#serialise(() => this.#writeEntry(path, data, options, 'write', false));
   }
 
+  /**
+   * NOT `this.writeBytes(...)`. A public entry point takes the mutex, and a
+   * public entry point calling another one would wait for a lock its own
+   * caller is holding. Every internal route goes to the locked body instead —
+   * the same rule applies to `appendText` and to `utimes`, which creates a
+   * file and then stamps it.
+   */
   async writeText(path: string, text: string, options: WriteOptions = {}): Promise<Result<WriteReceipt>> {
-    return this.writeBytes(path, ENCODER.encode(text), options);
+    return this.#serialise(() => this.#writeEntry(path, ENCODER.encode(text), options, 'write', false));
   }
 
   async appendBytes(
@@ -799,13 +963,28 @@ export class MemoryStorage implements StorageBackend {
     data: Uint8Array,
     options: WriteOptions = {},
   ): Promise<Result<WriteReceipt>> {
-    const guarded = this.#guardWrite(path, 'append');
-    if (guarded !== null) return guarded;
-    return this.#write(path, data, options, 'append', true);
+    return this.#serialise(() => this.#writeEntry(path, data, options, 'append', true));
   }
 
   async appendText(path: string, text: string, options: WriteOptions = {}): Promise<Result<WriteReceipt>> {
-    return this.appendBytes(path, ENCODER.encode(text), options);
+    return this.#serialise(() => this.#writeEntry(path, ENCODER.encode(text), options, 'append', true));
+  }
+
+  /**
+   * The guard runs INSIDE the critical section, not before it. `readOnly` and
+   * the path precondition are cheap, but validating outside the lock and
+   * mutating inside it is the shape this whole class of defect comes from.
+   */
+  async #writeEntry(
+    path: string,
+    data: Uint8Array,
+    options: WriteOptions,
+    syscall: StorageSyscall,
+    append: boolean,
+  ): Promise<Result<WriteReceipt>> {
+    const guarded = this.#guardWrite(path, syscall);
+    if (guarded !== null) return guarded;
+    return this.#write(path, data, options, syscall, append);
   }
 
   async #write(
@@ -858,7 +1037,7 @@ export class MemoryStorage implements StorageBackend {
         data: next,
         ...(options.origin === undefined ? {} : { origin: options.origin }),
       });
-      const plan: MutationPlan = { syscall, steps, byteDelta };
+      const plan: MutationPlan = { id: this.#nextPlanId(), syscall, steps, byteDelta };
       return this.#commit(plan, path, { path, size: next.byteLength, created: false });
     }
 
@@ -870,7 +1049,7 @@ export class MemoryStorage implements StorageBackend {
       mode: options.mode ?? DEFAULT_FILE_MODE,
       origin: options.origin ?? 'user',
     });
-    const plan: MutationPlan = { syscall, steps, byteDelta };
+    const plan: MutationPlan = { id: this.#nextPlanId(), syscall, steps, byteDelta };
     return this.#commit(plan, path, { path, size: data.byteLength, created: true });
   }
 
@@ -922,10 +1101,14 @@ export class MemoryStorage implements StorageBackend {
       if (next.kind !== 'directory') return enotdir(path, syscall, walked);
       node = next;
     }
-    return ok({ syscall, steps, byteDelta: 0 });
+    return ok({ id: this.#nextPlanId(), syscall, steps, byteDelta: 0 });
   }
 
   async mkdir(path: string, options: MkdirOptions = {}): Promise<Result<FileStat>> {
+    return this.#serialise(() => this.#mkdirLocked(path, options));
+  }
+
+  async #mkdirLocked(path: string, options: MkdirOptions): Promise<Result<FileStat>> {
     const guarded = this.#guardWrite(path, 'mkdir');
     if (guarded !== null) return guarded;
 
@@ -948,6 +1131,7 @@ export class MemoryStorage implements StorageBackend {
     if (!this.#can(parent.value, 'write')) return eacces(dirname(path), 'mkdir', 'write');
 
     const plan: MutationPlan = {
+      id: this.#nextPlanId(),
       syscall: 'mkdir',
       steps: [{ op: 'create-directory', path, mode, origin }],
       byteDelta: 0,
@@ -962,6 +1146,10 @@ export class MemoryStorage implements StorageBackend {
   // -------------------------------------------------------------------------
 
   async remove(path: string, options: RemoveOptions = {}): Promise<Result<void>> {
+    return this.#serialise(() => this.#removeLocked(path, options));
+  }
+
+  async #removeLocked(path: string, options: RemoveOptions): Promise<Result<void>> {
     const guarded = this.#guardWrite(path, 'remove');
     if (guarded !== null) return guarded;
     if (splitSegments(path).length === 0) {
@@ -1011,7 +1199,7 @@ export class MemoryStorage implements StorageBackend {
     const failure = collect(node, path);
     if (failure !== null) return failure;
 
-    return this.#commit({ syscall: 'remove', steps, byteDelta }, path, undefined);
+    return this.#commit({ id: this.#nextPlanId(), syscall: 'remove', steps, byteDelta }, path, undefined);
   }
 
   // -------------------------------------------------------------------------
@@ -1019,6 +1207,10 @@ export class MemoryStorage implements StorageBackend {
   // -------------------------------------------------------------------------
 
   async rename(from: string, to: string, options: RenameOptions = {}): Promise<Result<void>> {
+    return this.#serialise(() => this.#renameLocked(from, to, options));
+  }
+
+  async #renameLocked(from: string, to: string, options: RenameOptions): Promise<Result<void>> {
     const guarded = this.#guardWrite(from, 'rename');
     if (guarded !== null) return guarded;
     const guardedTo = this.#guardWrite(to, 'rename');
@@ -1072,10 +1264,14 @@ export class MemoryStorage implements StorageBackend {
     const steps: MutationStep[] = [];
     if (existing !== undefined) steps.push({ op: 'remove', path: to });
     steps.push({ op: 'move', path: to, from });
-    return this.#commit({ syscall: 'rename', steps, byteDelta: 0 }, to, undefined);
+    return this.#commit({ id: this.#nextPlanId(), syscall: 'rename', steps, byteDelta: 0 }, to, undefined);
   }
 
   async copy(from: string, to: string, options: CopyOptions = {}): Promise<Result<void>> {
+    return this.#serialise(() => this.#copyLocked(from, to, options));
+  }
+
+  async #copyLocked(from: string, to: string, options: CopyOptions): Promise<Result<void>> {
     const guarded = this.#guardWrite(from, 'copy');
     if (guarded !== null) return guarded;
     const guardedTo = this.#guardWrite(to, 'copy');
@@ -1098,21 +1294,58 @@ export class MemoryStorage implements StorageBackend {
     if (!this.#can(destinationParent.value, 'write')) return eacces(dirname(to), 'copy', 'write');
 
     const existing = destinationParent.value.children.get(basename(to));
-    if (existing !== undefined) {
-      if (options.overwrite !== true) return eexist(to, 'copy', existing.kind);
-      if (existing.kind !== source.value.kind) {
-        return existing.kind === 'directory' ? eisdir(to, 'copy') : enotdir(to, 'copy', basename(to));
-      }
+    if (existing !== undefined && options.overwrite !== true) {
+      return eexist(to, 'copy', existing.kind);
     }
+    // The top-level kind check that used to live here is GONE, and deliberately.
+    // It only ever guarded the destination ROOT, so `copy('/src', '/dst')` with
+    // a file at `/src/x` and a directory at `/dst/x` sailed past it: the
+    // recursive planner emitted `create-file /dst/x` without asking what was
+    // already there, and `#apply` replaced the directory — subtree and all —
+    // with a 16-byte file, and returned ok. Deleting that check killed zero
+    // tests, which is what a guard applied at one level out of N is worth. The
+    // planner below now resolves the existing node at EVERY target path,
+    // including the root, and produces exactly the codes the old check did.
 
     // PLAN, then VALIDATE, then APPLY. A copy that fails on its ninth file must
     // leave the destination exactly as it was; building the whole plan first is
     // what guarantees that without a rollback path. See `MutationPlan`.
+    //
+    // MEASURED, GNU coreutils 8.32 — this is where the semantics come from:
+    //   $ cp -r src/. dst/     # src/x is a file, dst/x is a directory
+    //   cp: cannot overwrite directory 'dst/./x' with non-directory
+    //   $ cp -r src/. dst/     # src/zzz is a directory, dst/zzz is a file
+    //   cp: cannot overwrite non-directory 'dst/./zzz' with directory 'src/./zzz'
+    // Both exit 1, and `cp -rf` gives the identical refusal — there is no flag
+    // that turns either case into a remove-then-create. So the planner REFUSES;
+    // it does not plan a `remove` first.
+    //
+    // Where this backend is deliberately STRONGER than the reference: GNU cp is
+    // best-effort per file, and in the second transcript it had already created
+    // `dst/aaa` before it reached `zzz`. Refusing during PLANNING means no step
+    // is applied at all, which is the atomicity `MutationPlan` promises.
     const steps: MutationStep[] = [];
     let byteDelta = 0;
-    const plan = (node: MemoryNode, sourcePath: string, targetPath: string): Err<StorageError> | null => {
+    const plan = (
+      node: MemoryNode,
+      sourcePath: string,
+      targetPath: string,
+      target: MemoryNode | undefined,
+    ): Err<StorageError> | null => {
       if (node.kind === 'file') {
         if (!this.#can(node, 'read')) return eacces(sourcePath, 'copy', 'read');
+        if (target !== undefined) {
+          if (target.kind === 'directory') return eisdir(targetPath, 'copy');
+          // MEASURED: `chmod 0444 ro && cp src ro` is
+          //   cp: cannot create regular file 'ro': Permission denied
+          // `writeText` already refused this; `copy` was the one write path
+          // that overwrote a read-only file and reported ok.
+          if (!this.#can(target, 'write')) return eacces(targetPath, 'copy', 'write');
+          // NET bytes. Charging the gross made a copy that replaces a 40-byte
+          // file with another 40-byte file report ENOSPC "120 > 100" on a disk
+          // whose occupancy does not move.
+          byteDelta -= target.data.byteLength;
+        }
         steps.push({ op: 'create-file', path: targetPath, data: node.data.slice(), mode: node.mode });
         byteDelta += node.data.byteLength;
         return null;
@@ -1120,17 +1353,38 @@ export class MemoryStorage implements StorageBackend {
       if (!this.#can(node, 'read') || !this.#can(node, 'execute')) {
         return eacces(sourcePath, 'copy', 'read');
       }
+      if (target !== undefined) {
+        if (target.kind !== 'directory') return enotdir(targetPath, 'copy', basename(targetPath));
+        // Looking at what the destination already holds is a directory search,
+        // and adding an entry to it is a write. `#write` and `mkdir` check both
+        // bits before creating anything; `copy` did not, which made it the one
+        // mutation that could plant files in a directory the user cannot enter.
+        if (!this.#can(target, 'execute')) return eacces(targetPath, 'copy', 'execute');
+        let addsEntry = false;
+        for (const name of node.children.keys()) {
+          if (!target.children.has(name)) {
+            addsEntry = true;
+            break;
+          }
+        }
+        if (addsEntry && !this.#can(target, 'write')) return eacces(targetPath, 'copy', 'write');
+      }
       steps.push({ op: 'create-directory', path: targetPath, mode: node.mode });
       for (const [name, child] of node.children) {
-        const failure = plan(child, join(sourcePath, name), join(targetPath, name));
+        const failure = plan(
+          child,
+          join(sourcePath, name),
+          join(targetPath, name),
+          target === undefined ? undefined : target.children.get(name),
+        );
         if (failure !== null) return failure;
       }
       return null;
     };
-    const failure = plan(source.value, from, to);
+    const failure = plan(source.value, from, to, existing);
     if (failure !== null) return failure;
 
-    return this.#commit({ syscall: 'copy', steps, byteDelta }, to, undefined);
+    return this.#commit({ id: this.#nextPlanId(), syscall: 'copy', steps, byteDelta }, to, undefined);
   }
 
   // -------------------------------------------------------------------------
@@ -1138,6 +1392,10 @@ export class MemoryStorage implements StorageBackend {
   // -------------------------------------------------------------------------
 
   async chmod(path: string, mode: number): Promise<Result<FileStat>> {
+    return this.#serialise(() => this.#chmodLocked(path, mode));
+  }
+
+  async #chmodLocked(path: string, mode: number): Promise<Result<FileStat>> {
     const guarded = this.#guardWrite(path, 'chmod');
     if (guarded !== null) return guarded;
     const found = this.#walk(path, 'chmod');
@@ -1148,13 +1406,22 @@ export class MemoryStorage implements StorageBackend {
     // locked out of.
     if (found.value.owner !== this.#user) return eacces(path, 'chmod', 'write');
 
-    const plan: MutationPlan = { syscall: 'chmod', steps: [{ op: 'set-meta', path, mode }], byteDelta: 0 };
+    const plan: MutationPlan = {
+      id: this.#nextPlanId(),
+      syscall: 'chmod',
+      steps: [{ op: 'set-meta', path, mode }],
+      byteDelta: 0,
+    };
     const done = await this.#commit(plan, path, undefined);
     if (!done.ok) return done;
     return this.stat(path);
   }
 
   async utimes(path: string, times: Times, create = true): Promise<Result<FileStat>> {
+    return this.#serialise(() => this.#utimesLocked(path, times, create));
+  }
+
+  async #utimesLocked(path: string, times: Times, create: boolean): Promise<Result<FileStat>> {
     const guarded = this.#guardWrite(path, 'utimes');
     if (guarded !== null) return guarded;
 
@@ -1163,10 +1430,12 @@ export class MemoryStorage implements StorageBackend {
       if (found.error.code !== 'ENOENT' || !create) return found;
       // `touch` on a missing file creates it. The write goes through the normal
       // path so the parent's permissions and the quota are checked the same way.
-      const written = await this.writeBytes(path, new Uint8Array(0), {});
+      // The locked bodies, not the public methods: this code already holds
+      // the mutex, and `this.writeBytes(...)` would queue behind itself.
+      const written = await this.#writeEntry(path, new Uint8Array(0), {}, 'write', false);
       if (!written.ok) return written;
       if (times.mtime === undefined) return this.stat(path);
-      return this.utimes(path, times, false);
+      return this.#utimesLocked(path, times, false);
     }
 
     if (!this.#can(found.value, 'write') && found.value.owner !== this.#user) {
@@ -1174,6 +1443,7 @@ export class MemoryStorage implements StorageBackend {
     }
     const mtime = times.mtime ?? this.#clock();
     const plan: MutationPlan = {
+      id: this.#nextPlanId(),
       syscall: 'utimes',
       steps: [{ op: 'set-meta', path, mtime }],
       byteDelta: 0,
@@ -1188,6 +1458,13 @@ export class MemoryStorage implements StorageBackend {
 // helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * The cap on every link of the mutex chain. One operation's rejection must not
+ * become every later operation's rejection — the caller of the failing call
+ * still sees it, through the promise `#serialise` hands back.
+ */
+function noop(): void {}
+
 function join(directory: string, name: string): string {
   return directory === '/' ? `/${name}` : `${directory}/${name}`;
 }
@@ -1198,3 +1475,4 @@ function concat(left: Uint8Array, right: Uint8Array): Uint8Array {
   out.set(right, left.byteLength);
   return out;
 }
+
