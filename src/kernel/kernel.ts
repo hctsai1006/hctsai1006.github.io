@@ -222,6 +222,30 @@ export interface KernelOptions {
    * holds the capture supplies this.
    */
   readonly bindOptions?: (manifest: CommandManifest) => BindOptions;
+  /**
+   * What to do when an event listener throws.
+   *
+   * It has to be somebody's decision, because the default before this option
+   * existed was the worst of the three: the throw travelled out of `#emit`,
+   * out of `send`, and aborted whatever kernel operation happened to be
+   * emitting. MEASURED against the shipped class, with two listeners and the
+   * first one throwing on `process-changed`:
+   *
+   *     send() threw: listener blew up
+   *     listener A saw: [1]
+   *     listener B saw: []      <- never told about seq 1 at all
+   *     final seq: 1            <- the pipeline never started
+   *
+   * One renderer with a bug, or one `postMessage` refusing a value, and the
+   * kernel stops executing. That is not a hypothetical across a Worker: the
+   * transport's post IS a listener, and `postMessage` throws `DataCloneError`.
+   *
+   * So a listener's failure is now contained to that listener, and this says
+   * where it goes. The default rethrows it on a fresh microtask, which is loud
+   * — an uncaught exception in Node, `self.onerror` in a Worker — while being
+   * nowhere near the kernel's own stack.
+   */
+  readonly onListenerError?: (error: unknown, event: KernelEvent) => void;
 }
 
 /** Per-terminal state the kernel owns because the DOM is not reachable. */
@@ -406,6 +430,7 @@ export class Kernel {
   readonly #dialog: DialogPort | null;
   readonly #validateEvents: boolean;
   readonly #bindOptions: (manifest: CommandManifest) => BindOptions;
+  readonly #onListenerError: (error: unknown, event: KernelEvent) => void;
   /**
    * The last sequence number handed out. Never reset, so a consumer that sees
    * seq N knows it has missed nothing if it has already seen 1..N-1.
@@ -434,6 +459,13 @@ export class Kernel {
     this.#defaultCwd = options.cwd ?? '/home/thc1006';
     this.#validateEvents = options.validateEvents ?? true;
     this.#bindOptions = options.bindOptions ?? (() => ({}));
+    this.#onListenerError =
+      options.onListenerError ??
+      ((error: unknown) => {
+        queueMicrotask(() => {
+          throw error;
+        });
+      });
     this.#fs = options.fs ?? null;
     this.#preferences = options.preferences ?? null;
     this.#dialog = options.dialog ?? null;
@@ -636,10 +668,39 @@ export class Kernel {
         // Copy the listener set first: a listener that unsubscribes on `exit` —
         // the obvious thing for a "wait for this command" helper to do — would
         // otherwise mutate it while it is being iterated.
-        for (const listener of [...this.#listeners]) listener(next);
+        //
+        // CONTAINED, one listener at a time. A throw used to escape this loop
+        // entirely: the listeners registered after the failing one never saw
+        // the event, the events still queued behind it were delivered late,
+        // and the exception surfaced inside whichever kernel operation was
+        // emitting — so `#exec` aborted half-way and left a process in
+        // `created` forever. See `KernelOptions.onListenerError` for the
+        // transcript. A renderer's bug is not the kernel's control flow.
+        for (const listener of [...this.#listeners]) {
+          try {
+            listener(next);
+          } catch (error: unknown) {
+            this.#reportListenerError(error, next);
+          }
+        }
       }
     } finally {
       this.#delivering = false;
+    }
+  }
+
+  /** Hand a listener's failure to the handler, and survive a handler that throws too. */
+  #reportListenerError(error: unknown, event: KernelEvent): void {
+    try {
+      this.#onListenerError(error, event);
+    } catch {
+      // SWALLOWED, and this is the one place in the kernel where that is the
+      // right answer. `#onListenerError` IS the place errors go; if it throws,
+      // the embedder's error sink is the thing that is broken, and there is
+      // nowhere left to put either error. Rethrowing here — even
+      // asynchronously — would turn a bug in a log line into a dead kernel,
+      // which is precisely the failure the surrounding try/catch exists to
+      // prevent. Delivery continues, which is the property being protected.
     }
   }
 
@@ -781,7 +842,21 @@ export class Kernel {
   #exec(requestId: RequestId, terminalId: TerminalId, source: string, background: boolean): void {
     const terminal = this.#terminal(terminalId);
     const stages = splitPipeline(source);
-    if (stages.length === 0) return;
+    if (stages.length === 0) {
+      // NOT a silent return, which is what this was. MEASURED: an `exec` whose
+      // source was `'   '` produced zero events and left `sequence` at 0, while
+      // the requestId was already recorded in `#submitted` — so the correlation
+      // id was spent, nothing was reported against it, and anything waiting for
+      // the request to finish waited forever. Every accepted `exec` now ends in
+      // at least one `exit` or in exactly one `rejected`.
+      this.#emit({
+        kind: 'rejected',
+        requestId,
+        requestKind: 'exec',
+        problems: ['source contains no command'],
+      });
+      return;
+    }
 
     // Resolve every stage BEFORE starting any of them. A pipeline whose third
     // stage does not exist must not run its first two — in a shell that would
@@ -936,6 +1011,11 @@ export class Kernel {
         }
       }
     } finally {
+      // BEFORE the exits, not after. A terminal prints its next prompt when the
+      // request's last process exits, so a `cwd-changed` that arrives after it
+      // is a prompt that is one command stale.
+      this.#syncLocation(terminalId);
+
       // Reported after the output has drained, so the last `objects` event
       // always precedes the `exit` that follows it — the sequence number is
       // only worth having if the kernel's own events respect it.
@@ -964,6 +1044,46 @@ export class Kernel {
       }
       this.#cancelled.delete(requestId);
     }
+  }
+
+  /**
+   * Notice that a command moved the shell, and say so.
+   *
+   * Roadmap task 6.4, "stop commands mutating prompt chrome; return a CWD
+   * change instead". In v1 `cd` writes the prompt itself — `CWD = p;` then
+   * `document.getElementById('prompt').textContent = shortCwd()` — which is
+   * three things a Worker cannot do and one thing the DOM's owner cannot
+   * override. Here `Set-Location` moves the FILESYSTEM PORT and touches nothing
+   * else; this is the kernel noticing, and `cwd-changed` is it saying so.
+   *
+   * Polled rather than pushed, deliberately. The alternative is a callback on
+   * the port that every backend would have to remember to fire, and a port that
+   * forgot would leave the terminal permanently wrong with nothing to notice
+   * it. The location is one property read, once per pipeline.
+   *
+   * THE LIMIT, because it is real and this is where somebody would look for it:
+   * a Kernel has ONE `FileSystemPort` and a port has ONE location, so two
+   * terminals share a current directory. Terminal B running anything will
+   * observe A's `cd` and emit its own `cwd-changed` — consistent, and still
+   * surprising to anyone expecting two independent shells. Per-terminal
+   * locations belong to whoever owns the port, not here.
+   */
+  #syncLocation(terminalId: TerminalId): void {
+    const fs = this.#fs;
+    if (fs === null) return;
+    let current: string;
+    try {
+      current = fs.location.full;
+    } catch {
+      // A port whose `location` getter throws must not cost the pipeline its
+      // `exit` events — this runs inside `#drive`'s finally. The directory
+      // simply stays where the kernel last saw it.
+      return;
+    }
+    const terminal = this.#terminal(terminalId);
+    if (current === terminal.cwd) return;
+    terminal.cwd = current;
+    this.#emit({ kind: 'cwd-changed', terminalId, cwd: current });
   }
 
   /**

@@ -77,6 +77,7 @@ export { KERNEL_PID } from './ids.ts';
 
 export type {
   CancelRequest,
+  CwdChangedEvent,
   DecodeResult,
   ExecRequest,
   ExitEvent,
@@ -101,6 +102,7 @@ export {
   assertCloneSafe,
   cloneSafetyProblems,
   CloneUnsafeError,
+  decodeKernelEvent,
   decodeKernelRequest,
   isCloneSafe,
   KERNEL_EVENT_KINDS,

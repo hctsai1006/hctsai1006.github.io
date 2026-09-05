@@ -71,6 +71,7 @@
 import type { ProgressRecord, RedirectableStream } from '../pipeline/streams.ts';
 import type { ProcessId, RequestId, TerminalId } from './ids.ts';
 import type { ProcessSnapshot } from './process/snapshot.ts';
+import { PROCESS_STATES } from './process/snapshot.ts';
 import type { VirtualSignal } from './signals.ts';
 import { VIRTUAL_SIGNALS } from './signals.ts';
 import type { WireErrorRecord, WireInformationRecord, WireValue } from './wire.ts';
@@ -534,6 +535,37 @@ export interface RejectedEvent {
 }
 
 /**
+ * The shell moved.
+ *
+ * This is the whole of roadmap task 6.4 — "stop commands mutating prompt
+ * chrome; return a CWD change instead" — as a message. In v1 `cd` reaches into
+ * the page and rewrites the prompt itself:
+ *
+ *     CWD = p; ... document.getElementById('prompt').textContent = shortCwd();
+ *
+ * A command that repaints the prompt cannot run in a Worker, cannot be
+ * composed, and cannot be undone by whoever owns the DOM. So `Set-Location`
+ * moves the FILESYSTEM, and the kernel notices and says so; the terminal
+ * decides what a prompt looks like.
+ *
+ * Keyed by terminal rather than by request, because the prompt outlives the
+ * command that changed it. `cwd` is the absolute resolved path, never `~` — a
+ * terminal that wants to shorten it has the home directory and this does not.
+ *
+ * MEASURED BEFORE THIS EXISTED. `Set-Location sub` moved the port to
+ * /home/thc1006/sub while `Kernel.cwd(terminalId)` still answered
+ * /home/thc1006, and the NEXT process was created with the stale directory in
+ * its snapshot and in `$PWD`. Two sources of truth, disagreeing, with nothing
+ * emitted either way.
+ */
+export interface CwdChangedEvent {
+  readonly kind: 'cwd-changed';
+  readonly terminalId: TerminalId;
+  /** Absolute and resolved. Never `~`, never relative. */
+  readonly cwd: string;
+}
+
+/**
  * An event as its call site builds it, before the kernel stamps it.
  *
  * Exported because a test that constructs a sample event should not have to
@@ -548,7 +580,8 @@ export type KernelEventBody =
   | StreamEvent
   | ProcessChangedEvent
   | ExitEvent
-  | RejectedEvent;
+  | RejectedEvent
+  | CwdChangedEvent;
 
 /**
  * The envelope every event passes through.
@@ -590,7 +623,166 @@ export const KERNEL_EVENT_KINDS = [
   'process-changed',
   'exit',
   'rejected',
+  'cwd-changed',
 ] as const satisfies readonly KernelEventKind[];
+
+// ---------------------------------------------------------------------------
+// decoding an event that arrived from outside
+// ---------------------------------------------------------------------------
+
+/**
+ * Turn an arbitrary message into a `KernelEvent`, or say why it is not one.
+ *
+ * The mirror of `decodeKernelRequest`, and it exists for the mirror reason. The
+ * header above says events leaving the kernel are CHECKED by `assertCloneSafe`
+ * while requests arriving at it are DECODED, and that asymmetry was right while
+ * the kernel and the terminal were the same program. Once the kernel is a
+ * Worker they are two programs, and the terminal's `switch (event.kind)` is a
+ * claim about a sender it does not control — the same claim `Kernel.send` used
+ * to make about the page, with the same consequence: the first symptom of a
+ * malformed message is a `bytes.length` read on a string, three layers into a
+ * renderer.
+ *
+ * WHAT THIS CHECKS: the envelope (`kind`, `seq`) and every field a consumer
+ * ROUTES on — the ids that say which request, process or terminal a message
+ * belongs to, the discriminators that decide which payload type applies, and
+ * the scalars a terminal renders directly.
+ *
+ * WHAT THIS DOES NOT CHECK, stated so nobody assumes otherwise:
+ *
+ *   THE INTERIOR OF A PAYLOAD. `values`, `targetObject`, an information
+ *   record's `message` — these are `WireValue` graphs, and validating one here
+ *   would be a second implementation of `sanitizePSValue` with a second set of
+ *   limits to disagree with the first. They are checked where they are BUILT.
+ *
+ *   EXTRA PROPERTIES. Unlike `decodeKernelRequest`, which rebuilds each request
+ *   from named fields, this returns the message it was given. Rebuilding an
+ *   event means copying the payload graph, which is the thing above that it
+ *   deliberately does not walk.
+ *
+ *   ACCESSORS. The message is assumed to have arrived through structured clone,
+ *   which yields plain data. A SAME-REALM transport hands over whatever object
+ *   the sender built, getters included, and nothing here would notice.
+ *
+ * `seq` is checked for shape only. Whether it FOLLOWS the last one is a
+ * question about the stream rather than about one message, so it belongs to the
+ * consumer that holds the stream — `KernelClient` in `client.ts` does it.
+ */
+export function decodeKernelEvent(message: unknown): DecodeResult<KernelEvent> {
+  if (typeof message !== 'object' || message === null) {
+    return decodeFailure('an event must be an object');
+  }
+  const record = message as Record<string, unknown>;
+  const kind: unknown = record['kind'];
+  if (typeof kind !== 'string') return decodeFailure('kind must be a string');
+  if (!(KERNEL_EVENT_KINDS as readonly string[]).includes(kind)) {
+    return decodeFailure(`kind must be one of ${KERNEL_EVENT_KINDS.join(', ')}, not '${kind}'`);
+  }
+
+  const problems: string[] = [];
+  // 0 is reserved for "nothing emitted yet" and can never be an event's own
+  // number, so the floor is 1 rather than 0.
+  const seq: unknown = record['seq'];
+  if (typeof seq !== 'number' || !Number.isInteger(seq) || seq < 1) {
+    problems.push('seq must be an integer of at least 1');
+  }
+
+  switch (kind) {
+    case 'objects': {
+      decodeId(record['requestId'], 'requestId', problems);
+      if (!Array.isArray(record['values'])) problems.push('values must be an array');
+      break;
+    }
+    case 'stdout':
+    case 'stderr': {
+      decodeInteger(record['processId'], 'processId', problems);
+      // `instanceof`, for the same reason `stdin` uses it: a plain object with
+      // a `length` passes a duck test and then gets decoded as text.
+      if (!(record['bytes'] instanceof Uint8Array)) problems.push('bytes must be a Uint8Array');
+      break;
+    }
+    case 'stream': {
+      decodeInteger(record['processId'], 'processId', problems);
+      const which: unknown = record['which'];
+      if (typeof which !== 'string' || !(KERNEL_STREAMS as readonly string[]).includes(which)) {
+        problems.push(`which must be one of ${KERNEL_STREAMS.join(', ')}`);
+        break;
+      }
+      // The payload type is decided by `which`, so this is the one place the
+      // discriminator has to be honoured or every consumer's cast is a guess.
+      const payload: unknown = record['payload'];
+      const wantsText = which === 'warning' || which === 'verbose' || which === 'debug';
+      if (wantsText && typeof payload !== 'string') {
+        problems.push(`a ${which} payload must be a string`);
+      } else if (!wantsText && (typeof payload !== 'object' || payload === null)) {
+        problems.push(`a ${which} payload must be a record`);
+      }
+      break;
+    }
+    case 'process-changed': {
+      const snapshot: unknown = record['snapshot'];
+      if (typeof snapshot !== 'object' || snapshot === null) {
+        problems.push('snapshot must be an object');
+        break;
+      }
+      const fields = snapshot as Record<string, unknown>;
+      decodeInteger(fields['pid'], 'snapshot.pid', problems);
+      decodeId(fields['requestId'], 'snapshot.requestId', problems);
+      decodeId(fields['terminalId'], 'snapshot.terminalId', problems);
+      const state: unknown = fields['state'];
+      if (typeof state !== 'string' || !(PROCESS_STATES as readonly string[]).includes(state)) {
+        problems.push(`snapshot.state must be one of ${PROCESS_STATES.join(', ')}`);
+      }
+      break;
+    }
+    case 'exit': {
+      decodeInteger(record['processId'], 'processId', problems);
+      decodeId(record['requestId'], 'requestId', problems);
+      decodeInteger(record['exitCode'], 'exitCode', problems);
+      decodeBoolean(record['succeeded'], 'succeeded', problems);
+      // Null is the value that MEANS something here — "this process did not
+      // move $LASTEXITCODE" — so it is a legal answer and not a missing one.
+      const native: unknown = record['nativeExitCode'];
+      if (native !== null) decodeInteger(native, 'nativeExitCode', problems);
+      decodeSignal(record['signalled'], 'signalled', problems);
+      break;
+    }
+    case 'rejected': {
+      const requestId: unknown = record['requestId'];
+      if (requestId !== null) decodeId(requestId, 'requestId', problems);
+      const requestKind: unknown = record['requestKind'];
+      if (requestKind !== null && typeof requestKind !== 'string') {
+        problems.push('requestKind must be a string or null');
+      }
+      const list: unknown = record['problems'];
+      if (!Array.isArray(list) || list.some((p) => typeof p !== 'string')) {
+        problems.push('problems must be an array of strings');
+      }
+      break;
+    }
+    case 'cwd-changed': {
+      decodeId(record['terminalId'], 'terminalId', problems);
+      if (typeof record['cwd'] !== 'string') problems.push('cwd must be a string');
+      break;
+    }
+    default:
+      // Unreachable: `kind` was checked against KERNEL_EVENT_KINDS above. Kept
+      // so that adding a kind without a case here is a decode failure rather
+      // than a silent pass.
+      return decodeFailure(`no decoder for event kind '${kind}'`);
+  }
+
+  if (problems.length > 0) return { ok: false, problems };
+  return { ok: true, value: message as KernelEvent };
+}
+
+/** A `VirtualSignal` or null, which is what "it finished on its own" means. */
+function decodeSignal(value: unknown, field: string, problems: string[]): void {
+  if (value === null) return;
+  if (typeof value !== 'string' || !(VIRTUAL_SIGNALS as readonly string[]).includes(value)) {
+    problems.push(`${field} must be null or one of ${VIRTUAL_SIGNALS.join(', ')}`);
+  }
+}
 
 // ---------------------------------------------------------------------------
 // honouring the constraint
