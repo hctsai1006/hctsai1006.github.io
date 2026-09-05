@@ -1,0 +1,4 @@
+whoami
+Get-Contribution -Foundation CNCF
+Get-Publication -Full
+Get-Award -Year 2023

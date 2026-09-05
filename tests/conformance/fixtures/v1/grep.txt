@@ -1,0 +1,4 @@
+PS /home/thc1006> grep
+Usage: grep [OPTION]... PATTERNS [FILE]...
+Try 'grep --help' for more information.
+

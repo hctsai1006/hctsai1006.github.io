@@ -49,9 +49,10 @@ describe('workflow files', () => {
     // A glob that matches nothing passes every assertion below it. That is the
     // failure tools/run-tests.mts exists to prevent, and it is reachable here
     // too: rename the directory and this file goes green having checked nothing.
-    assert.ok(files.length >= 2, `expected the workflows, found ${JSON.stringify(files)}`);
+    assert.ok(files.length >= 3, `expected the workflows, found ${JSON.stringify(files)}`);
     assert.ok(files.includes('.github/workflows/upstream-sync.yml'));
     assert.ok(files.includes('.github/workflows/verify.yml'));
+    assert.ok(files.includes('.github/workflows/browser.yml'));
   });
 
   for (const file of files) {
@@ -118,6 +119,61 @@ describe('workflow files', () => {
     // returns 403 and the verifier correctly reports exit 2. The file explains
     // that in a comment, so the assertion is over the lines that run.
     assert.doesNotMatch(codeOf(text), /truth:check/);
+    // And it stays browser-free. `npm run verify` is the gate that has to run on
+    // a machine with no Chromium; the replay of the v1 transcripts is a separate
+    // job with the browser already in its image. Folding it back in here would
+    // make a required, network-free check depend on a 130MB download.
+    const code = codeOf(text);
+    assert.doesNotMatch(code, /test:browser/);
+    assert.doesNotMatch(code, /playwright/i);
+    assert.doesNotMatch(code, /^\s*container:/m);
+  });
+
+  it('browser.yml pins the Playwright image by digest, at the version package.json asks for', () => {
+    // Two separate rots, both silent, both closed here.
+    //
+    // A container tag is a mutable pointer, exactly like an action tag: the
+    // workflow test above refuses `uses: actions/checkout@v7` for that reason,
+    // and `image: ...:v1.60.0-noble` is the same defect with a different key.
+    //
+    // And the image and the npm package have to move together. playwright-core
+    // asks for one exact Chromium build number; the image ships the build its
+    // own version expects. Bumping `playwright` in package.json without bumping
+    // the image gives a job that fails at launch with a missing browser, and
+    // bumping the image alone silently runs the replay on a browser nobody
+    // chose. Neither produces a diff that says so.
+    const text = read('.github/workflows/browser.yml');
+    const image = /^\s*image:\s*(\S+)$/m.exec(text)?.[1] ?? '';
+    assert.match(
+      image,
+      /^mcr\.microsoft\.com\/playwright@sha256:[0-9a-f]{64}$/,
+      `browser.yml runs in "${image}" — pin the image by digest, not by tag.`,
+    );
+
+    const pkg = JSON.parse(read('package.json')) as { devDependencies?: Record<string, string> };
+    const version = pkg.devDependencies?.['playwright'];
+    assert.ok(version !== undefined, 'package.json no longer depends on playwright');
+    assert.match(
+      version,
+      /^\d+\.\d+\.\d+$/,
+      `playwright is pinned as "${version}"; a range would let the image and the package drift apart`,
+    );
+    // The human-readable tag lives in a comment next to the digest, the same way
+    // every action pin carries its release tag.
+    assert.ok(
+      text.includes(`mcr.microsoft.com/playwright:v${version}-noble`),
+      `browser.yml does not name the v${version} image anywhere, so nothing connects ` +
+        'the digest above to the playwright version package.json installs.',
+    );
+  });
+
+  it('the browser gate is wired to a job, not just to a script', () => {
+    // package.json can define `test:browser` and nothing can call it. That is
+    // the shape of a check that never runs, and it is invisible: the script
+    // exists, the tests pass locally, and CI has never executed them.
+    const pkg = JSON.parse(read('package.json')) as { scripts?: Record<string, string> };
+    assert.ok(pkg.scripts?.['test:browser'] !== undefined, 'no test:browser script');
+    assert.match(codeOf(read('.github/workflows/browser.yml')), /npm run test:browser/);
   });
 
   it('the sync branch is a constant, not a date', () => {

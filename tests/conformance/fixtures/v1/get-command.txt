@@ -1,0 +1,117 @@
+PS /home/thc1006> Get-Command
+CommandType  Name                      
+-----------  --------------------------
+Alias        ac -> Add-Content         
+Alias        advisories -> Get-Advisory
+Alias        advisory -> Get-Advisory  
+Alias        cd -> Set-Location        
+Alias        chdir -> Set-Location     
+Alias        ci -> Copy-Item           
+Alias        clear -> Clear-Host       
+Alias        cls -> Clear-Host         
+Alias        copy -> Copy-Item         
+Alias        date -> Get-Date          
+Alias        del -> Remove-Item        
+Alias        dir -> Get-ChildItem      
+Alias        echo -> Write-Output      
+Alias        erase -> Remove-Item      
+Alias        gc -> Get-Content         
+Alias        gci -> Get-ChildItem      
+Alias        gcm -> Get-Command        
+Alias        gl -> Get-Location        
+Alias        gps -> Get-Process        
+Alias        h -> Get-History          
+Alias        history -> Get-History    
+Alias        links -> Get-Source       
+Alias        md -> New-Item            
+Alias        measure -> Measure-Object 
+Alias        mi -> Move-Item           
+Alias        move -> Move-Item         
+Alias        ni -> New-Item            
+Alias        profile -> whoami         
+Alias        pwd -> Get-Location       
+Alias        rd -> Remove-Item         
+Alias        ren -> Rename-Item        
+Alias        ri -> Remove-Item         
+Alias        rmdir -> Remove-Item      
+Alias        rni -> Rename-Item        
+Alias        sc -> Set-Content         
+Alias        select -> Select-Object   
+Alias        sl -> Set-Location        
+Alias        sls -> Select-String      
+Alias        sort -> Sort-Object       
+Alias        sources -> Get-Source     
+Alias        src -> Get-Source         
+Alias        theme -> Set-Theme        
+Alias        tracepath -> traceroute   
+Alias        type -> Get-Content       
+Alias        where -> Where-Object     
+Alias        whois -> whoami           
+Application  cat                       
+Application  chmod                     
+Application  chown                     
+Application  cp                        
+Application  df                        
+Application  free                      
+Application  git                       
+Application  grep                      
+Application  hostname                  
+Application  ifconfig                  
+Application  ip                        
+Application  ls                        
+Application  lsb_release               
+Application  mkdir                     
+Application  mv                        
+Application  nano                      
+Application  ping                      
+Application  ps                        
+Application  rm                        
+Application  touch                     
+Application  traceroute                
+Application  tree                      
+Application  uname                     
+Application  uptime                    
+Application  vi                        
+Application  vim                       
+Application  which                     
+Application  whoami                    
+Cmdlet       Add-Content               
+Cmdlet       Clear-Host                
+Cmdlet       Copy-Item                 
+Cmdlet       exit                      
+Cmdlet       Get-Advisory              
+Cmdlet       Get-Award                 
+Cmdlet       Get-ChildItem             
+Cmdlet       Get-Command               
+Cmdlet       Get-Content               
+Cmdlet       Get-Contribution          
+Cmdlet       Get-Date                  
+Cmdlet       Get-Help                  
+Cmdlet       Get-History               
+Cmdlet       Get-Location              
+Cmdlet       Get-Process               
+Cmdlet       Get-Project               
+Cmdlet       Get-Publication           
+Cmdlet       Get-Random                
+Cmdlet       Get-Source                
+Cmdlet       Get-Timeline              
+Cmdlet       help                      
+Cmdlet       Measure-Object            
+Cmdlet       Move-Item                 
+Cmdlet       New-Item                  
+Cmdlet       Out-Null                  
+Cmdlet       Remove-Item               
+Cmdlet       Rename-Item               
+Cmdlet       Reset-FileSystem          
+Cmdlet       Select-Object             
+Cmdlet       Select-String             
+Cmdlet       Set-Content               
+Cmdlet       Set-Location              
+Cmdlet       Set-Theme                 
+Cmdlet       Sort-Object               
+Cmdlet       Test-Connection           
+Cmdlet       Test-Path                 
+Cmdlet       Where-Object              
+Cmdlet       Write-Output              
+Variable     $PSVersionTable           
+

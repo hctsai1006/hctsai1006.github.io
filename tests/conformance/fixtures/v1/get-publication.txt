@@ -1,0 +1,14 @@
+PS /home/thc1006> Get-Publication
+13 publications (3 IEEE accepted + preprints)
+
+Venue               Title                                    Status  
+------------------  ---------------------------------------  --------
+IEEE SCC 2026       Ground-Side Mission Plan Compilation     Accepted
+IEEE WF-PST 2026    OOBWatch-S3: Zephyr Cold-Boot Race       Accepted
+ICAIMS 2026 (IEEE)  Band-as-Modality Learning                Accepted
+arXiv:2607.09992    Trusted Floors Under Untrusted Learners  preprint
+engrXiv 7541        Physics-Grounded DRL for LEO NTN         preprint
+  … 8 more · run -Full for the complete list
+
+  來源: /publications/
+

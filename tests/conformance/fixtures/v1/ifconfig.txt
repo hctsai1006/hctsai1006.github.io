@@ -1,0 +1,4 @@
+PS /home/thc1006> ifconfig
+Command 'ifconfig' not found, but can be installed with:
+  sudo apt install net-tools
+

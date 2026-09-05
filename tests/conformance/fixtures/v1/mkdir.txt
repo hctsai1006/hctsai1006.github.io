@@ -1,0 +1,4 @@
+PS /home/thc1006> mkdir
+mkdir: missing operand
+Try 'mkdir --help' for more information.
+

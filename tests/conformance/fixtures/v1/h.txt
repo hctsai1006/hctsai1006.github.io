@@ -1,0 +1,7 @@
+PS /home/thc1006> h
+1    whoami
+2    Get-Contribution -Foundation CNCF
+3    Get-Publication -Full
+4    Get-Award -Year 2023
+5    h
+

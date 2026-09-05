@@ -1,0 +1,10 @@
+PS /home/thc1006> gps
+Id    CPU(s)  RSS(M)  ProcessName
+----  ------  ------  -----------
+1006  12.83   182     pwsh       
+1142  48.21   1204    code-server
+2612  96.44   2048    chromium   
+8890  0.77    96      kubectl    
+3120  2.15    154     containerd 
+4471  0.31    42      sshd       
+

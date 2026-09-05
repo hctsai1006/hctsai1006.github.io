@@ -1,0 +1,3 @@
+PS /home/thc1006> thc1006
+That is me. 打 whoami 看更多,或 Get-Contribution。
+

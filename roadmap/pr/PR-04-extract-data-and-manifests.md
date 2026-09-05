@@ -12,7 +12,7 @@ D (portfolio data) and CMDLETS (67 command entries) are trapped in a 2113-line s
 
 ## Depends on
 
-- [~] **1. Archive the single-file terminal and capture golden transcripts** — [detail](PR-01-archive-and-golden-transcripts.md)
+- [x] **1. Archive the single-file terminal and capture golden transcripts** — [detail](PR-01-archive-and-golden-transcripts.md)
 
 ## Tasks
 

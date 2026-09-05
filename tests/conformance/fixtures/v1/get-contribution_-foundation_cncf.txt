@@ -1,0 +1,19 @@
+PS /home/thc1006> Get-Contribution -Foundation CNCF
+CNCF — 191 merged · 46 repos
+
+Repository                           Merged
+-----------------------------------  ------
+kubernetes-sigs/kueue                49    
+open-telemetry/opentelemetry-cpp     37    
+kubernetes/kubernetes                22    
+kubernetes-sigs/dra-driver-cpu       9     
+kubernetes-sigs/dranet               6     
+llm-d/llm-d-router                   6     
+jaegertracing/jaeger-ui              6     
+kptdev/porch                         4     
+volcano-sh/volcano                   3     
+argoproj/argo-workflows              3     
+k8s-operatorhub/community-operators  3     
+
+  來源: /open-source/ 逐筆清單與計數規則
+

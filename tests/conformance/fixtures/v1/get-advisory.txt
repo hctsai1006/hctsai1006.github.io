@@ -1,0 +1,20 @@
+PS /home/thc1006> Get-Advisory
+Advisory             Project             Severity    Role      Published 
+-------------------  ------------------  ----------  --------  ----------
+GHSA-qm8v-g4f9-qhjx  istio/istio         6.8 medium  reporter  2026-08-27
+GHSA-j38h-7pfq-cxmw  volcano-sh/volcano  medium      finder    2026-08-26
+
+GHSA-qm8v-g4f9-qhjx  istio/istio
+  BackendTLSPolicy 的 caCertificateRefs 解不出來時,sidecar 丟掉 upstream 的 TLS socket 改送明文,加密與 CA 驗證同時失效且無聲;gateway 則 fail closed 不受影響。
+  CNCF Graduated  ·  fixed in 1.30.4 / 1.29.7
+  bulletin: istio.io/latest/news/security/istio-security-2026-006/
+
+GHSA-j38h-7pfq-cxmw  volcano-sh/volcano
+  DRA 容量會計的迭代量隨租戶可控的數字成長,已驗證的租戶可用可控的 device count 吃光 scheduler CPU,癱瘓整個叢集的排程(CWE-400 經由 CWE-834)。
+  CNCF Incubating  ·  fixed in v1.15.2 (2026-08-29 已發布)
+
+兩則都在 advisory 的 credits 欄具名、狀態 accepted。
+兩則目前都還沒有 CVE,也都還沒進 GitHub 全域 advisory 資料庫與 OSV。
+
+  來源: /open-source/#advisories
+

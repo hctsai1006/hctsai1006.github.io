@@ -1,0 +1,50 @@
+PS /home/thc1006> Get-Publication -Full
+13 publications  ·  3 IEEE accepted  ·  8 preprints  ·  2 earlier
+ORCID 0000-0001-7421-8027
+
+2026
+  Ground-Side Mission Plan Compilation with Policy-as-Code Guardrails for Cloud-Native Satellite Platforms
+    IEEE SCC 2026 (Space Computing Conference)  ·  arXiv:2607.14798  ·  Accepted
+    Hsiu-Chi Tsai, Chia-Tung Chung
+  OOBWatch-S3: Surfacing a Zephyr Wi-Fi Cold-Boot Race Family on ESP32-S3 via a Public-Safety Watchdog Deployment
+    IEEE WF-PST 2026 (World Forum on Public Safety Technology)  ·  Accepted
+    Hsiu-Chi Tsai, Chia-Tung Chung
+  Band-as-Modality Learning for Multispectral and Hyperspectral Segmentation: Spectral Group Masked Pretraining and Cross-Band Attention for Missing-Band Robustness
+    IEEE ICAIMS 2026  ·  Accepted
+    Chia-Tung Chung, Hsiu-Chi Tsai
+  Trusted Floors Under Untrusted Learners: A Runtime Assured-SLO Guard for ML Serving
+    arXiv (cs.DC)  ·  arXiv:2607.09992  ·  preprint
+    Hsiu-Chi Tsai
+  Physics-Grounded Deep Reinforcement Learning for Power Control in LEO Non-Terrestrial O-RAN: A QoS-Power Pareto and Cross-Orbit Robustness Study
+    engrXiv  ·  10.31224/7541  ·  preprint
+    Hsiu-Chi Tsai, Chia-Tung Chung
+  An Iterative Dual-Channel Neural Quantum State Algorithm for Selected Configuration Interaction
+    arXiv (physics.chem-ph / quant-ph)  ·  arXiv:2606.26760  ·  preprint
+    Jen-Yu Chang, Yi-Chun Chang, Yu-Jui Lin, Ming-Chun Yang, Hsiu-Chi Tsai, Tai-Yue Li, Nan-Yow Chen, Tsung-Wei Huang, En-Jui Kuo
+  A Large-Scale Empirical Study of Deep Learning for MEMS Gyroscope Bias Estimation
+    engrXiv  ·  10.31224/7144  ·  preprint
+    Hsiu-Chi Tsai, Chia-Tung Chung
+  Cross-Layer Diagnostics for Operator-Side Platform Porting of GPU-Accelerated 5G RAN: An Experience Report on Cable-on Validation of NVIDIA Aerial cuBB on DGX Spark
+    engrXiv  ·  10.31224/7056  ·  preprint
+    Hsiu-Chi Tsai
+  Federated O-RAN Slice SLA Prediction: A Cross-Architecture Empirical Benchmark on Colosseum/ColO-RAN
+    Zenodo  ·  10.5281/zenodo.20075433  ·  preprint
+    Hsiu-Chi Tsai
+  ECD length and fold identity shape the calibration of AI-predicted immune-receptor interactions: lessons from 834 experimentally tested pairs
+    Research Square  ·  10.21203/rs.3.rs-9526911/v1  ·  preprint
+    Hsiu-Chi Tsai
+  Sub-Millijoule Intrusion Detection on a Commodity MCU Neural Processing Unit: A Four-Dataset Deployment Study
+    Preprints.org (MDPI)  ·  10.20944/preprints202603.0817.v3  ·  preprint
+    Hsiu-Chi Tsai
+
+2023
+  Intelligent Management System of O-RAN Private Network in Internal Medicine Environment
+    NYCU Capstone  ·  10.13140/RG.2.2.28996.30081  ·  published
+    Hsiu-Chi Tsai, Yu-Te Wu
+  The Development and Prospect of O-RAN Integrated LEO Satellite Communication System for Marine Vessel
+    NYCU Thesis  ·  10.13140/RG.2.2.12387.02085  ·  published
+    Hsiu-Chi Tsai, Chi-Hsuan Wang, Yu-Tang You, An-Tai Yeh
+
+  來源: /publications/
+        ORCID 0000-0001-7421-8027
+

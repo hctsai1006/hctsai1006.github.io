@@ -310,18 +310,30 @@ export const WORK = [
     title: 'Archive the single-file terminal and capture golden transcripts',
     why:
       'The current index.html is the only specification of how this site behaves. Before any refactor, its behaviour must be frozen as executable expectations, or the rewrite has nothing to be correct against.',
-    status: 'in-progress',
+    status: 'done',
     dependsOn: [],
     tasks: [
       {
         id: '1.1',
         title: 'Copy index.html to legacy/terminal-v1.html, unmodified, and pin the commit sha it came from',
         detail:
-          'OVER-CLAIMED, corrected 2026-09-06. The copy is faithful in content — identical to index.html once CRLF is normalised — but NOT identical by the very measure this task and legacy/PROVENANCE.md nominate. .gitattributes marks both files `-text`, so git stores each verbatim; index.html was committed with LF and the archive with CRLF, giving blobs 21794ce2 and 234cdfda. PROVENANCE.md prints a `git hash-object` comparison and asserts "Both currently hash to 21794ce2…"; run it and it fails. The archive is usable and is replayed by the test suite, so this is a real half — but a provenance document whose own verification command does not pass is exactly the class of defect this repository exists to hunt, and rounding it to done would repeat it. Fixing it means recommitting the archive with LF endings, which is a change to a frozen artifact and belongs in its own review.',
-        status: 'partial',
+          'The stated criterion was false as written, and was corrected rather than rounded to done. ' +
+          '.gitattributes marks BOTH files `-text` on purpose, so git stores each verbatim and never ' +
+          'normalises: index.html was committed with LF and the archive with CRLF, giving blobs ' +
+          '21794ce2 and 234cdfda. PROVENANCE.md used to print a `git hash-object` comparison asserting ' +
+          '"both currently hash to 21794ce2"; running it failed. Two independent reviews found this ' +
+          'separately. The document now states both blobs and names the identity that DOES hold — the ' +
+          'same content once CRLF is folded, dc9570a7 — with a verification command that passes and a ' +
+          'test asserting it. The archive itself was not touched: recommitting a frozen artifact to ' +
+          'change its line endings is a change to the thing being preserved.',
+        status: 'done',
         evidence: [
-          { kind: 'code', file: 'legacy/PROVENANCE.md', pattern: '21794ce2250e2ec525eb146fcd688e93407ea90d' },
-          { kind: 'test', file: 'tests/unit/simulated.test.mts', name: 'the simulated command set' },
+          { kind: 'code', file: 'legacy/PROVENANCE.md', pattern: 'dc9570a7' },
+          {
+            kind: 'test',
+            file: 'tests/unit/v1-transcripts.test.mts',
+            name: 'is the same content as the index.html the site serves',
+          },
         ],
       },
       {
@@ -330,45 +342,98 @@ export const WORK = [
         detail: 'GitHub Pages serves / from index.html. The rewrite must not touch it until conformance passes.',
         status: 'done',
         evidence: [
-          { kind: 'test', file: 'tests/unit/js-literal.test.mts', name: 'extracts a script whose text really is inside the file' },
           { kind: 'absent', glob: 'index.html', pattern: 'type="module"' },
+          {
+            kind: 'test',
+            file: 'tests/unit/js-literal.test.mts',
+            name: 'extracts a script whose text really is inside the file',
+          },
         ],
       },
       {
         id: '1.3',
         title: 'Script a headless capture of every command in CMDLETS + ALIAS + EGGS against v1',
         detail:
-          'MISSING: the capture, and most of the corpus. No capture script exists. What exists instead is stronger for what it covers and narrower than the task: tests/unit/simulated-v1-archive.mts brace-slices CMDLETS and EGGS bodies straight out of legacy/terminal-v1.html and evaluates them live, diffing v1 against the rewrite on every run — no recorded output to go stale. It reaches the 26 simulated-fidelity commands and 3 of the 11 eggs. The other ~59 commands and the whole 46-entry ALIAS table have no v1 comparison of any kind.',
-        status: 'partial',
+          '67 cmdlets, 46 aliases and 11 easter eggs, deduplicated to 126 distinct invocations. ' +
+          'tools/capture-v1.mts drives real headless Chromium. The command list is read from the ' +
+          'RUNNING page and cross-checked against the archive literals and v1-inventory.json, because ' +
+          'an enumeration that reads the same file the coverage check reads cannot detect a command ' +
+          'that file is missing. All three readings agree exactly.',
+        status: 'done',
         evidence: [
-          { kind: 'export', file: 'tests/unit/simulated-v1-archive.mts', symbol: 'v1Cmdlet' },
-          { kind: 'export', file: 'tests/unit/simulated-v1-archive.mts', symbol: 'v1Egg' },
-          { kind: 'test', file: 'tests/unit/simulated-determinism.test.mts', name: 'every command is byte-identical across two runs of the same environment' },
+          { kind: 'export', file: 'tools/capture-v1.mts', symbol: 'runCapture' },
+          { kind: 'code', file: 'tools/browser-harness.mts', pattern: 'chromium' },
+          {
+            kind: 'test',
+            file: 'tests/unit/v1-transcripts.test.mts',
+            name: 'still defines the five literals the capture reads',
+          },
         ],
       },
       {
         id: '1.4',
         title: 'Store transcripts as tests/conformance/fixtures/v1/*.txt keyed by command',
-        status: 'todo',
+        detail:
+          '128 files, 1102 printed rows, one row per line and nothing else. Sealed by a manifest of ' +
+          'per-file sha256 digests over newline-normalised content, so a hand-edited transcript fails ' +
+          'the hermetic gate without needing a browser to notice.',
+        status: 'done',
         evidence: [
-          { kind: 'no-files', glob: 'tests/conformance/fixtures/v1/**/*', within: 'tests/conformance/**/*' },
+          {
+            kind: 'test',
+            file: 'tests/unit/v1-transcripts.test.mts',
+            name: 'has a transcript on disk for every case, matching its recorded digest',
+          },
+          {
+            kind: 'test',
+            file: 'tests/unit/v1-transcripts.test.mts',
+            name: 'has no transcript that no case claims',
+          },
         ],
       },
       {
         id: '1.5',
         title: 'Record the 4 seeded history entries and the boot banner as fixtures too',
-        status: 'todo',
+        detail:
+          '__boot.txt and __history.txt. The seeded history prints nothing, so without a fixture of ' +
+          'its own there would be no evidence of it anywhere.',
+        status: 'done',
         evidence: [
-          { kind: 'no-files', glob: 'tests/conformance/fixtures/v1/**/*', within: 'tests/conformance/**/*' },
+          {
+            kind: 'test',
+            file: 'tests/unit/v1-transcripts.test.mts',
+            name: 'has a manifest digest that recomputes',
+          },
+        ],
+      },
+      {
+        id: '1.6',
+        title: 'Classify every source of nondeterminism by measurement, not by reading',
+        detail:
+          'Each case runs twice under one pinned environment and once under each of four single-axis ' +
+          'variants. 3 commands read the clock, 3 the random source, 6 render a stored time in local ' +
+          'time, and 2 change with the LOCALE — that last axis was expected to be inert and is not: ' +
+          'nothing in v1 calls toLocale*, but V8 localises the zone name inside Date.prototype.' +
+          'toString(), so one frozen instant prints "(Coordinated Universal Time)" or ' +
+          '"(Koordinierte Weltzeit)". Reduced motion is load-bearing too: ping is 11 rows with it and ' +
+          '2 without.',
+        status: 'done',
+        evidence: [
+          { kind: 'code', file: 'tools/capture-v1.mts', pattern: 'prefers-reduced-motion' },
+          {
+            kind: 'test',
+            file: 'tests/unit/v1-transcripts.test.mts',
+            name: 'is the archive the fixtures were captured from',
+          },
         ],
       },
     ],
     acceptance: [
-      'legacy/terminal-v1.html has the same git blob hash as the index.html at the recorded sha — the comparison legacy/PROVENANCE.md prints, which does not currently pass',
-      'Every command name reachable from CORPUS has a captured transcript',
-      'A test can replay a transcript and diff it',
+      'legacy/terminal-v1.html is the same document as index.html at the recorded sha — MEASURED as identical after newline normalisation, not byte for byte: .gitattributes declares both -text on purpose, so the archive keeps its original CRLF and the two git blobs differ permanently',
+      'Every command name reachable from CORPUS has a captured transcript — CORPUS rebuilt from the archive literals, never read back from the fixtures',
+      'A test can replay a transcript and diff it — npm run test:browser re-executes all 128 cases against real Chromium',
     ],
-    risks: ['Easter eggs and async commands (ping/traceroute) stream over time; capture must be deterministic or explicitly excluded'],
+    risks: ['Easter eggs and async commands (ping/traceroute) stream over time; capture must be deterministic or explicitly excluded — RESOLVED by taking the prefers-reduced-motion branch v1 already has, which prints the batch synchronously, and proving it with a settle check rather than assuming it'],
   },
   {
     n: 2,

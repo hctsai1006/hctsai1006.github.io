@@ -1,0 +1,5 @@
+PS /home/thc1006> gl
+Path
+-------------
+/home/thc1006
+

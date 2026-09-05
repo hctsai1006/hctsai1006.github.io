@@ -1,0 +1,5 @@
+PowerShell 7.6.5
+
+Type help to explore, or try whoami / Get-Contribution -Foundation CNCF
+Themes: Set-Theme pi / campbell / blue
+

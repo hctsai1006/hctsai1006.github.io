@@ -1,0 +1,7 @@
+PS /home/thc1006> ip
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN
+    inet 127.0.0.1/8 scope host lo
+2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP
+    inet 10.6.10.6/24 brd 10.6.10.255 scope global eth0
+    inet6 fe80::216:3eff:fe74:1006/64 scope link
+

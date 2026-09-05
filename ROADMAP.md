@@ -5,7 +5,7 @@
 
 Turning a single-file PowerShell-flavoured web terminal into a browser workstation with a versioned PowerShell compatibility layer, a real object pipeline, durable state, a trusted package model and an audited AI surface.
 
-**55 of 104 tasks complete**, 15 partial.  `#################/////..........`
+**60 of 105 tasks complete**, 13 partial.  `##################////..........`
 
 Legend: `[x]` done · `[/]` partial · `[~]` in progress · `[ ]` todo · `[!]` blocked · `[-]` deferred
 
@@ -15,7 +15,7 @@ Every `done` and `partial` task cites evidence — a symbol, a passing test, a v
 
 | Phase | Goal | Items | Progress |
 | --- | --- | --- | --- |
-| **Ground truth** | Make it impossible to be wrong about upstream by accident. Nothing downstream is trustworthy until version truth is mechanised. | 1, 2, 3 | `##############//..` 24/30 +4 partial |
+| **Ground truth** | Make it impossible to be wrong about upstream by accident. Nothing downstream is trustworthy until version truth is mechanised. | 1, 2, 3 | `#################/` 29/31 +2 partial |
 | **Core** | A real execution engine: one lexer, one AST, a version-aware binder, and a typed object pipeline. This is where the current site is weakest. | 4, 5, 6, 7, 8 | `############///...` 21/31 +5 partial |
 | **State** | Durable, inspectable, recoverable virtual machine state — filesystem, providers, transactions, migrations. | 9, 10 | `#####/////........` 3/11 +3 partial |
 | **Compatibility** | Prove the emulation is faithful by differential-testing against real pwsh, and express version differences as data. | 11, 12 | `###########//.....` 5/8 +1 partial |
@@ -32,7 +32,7 @@ Dependency-respecting. An item cannot be complete before everything it depends o
 
 | # | Item | Phase | Status | Depends on | Tasks |
 | --- | --- | --- | --- | --- | --- |
-| 1 | [Archive the single-file terminal and capture golden transcripts](roadmap/pr/PR-01-archive-and-golden-transcripts.md) | Ground truth | [~] in progress | — | 1/5 +2 partial |
+| 1 | [Archive the single-file terminal and capture golden transcripts](roadmap/pr/PR-01-archive-and-golden-transcripts.md) | Ground truth | [x] done | — | 6/6 |
 | 2 | [Mechanise version truth across five axes](roadmap/pr/PR-02-verify-release-truth.md) | Ground truth | [x] done | — | 17/17 |
 | 3 | [Express 7.6.5 and 7.7.0-preview.4 as compatibility profiles](roadmap/pr/PR-03-compatibility-profiles.md) | Ground truth | [~] in progress | 2 | 6/8 +2 partial |
 | 4 | [Extract portfolio data and command manifests out of index.html](roadmap/pr/PR-04-extract-data-and-manifests.md) | Core | [~] in progress | 1 | 8/9 |
@@ -187,12 +187,13 @@ Every claim below was checked against a primary source on 2026-09-04. These are 
 
 ### Ground truth
 
-- [~] **1. Archive the single-file terminal and capture golden transcripts** — [detail](roadmap/pr/PR-01-archive-and-golden-transcripts.md)
-  - [/] 1.1 Copy index.html to legacy/terminal-v1.html, unmodified, and pin the commit sha it came from
+- [x] **1. Archive the single-file terminal and capture golden transcripts** — [detail](roadmap/pr/PR-01-archive-and-golden-transcripts.md)
+  - [x] 1.1 Copy index.html to legacy/terminal-v1.html, unmodified, and pin the commit sha it came from
   - [x] 1.2 Keep the live site serving the v1 file until the rewrite reaches parity
-  - [/] 1.3 Script a headless capture of every command in CMDLETS + ALIAS + EGGS against v1
-  - [ ] 1.4 Store transcripts as tests/conformance/fixtures/v1/*.txt keyed by command
-  - [ ] 1.5 Record the 4 seeded history entries and the boot banner as fixtures too
+  - [x] 1.3 Script a headless capture of every command in CMDLETS + ALIAS + EGGS against v1
+  - [x] 1.4 Store transcripts as tests/conformance/fixtures/v1/*.txt keyed by command
+  - [x] 1.5 Record the 4 seeded history entries and the boot banner as fixtures too
+  - [x] 1.6 Classify every source of nondeterminism by measurement, not by reading
 - [x] **2. Mechanise version truth across five axes** — [detail](roadmap/pr/PR-02-verify-release-truth.md)
   - [x] 2.1 Resolve which releases exist from the GitHub Releases API
   - [x] 2.2 Dereference annotated tags to real commit shas

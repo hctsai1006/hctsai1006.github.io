@@ -1,0 +1,78 @@
+name: browser
+
+# The v1 golden transcripts, replayed against a real browser.
+#
+# WHY THIS IS NOT PART OF verify.yml. `npm run verify` is hermetic on purpose,
+# and tests/unit/workflows.test.mts asserts it. Replaying v1 needs Chromium, and
+# acquiring Chromium is a network operation: folding it into the required gate
+# would make a change fail review because a browser download 503'd, which is the
+# class of failure that gets a gate muted. The transcripts are therefore checked
+# twice — hermetically for coherence and tamper-evidence in `npm test`, and here
+# for whether they still describe what v1 prints.
+#
+# WHY A CONTAINER RATHER THAN `npx playwright install`. The official Playwright
+# image already carries the exact browser build that this Playwright expects, so
+# this job downloads no browser at all. That removes the failure mode above
+# instead of moving it, and it removes the second one too: a browser cache keyed
+# on a lockfile hash is a cache that is cold exactly when the Playwright version
+# changes, which is the run you least want to be slow and flaky.
+#
+# The image is pinned BY DIGEST, for the same reason every action here is pinned
+# by commit sha: `v1.60.0-noble` is a mutable tag, and it naming a different
+# image tomorrow would produce no diff anywhere in this repository. The tag is
+# kept in the comment so a human can read it, and tests/unit/workflows.test.mts
+# asserts the tag matches the `playwright` version in package.json — the two
+# have to move together or the image's browsers are not the ones playwright-core
+# will look for.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: browser-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  transcripts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container:
+      # mcr.microsoft.com/playwright:v1.60.0-noble
+      #
+      # MEASURED in this image: Node v24.15.0, PLAYWRIGHT_BROWSERS_PATH=/ms-playwright,
+      # and chromium-1223 + chromium_headless_shell-1223 already installed — which
+      # is exactly the build playwright-core 1.60.0 asks for.
+      #
+      # Node is the image's own, not the .node-version pin, and that is a
+      # deliberate exception rather than an oversight. The pin exists because
+      # `process.versions.unicode` has to match the checked-in UCD extracts for
+      # the width table; this job runs none of that. What it does run is
+      # `npm ci`, which enforces engines.node >= 24.12.0 through
+      # `engine-strict=true`, so an image whose Node fell below the floor would
+      # fail loudly at install rather than quietly at runtime. Everything the
+      # transcripts actually depend on comes from Chromium, not from Node.
+      image: mcr.microsoft.com/playwright@sha256:9bd26ad900bb5e0f4dee75839e957a89ae89c2b7ab1e76050e559790e946b948
+    env:
+      # The image already has the browsers. Saying so makes "this job downloads
+      # nothing" an enforced property rather than a lucky cache hit: if the pin
+      # and the image ever disagree, launch fails with the missing build named,
+      # instead of silently pulling a second copy over the network.
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - run: npm ci
+
+      # Replays every command in CMDLETS + ALIAS + EGGS against
+      # legacy/terminal-v1.html and diffs each transcript against the committed
+      # fixture. tools/run-browser-tests.mts refuses to report success for a
+      # suite that skipped itself, which is what a browser test does when there
+      # is no browser.
+      - name: replay the v1 transcripts
+        run: npm run test:browser

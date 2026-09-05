@@ -1,0 +1,3 @@
+PS /home/thc1006> mv
+mv: missing destination file operand
+

@@ -1,0 +1,26 @@
+PS /home/thc1006> Get-Contribution
+276 merged pull requests · 79 projects · 8 foundations
+
+Repository                           Merged
+-----------------------------------  ------
+kubernetes-sigs/kueue                49    
+open-telemetry/opentelemetry-cpp     37    
+RocketPy-Team/RocketPy               18    
+kubernetes/kubernetes                22    
+zephyrproject-rtos/zephyr            10    
+ocudu/ocudu                          10    
+kubernetes-sigs/dra-driver-cpu       9     
+kubernetes-sigs/dranet               6     
+sysprog21/muxleq                     6     
+llm-d/llm-d-router                   6     
+jaegertracing/jaeger-ui              6     
+ROCm/k8s-gpu-dra-driver              4     
+kptdev/porch                         4     
+volcano-sh/volcano                   3     
+argoproj/argo-workflows              3     
+k8s-operatorhub/community-operators  3     
+nephio-project/test-infra            3     
+AverageMarcus/devstats-viewer        3     
+
+  來源: /open-source/ 逐筆清單與計數規則
+

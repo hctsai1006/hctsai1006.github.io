@@ -1,0 +1,4 @@
+PS /home/thc1006> sudo
+sudo: command not found
+PowerShell elevates with Start-Process -Verb RunAs. (nice try)
+

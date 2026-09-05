@@ -1,0 +1,18 @@
+PS /home/thc1006> src
+這個終端機是次要展示面。所有內容以個人網站為準,
+若兩邊有出入,請以下列來源為準:
+
+  個人網站    people.cs.nycu.edu.tw/~hctsai1006
+  著作        /publications/
+  開源        /open-source/
+  榮譽        /honors/
+  經歷        /experience/
+  醫學        /medical/
+  教學        /teaching/
+  部落格      /blog/
+  聯絡        /contact/
+  CV          cv.pdf
+  ORCID       0000-0001-7421-8027
+  GitHub      @thc1006
+  舊版終端機  classic.html
+

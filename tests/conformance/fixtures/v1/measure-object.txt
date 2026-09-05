@@ -1,0 +1,3 @@
+PS /home/thc1006> Measure-Object
+Usage: <command> | Measure-Object
+
