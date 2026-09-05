@@ -45,14 +45,26 @@ rather than sorting objects by a property.
 Compare the content **after folding CRLF to LF**. Not the raw bytes, and — this
 is the correction — not the git blob hash either.
 
+Against `index.html` **at the archived commit**, not at `HEAD`. The archive is
+frozen and the page is not: comparing with `HEAD` made this command — and the
+test below — fail the first time the page was edited for any reason, which
+happened on a routine refresh of the contribution counts.
+
 ```sh
-a=$(git show HEAD:index.html              | tr -d '\r' | sha256sum)
-b=$(git show HEAD:legacy/terminal-v1.html | tr -d '\r' | sha256sum)
+c=0838080474d7e34d45cff9f242d2cdb7adde3380
+a=$(git show "$c":index.html                 | tr -d '\r' | sha256sum)
+b=$(git show HEAD:legacy/terminal-v1.html    | tr -d '\r' | sha256sum)
 [ "$a" = "$b" ] && echo identical
 ```
 
-`tests/unit/v1-transcripts.test.mts` asserts exactly this, so the archive
-drifting from the deployed page now fails a test rather than a paragraph.
+Both are `dc9570a7…`, which is the row above.
+
+`tests/unit/v1-transcripts.test.mts` asserts exactly this, against the same
+commit, and a second test asserts that commit is still the one recorded here —
+so the constant in the test cannot become a different claim from this document.
+What it catches is the archive being edited after the fact, which is the thing
+worth catching; what it deliberately no longer catches is the living page moving
+on, which is not drift but the point of having an archive.
 
 ### Why not the git blob hash
 

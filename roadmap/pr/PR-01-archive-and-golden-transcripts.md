@@ -19,7 +19,7 @@ Nothing. This can start immediately.
 - [x] **1.1** Copy index.html to legacy/terminal-v1.html, unmodified, and pin the commit sha it came from
   - The stated criterion was false as written, and was corrected rather than rounded to done. .gitattributes marks BOTH files `-text` on purpose, so git stores each verbatim and never normalises: index.html was committed with LF and the archive with CRLF, giving blobs 21794ce2 and 234cdfda. PROVENANCE.md used to print a `git hash-object` comparison asserting "both currently hash to 21794ce2"; running it failed. Two independent reviews found this separately. The document now states both blobs and names the identity that DOES hold — the same content once CRLF is folded, dc9570a7 — with a verification command that passes and a test asserting it. The archive itself was not touched: recommitting a frozen artifact to change its line endings is a change to the thing being preserved.
   - *evidence:* `legacy/PROVENANCE.md` matches `/dc9570a7/`
-  - *evidence:* `tests/unit/v1-transcripts.test.mts` — test "is the same content as the index.html the site serves"
+  - *evidence:* `tests/unit/v1-transcripts.test.mts` — test "is the document index.html was at the commit it was archived from"
 - [x] **1.2** Keep the live site serving the v1 file until the rewrite reaches parity
   - GitHub Pages serves / from index.html. The rewrite must not touch it until conformance passes.
   - *evidence:* nothing under `index.html` matches `/type="module"/`

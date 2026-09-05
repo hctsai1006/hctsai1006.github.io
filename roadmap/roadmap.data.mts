@@ -332,7 +332,7 @@ export const WORK = [
           {
             kind: 'test',
             file: 'tests/unit/v1-transcripts.test.mts',
-            name: 'is the same content as the index.html the site serves',
+            name: 'is the document index.html was at the commit it was archived from',
           },
         ],
       },
