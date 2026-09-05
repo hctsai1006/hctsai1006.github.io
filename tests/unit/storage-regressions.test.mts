@@ -551,3 +551,91 @@ describe('restoreSnapshot', () => {
     assert.equal(value(await store.stat('/etc/motd')).origin, 'seed', 'a real seed node stays a seed node');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Second review pass. Four more, all reproduced before they were fixed.
+// ---------------------------------------------------------------------------
+
+describe('installImage that fails part way', () => {
+  it('re-authorises the byte total on the FAILING exit too', async () => {
+    // The recompute sat on the last line of the happy path, so every early
+    // return left `#used` stale — and `#checkCapacity` reads it. The first
+    // entry lands, the second returns ENOTDIR, and the mount then believes it
+    // holds nothing.
+    const store = backend({ capacity: 100 });
+    const installed = await store.installImage({
+      time: 1_700_000_000_000,
+      entries: [
+        { path: '/big', kind: 'file', content: 'x'.repeat(90) },
+        { path: '/big/under', kind: 'file', content: 'boom' },
+      ],
+    });
+    assert.equal(code(installed), 'ENOTDIR', 'a file cannot be a path component');
+    assert.equal(value(await store.quota()).used, 90, 'the bytes that DID land must be counted');
+    // And the capacity check must act on that: 90 + 90 does not fit in 100.
+    assert.equal(code(await store.writeText('/more', 'y'.repeat(90))), 'ENOSPC');
+    assert.equal(value(await store.quota()).used, 90);
+  });
+});
+
+describe('a directory that is writable but not searchable', () => {
+  /** mode 0o644 on a DIRECTORY: rw-, no execute. Real Linux refuses entry creation. */
+  const unsearchable = async (store: MemoryStorage): Promise<void> => {
+    await store.mkdir('/e');
+    await store.mkdir('/e/sub');
+    await store.chmod('/e/sub', 0o644);
+  };
+
+  it('refuses mkdir BEFORE creating, not after', async () => {
+    // `mkdir` checked only the write bit, so `#apply` created the node and the
+    // trailing `stat` — which checks execute on every directory it crosses —
+    // then failed. The caller got an Err for a mutation that had happened,
+    // which is precisely the "Err means the tree is untouched" claim broken.
+    const store = backend();
+    await unsearchable(store);
+    assert.equal(code(await store.mkdir('/e/sub/w')), 'EACCES');
+    await store.chmod('/e/sub', 0o755);
+    assert.deepEqual(value(await store.readdir('/e/sub')).map((row) => row.name), []);
+  });
+
+  it('refuses to plant an entry there through write or copy', async () => {
+    // Both used to succeed, leaving files that could not be stat'd or removed.
+    const store = backend();
+    await unsearchable(store);
+    await store.mkdir('/srcdir');
+    await store.writeText('/srcdir/f', 'z');
+
+    assert.equal(code(await store.writeText('/e/sub/planted', 'x')), 'EACCES');
+    assert.equal(code(await store.copy('/srcdir', '/e/sub/c', { recursive: true })), 'EACCES');
+    await store.chmod('/e/sub', 0o755);
+    assert.deepEqual(value(await store.readdir('/e/sub')).map((row) => row.name), []);
+  });
+
+  it('still reports the missing bit as write when write is what is missing', async () => {
+    // The order matters: every refusal that already said 'write' must keep
+    // saying it, or the new check is a silent change to an existing contract.
+    const store = backend();
+    await store.mkdir('/locked');
+    await store.chmod('/locked', 0o500);
+    const refused = await store.mkdir('/locked/a');
+    assert.ok(!refused.ok && refused.error.code === 'EACCES' && refused.error.required === 'write');
+  });
+});
+
+describe('copy builds its own target paths', () => {
+  it('refuses one past PATH_MAX instead of creating an unreachable node', async () => {
+    // `#guardWrite` bounds `from` and `to`, but the planner CONSTRUCTS every
+    // descendant path. A 2040-deep source under a long destination name made a
+    // 4201-character path: created, then permanently unreachable, because
+    // `stat` refuses it with ENAMETOOLONG.
+    const store = backend();
+    let deep = '';
+    while (deep.length + 2 <= 4000) deep += '/a';
+    await store.mkdir(deep, { recursive: true });
+    await store.writeText(`${deep}/f`, 'deep');
+
+    const target = `/${'p'.repeat(200)}`;
+    assert.equal(code(await store.copy('/a', target, { recursive: true })), 'ENAMETOOLONG');
+    assert.equal(await store.exists(target), false, 'and nothing is created');
+  });
+});

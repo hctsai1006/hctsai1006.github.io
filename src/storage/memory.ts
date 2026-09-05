@@ -70,6 +70,7 @@ import {
   DEFAULT_DIRECTORY_MODE,
   DEFAULT_FILE_MODE,
   DIRECTORY_SIZE,
+  PATH_MAX,
   err,
   ok,
 } from './types.ts';
@@ -264,6 +265,17 @@ function einval(path: string, syscall: StorageSyscall, message: string, reason: 
   return err({ code: 'EINVAL', path, syscall, message, reason });
 }
 
+function enametoolong(path: string, syscall: StorageSyscall, limit: number): Err<StorageError> {
+  return err({
+    code: 'ENAMETOOLONG',
+    path: path.slice(0, 80),
+    syscall,
+    message: `path exceeds PATH_MAX (${String(limit)})`,
+    limit,
+    actual: path.length,
+  });
+}
+
 // ---------------------------------------------------------------------------
 // the backend
 // ---------------------------------------------------------------------------
@@ -385,6 +397,22 @@ export class MemoryStorage implements StorageBackend {
   }
 
   async #installImageLocked(spec: SeedSpec): Promise<Result<void>> {
+    // `finally`, and not a line at the end of the happy path. `#installEntries`
+    // mutates the tree entry by entry and can bail out PART WAY — an
+    // unnormalised path, a component that turns out to be a file, a seed root
+    // declared as a file — with earlier entries already written. Recomputing
+    // only on the successful return left `#used` stale forever, and because
+    // `#checkCapacity` reads it, a capacity-100 mount then accepted 90 more
+    // bytes on top of the 90 the failed image had already stored. MEASURED at
+    // 180 bytes in a 100-byte mount before this moved.
+    try {
+      return this.#installEntries(spec);
+    } finally {
+      this.#used = this.#usedBytes();
+    }
+  }
+
+  #installEntries(spec: SeedSpec): Result<void> {
     for (const entry of spec.entries) {
       const checked = validatePath(entry.path, 'restore');
       if (checked.ok) {
@@ -452,10 +480,6 @@ export class MemoryStorage implements StorageBackend {
       node.birthtime = spec.time;
       parent.children.set(name, node);
     }
-    // The image is built by direct tree construction rather than through
-    // `#apply`, so the running total has nothing to have counted. Recompute
-    // once, here, where it is boot-time and O(tree) is free.
-    this.#used = this.#usedBytes();
     return ok(undefined);
   }
 
@@ -504,6 +528,28 @@ export class MemoryStorage implements StorageBackend {
     const shift = node.owner === this.#user ? 6 : node.group === this.#group ? 3 : 0;
     const bit = permission === 'read' ? 0o4 : permission === 'write' ? 0o2 : 0o1;
     return ((node.mode >> shift) & bit) !== 0;
+  }
+
+  /**
+   * Which bit stops the user creating or removing an entry in this directory,
+   * or null if none does.
+   *
+   * POSIX needs BOTH: write to change the directory, and execute (search) to
+   * resolve the name being changed. Every call site here used to check only
+   * `write`, and a directory at mode 0o644 — writable, NOT searchable — was
+   * the result: `writeText` and `copy` happily planted entries in it that
+   * `stat` then refused with EACCES and `remove` could not delete, and `mkdir`
+   * created the node and THEN returned EACCES from the `stat` it does to build
+   * its own return value, which is a mutation reported as a refusal.
+   *
+   * Write is tested first so every refusal that already said 'write' still
+   * says 'write'; 'execute' is only ever reported for the case that used to be
+   * allowed by mistake.
+   */
+  #blocksCreateIn(directory: MemoryDirectory): Permission | null {
+    if (!this.#can(directory, 'write')) return 'write';
+    if (!this.#can(directory, 'execute')) return 'execute';
+    return null;
   }
 
   // -------------------------------------------------------------------------
@@ -1015,7 +1061,8 @@ export class MemoryStorage implements StorageBackend {
       // intermediate levels first and then checking would let `mkdir -p` build
       // a chain into a directory the user cannot write to.
       const anchor = this.#deepestExisting(parentPath);
-      if (!this.#can(anchor.node, 'write')) return eacces(anchor.path, syscall, 'write');
+      const blocked = this.#blocksCreateIn(anchor.node);
+      if (blocked !== null) return eacces(anchor.path, syscall, blocked);
       parent = anchor.node;
     } else {
       if (parentFound.value.kind !== 'directory') return enotdir(path, syscall, parentPath);
@@ -1041,7 +1088,8 @@ export class MemoryStorage implements StorageBackend {
       return this.#commit(plan, path, { path, size: next.byteLength, created: false });
     }
 
-    if (!this.#can(parent, 'write')) return eacces(parentPath, syscall, 'write');
+    const blocksParent = this.#blocksCreateIn(parent);
+    if (blocksParent !== null) return eacces(parentPath, syscall, blocksParent);
     steps.push({
       op: 'create-file',
       path,
@@ -1128,7 +1176,8 @@ export class MemoryStorage implements StorageBackend {
 
     const parent = this.#parent(path, 'mkdir');
     if (!parent.ok) return parent;
-    if (!this.#can(parent.value, 'write')) return eacces(dirname(path), 'mkdir', 'write');
+    const blocked = this.#blocksCreateIn(parent.value);
+    if (blocked !== null) return eacces(dirname(path), 'mkdir', blocked);
 
     const plan: MutationPlan = {
       id: this.#nextPlanId(),
@@ -1175,7 +1224,8 @@ export class MemoryStorage implements StorageBackend {
 
     const parent = this.#parent(path, 'remove');
     if (!parent.ok) return parent;
-    if (!this.#can(parent.value, 'write')) return eacces(dirname(path), 'remove', 'write');
+    const blocked = this.#blocksCreateIn(parent.value);
+    if (blocked !== null) return eacces(dirname(path), 'remove', blocked);
 
     // Children before parents, so a journal replaying front-to-back after a
     // crash never tries to delete a directory that still has entries.
@@ -1231,11 +1281,13 @@ export class MemoryStorage implements StorageBackend {
 
     const destinationParent = this.#parent(to, 'rename');
     if (!destinationParent.ok) return destinationParent;
-    if (!this.#can(destinationParent.value, 'write')) return eacces(dirname(to), 'rename', 'write');
+    const blocksTo = this.#blocksCreateIn(destinationParent.value);
+    if (blocksTo !== null) return eacces(dirname(to), 'rename', blocksTo);
 
     const sourceParent = this.#parent(from, 'rename');
     if (!sourceParent.ok) return sourceParent;
-    if (!this.#can(sourceParent.value, 'write')) return eacces(dirname(from), 'rename', 'write');
+    const blocksFrom = this.#blocksCreateIn(sourceParent.value);
+    if (blocksFrom !== null) return eacces(dirname(from), 'rename', blocksFrom);
 
     const existing = destinationParent.value.children.get(basename(to));
     if (existing !== undefined) {
@@ -1291,7 +1343,8 @@ export class MemoryStorage implements StorageBackend {
 
     const destinationParent = this.#parent(to, 'copy');
     if (!destinationParent.ok) return destinationParent;
-    if (!this.#can(destinationParent.value, 'write')) return eacces(dirname(to), 'copy', 'write');
+    const blocksDestination = this.#blocksCreateIn(destinationParent.value);
+    if (blocksDestination !== null) return eacces(dirname(to), 'copy', blocksDestination);
 
     const existing = destinationParent.value.children.get(basename(to));
     if (existing !== undefined && options.overwrite !== true) {
@@ -1332,6 +1385,13 @@ export class MemoryStorage implements StorageBackend {
       targetPath: string,
       target: MemoryNode | undefined,
     ): Err<StorageError> | null => {
+      // The planner BUILDS these paths, so `#guardWrite` on `to` does not
+      // bound them: copying a 2040-deep tree under a long destination name
+      // produced a 4201-character path — past PATH_MAX — and created a node
+      // that `stat` then refused with ENAMETOOLONG and nothing could reach.
+      // The component names come from nodes that already passed NAME_MAX, so
+      // the total length is the only thing that can newly overflow.
+      if (targetPath.length > PATH_MAX) return enametoolong(targetPath, 'copy', PATH_MAX);
       if (node.kind === 'file') {
         if (!this.#can(node, 'read')) return eacces(sourcePath, 'copy', 'read');
         if (target !== undefined) {
@@ -1356,9 +1416,13 @@ export class MemoryStorage implements StorageBackend {
       if (target !== undefined) {
         if (target.kind !== 'directory') return enotdir(targetPath, 'copy', basename(targetPath));
         // Looking at what the destination already holds is a directory search,
-        // and adding an entry to it is a write. `#write` and `mkdir` check both
-        // bits before creating anything; `copy` did not, which made it the one
-        // mutation that could plant files in a directory the user cannot enter.
+        // and adding an entry to it is a write — the pair `#blocksCreateIn`
+        // enforces everywhere else. An earlier version of this comment claimed
+        // `#write` and `mkdir` already checked both bits and that only `copy`
+        // did not. That was FALSE when it was written: none of the three
+        // checked execute, so all three could plant an entry in a directory
+        // the user cannot enter, and only `copy` was being fixed. They all
+        // check it now, which is what makes the sentence above true.
         if (!this.#can(target, 'execute')) return eacces(targetPath, 'copy', 'execute');
         let addsEntry = false;
         for (const name of node.children.keys()) {
