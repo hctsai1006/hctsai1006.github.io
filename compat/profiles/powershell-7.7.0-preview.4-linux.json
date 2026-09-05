@@ -15,7 +15,7 @@
     "dotnetSdk": "11.0.100-preview.6.26359.118",
     "sourceCommit": "1481b98f0079f979f658e49a7281024cc754049b",
     "snapshotDigest": "sha256:a828af31a3c946f1e1321fc082acff249528d54027265e47effd8ba64d773bff",
-    "derivedFrom": "releases.lock.json generated 2026-09-05T02:51:20.911Z"
+    "derivedFrom": "releases.lock.json generated 2026-09-05T16:14:25.512Z"
   },
   "bundledModules": {
     "Microsoft.PowerShell.Archive": "1.2.6",

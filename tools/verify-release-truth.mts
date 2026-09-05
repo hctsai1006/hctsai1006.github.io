@@ -1105,7 +1105,19 @@ async function build(): Promise<Lockfile> {
         message:
           daysLeft <= 0
             ? `${rec.tag} reached end of support on ${rec.supportedUntil}. It must not be offered as a supported profile.`
-            : `${rec.tag} loses support on ${rec.supportedUntil}, in ${daysLeft} days (.NET ${rec.dotnet.channelVersion} is in ${rec.dotnet.supportPhase}). Plan the profile's retirement before then.`,
+            : // NO COUNTDOWN IN HERE. `daysLeft` is derived from Date.now(), and this
+              // message is stored in the lockfile and compared, so embedding it made
+              // the lockfile drift EVERY DAY -- "in 66 days" becoming "in 65 days" was
+              // the entire diff on the first live check after merge. A scheduled job
+              // that reports drift daily, forever, for the passage of time is a job
+              // whose pull request everyone learns to ignore, which costs exactly the
+              // signal it exists to provide.
+              //
+              // The date is the upstream fact and it is what gets recorded. The
+              // countdown is a rendering of it against today, so `render` computes it
+              // live from `actual`. Severity and code still turn on daysLeft, and that
+              // is fine: those change once, when it actually expires.
+              `${rec.tag} loses support on ${rec.supportedUntil} (.NET ${rec.dotnet.channelVersion} is in ${rec.dotnet.supportPhase}). Plan the profile's retirement before then.`,
         actual: rec.supportedUntil,
         sources: [DOTNET_INDEX, LIFECYCLE_URL],
       });
@@ -1439,6 +1451,14 @@ function report(lock: Lockfile): void {
   for (const d of lock.discrepancies) {
     line(`  [${d.severity}] ${d.code}`);
     for (const chunk of wrap(d.message, 66)) line(`     ${chunk}`);
+    // Computed here, never stored: a countdown against today is not an upstream
+    // fact, and putting one in the lockfile made it drift every day. See the
+    // note that raises lts-approaching-eol.
+    const until = typeof d.actual === 'string' ? Date.parse(`${d.actual}T00:00:00Z`) : Number.NaN;
+    if (d.code === 'lts-approaching-eol' && Number.isFinite(until)) {
+      const days = Math.round((until - Date.now()) / 86_400_000);
+      line(`     (${String(days)} days from today)`);
+    }
   }
   line();
 }
