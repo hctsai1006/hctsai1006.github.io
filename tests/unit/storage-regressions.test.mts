@@ -24,6 +24,7 @@ import {
   HOME,
   MemoryStorage,
   NullJournal,
+  RecordingJournal,
   SNAPSHOT_FORMAT,
   SNAPSHOT_VERSION,
   bootStorage,
@@ -128,7 +129,7 @@ describe('copy: a destination subtree is not collateral', () => {
     // This backend is deliberately STRONGER than the reference, because
     // `MutationPlan` in types.ts promises it is: the refusal is discovered
     // while PLANNING, so no step is ever applied. `/dst/aaa` must not exist.
-    const journal = new NullJournal();
+    const journal = new RecordingJournal();
     const store = backend({ journal });
     await store.mkdir('/src');
     await store.writeText('/src/aaa', 'applied first');
@@ -313,15 +314,15 @@ describe('concurrency: the backend serialises mutations', () => {
 });
 
 // ---------------------------------------------------------------------------
-// NullJournal.pending(), across a serialisation boundary
+// RecordingJournal.pending(), across a serialisation boundary
 // ---------------------------------------------------------------------------
 
-describe('NullJournal.pending', () => {
+describe('RecordingJournal.pending', () => {
   it('matches on plan identity, not object identity', async () => {
     // A durable journal replays DESERIALISED plans, so `Array.includes` on the
     // object reference reports every committed plan as still pending. Replacing
     // pending() with `return ok([])` killed zero tests before this one existed.
-    const journal = new NullJournal();
+    const journal = new RecordingJournal();
     const store = backend({ journal });
     await store.writeText('/a', 'hello');
     assert.deepEqual(await journal.pending(), { ok: true, value: [] });
@@ -329,14 +330,14 @@ describe('NullJournal.pending', () => {
     const [written] = journal.written;
     assert.ok(written !== undefined);
     const roundTripped = JSON.parse(JSON.stringify({ ...written, steps: [] })) as typeof written;
-    const replayed = new NullJournal();
+    const replayed = new RecordingJournal();
     await replayed.write(written);
     await replayed.commit(roundTripped);
     assert.deepEqual(await replayed.pending(), { ok: true, value: [] }, 'a deserialised plan is the same plan');
   });
 
   it('gives every plan a distinct id', async () => {
-    const journal = new NullJournal();
+    const journal = new RecordingJournal();
     const store = backend({ journal });
     await store.writeText('/a', 'one');
     await store.writeText('/b', 'two');
@@ -1010,5 +1011,212 @@ describe('a node claiming seed origin that the seed never declared', () => {
     assert.ok(row !== undefined);
     assert.equal(row.s, 1);
     assert.equal(row.c, undefined);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buffer ownership: a resolved write must not still depend on the caller's array
+// ---------------------------------------------------------------------------
+
+describe('buffer ownership', () => {
+  // MEASURED against the code before the fix. `writeBytes` queued the caller's
+  // array, `#apply` stored that same array, and `#newFile` kept what it was
+  // handed:
+  //
+  //     const input = new Uint8Array([65, 66]);
+  //     await st.writeBytes('/file', input);   // resolves
+  //     input[0] = 90;
+  //     await st.readBytes('/file')  ->  [90, 66]
+  //
+  // A stored file changed with no syscall, no mtime bump, no journal record and
+  // no quota accounting. Every guarantee about mutations being planned,
+  // validated and applied was one assignment away from being bypassed.
+  //
+  // The tests below walk the MATRIX rather than the one path the defect was
+  // demonstrated on, because that is how this repository has been bitten
+  // before: `writeBytes` and `appendBytes` reach different arms of `#write`
+  // (overwrite versus create), `copy` builds its own step, and `readBytes` is
+  // the same defect facing the other way.
+  //
+  // WHICH OF THESE ARE LOAD-BEARING, measured by reverting each fix and
+  // watching the suite, rather than assumed:
+  //
+  //   revert `own()` in #writeEntry only   -> 3 red (the first, second, fourth)
+  //   revert `own()` in readBytes only     -> 0 red
+  //   revert `own()` in the copy planner   -> 0 red
+  //   revert all three                     -> 5 red (the two above join in)
+  //
+  // The read and copy sites are DEFENCE IN DEPTH, and this comment says so
+  // rather than letting five green tests imply five independent guarantees.
+  // They are unreachable today only because owning at the write boundary makes
+  // every stored array a plain `Uint8Array`, whose `.slice()` does copy. That
+  // is a property of one line in another method; the moment a byte array
+  // reaches `MemoryFile.data` by some other route — a replayed journal step, a
+  // seed built from something other than `TextEncoder` — the `.slice()`s become
+  // live defects again. Two ends of one ownership rule should not be enforced
+  // by two different mechanisms.
+
+  it('writeBytes: mutating the caller array afterwards does not change the file', async () => {
+    const store = backend();
+    const input = new Uint8Array([65, 66]);
+    assert.ok((await store.writeBytes('/file', input)).ok);
+    input[0] = 90;
+    assert.deepEqual(Array.from(value(await store.readBytes('/file'))), [65, 66]);
+  });
+
+  it('appendBytes onto a MISSING file: the create arm owns its bytes too', async () => {
+    // A different branch of `#write`: `existing === undefined` builds a
+    // `create-file` step, so fixing only the overwrite arm leaves this open.
+    const store = backend();
+    const input = new Uint8Array([1, 2]);
+    assert.ok((await store.appendBytes('/new', input)).ok);
+    input[0] = 99;
+    assert.deepEqual(Array.from(value(await store.readBytes('/new'))), [1, 2]);
+  });
+
+  it('appendBytes onto an EXISTING file: unaffected, and that is the control', async () => {
+    // Green before the fix as well as after: the append-onto-existing arm goes
+    // through `concat`, which allocates. Kept because "this arm was always
+    // fine" is a claim worth holding still — if `concat` is ever optimised into
+    // an in-place grow, this is what notices.
+    const store = backend();
+    assert.ok((await store.writeBytes('/f', new Uint8Array([1]))).ok);
+    const input = new Uint8Array([2, 3]);
+    assert.ok((await store.appendBytes('/f', input)).ok);
+    input[0] = 77;
+    assert.deepEqual(Array.from(value(await store.readBytes('/f'))), [1, 2, 3]);
+  });
+
+  it('writeBytes accepts a Buffer without aliasing it', async () => {
+    // A Node `Buffer` IS a `Uint8Array` and satisfies the signature. It is also
+    // exactly what any caller that read a file off disk will hand over.
+    const store = backend();
+    const buffer = Buffer.from([7, 8, 9]);
+    assert.ok((await store.writeBytes('/buf', buffer)).ok);
+    buffer[0] = 200;
+    assert.deepEqual(Array.from(value(await store.readBytes('/buf'))), [7, 8, 9]);
+  });
+
+  it('readBytes hands back a copy, even when the stored array came in as a Buffer', async () => {
+    // The other direction, and a defect the review that found the write side
+    // did not name. `readBytes` returned `data.slice()`, and
+    // `Buffer.prototype.slice` is an alias for `subarray` — a VIEW. MEASURED
+    // before the fix:
+    //
+    //     await st.writeBytes('/buf', Buffer.from([7, 8, 9]));
+    //     const a = await st.readBytes('/buf');  a.value[0] = 200;
+    //     await st.readBytes('/buf')  ->  [200, 8, 9]
+    const store = backend();
+    assert.ok((await store.writeBytes('/buf', Buffer.from([7, 8, 9]))).ok);
+    const first = value(await store.readBytes('/buf'));
+    first[0] = 200;
+    assert.deepEqual(Array.from(value(await store.readBytes('/buf'))), [7, 8, 9]);
+  });
+
+  it('copy does not alias the destination to the source', async () => {
+    // `#planCopy` used `node.data.slice()`, which aliases for a Buffer. Two
+    // files sharing one array means a read of either can be written through to
+    // the other. Both ends are now `own()`, and this pins the pair.
+    const store = backend();
+    assert.ok((await store.writeBytes('/a', Buffer.from([1, 2, 3]))).ok);
+    assert.ok((await store.copy('/a', '/b')).ok);
+    const fromA = value(await store.readBytes('/a'));
+    fromA[0] = 250;
+    assert.deepEqual(Array.from(value(await store.readBytes('/b'))), [1, 2, 3]);
+    assert.deepEqual(Array.from(value(await store.readBytes('/a'))), [1, 2, 3]);
+  });
+
+  it('writeText is unaffected, which is the control', async () => {
+    const store = backend();
+    assert.ok((await store.writeText('/t', 'hello')).ok);
+    assert.equal(value(await store.readText('/t')), 'hello');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// the default journal must not retain payloads
+// ---------------------------------------------------------------------------
+
+describe('NullJournal retention', () => {
+  // MEASURED against the code before the fix. `NullJournal` pushed every plan
+  // onto two arrays that nothing ever cleared, and `MemoryStorage` installs it
+  // BY DEFAULT. `MutationStep.data` is file content, so every version of every
+  // file written in the process stayed reachable. Sixteen overwrites of one
+  // 64 KiB file, then `remove('/big')`, then `reset()`:
+  //
+  //     plans retained in journal.written   : 17
+  //     plans retained in journal.committed : 17
+  //     distinct payload buffers referenced : 16
+  //     bytes still referenced              : 1,048,576
+  //     live file exists                    : false
+  //     quota.used reports                  : 0
+  //
+  // A megabyte pinned and invisible to the accounting that is meant to be the
+  // authority on this backend's footprint, for an empty filesystem.
+
+  it('reports nothing pending after an uncommitted write', async () => {
+    // The semantic claim, and the one that goes red if the retention comes
+    // back: a store that cannot survive an interruption has nothing for a log
+    // to recover to, so there is never anything pending. Before the fix this
+    // returned the plan.
+    //
+    // The payload here is 8 bytes, not the 64 KiB of the measurement above,
+    // and deliberately: on the FAILURE path `assert.deepEqual` formats the
+    // whole array for its diff, and a 64 KiB payload turned a red test into a
+    // 78-second hang. A test that fails slowly is a test people stop running.
+    const journal = new NullJournal();
+    const plan = {
+      id: 'test-1',
+      syscall: 'write' as const,
+      steps: [{ op: 'create-file' as const, path: '/x', data: new Uint8Array(8) }],
+      byteDelta: 8,
+    };
+    assert.ok((await journal.write(plan)).ok);
+    assert.deepEqual(await journal.pending(), { ok: true, value: [] });
+  });
+
+  it('exposes no accessor that could hold a payload', () => {
+    // Structural, and deliberately so. The leak was not a behaviour anyone
+    // could observe through `MutationJournal`; it was two fields kept for a
+    // test's benefit. Asserting the accessors are gone is what stops them being
+    // added back "just for debugging".
+    const journal = new NullJournal();
+    assert.equal('written' in journal, false);
+    assert.equal('committed' in journal, false);
+  });
+
+  it('a default store reports an empty filesystem after churn — a control', async () => {
+    // GREEN BEFORE THE FIX TOO, and it is listed as a control rather than
+    // dressed up as coverage. It exercises the shape the leak was measured on —
+    // sixteen overwrites, a remove, a default journal — and asserts everything
+    // this test can honestly reach.
+    //
+    // WHAT IS NOT TESTED, stated so nobody assumes it is: that the bytes are
+    // released. Proving that needs the garbage collector, and every way to ask
+    // it from a test — `WeakRef` polling, heap-usage thresholds — is a
+    // stopwatch race dressed as an assertion. This repository already has one
+    // timing-sensitive test and it flakes under a parallel suite. The two tests
+    // above are the ones that go red when the retention returns; this one holds
+    // the surrounding behaviour still.
+    const store = backend();
+    const payload = new Uint8Array(64 * 1024).fill(3);
+    for (let index = 0; index < 16; index += 1) {
+      assert.ok((await store.writeBytes('/big', payload)).ok);
+    }
+    assert.ok((await store.remove('/big')).ok);
+    assert.equal(value(await store.quota()).used, 0);
+    assert.equal(await store.exists('/big'), false);
+  });
+
+  it('RecordingJournal still records, because tests depend on it', async () => {
+    // The other half of the split. If someone ever "simplifies" this into
+    // NullJournal, the seam tests above lose their subject silently.
+    const journal = new RecordingJournal();
+    const store = backend({ journal });
+    assert.ok((await store.writeText('/a', 'hello')).ok);
+    assert.equal(journal.written.length, 1);
+    assert.equal(journal.committed.length, 1);
+    journal.clear();
+    assert.equal(journal.written.length, 0);
   });
 });

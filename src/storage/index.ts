@@ -58,7 +58,7 @@ export {
   unwrap,
 } from './types.ts';
 
-export { MemoryStorage, NullJournal } from './memory.ts';
+export { MemoryStorage, NullJournal, RecordingJournal } from './memory.ts';
 export type { MemoryStorageOptions } from './memory.ts';
 
 export {
