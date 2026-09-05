@@ -1,0 +1,356 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hctsai1006.github.io/compat/schemas/compatibility-profile.schema.json",
+  "title": "PowerShell compatibility profile",
+  "description": "Declares which PowerShell version's OBSERVABLE SEMANTICS a BrowserShell session emulates. A profile is data, never code: the engine reads it at boot and the same command implementation behaves differently under different profiles. Adding a version must never mean forking a command.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "profile",
+    "channel",
+    "displayVersion",
+    "source",
+    "behaviors",
+    "documentedBehaviors",
+    "commands"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "profile": {
+      "description": "Stable profile id. Shape: powershell/<version>/<platform>.",
+      "type": "string",
+      "pattern": "^powershell/[0-9A-Za-z.+-]+/(linux|windows|macos)$"
+    },
+    "channel": {
+      "enum": [
+        "lts",
+        "stable",
+        "preview",
+        "edge"
+      ]
+    },
+    "displayVersion": {
+      "description": "What the session banner and $PSVersionTable report. Must equal source.releaseTag minus its leading v, or be explicitly justified in notes.",
+      "type": "string"
+    },
+    "inherits": {
+      "description": "Profile id this one is a delta against. Resolution order is parent-first, so a derived profile overrides what it inherits. `behaviors` and `documentedBehaviors` REPLACE per key: they are flat scalars and there is nothing inside one to merge. `commands` DEEP-MERGES per command: a child that sets only `notes` on an inherited command keeps that command's `availability`, and `parameterPatches` merge per parameter. Removal is expressed as data (`availability: \"removed\"` with `removedIn`), never as absence, so deep-merging cannot hide a deletion. Cycles are a hard error.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "supported": {
+      "type": "object",
+      "properties": {
+        "isSupportedUpstream": {
+          "type": "boolean"
+        },
+        "endOfSupport": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "notes": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "source": {
+      "description": "Provenance. Every field here is copied from the release-truth lockfile, never typed by hand.",
+      "type": "object",
+      "required": [
+        "releaseTag",
+        "publishedAt",
+        "dotnetSdk",
+        "sourceCommit"
+      ],
+      "properties": {
+        "releaseTag": {
+          "type": "string"
+        },
+        "publishedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "dotnetSdk": {
+          "type": "string"
+        },
+        "sourceCommit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "snapshotDigest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "derivedFrom": {
+          "description": "Which lockfile generation produced this profile.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "bundledModules": {
+      "description": "Modules shipped in the box at this version, as stated by the release notes.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "behaviors": {
+      "description": "The semantic switchboard THE ENGINE READS. Every entry is a behaviour a command implementation may branch on, and every entry is one BrowserShell actually emulates and proves with a test. A documented-but-unemulated difference belongs in `documentedBehaviors`; putting it here would serve a claim we cannot support as live execution semantics. Keys are command- and parameter-scoped, dotted, stable and documented; a key is added here BEFORE any command reads it.",
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "behaviorDocs": {
+      "description": "Human explanation plus upstream citation for each behavior key. A behavior without a doc entry fails validation in CI: an undocumented flag is a guess.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "summary"
+        ],
+        "properties": {
+          "summary": {
+            "type": "string"
+          },
+          "upstreamPr": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "breaking": {
+            "type": "boolean"
+          },
+          "since": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "documentedBehaviors": {
+      "description": "EVERY documented upstream difference, whether or not BrowserShell emulates it. This is the honest half of the compatibility record and it is deliberately NOT the table the engine reads: `behaviors` holds only what we reproduce, and a key appears there only when `emulated` is true here. Keeping them apart is the fix for a defect in which the generator wrote every documented-but-unemulated change into the runtime profile, so commands were served thirteen behaviour flags the engine did not implement. Nothing under src/ may read this.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "summary",
+          "value",
+          "upstreamValue",
+          "baselineValue",
+          "implementation",
+          "emulated",
+          "upstreamPr"
+        ],
+        "properties": {
+          "summary": {
+            "type": "string"
+          },
+          "value": {
+            "description": "The value for THIS profile's version.",
+            "oneOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "upstreamValue": {
+            "description": "What the newer PowerShell does.",
+            "oneOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "baselineValue": {
+            "description": "What the older PowerShell does, derived from upstreamValue.",
+            "oneOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "implementation": {
+            "description": "What BrowserShell does about it. Only implemented/verified may reach `behaviors`.",
+            "enum": [
+              "documented",
+              "partial",
+              "implemented",
+              "verified"
+            ]
+          },
+          "emulated": {
+            "description": "True exactly when a command can read this key from `behaviors`.",
+            "type": "boolean"
+          },
+          "upstreamPr": {
+            "type": "integer"
+          },
+          "breaking": {
+            "type": "boolean"
+          },
+          "since": {
+            "type": "string"
+          },
+          "scope": {
+            "description": "Where the behaviour applies. `command: null` is an explicit claim that the upstream change really is engine-wide.",
+            "type": "object",
+            "required": [
+              "command",
+              "parameters"
+            ],
+            "properties": {
+              "command": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "parameters": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "commands": {
+      "description": "Per-command availability and metadata patches, applied over the base command manifest. Absent command means inherit from parent profile.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "availability": {
+            "enum": [
+              "available",
+              "added",
+              "removed",
+              "not-implemented"
+            ]
+          },
+          "since": {
+            "type": "string"
+          },
+          "removedIn": {
+            "type": "string"
+          },
+          "parameterPatches": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "added": {
+                  "type": "boolean"
+                },
+                "removed": {
+                  "type": "boolean"
+                },
+                "validation": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "switchSemantics": {
+                  "enum": [
+                    "presence",
+                    "boolean-value"
+                  ]
+                },
+                "defaultValue": {},
+                "notes": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "notes": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "experimentalFeatures": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "engineLimits": {
+      "description": "Where BrowserShell knowingly diverges from upstream. Stating a limit is mandatory; silently behaving differently is not allowed.",
+      "type": "object",
+      "properties": {
+        "nativePowerShellEngine": {
+          "const": false
+        },
+        "unimplementedAstNodes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "notes": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

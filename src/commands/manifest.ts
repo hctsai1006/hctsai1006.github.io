@@ -1,0 +1,320 @@
+/**
+ * manifest.ts — what a command IS, declared rather than implied.
+ *
+ * This project makes two separate honesty claims, and they need two separate
+ * mechanisms:
+ *
+ *   compatibility profile  →  which PowerShell version's semantics we claim
+ *   fidelity (this file)   →  how real any individual command actually is
+ *
+ * A profile alone is not enough. A page can faithfully model PowerShell 7.6.5's
+ * `Get-Content` while its `ping` invents round-trip times and its `sudo` grants
+ * nothing at all. Without a per-command declaration, a visitor cannot tell those
+ * apart, and a terminal that looks authoritative about everything is lying about
+ * most of it.
+ *
+ * So every command declares its fidelity, and `Get-Command -Detailed` prints it.
+ * Being visibly honest about which parts are simulated makes the parts that are
+ * real more credible, not less.
+ */
+
+/**
+ * How real is this command?
+ *
+ * Note on the taxonomy: the originating design document lists four levels in its
+ * prose table but only three in its interface sketch. All four are kept here —
+ * `external-runtime` is a genuinely different claim from the other three (it
+ * says "a downloaded runtime executed this", which is neither our semantics nor
+ * a browser API nor a fiction) and dropping it would force WebContainer or VM
+ * commands to misdeclare themselves.
+ */
+export type Fidelity =
+  /**
+   * Implemented by us, aiming at real PowerShell semantics. The behaviour is
+   * ours, but it is measured against the reference implementation and the
+   * divergences are recorded.
+   */
+  | 'native-semantic'
+  /**
+   * Really calls a browser capability. The effect is genuine: bytes are stored,
+   * the clipboard changes, a request goes out.
+   */
+  | 'browser-backed'
+  /**
+   * The output is invented or fixed, and nothing outside this page is read or
+   * changed. `sudo` grants nothing; `ping` sends no packet; `free` reports
+   * memory figures the browser cannot see.
+   *
+   * Deliberately wider than "pretends to be a Linux machine", because most of
+   * the commands carrying this label are not doing that. Eight of them are
+   * jokes, `classic` is a link to the archived v1, and `exit` explains why a
+   * tab cannot close itself. An earlier version of this comment described only
+   * the Linux facade, which left the majority of its own members undescribed —
+   * and a taxonomy that does not describe its members cannot be applied
+   * consistently. What actually unites them is the absence of real effect and
+   * real information, which is the thing a visitor needs to be told.
+   */
+  | 'simulated'
+  /**
+   * Executed by a separately downloaded runtime — WebContainer, a WASM VM.
+   * Real execution, but not ours and not the browser's.
+   */
+  | 'external-runtime';
+
+/** Where the work happens. */
+export type Runtime = 'semantic' | 'browser' | 'wasm' | 'vm';
+
+/**
+ * A permission the command needs. Capabilities are brokered: a command asks the
+ * kernel and the kernel decides, against this list and against what the session
+ * was granted. Declaring them here is what makes that decision possible rather
+ * than aspirational.
+ *
+ * WHAT THIS IS NOT. It is not a sandbox, and the previous wording — "a command
+ * never touches a browser API directly" — read like one. Nothing stops a module
+ * registered with `Kernel.register` from calling `fetch` or IndexedDB itself:
+ * it shares the Worker's global and needs nothing from here, and the audit log
+ * would record nothing because nothing was asked. Every command in this
+ * repository does go through the broker, and that is checkable in a diff, but
+ * it is a convention rather than a boundary. The boundary needs a separate
+ * Worker or sandboxed iframe with a message-only API — ROADMAP 14.3.
+ */
+export type Capability =
+  | 'filesystem.read'
+  | 'filesystem.write'
+  | 'filesystem.delete'
+  | 'portfolio.read'
+  | 'preferences.write'
+  | 'terminal.control'
+  | 'ui.dialog'
+  | 'process.read'
+  | 'process.control'
+  | 'network.fetch'
+  | 'clipboard.read'
+  | 'clipboard.write'
+  | 'device.request'
+  /**
+   * Elevates privilege inside the VIRTUAL policy engine only. It confers
+   * nothing on the browser, the origin, or the host — and the UI must say so
+   * every time it is used.
+   */
+  | 'virtual.policy.elevate';
+
+/**
+ * How much of this command exists HERE — which is a different question from
+ * `Fidelity` and from whether upstream has the command at all.
+ *
+ * Three facts kept getting collapsed into one, and each consumer needs a
+ * different one of them:
+ *
+ *   upstream availability   does real PowerShell have this command, and what
+ *                           are its real parameters?  `parameterSource` and
+ *                           `parameters` answer that, and they answer it about
+ *                           pwsh, not about us.
+ *   implementation status   this field. How much of it did WE build?
+ *   session registration    is it reachable from the prompt right now?
+ *                           `registry.ts` answers that, because it is a
+ *                           property of the running session and not of the
+ *                           declaration.
+ *
+ * Collapsing the first two is how `Sort-Object -Top` ended up in tab
+ * completion: upstream has `-Top`, so the generated manifest lists it, and the
+ * completion engine read that as "you can type this" — but the command body
+ * has never heard of it and the binder rejects it. Collapsing the second and
+ * third is how `Where-Object` was counted as an implemented command while its
+ * manifest could not express its own parameter sets.
+ */
+export type ImplementationStatus =
+  /** Declared in the manifest set; no module implements it. */
+  | 'declared'
+  /**
+   * A module exists, and it is NOT good enough to register by default. The
+   * gap is named in `notes`. Held back rather than deleted, because a partial
+   * implementation is worth testing and worth finishing — it is just not worth
+   * putting in front of a visitor who would be told a wrong answer.
+   */
+  | 'partial'
+  /** A module implements it, and its declared surface is the surface it binds. */
+  | 'implemented'
+  /**
+   * Implemented AND compared against a captured reference-implementation run.
+   * Nothing claims this yet; it exists so that `implemented` cannot quietly
+   * come to mean it.
+   */
+  | 'verified';
+
+/** How dangerous is running this? Drives confirmation and AI approval gates. */
+export type Risk =
+  | 'read'
+  | 'query-external'
+  | 'write'
+  | 'destructive'
+  | 'device'
+  | 'privileged-simulation';
+
+/** What one parameter set says about a parameter. */
+export interface ParameterSetBinding {
+  position: number | null;
+  mandatory: boolean;
+  valueFromPipeline: boolean;
+}
+
+export interface ParameterMetadata {
+  name: string;
+  aliases: readonly string[];
+  /** .NET type name as the reference implementation reports it. */
+  type: string;
+  /**
+   * A switch is not a boolean. `-Switch` and `-Switch:$false` differ, and a
+   * whole family of PowerShell 7.7 fixes is exactly that distinction.
+   */
+  isSwitch: boolean;
+  /**
+   * Per parameter set, as captured. The binder needs this: a parameter can be
+   * mandatory in one set and optional in another, and collapsing that loses the
+   * distinction. `New-Item -Path` is mandatory only in its Path set, so a
+   * flattened "mandatory" would make the binder reject
+   * `New-Item -Name x -ItemType File`, which real pwsh accepts.
+   */
+  sets: Readonly<Record<string, ParameterSetBinding>>;
+  /**
+   * DERIVED summaries, not captured facts. Named so nobody mistakes them for
+   * the reference implementation's own answer — `verified` below covers only
+   * the fields that were read directly.
+   */
+  mandatoryInAnySet: boolean;
+  mandatoryInEverySet: boolean;
+  firstPosition: number | null;
+  valueFromPipelineInAnySet: boolean;
+  /** Validation attributes, as captured from the reference implementation. */
+  validation: readonly string[];
+  /**
+   * True when `type`, `isSwitch`, `aliases`, `validation` and `sets` came from
+   * real pwsh. It does NOT vouch for the derived summaries above, which are
+   * this project's flattening of the captured sets rather than pwsh's own view.
+   */
+  verified: boolean;
+}
+
+export interface CommandManifest {
+  name: string;
+  /** The canonical display form, e.g. `Get-ChildItem`. */
+  display: string;
+  aliases: readonly string[];
+  runtime: Runtime;
+  fidelity: Fidelity;
+  risk: Risk;
+  capabilities: readonly Capability[];
+  parameters: readonly ParameterMetadata[];
+  outputTypeNames: readonly string[];
+  /** One line, shown by `Get-Help`. */
+  synopsis: string;
+  /**
+   * Why this fidelity, when the answer is not obvious. Required for anything
+   * `simulated`, so that a fiction is never undocumented.
+   */
+  notes?: string;
+  /**
+   * Whether the parameter metadata was captured from a real PowerShell, or is
+   * a declaration with nothing behind it yet.
+   *
+   * This describes UPSTREAM. `reference-implementation` means pwsh reported
+   * these parameters; it does NOT mean this engine binds them. Read
+   * `implementationStatus` for that, and `implementedParameters` for the
+   * subset a running command will actually accept.
+   */
+  parameterSource: 'reference-implementation' | 'declared' | 'none';
+  /**
+   * Set when this command's own NAME is an alias of a different command, which
+   * is what a visitor typing it actually reaches. Names the owner.
+   *
+   * This exists because `sl` was described by three subsystems in two different
+   * ways at once: `manifests.json` carried an `sl` command (fidelity
+   * `simulated`, empty synopsis, "a joke response to a common typo for ls") AND
+   * `Set-Location` listing `sl` among its aliases. The registry bound the token
+   * to Set-Location while completion, `Get-Help` and the fidelity badge all
+   * described the joke, so the badge said `SIMULATED` for a token that runs a
+   * `native-semantic` cmdlet.
+   *
+   * DISTINCT FROM `implementationStatus`, and the two are not interchangeable.
+   * Shadowing is a NAMING fact — the module is complete and something else owns
+   * the word. Status is a CORRECTNESS fact — the name is free and the module
+   * would answer to it, wrongly. A consumer that resolves a typed token must
+   * honour both, for different reasons.
+   */
+  shadowedBy?: string;
+  /** How much of this command exists here. See `ImplementationStatus`. */
+  implementationStatus: ImplementationStatus;
+  /**
+   * The parameter names a module in THIS engine binds, when a module exists
+   * and hand-writes its own surface.
+   *
+   * Absent means "no separate answer": either nothing implements the command,
+   * or its module reads this very manifest and so cannot narrow it. Present and
+   * shorter than `parameters` is the honest common case — upstream
+   * `Sort-Object` has nine parameters and this one binds six.
+   */
+  implementedParameters?: readonly string[];
+  /**
+   * The set the binder falls back to when several fit, as pwsh's
+   * `DefaultParameterSetName` does. Only meaningful for a manifest that
+   * declares named parameter sets.
+   */
+  defaultParameterSet?: string;
+}
+
+/**
+ * The parameters a running command will actually accept.
+ *
+ * `manifest.parameters` describes UPSTREAM. Reading it as "what you can type"
+ * is the conflation `ImplementationStatus` exists to break, and help and
+ * syntax are two of the surfaces that were doing it: `Get-Help Sort-Object`
+ * listed -Top, -Bottom and -Culture, and `Get-Command Sort-Object -Syntax`
+ * printed them into the syntax line, for a binder that answers
+ * NamedParameterNotFound.
+ *
+ * Falls back to every parameter when `implementedParameters` is absent, which
+ * is the honest answer for a command whose module reads this manifest rather
+ * than declaring its own surface: nothing narrower is known.
+ */
+export function boundParameters(manifest: CommandManifest): readonly ParameterMetadata[] {
+  const implemented = manifest.implementedParameters;
+  if (implemented === undefined) return manifest.parameters;
+  const wanted = new Set(implemented.map((name) => name.toLowerCase()));
+  return manifest.parameters.filter((p) => wanted.has(p.name.toLowerCase()));
+}
+
+/**
+ * Parameters real PowerShell has and this engine does not accept.
+ *
+ * The complement of the above, and the thing worth SAYING rather than merely
+ * filtering: a user who knows `Sort-Object -Top 5` needs to be told it is
+ * missing here, not left to discover it as a parse error.
+ */
+export function upstreamOnlyParameters(manifest: CommandManifest): readonly string[] {
+  const implemented = manifest.implementedParameters;
+  if (implemented === undefined) return [];
+  const wanted = new Set(implemented.map((name) => name.toLowerCase()));
+  return manifest.parameters
+    .filter((p) => !wanted.has(p.name.toLowerCase()))
+    .map((p) => p.name);
+}
+
+/**
+ * The badge shown beside a command in the UI. Kept next to the taxonomy so the
+ * two cannot drift: a new fidelity level without a badge would render blank.
+ */
+export const FIDELITY_BADGE: Record<Fidelity, string> = {
+  'native-semantic': 'SEMANTIC',
+  'browser-backed': 'BROWSER',
+  simulated: 'SIMULATED',
+  'external-runtime': 'RUNTIME',
+};
+
+/** One-line explanation of each level, for `Get-Help about_Fidelity`. */
+export const FIDELITY_MEANING: Record<Fidelity, string> = {
+  'native-semantic': 'Implemented here, measured against real PowerShell.',
+  'browser-backed': 'Really calls a browser capability; the effect is genuine.',
+  simulated: 'The output is invented or fixed. Nothing outside this page is read or changed.',
+  'external-runtime': 'Executed by a separately downloaded runtime.',
+};

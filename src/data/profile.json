@@ -1,0 +1,42 @@
+{
+  "$comment": "Extracted from index.html by tools/extract-portfolio-data.mts. The single source of the three contribution counts.",
+  "handle": "thc1006",
+  "name": {
+    "en": "Hsiu-Chi Tsai",
+    "zh": "蔡秀吉"
+  },
+  "affiliation": "National Yang Ming Chiao Tung University — Computer Science",
+  "stats": {
+    "merged": 276,
+    "projects": 79,
+    "foundations": 8,
+    "asOf": "2026-09-04"
+  },
+  "lines": [
+    {
+      "kind": "head",
+      "text": "thc1006  (蔡秀吉 · Hsiu-Chi Tsai)"
+    },
+    {
+      "kind": "body",
+      "text": "CNCF Ambassador"
+    },
+    {
+      "kind": "body",
+      "text": "Nephio (Linux Foundation Networking) Technical Steering Committee Member"
+    },
+    {
+      "kind": "body",
+      "text": "Zephyr RTOS · M5Stack Platforms Maintainer"
+    },
+    {
+      "kind": "accent",
+      "text": "__STATS__",
+      "derived": "stats-line"
+    },
+    {
+      "kind": "muted",
+      "text": "National Yang Ming Chiao Tung University — Computer Science"
+    }
+  ]
+}

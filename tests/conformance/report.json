@@ -1,0 +1,2034 @@
+{
+  "engine": {
+    "psVersion": "7.6.5",
+    "psEdition": "Core",
+    "gitCommitId": "7.6.5",
+    "os": "Ubuntu 24.04.4 LTS",
+    "platform": "Unix",
+    "framework": ".NET 10.0.11"
+  },
+  "capture": {
+    "renderWidth": 120,
+    "pinnedCulture": "en-US",
+    "stressCulture": "de-DE",
+    "hostCulture": "",
+    "hostUICulture": "",
+    "outputRendering": "PlainText",
+    "strictMode": "Latest",
+    "updatableHelp": "not-installed"
+  },
+  "fixtureCapturedAt": "2026-09-05T01:30:19.6549806Z",
+  "platformCaveat": null,
+  "totals": {
+    "cases": 115,
+    "compared": 107,
+    "matched": 107,
+    "differencesExplained": 0,
+    "differencesUnexplained": 0,
+    "unimplemented": 8
+  },
+  "coverage": {
+    "nativeSemanticCommands": 30,
+    "commandsWithBehaviouralEvidence": 10,
+    "behaviouralCoveragePercent": 33.3,
+    "commandsWithMetadataEvidence": 11,
+    "metadataCoveragePercent": 36.7,
+    "withheldCommands": [
+      "where-object"
+    ]
+  },
+  "perCommand": [
+    {
+      "command": "$psversiontable",
+      "behavioural": 1,
+      "metadata": 0,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "clear-host",
+      "behavioural": 0,
+      "metadata": 0,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "format-list",
+      "behavioural": 0,
+      "metadata": 0,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "format-table",
+      "behavioural": 0,
+      "metadata": 0,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "format-wide",
+      "behavioural": 0,
+      "metadata": 0,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "get-advisory",
+      "behavioural": 0,
+      "metadata": 0,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "get-award",
+      "behavioural": 0,
+      "metadata": 0,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "get-command",
+      "behavioural": 4,
+      "metadata": 2,
+      "unimplemented": 1,
+      "differences": 0
+    },
+    {
+      "command": "get-contribution",
+      "behavioural": 0,
+      "metadata": 0,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "get-date",
+      "behavioural": 15,
+      "metadata": 2,
+      "unimplemented": 1,
+      "differences": 0
+    },
+    {
+      "command": "get-help",
+      "behavioural": 3,
+      "metadata": 2,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "get-history",
+      "behavioural": 1,
+      "metadata": 2,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "get-location",
+      "behavioural": 1,
+      "metadata": 2,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "get-member",
+      "behavioural": 0,
+      "metadata": 0,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "get-project",
+      "behavioural": 0,
+      "metadata": 0,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "get-publication",
+      "behavioural": 0,
+      "metadata": 0,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "get-random",
+      "behavioural": 5,
+      "metadata": 2,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "get-source",
+      "behavioural": 0,
+      "metadata": 0,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "get-timeline",
+      "behavioural": 0,
+      "metadata": 0,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "group-object",
+      "behavioural": 0,
+      "metadata": 0,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "help",
+      "behavioural": 0,
+      "metadata": 0,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "measure-object",
+      "behavioural": 2,
+      "metadata": 2,
+      "unimplemented": 1,
+      "differences": 0
+    },
+    {
+      "command": "new-guid",
+      "behavioural": 0,
+      "metadata": 0,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "out-null",
+      "behavioural": 0,
+      "metadata": 1,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "out-string",
+      "behavioural": 0,
+      "metadata": 0,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "select-object",
+      "behavioural": 0,
+      "metadata": 2,
+      "unimplemented": 1,
+      "differences": 0
+    },
+    {
+      "command": "set-location",
+      "behavioural": 0,
+      "metadata": 0,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "sort-object",
+      "behavioural": 2,
+      "metadata": 2,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "whoami",
+      "behavioural": 0,
+      "metadata": 0,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "write-output",
+      "behavioural": 6,
+      "metadata": 2,
+      "unimplemented": 0,
+      "differences": 0
+    }
+  ],
+  "cultureSensitiveCases": [
+    "culture.format-operator-follows-culture",
+    "culture.tostring-follows-culture",
+    "date.format-day-and-month-names",
+    "date.format-single-char-is-standard"
+  ],
+  "uncreditedLabels": [
+    "collation.b-lt-a (labelled 'sort-object'): the source does not name 'sort-object', and the module implementing it does not reference 'compareValues'",
+    "collation.a-lt-b-upper (labelled 'sort-object'): the source does not name 'sort-object', and the module implementing it does not reference 'compareValues'",
+    "comparison.null-sorts-first (labelled 'sort-object'): the source does not name 'sort-object', and the module implementing it does not reference 'compareValues'",
+    "comparison.array-eq-filters (labelled 'where-object'): the source does not name 'where-object', and the module implementing it does not reference 'comparisonOperator'",
+    "property.declaration-order-is-kept (labelled 'select-object'): the source does not name 'select-object', and the module implementing it does not reference 'propertyNames'"
+  ],
+  "knownDifferences": [
+    {
+      "id": "string-collation-pinned-to-en",
+      "kind": "deliberate",
+      "expect": "matches",
+      "cases": [
+        "collation.b-lt-a",
+        "collation.a-lt-b-upper",
+        "collation.sort-mixed-case",
+        "comparison.eq-is-case-insensitive",
+        "comparison.ceq-is-case-sensitive",
+        "comparison.strings-compare-as-strings"
+      ]
+    },
+    {
+      "id": "date-formatting-pinned-to-en-us",
+      "kind": "deliberate",
+      "expect": "matches",
+      "cases": [
+        "date.format-single-char-is-standard",
+        "date.format-day-and-month-names",
+        "date.format-meridiem-and-twelve-hour"
+      ]
+    },
+    {
+      "id": "typename-of-null-is-total",
+      "kind": "deliberate",
+      "expect": "unimplemented",
+      "cases": [
+        "type.null-has-no-type"
+      ]
+    }
+  ],
+  "problems": [],
+  "cases": [
+    {
+      "id": "pipeline.measure-nested-array",
+      "command": "measure-object",
+      "credits": "measure-object",
+      "creditBasis": "direct",
+      "area": "pipeline",
+      "outcome": "match",
+      "expected": [
+        2
+      ],
+      "actual": 2,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "pipeline.nested-array-arrives-intact",
+      "command": "write-output",
+      "credits": "write-output",
+      "creditBasis": "shared-code",
+      "area": "pipeline",
+      "outcome": "match",
+      "expected": [
+        "System.Int32",
+        "System.Object[]"
+      ],
+      "actual": [
+        "System.Int32",
+        "System.Object[]"
+      ],
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "pipeline.deep-nesting-still-one-level",
+      "command": "measure-object",
+      "credits": "measure-object",
+      "creditBasis": "direct",
+      "area": "pipeline",
+      "outcome": "match",
+      "expected": [
+        2
+      ],
+      "actual": 2,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "pipeline.foreach-runs-for-null",
+      "command": "write-output",
+      "credits": "write-output",
+      "creditBasis": "shared-code",
+      "area": "pipeline",
+      "outcome": "match",
+      "expected": [
+        2
+      ],
+      "actual": 2,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "pipeline.measure-object-skips-null",
+      "command": "measure-object",
+      "credits": "measure-object",
+      "creditBasis": "direct",
+      "area": "pipeline",
+      "outcome": "unimplemented",
+      "expected": [
+        1
+      ],
+      "actual": null,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": "Measure-Object is declared native-semantic in the manifest but has no implementation yet, so there is nothing to compare. The pipeline half of this pair IS compared, by pipeline.foreach-runs-for-null."
+    },
+    {
+      "id": "pipeline.empty-array-emits-nothing",
+      "command": "write-output",
+      "credits": "write-output",
+      "creditBasis": "direct",
+      "area": "pipeline",
+      "outcome": "match",
+      "expected": [
+        0
+      ],
+      "actual": 0,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "pipeline.string-is-not-enumerated",
+      "command": "write-output",
+      "credits": "write-output",
+      "creditBasis": "direct",
+      "area": "pipeline",
+      "outcome": "match",
+      "expected": [
+        1
+      ],
+      "actual": 1,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "pipeline.hashtable-is-not-enumerated",
+      "command": "write-output",
+      "credits": "write-output",
+      "creditBasis": "direct",
+      "area": "pipeline",
+      "outcome": "match",
+      "expected": [
+        1
+      ],
+      "actual": 1,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "pipeline.scalar-is-one-object",
+      "command": "write-output",
+      "credits": "write-output",
+      "creditBasis": "direct",
+      "area": "pipeline",
+      "outcome": "match",
+      "expected": [
+        1
+      ],
+      "actual": 1,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "collation.b-lt-a",
+      "command": "sort-object",
+      "credits": null,
+      "creditBasis": "not-established",
+      "area": "comparison",
+      "outcome": "match",
+      "expected": [
+        false
+      ],
+      "actual": false,
+      "explainedBy": "string-collation-pinned-to-en",
+      "explanationKind": "deliberate",
+      "detail": null
+    },
+    {
+      "id": "collation.a-lt-b-upper",
+      "command": "sort-object",
+      "credits": null,
+      "creditBasis": "not-established",
+      "area": "comparison",
+      "outcome": "match",
+      "expected": [
+        true
+      ],
+      "actual": true,
+      "explainedBy": "string-collation-pinned-to-en",
+      "explanationKind": "deliberate",
+      "detail": null
+    },
+    {
+      "id": "collation.sort-mixed-case",
+      "command": "sort-object",
+      "credits": "sort-object",
+      "creditBasis": "direct",
+      "area": "comparison",
+      "outcome": "match",
+      "expected": [
+        "A",
+        "a",
+        "b",
+        "B"
+      ],
+      "actual": [
+        "A",
+        "a",
+        "b",
+        "B"
+      ],
+      "explainedBy": "string-collation-pinned-to-en",
+      "explanationKind": "deliberate",
+      "detail": null
+    },
+    {
+      "id": "collation.sort-numeric-not-lexicographic",
+      "command": "sort-object",
+      "credits": "sort-object",
+      "creditBasis": "direct",
+      "area": "comparison",
+      "outcome": "match",
+      "expected": [
+        1,
+        9,
+        10
+      ],
+      "actual": [
+        1,
+        9,
+        10
+      ],
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "comparison.eq-is-case-insensitive",
+      "command": "where-object",
+      "credits": "where-object",
+      "creditBasis": "shared-code",
+      "area": "comparison",
+      "outcome": "match",
+      "expected": [
+        true
+      ],
+      "actual": true,
+      "explainedBy": "string-collation-pinned-to-en",
+      "explanationKind": "deliberate",
+      "detail": null
+    },
+    {
+      "id": "comparison.ceq-is-case-sensitive",
+      "command": "where-object",
+      "credits": "where-object",
+      "creditBasis": "shared-code",
+      "area": "comparison",
+      "outcome": "match",
+      "expected": [
+        false
+      ],
+      "actual": false,
+      "explainedBy": "string-collation-pinned-to-en",
+      "explanationKind": "deliberate",
+      "detail": null
+    },
+    {
+      "id": "comparison.strings-compare-as-strings",
+      "command": "where-object",
+      "credits": "where-object",
+      "creditBasis": "shared-code",
+      "area": "comparison",
+      "outcome": "match",
+      "expected": [
+        true
+      ],
+      "actual": true,
+      "explainedBy": "string-collation-pinned-to-en",
+      "explanationKind": "deliberate",
+      "detail": null
+    },
+    {
+      "id": "comparison.left-operand-decides-type",
+      "command": "where-object",
+      "credits": "where-object",
+      "creditBasis": "shared-code",
+      "area": "comparison",
+      "outcome": "match",
+      "expected": [
+        false
+      ],
+      "actual": false,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "comparison.null-sorts-first",
+      "command": "sort-object",
+      "credits": null,
+      "creditBasis": "not-established",
+      "area": "comparison",
+      "outcome": "match",
+      "expected": [
+        true
+      ],
+      "actual": true,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "comparison.array-eq-filters",
+      "command": "where-object",
+      "credits": null,
+      "creditBasis": "not-established",
+      "area": "comparison",
+      "outcome": "match",
+      "expected": [
+        "System.Object[]=2"
+      ],
+      "actual": "System.Object[]=2",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "truthy.empty-array",
+      "command": "where-object",
+      "credits": "where-object",
+      "creditBasis": "shared-code",
+      "area": "truthiness",
+      "outcome": "match",
+      "expected": [
+        false
+      ],
+      "actual": false,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "truthy.single-element-takes-element",
+      "command": "where-object",
+      "credits": "where-object",
+      "creditBasis": "shared-code",
+      "area": "truthiness",
+      "outcome": "match",
+      "expected": [
+        false
+      ],
+      "actual": false,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "truthy.single-element-true",
+      "command": "where-object",
+      "credits": "where-object",
+      "creditBasis": "shared-code",
+      "area": "truthiness",
+      "outcome": "match",
+      "expected": [
+        true
+      ],
+      "actual": true,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "truthy.multi-element-array-is-true",
+      "command": "where-object",
+      "credits": "where-object",
+      "creditBasis": "shared-code",
+      "area": "truthiness",
+      "outcome": "match",
+      "expected": [
+        true
+      ],
+      "actual": true,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "truthy.string-zero",
+      "command": "where-object",
+      "credits": "where-object",
+      "creditBasis": "shared-code",
+      "area": "truthiness",
+      "outcome": "match",
+      "expected": [
+        true
+      ],
+      "actual": true,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "truthy.number-zero",
+      "command": "where-object",
+      "credits": "where-object",
+      "creditBasis": "shared-code",
+      "area": "truthiness",
+      "outcome": "match",
+      "expected": [
+        false
+      ],
+      "actual": false,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "truthy.empty-string",
+      "command": "where-object",
+      "credits": "where-object",
+      "creditBasis": "shared-code",
+      "area": "truthiness",
+      "outcome": "match",
+      "expected": [
+        false
+      ],
+      "actual": false,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "truthy.whitespace-string",
+      "command": "where-object",
+      "credits": "where-object",
+      "creditBasis": "shared-code",
+      "area": "truthiness",
+      "outcome": "match",
+      "expected": [
+        true
+      ],
+      "actual": true,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "truthy.null",
+      "command": "where-object",
+      "credits": "where-object",
+      "creditBasis": "shared-code",
+      "area": "truthiness",
+      "outcome": "match",
+      "expected": [
+        false
+      ],
+      "actual": false,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "truthy.negative-number",
+      "command": "where-object",
+      "credits": "where-object",
+      "creditBasis": "shared-code",
+      "area": "truthiness",
+      "outcome": "match",
+      "expected": [
+        true
+      ],
+      "actual": true,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "truthy.empty-hashtable",
+      "command": "where-object",
+      "credits": "where-object",
+      "creditBasis": "shared-code",
+      "area": "truthiness",
+      "outcome": "match",
+      "expected": [
+        true
+      ],
+      "actual": true,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "type.int-literal",
+      "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
+      "area": "types",
+      "outcome": "match",
+      "expected": [
+        "System.Int32"
+      ],
+      "actual": "System.Int32",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "type.double-literal",
+      "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
+      "area": "types",
+      "outcome": "match",
+      "expected": [
+        "System.Double"
+      ],
+      "actual": "System.Double",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "type.exact-division-stays-int",
+      "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
+      "area": "types",
+      "outcome": "match",
+      "expected": [
+        "System.Int32"
+      ],
+      "actual": "System.Int32",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "type.inexact-division-promotes",
+      "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
+      "area": "types",
+      "outcome": "match",
+      "expected": [
+        "System.Double"
+      ],
+      "actual": "System.Double",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "type.int64-boundary",
+      "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
+      "area": "types",
+      "outcome": "match",
+      "expected": [
+        "System.Int64"
+      ],
+      "actual": "System.Int64",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "type.string",
+      "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
+      "area": "types",
+      "outcome": "match",
+      "expected": [
+        "System.String"
+      ],
+      "actual": "System.String",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "type.boolean",
+      "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
+      "area": "types",
+      "outcome": "match",
+      "expected": [
+        "System.Boolean"
+      ],
+      "actual": "System.Boolean",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "type.array",
+      "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
+      "area": "types",
+      "outcome": "match",
+      "expected": [
+        "System.Object[]"
+      ],
+      "actual": "System.Object[]",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "type.byte-array",
+      "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
+      "area": "types",
+      "outcome": "match",
+      "expected": [
+        "System.Byte[]"
+      ],
+      "actual": "System.Byte[]",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "type.datetime",
+      "command": "get-date",
+      "credits": "get-date",
+      "creditBasis": "direct",
+      "area": "types",
+      "outcome": "match",
+      "expected": [
+        "System.DateTime"
+      ],
+      "actual": "System.DateTime",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "type.pscustomobject-typename",
+      "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
+      "area": "types",
+      "outcome": "match",
+      "expected": [
+        "System.Management.Automation.PSCustomObject"
+      ],
+      "actual": "System.Management.Automation.PSCustomObject",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "type.datetime-hierarchy",
+      "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
+      "area": "types",
+      "outcome": "match",
+      "expected": [
+        "System.DateTime,System.ValueType,System.Object"
+      ],
+      "actual": "System.DateTime,System.ValueType,System.Object",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "type.is-matches-short-name",
+      "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
+      "area": "types",
+      "outcome": "match",
+      "expected": [
+        true
+      ],
+      "actual": true,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "type.null-has-no-type",
+      "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
+      "area": "types",
+      "outcome": "unimplemented",
+      "expected": [
+        "InvokeMethodOnNull"
+      ],
+      "actual": null,
+      "explainedBy": "typename-of-null-is-total",
+      "explanationKind": "deliberate",
+      "detail": "typeNameOf(null) returns 'System.Object' as a total-function convenience, and the reference implementation throws instead, so there is no honest scalar to compare. Recorded in known-differences.yml as typename-of-null-is-total."
+    },
+    {
+      "id": "property.access-is-case-insensitive",
+      "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
+      "area": "properties",
+      "outcome": "match",
+      "expected": [
+        "x"
+      ],
+      "actual": "x",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "property.missing-property-is-absent",
+      "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
+      "area": "properties",
+      "outcome": "match",
+      "expected": [
+        true
+      ],
+      "actual": true,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "property.declaration-order-is-kept",
+      "command": "select-object",
+      "credits": null,
+      "creditBasis": "not-established",
+      "area": "properties",
+      "outcome": "match",
+      "expected": [
+        "B",
+        "A",
+        "C"
+      ],
+      "actual": [
+        "B",
+        "A",
+        "C"
+      ],
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "property.has-property-case-insensitive",
+      "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
+      "area": "properties",
+      "outcome": "match",
+      "expected": [
+        true
+      ],
+      "actual": true,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "strings.regex-replace-is-case-insensitive",
+      "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
+      "area": "strings",
+      "outcome": "match",
+      "expected": [
+        "AxC"
+      ],
+      "actual": "AxC",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "strings.like-is-case-insensitive",
+      "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
+      "area": "strings",
+      "outcome": "match",
+      "expected": [
+        true
+      ],
+      "actual": true,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "strings.split-returns-array",
+      "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
+      "area": "strings",
+      "outcome": "match",
+      "expected": [
+        3
+      ],
+      "actual": 3,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "culture.interpolation-is-invariant",
+      "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
+      "area": "culture",
+      "outcome": "match",
+      "expected": [
+        "1.5"
+      ],
+      "actual": "1.5",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "culture.tostring-follows-culture",
+      "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
+      "area": "culture",
+      "outcome": "match",
+      "expected": [
+        "1234.5"
+      ],
+      "actual": "1234.5",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "culture.format-operator-follows-culture",
+      "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
+      "area": "culture",
+      "outcome": "match",
+      "expected": [
+        "1,234.50"
+      ],
+      "actual": "1,234.50",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "status.dollar-hook-true-on-success",
+      "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
+      "area": "status",
+      "outcome": "unimplemented",
+      "expected": true,
+      "actual": null,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": "The kernel that would set $? is not built; streams.ts defines the ErrorRecord it will carry. Captured now so the harness is ready for it."
+    },
+    {
+      "id": "status.dollar-hook-false-after-error",
+      "command": "get-command",
+      "credits": "get-command",
+      "creditBasis": "direct",
+      "area": "status",
+      "outcome": "unimplemented",
+      "expected": false,
+      "actual": null,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": "No kernel to set $? yet."
+    },
+    {
+      "id": "status.lastexitcode-from-native-command",
+      "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
+      "area": "status",
+      "outcome": "unimplemented",
+      "expected": [
+        3
+      ],
+      "actual": null,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": "No native process channel in the browser build; NativeStreams is declared but nothing drives it."
+    },
+    {
+      "id": "error.command-not-found-id",
+      "command": "get-command",
+      "credits": "get-command",
+      "creditBasis": "direct",
+      "area": "errors",
+      "outcome": "match",
+      "expected": "CommandNotFoundException,Microsoft.PowerShell.Commands.GetCommandCommand",
+      "actual": "CommandNotFoundException,Microsoft.PowerShell.Commands.GetCommandCommand",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "error.command-not-found-category",
+      "command": "get-command",
+      "credits": "get-command",
+      "creditBasis": "direct",
+      "area": "errors",
+      "outcome": "match",
+      "expected": "ObjectNotFound",
+      "actual": "ObjectNotFound",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "error.select-object-first-negative",
+      "command": "select-object",
+      "credits": "select-object",
+      "creditBasis": "direct",
+      "area": "errors",
+      "outcome": "unimplemented",
+      "expected": "ParameterArgumentValidationError,Microsoft.PowerShell.Commands.SelectObjectCommand",
+      "actual": null,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": "No binder yet. invocation.ts declares the BindingResult a binder will return; nothing produces one."
+    },
+    {
+      "id": "error.method-on-null",
+      "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
+      "area": "errors",
+      "outcome": "match",
+      "expected": "InvokeMethodOnNull",
+      "actual": "InvokeMethodOnNull",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "error.divide-by-zero",
+      "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
+      "area": "errors",
+      "outcome": "match",
+      "expected": "RuntimeException",
+      "actual": "RuntimeException",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "error.no-error-on-success",
+      "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
+      "area": "errors",
+      "outcome": "unimplemented",
+      "expected": 0,
+      "actual": null,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": "No error-stream driver yet; this case exists to check the capture, not the project."
+    },
+    {
+      "id": "meta.measure-object-sum-type",
+      "command": "measure-object",
+      "credits": "measure-object",
+      "creditBasis": "probe-argument",
+      "area": "metadata",
+      "outcome": "match",
+      "expected": [
+        "System.Management.Automation.SwitchParameter"
+      ],
+      "actual": "System.Management.Automation.SwitchParameter",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "meta.measure-object-inputobject-pipeline",
+      "command": "measure-object",
+      "credits": "measure-object",
+      "creditBasis": "probe-argument",
+      "area": "metadata",
+      "outcome": "match",
+      "expected": [
+        true
+      ],
+      "actual": true,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "meta.sort-object-property-position",
+      "command": "sort-object",
+      "credits": "sort-object",
+      "creditBasis": "probe-argument",
+      "area": "metadata",
+      "outcome": "match",
+      "expected": [
+        0
+      ],
+      "actual": 0,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "meta.sort-object-property-type",
+      "command": "sort-object",
+      "credits": "sort-object",
+      "creditBasis": "probe-argument",
+      "area": "metadata",
+      "outcome": "match",
+      "expected": [
+        "System.Object[]"
+      ],
+      "actual": "System.Object[]",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "meta.select-object-first-type",
+      "command": "select-object",
+      "credits": "select-object",
+      "creditBasis": "probe-argument",
+      "area": "metadata",
+      "outcome": "match",
+      "expected": [
+        "System.Int32"
+      ],
+      "actual": "System.Int32",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "meta.select-object-parameter-sets",
+      "command": "select-object",
+      "credits": "select-object",
+      "creditBasis": "probe-argument",
+      "area": "metadata",
+      "outcome": "match",
+      "expected": [
+        "DefaultParameter,SkipLastParameter"
+      ],
+      "actual": "DefaultParameter,SkipLastParameter",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "meta.where-object-filterscript-position",
+      "command": "where-object",
+      "credits": "where-object",
+      "creditBasis": "probe-argument",
+      "area": "metadata",
+      "outcome": "match",
+      "expected": [
+        0
+      ],
+      "actual": 0,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "meta.where-object-eq-aliases",
+      "command": "where-object",
+      "credits": "where-object",
+      "creditBasis": "probe-argument",
+      "area": "metadata",
+      "outcome": "match",
+      "expected": [
+        "IEQ"
+      ],
+      "actual": "IEQ",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "meta.write-output-noenumerate-switch",
+      "command": "write-output",
+      "credits": "write-output",
+      "creditBasis": "probe-argument",
+      "area": "metadata",
+      "outcome": "match",
+      "expected": [
+        true
+      ],
+      "actual": true,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "meta.write-output-inputobject-position",
+      "command": "write-output",
+      "credits": "write-output",
+      "creditBasis": "probe-argument",
+      "area": "metadata",
+      "outcome": "match",
+      "expected": [
+        0
+      ],
+      "actual": 0,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "meta.out-null-inputobject-pipeline",
+      "command": "out-null",
+      "credits": "out-null",
+      "creditBasis": "probe-argument",
+      "area": "metadata",
+      "outcome": "match",
+      "expected": [
+        true
+      ],
+      "actual": true,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "meta.get-random-count-type",
+      "command": "get-random",
+      "credits": "get-random",
+      "creditBasis": "probe-argument",
+      "area": "metadata",
+      "outcome": "match",
+      "expected": [
+        "System.Int32"
+      ],
+      "actual": "System.Int32",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "meta.get-random-maximum-type",
+      "command": "get-random",
+      "credits": "get-random",
+      "creditBasis": "probe-argument",
+      "area": "metadata",
+      "outcome": "match",
+      "expected": [
+        "System.Object"
+      ],
+      "actual": "System.Object",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "meta.get-date-format-type",
+      "command": "get-date",
+      "credits": "get-date",
+      "creditBasis": "probe-argument",
+      "area": "metadata",
+      "outcome": "match",
+      "expected": [
+        "System.String"
+      ],
+      "actual": "System.String",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "meta.get-date-asutc-switch",
+      "command": "get-date",
+      "credits": "get-date",
+      "creditBasis": "probe-argument",
+      "area": "metadata",
+      "outcome": "match",
+      "expected": [
+        true
+      ],
+      "actual": true,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "meta.get-command-name-position",
+      "command": "get-command",
+      "credits": "get-command",
+      "creditBasis": "probe-argument",
+      "area": "metadata",
+      "outcome": "match",
+      "expected": [
+        0
+      ],
+      "actual": 0,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "meta.get-command-syntax-switch",
+      "command": "get-command",
+      "credits": "get-command",
+      "creditBasis": "probe-argument",
+      "area": "metadata",
+      "outcome": "match",
+      "expected": [
+        true
+      ],
+      "actual": true,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "meta.get-help-name-position",
+      "command": "get-help",
+      "credits": "get-help",
+      "creditBasis": "probe-argument",
+      "area": "metadata",
+      "outcome": "match",
+      "expected": [
+        0
+      ],
+      "actual": 0,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "meta.get-help-full-switch",
+      "command": "get-help",
+      "credits": "get-help",
+      "creditBasis": "probe-argument",
+      "area": "metadata",
+      "outcome": "match",
+      "expected": [
+        true
+      ],
+      "actual": true,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "meta.get-history-count-type",
+      "command": "get-history",
+      "credits": "get-history",
+      "creditBasis": "probe-argument",
+      "area": "metadata",
+      "outcome": "match",
+      "expected": [
+        "System.Int32"
+      ],
+      "actual": "System.Int32",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "meta.get-history-id-type",
+      "command": "get-history",
+      "credits": "get-history",
+      "creditBasis": "probe-argument",
+      "area": "metadata",
+      "outcome": "match",
+      "expected": [
+        "System.Int64[]"
+      ],
+      "actual": "System.Int64[]",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "meta.get-location-stack-switch",
+      "command": "get-location",
+      "credits": "get-location",
+      "creditBasis": "probe-argument",
+      "area": "metadata",
+      "outcome": "match",
+      "expected": [
+        true
+      ],
+      "actual": true,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "meta.get-location-psdrive-type",
+      "command": "get-location",
+      "credits": "get-location",
+      "creditBasis": "probe-argument",
+      "area": "metadata",
+      "outcome": "match",
+      "expected": [
+        "System.String[]"
+      ],
+      "actual": "System.String[]",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "normalisation.guid-is-canonicalised",
+      "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
+      "area": "normalisation",
+      "outcome": "match",
+      "expected": [
+        "<GUID>"
+      ],
+      "actual": "<GUID>",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "normalisation.cwd-is-canonicalised",
+      "command": "get-location",
+      "credits": "get-location",
+      "creditBasis": "direct",
+      "area": "normalisation",
+      "outcome": "match",
+      "expected": [
+        "<REPO>"
+      ],
+      "actual": "<REPO>",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "normalisation.declared-volatile-clock",
+      "command": "get-date",
+      "credits": "get-date",
+      "creditBasis": "direct",
+      "area": "normalisation",
+      "outcome": "unimplemented",
+      "expected": [
+        2026
+      ],
+      "actual": null,
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": "No clock abstraction yet."
+    },
+    {
+      "id": "date.format-single-char-is-standard",
+      "command": "get-date",
+      "credits": "get-date",
+      "creditBasis": "direct",
+      "area": "date",
+      "outcome": "match",
+      "expected": [
+        "March 4"
+      ],
+      "actual": "March 4",
+      "explainedBy": "date-formatting-pinned-to-en-us",
+      "explanationKind": "deliberate",
+      "detail": null
+    },
+    {
+      "id": "date.format-two-chars-is-custom",
+      "command": "get-date",
+      "credits": "get-date",
+      "creditBasis": "direct",
+      "area": "date",
+      "outcome": "match",
+      "expected": [
+        "03"
+      ],
+      "actual": "03",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "date.format-single-char-hour-throws",
+      "command": "get-date",
+      "credits": "get-date",
+      "creditBasis": "direct",
+      "area": "date",
+      "outcome": "match",
+      "expected": [
+        "threw"
+      ],
+      "actual": "threw",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "date.format-day-and-month-names",
+      "command": "get-date",
+      "credits": "get-date",
+      "creditBasis": "direct",
+      "area": "date",
+      "outcome": "match",
+      "expected": [
+        "Wed Wednesday Mar March"
+      ],
+      "actual": "Wed Wednesday Mar March",
+      "explainedBy": "date-formatting-pinned-to-en-us",
+      "explanationKind": "deliberate",
+      "detail": null
+    },
+    {
+      "id": "date.format-meridiem-and-twelve-hour",
+      "command": "get-date",
+      "credits": "get-date",
+      "creditBasis": "direct",
+      "area": "date",
+      "outcome": "match",
+      "expected": [
+        "05|05|AM"
+      ],
+      "actual": "05|05|AM",
+      "explainedBy": "date-formatting-pinned-to-en-us",
+      "explanationKind": "deliberate",
+      "detail": null
+    },
+    {
+      "id": "date.format-fractional-second-widths",
+      "command": "get-date",
+      "credits": "get-date",
+      "creditBasis": "direct",
+      "area": "date",
+      "outcome": "match",
+      "expected": [
+        "0089000|008900|008|00"
+      ],
+      "actual": "0089000|008900|008|00",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "date.ticks-are-int64",
+      "command": "get-date",
+      "credits": "get-date",
+      "creditBasis": "direct",
+      "area": "date",
+      "outcome": "match",
+      "expected": [
+        "639081975670000000"
+      ],
+      "actual": "639081975670000000",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "date.property-order",
+      "command": "get-date",
+      "credits": "get-date",
+      "creditBasis": "direct",
+      "area": "date",
+      "outcome": "match",
+      "expected": [
+        "DisplayHint,DateTime,Date,Day,DayOfWeek,DayOfYear,Hour,Kind,Millisecond,Microsecond,Nanosecond,Minute,Month,Second,Ticks,TimeOfDay,Year"
+      ],
+      "actual": "DisplayHint,DateTime,Date,Day,DayOfWeek,DayOfYear,Hour,Kind,Millisecond,Microsecond,Nanosecond,Minute,Month,Second,Ticks,TimeOfDay,Year",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "date.uformat-day-numbering-wednesday",
+      "command": "get-date",
+      "credits": "get-date",
+      "creditBasis": "direct",
+      "area": "date",
+      "outcome": "match",
+      "expected": [
+        "3|3"
+      ],
+      "actual": "3|3",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "date.uformat-day-numbering-sunday",
+      "command": "get-date",
+      "credits": "get-date",
+      "creditBasis": "direct",
+      "area": "date",
+      "outcome": "match",
+      "expected": [
+        "7|0"
+      ],
+      "actual": "7|0",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "date.uformat-week-numbers",
+      "command": "get-date",
+      "credits": "get-date",
+      "creditBasis": "direct",
+      "area": "date",
+      "outcome": "match",
+      "expected": [
+        "063|10|9|9"
+      ],
+      "actual": "063|10|9|9",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "date.uformat-padding-variants",
+      "command": "get-date",
+      "credits": "get-date",
+      "creditBasis": "direct",
+      "area": "date",
+      "outcome": "match",
+      "expected": [
+        "04| 4|05| 5|05| 5"
+      ],
+      "actual": "04| 4|05| 5|05| 5",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "date.uformat-unknown-specifier-keeps-the-letter",
+      "command": "get-date",
+      "credits": "get-date",
+      "creditBasis": "direct",
+      "area": "date",
+      "outcome": "match",
+      "expected": [
+        "q"
+      ],
+      "actual": "q",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "date.uformat-percent-escape",
+      "command": "get-date",
+      "credits": "get-date",
+      "creditBasis": "direct",
+      "area": "date",
+      "outcome": "match",
+      "expected": [
+        "a%b"
+      ],
+      "actual": "a%b",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "random.maximum-is-exclusive-single-value",
+      "command": "get-random",
+      "credits": "get-random",
+      "creditBasis": "direct",
+      "area": "random",
+      "outcome": "match",
+      "expected": [
+        "0"
+      ],
+      "actual": "0",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "random.maximum-is-exclusive-pair",
+      "command": "get-random",
+      "credits": "get-random",
+      "creditBasis": "direct",
+      "area": "random",
+      "outcome": "match",
+      "expected": [
+        "0,1"
+      ],
+      "actual": "0,1",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "random.empty-range-is-an-error",
+      "command": "get-random",
+      "credits": "get-random",
+      "creditBasis": "direct",
+      "area": "random",
+      "outcome": "match",
+      "expected": [
+        "MinGreaterThanOrEqualMax,Microsoft.PowerShell.Commands.GetRandomCommand"
+      ],
+      "actual": "MinGreaterThanOrEqualMax,Microsoft.PowerShell.Commands.GetRandomCommand",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "random.empty-range-error-message",
+      "command": "get-random",
+      "credits": "get-random",
+      "creditBasis": "direct",
+      "area": "random",
+      "outcome": "match",
+      "expected": [
+        "The Minimum value (5) cannot be greater than or equal to the Maximum value (5)."
+      ],
+      "actual": "The Minimum value (5) cannot be greater than or equal to the Maximum value (5).",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "random.count-larger-than-the-list",
+      "command": "get-random",
+      "credits": "get-random",
+      "creditBasis": "direct",
+      "area": "random",
+      "outcome": "match",
+      "expected": [
+        "a,b,c"
+      ],
+      "actual": "a,b,c",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "history.info-property-order",
+      "command": "get-history",
+      "credits": "get-history",
+      "creditBasis": "direct",
+      "area": "history",
+      "outcome": "match",
+      "expected": [
+        "Id,CommandLine,ExecutionStatus,StartExecutionTime,EndExecutionTime,Duration"
+      ],
+      "actual": "Id,CommandLine,ExecutionStatus,StartExecutionTime,EndExecutionTime,Duration",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "help.auto-generated-view-typenames",
+      "command": "get-help",
+      "credits": "get-help",
+      "creditBasis": "direct",
+      "area": "help",
+      "outcome": "match",
+      "expected": [
+        "ExtendedCmdletHelpInfo,CmdletHelpInfo,HelpInfo"
+      ],
+      "actual": "ExtendedCmdletHelpInfo,CmdletHelpInfo,HelpInfo",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "help.full-view-adds-a-twin-per-name",
+      "command": "get-help",
+      "credits": "get-help",
+      "creditBasis": "direct",
+      "area": "help",
+      "outcome": "match",
+      "expected": [
+        "ExtendedCmdletHelpInfo#FullView,CmdletHelpInfo#FullView,HelpInfo#FullView,ExtendedCmdletHelpInfo,CmdletHelpInfo,HelpInfo"
+      ],
+      "actual": "ExtendedCmdletHelpInfo#FullView,CmdletHelpInfo#FullView,HelpInfo#FullView,ExtendedCmdletHelpInfo,CmdletHelpInfo,HelpInfo",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "help.parameter-descriptor-members",
+      "command": "get-help",
+      "credits": "get-help",
+      "creditBasis": "direct",
+      "area": "help",
+      "outcome": "match",
+      "expected": [
+        "name,required,pipelineInput,isDynamic,globbing,parameterSetName,parameterValue,type,position,aliases"
+      ],
+      "actual": "name,required,pipelineInput,isDynamic,globbing,parameterSetName,parameterValue,type,position,aliases",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "commands.cmdlet-info-hierarchy",
+      "command": "get-command",
+      "credits": "get-command",
+      "creditBasis": "direct",
+      "area": "commands",
+      "outcome": "match",
+      "expected": [
+        "System.Management.Automation.CmdletInfo,System.Management.Automation.CommandInfo,System.Object"
+      ],
+      "actual": "System.Management.Automation.CmdletInfo,System.Management.Automation.CommandInfo,System.Object",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "commands.alias-info-hierarchy",
+      "command": "get-command",
+      "credits": "get-command",
+      "creditBasis": "direct",
+      "area": "commands",
+      "outcome": "match",
+      "expected": [
+        "System.Management.Automation.AliasInfo,System.Management.Automation.CommandInfo,System.Object"
+      ],
+      "actual": "System.Management.Automation.AliasInfo,System.Management.Automation.CommandInfo,System.Object",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    },
+    {
+      "id": "version.table-key-order",
+      "command": "$psversiontable",
+      "credits": "$psversiontable",
+      "creditBasis": "direct",
+      "area": "version",
+      "outcome": "match",
+      "expected": [
+        "PSVersion,PSEdition,GitCommitId,OS,Platform,PSCompatibleVersions,PSRemotingProtocolVersion,SerializationVersion,WSManStackVersion"
+      ],
+      "actual": "PSVersion,PSEdition,GitCommitId,OS,Platform,PSCompatibleVersions,PSRemotingProtocolVersion,SerializationVersion,WSManStackVersion",
+      "explainedBy": null,
+      "explanationKind": null,
+      "detail": null
+    }
+  ]
+}

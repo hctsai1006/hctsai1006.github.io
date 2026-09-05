@@ -1,0 +1,29 @@
+{
+  "$comment": "Published security advisories where the reporter is credited by name.",
+  "advisories": [
+    {
+      "id": "GHSA-qm8v-g4f9-qhjx",
+      "repository": "istio/istio",
+      "severity": "6.8 medium",
+      "role": "reporter",
+      "published": "2026-08-27",
+      "foundation": "CNCF Graduated",
+      "fixedIn": "1.30.4 / 1.29.7",
+      "summary": "BackendTLSPolicy 的 caCertificateRefs 解不出來時,sidecar 丟掉 upstream 的 TLS socket 改送明文,加密與 CA 驗證同時失效且無聲;gateway 則 fail closed 不受影響。",
+      "url": "https://github.com/istio/istio/security/advisories/GHSA-qm8v-g4f9-qhjx",
+      "bulletin": "https://istio.io/latest/news/security/istio-security-2026-006/"
+    },
+    {
+      "id": "GHSA-j38h-7pfq-cxmw",
+      "repository": "volcano-sh/volcano",
+      "severity": "medium",
+      "role": "finder",
+      "published": "2026-08-26",
+      "foundation": "CNCF Incubating",
+      "fixedIn": "v1.15.2 (2026-08-29 已發布)",
+      "summary": "DRA 容量會計的迭代量隨租戶可控的數字成長,已驗證的租戶可用可控的 device count 吃光 scheduler CPU,癱瘓整個叢集的排程(CWE-400 經由 CWE-834)。",
+      "url": "https://github.com/volcano-sh/volcano/security/advisories/GHSA-j38h-7pfq-cxmw",
+      "bulletin": null
+    }
+  ]
+}

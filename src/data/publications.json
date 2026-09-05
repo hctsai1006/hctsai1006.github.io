@@ -1,0 +1,137 @@
+{
+  "$comment": "total is the authoritative publication count. It is checked against entries.length at extraction time: two numbers that must agree are exactly how the 115-to-148 contribution drift happened, so they are never allowed to disagree silently. featured is the short list the terminal shows before -Full.",
+  "total": 13,
+  "entries": [
+    {
+      "year": "2026",
+      "status": "Accepted",
+      "venue": "IEEE SCC 2026 (Space Computing Conference)",
+      "title": "Ground-Side Mission Plan Compilation with Policy-as-Code Guardrails for Cloud-Native Satellite Platforms",
+      "identifier": "arXiv:2607.14798",
+      "authors": "Hsiu-Chi Tsai, Chia-Tung Chung"
+    },
+    {
+      "year": "2026",
+      "status": "Accepted",
+      "venue": "IEEE WF-PST 2026 (World Forum on Public Safety Technology)",
+      "title": "OOBWatch-S3: Surfacing a Zephyr Wi-Fi Cold-Boot Race Family on ESP32-S3 via a Public-Safety Watchdog Deployment",
+      "identifier": null,
+      "authors": "Hsiu-Chi Tsai, Chia-Tung Chung"
+    },
+    {
+      "year": "2026",
+      "status": "Accepted",
+      "venue": "IEEE ICAIMS 2026",
+      "title": "Band-as-Modality Learning for Multispectral and Hyperspectral Segmentation: Spectral Group Masked Pretraining and Cross-Band Attention for Missing-Band Robustness",
+      "identifier": null,
+      "authors": "Chia-Tung Chung, Hsiu-Chi Tsai"
+    },
+    {
+      "year": "2026",
+      "status": "preprint",
+      "venue": "arXiv (cs.DC)",
+      "title": "Trusted Floors Under Untrusted Learners: A Runtime Assured-SLO Guard for ML Serving",
+      "identifier": "arXiv:2607.09992",
+      "authors": "Hsiu-Chi Tsai"
+    },
+    {
+      "year": "2026",
+      "status": "preprint",
+      "venue": "engrXiv",
+      "title": "Physics-Grounded Deep Reinforcement Learning for Power Control in LEO Non-Terrestrial O-RAN: A QoS-Power Pareto and Cross-Orbit Robustness Study",
+      "identifier": "10.31224/7541",
+      "authors": "Hsiu-Chi Tsai, Chia-Tung Chung"
+    },
+    {
+      "year": "2026",
+      "status": "preprint",
+      "venue": "arXiv (physics.chem-ph / quant-ph)",
+      "title": "An Iterative Dual-Channel Neural Quantum State Algorithm for Selected Configuration Interaction",
+      "identifier": "arXiv:2606.26760",
+      "authors": "Jen-Yu Chang, Yi-Chun Chang, Yu-Jui Lin, Ming-Chun Yang, Hsiu-Chi Tsai, Tai-Yue Li, Nan-Yow Chen, Tsung-Wei Huang, En-Jui Kuo"
+    },
+    {
+      "year": "2026",
+      "status": "preprint",
+      "venue": "engrXiv",
+      "title": "A Large-Scale Empirical Study of Deep Learning for MEMS Gyroscope Bias Estimation",
+      "identifier": "10.31224/7144",
+      "authors": "Hsiu-Chi Tsai, Chia-Tung Chung"
+    },
+    {
+      "year": "2026",
+      "status": "preprint",
+      "venue": "engrXiv",
+      "title": "Cross-Layer Diagnostics for Operator-Side Platform Porting of GPU-Accelerated 5G RAN: An Experience Report on Cable-on Validation of NVIDIA Aerial cuBB on DGX Spark",
+      "identifier": "10.31224/7056",
+      "authors": "Hsiu-Chi Tsai"
+    },
+    {
+      "year": "2026",
+      "status": "preprint",
+      "venue": "Zenodo",
+      "title": "Federated O-RAN Slice SLA Prediction: A Cross-Architecture Empirical Benchmark on Colosseum/ColO-RAN",
+      "identifier": "10.5281/zenodo.20075433",
+      "authors": "Hsiu-Chi Tsai"
+    },
+    {
+      "year": "2026",
+      "status": "preprint",
+      "venue": "Research Square",
+      "title": "ECD length and fold identity shape the calibration of AI-predicted immune-receptor interactions: lessons from 834 experimentally tested pairs",
+      "identifier": "10.21203/rs.3.rs-9526911/v1",
+      "authors": "Hsiu-Chi Tsai"
+    },
+    {
+      "year": "2026",
+      "status": "preprint",
+      "venue": "Preprints.org (MDPI)",
+      "title": "Sub-Millijoule Intrusion Detection on a Commodity MCU Neural Processing Unit: A Four-Dataset Deployment Study",
+      "identifier": "10.20944/preprints202603.0817.v3",
+      "authors": "Hsiu-Chi Tsai"
+    },
+    {
+      "year": "2023",
+      "status": "published",
+      "venue": "NYCU Capstone",
+      "title": "Intelligent Management System of O-RAN Private Network in Internal Medicine Environment",
+      "identifier": "10.13140/RG.2.2.28996.30081",
+      "authors": "Hsiu-Chi Tsai, Yu-Te Wu"
+    },
+    {
+      "year": "2023",
+      "status": "published",
+      "venue": "NYCU Thesis",
+      "title": "The Development and Prospect of O-RAN Integrated LEO Satellite Communication System for Marine Vessel",
+      "identifier": "10.13140/RG.2.2.12387.02085",
+      "authors": "Hsiu-Chi Tsai, Chi-Hsuan Wang, Yu-Tang You, An-Tai Yeh"
+    }
+  ],
+  "featured": [
+    {
+      "venue": "IEEE SCC 2026",
+      "title": "Ground-Side Mission Plan Compilation",
+      "status": "Accepted"
+    },
+    {
+      "venue": "IEEE WF-PST 2026",
+      "title": "OOBWatch-S3: Zephyr Cold-Boot Race",
+      "status": "Accepted"
+    },
+    {
+      "venue": "ICAIMS 2026 (IEEE)",
+      "title": "Band-as-Modality Learning",
+      "status": "Accepted"
+    },
+    {
+      "venue": "arXiv:2607.09992",
+      "title": "Trusted Floors Under Untrusted Learners",
+      "status": "preprint"
+    },
+    {
+      "venue": "engrXiv 7541",
+      "title": "Physics-Grounded DRL for LEO NTN",
+      "status": "preprint"
+    }
+  ]
+}

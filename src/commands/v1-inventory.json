@@ -1,0 +1,830 @@
+{
+  "$comment": "The v1 terminal inventory, extracted from index.html by tools/extract-command-inventory.mts. This is the coverage target for the rewrite: every entry needs a manifest before v1 can be retired.",
+  "source": "index.html",
+  "counts": {
+    "commands": 67,
+    "aliases": 46,
+    "easterEggs": 11,
+    "parameters": 36
+  },
+  "commands": [
+    {
+      "name": "$psversiontable",
+      "display": "$PSVersionTable",
+      "kind": "Variable",
+      "params": [],
+      "help": "PowerShell version information",
+      "aliases": [],
+      "streamsOutput": false,
+      "offersPaths": false
+    },
+    {
+      "name": "add-content",
+      "display": "Add-Content",
+      "kind": "Cmdlet",
+      "params": [
+        "-Path",
+        "-Value"
+      ],
+      "help": "Append content to a file (ac)",
+      "aliases": [
+        "ac"
+      ],
+      "streamsOutput": false,
+      "offersPaths": true
+    },
+    {
+      "name": "cat",
+      "display": "cat",
+      "kind": "Application",
+      "params": [],
+      "help": "concatenate files and print on the standard output",
+      "aliases": [],
+      "streamsOutput": false,
+      "offersPaths": true
+    },
+    {
+      "name": "chmod",
+      "display": "chmod",
+      "kind": "Application",
+      "params": [],
+      "help": "change file mode bits",
+      "aliases": [],
+      "streamsOutput": false,
+      "offersPaths": true
+    },
+    {
+      "name": "chown",
+      "display": "chown",
+      "kind": "Application",
+      "params": [],
+      "help": "change file owner and group",
+      "aliases": [],
+      "streamsOutput": false,
+      "offersPaths": true
+    },
+    {
+      "name": "clear-host",
+      "display": "Clear-Host",
+      "kind": "Cmdlet",
+      "params": [],
+      "help": "Clear the display in the host program (cls)",
+      "aliases": [
+        "clear",
+        "cls"
+      ],
+      "streamsOutput": false,
+      "offersPaths": false
+    },
+    {
+      "name": "copy-item",
+      "display": "Copy-Item",
+      "kind": "Cmdlet",
+      "params": [
+        "-Path",
+        "-Destination",
+        "-Recurse"
+      ],
+      "help": "Copy an item to another location (cp)",
+      "aliases": [
+        "ci",
+        "copy"
+      ],
+      "streamsOutput": false,
+      "offersPaths": true
+    },
+    {
+      "name": "cp",
+      "display": "cp",
+      "kind": "Application",
+      "params": [],
+      "help": "copy files and directories",
+      "aliases": [],
+      "streamsOutput": false,
+      "offersPaths": true
+    },
+    {
+      "name": "df",
+      "display": "df",
+      "kind": "Application",
+      "params": [],
+      "help": "report file system space usage",
+      "aliases": [],
+      "streamsOutput": false,
+      "offersPaths": false
+    },
+    {
+      "name": "exit",
+      "display": "exit",
+      "kind": "Cmdlet",
+      "params": [],
+      "help": "Exit message",
+      "aliases": [],
+      "streamsOutput": false,
+      "offersPaths": false
+    },
+    {
+      "name": "free",
+      "display": "free",
+      "kind": "Application",
+      "params": [],
+      "help": "Display amount of free and used memory in the system",
+      "aliases": [],
+      "streamsOutput": false,
+      "offersPaths": false
+    },
+    {
+      "name": "get-advisory",
+      "display": "Get-Advisory",
+      "kind": "Cmdlet",
+      "params": [],
+      "help": "List published security advisories that credit me",
+      "aliases": [
+        "advisories",
+        "advisory"
+      ],
+      "streamsOutput": false,
+      "offersPaths": false
+    },
+    {
+      "name": "get-award",
+      "display": "Get-Award",
+      "kind": "Cmdlet",
+      "params": [
+        "-Year"
+      ],
+      "help": "List awards and honors",
+      "aliases": [],
+      "streamsOutput": false,
+      "offersPaths": false
+    },
+    {
+      "name": "get-childitem",
+      "display": "Get-ChildItem",
+      "kind": "Cmdlet",
+      "params": [
+        "-Path"
+      ],
+      "help": "Get the items in a directory (dir/gci)",
+      "aliases": [
+        "dir",
+        "gci"
+      ],
+      "streamsOutput": false,
+      "offersPaths": true
+    },
+    {
+      "name": "get-command",
+      "display": "Get-Command",
+      "kind": "Cmdlet",
+      "params": [
+        "-Name"
+      ],
+      "help": "Get all commands (gcm)",
+      "aliases": [
+        "gcm"
+      ],
+      "streamsOutput": false,
+      "offersPaths": false
+    },
+    {
+      "name": "get-content",
+      "display": "Get-Content",
+      "kind": "Cmdlet",
+      "params": [
+        "-Path"
+      ],
+      "help": "Get the contents of a file (cat/type)",
+      "aliases": [
+        "gc",
+        "type"
+      ],
+      "streamsOutput": false,
+      "offersPaths": true
+    },
+    {
+      "name": "get-contribution",
+      "display": "Get-Contribution",
+      "kind": "Cmdlet",
+      "params": [
+        "-Foundation"
+      ],
+      "help": "List merged upstream contributions",
+      "aliases": [],
+      "streamsOutput": false,
+      "offersPaths": false
+    },
+    {
+      "name": "get-date",
+      "display": "Get-Date",
+      "kind": "Cmdlet",
+      "params": [],
+      "help": "Get the current date and time",
+      "aliases": [
+        "date"
+      ],
+      "streamsOutput": false,
+      "offersPaths": false
+    },
+    {
+      "name": "get-help",
+      "display": "Get-Help",
+      "kind": "Cmdlet",
+      "params": [
+        "-Name"
+      ],
+      "help": "Display information about commands (man)",
+      "aliases": [],
+      "streamsOutput": false,
+      "offersPaths": false
+    },
+    {
+      "name": "get-history",
+      "display": "Get-History",
+      "kind": "Cmdlet",
+      "params": [],
+      "help": "Get the commands entered during the current session",
+      "aliases": [
+        "h",
+        "history"
+      ],
+      "streamsOutput": false,
+      "offersPaths": false
+    },
+    {
+      "name": "get-location",
+      "display": "Get-Location",
+      "kind": "Cmdlet",
+      "params": [],
+      "help": "Get the current working location (pwd)",
+      "aliases": [
+        "gl",
+        "pwd"
+      ],
+      "streamsOutput": false,
+      "offersPaths": false
+    },
+    {
+      "name": "get-process",
+      "display": "Get-Process",
+      "kind": "Cmdlet",
+      "params": [],
+      "help": "Get the processes running on the local computer",
+      "aliases": [
+        "gps"
+      ],
+      "streamsOutput": false,
+      "offersPaths": false
+    },
+    {
+      "name": "get-project",
+      "display": "Get-Project",
+      "kind": "Cmdlet",
+      "params": [],
+      "help": "List representative projects",
+      "aliases": [],
+      "streamsOutput": false,
+      "offersPaths": false
+    },
+    {
+      "name": "get-publication",
+      "display": "Get-Publication",
+      "kind": "Cmdlet",
+      "params": [
+        "-Full"
+      ],
+      "help": "List publications (-Full shows every entry)",
+      "aliases": [],
+      "streamsOutput": false,
+      "offersPaths": false
+    },
+    {
+      "name": "get-random",
+      "display": "Get-Random",
+      "kind": "Cmdlet",
+      "params": [
+        "-Maximum"
+      ],
+      "help": "Get a random number",
+      "aliases": [],
+      "streamsOutput": false,
+      "offersPaths": false
+    },
+    {
+      "name": "get-source",
+      "display": "Get-Source",
+      "kind": "Cmdlet",
+      "params": [],
+      "help": "List every authoritative source, with links",
+      "aliases": [
+        "links",
+        "sources",
+        "src"
+      ],
+      "streamsOutput": false,
+      "offersPaths": false
+    },
+    {
+      "name": "get-timeline",
+      "display": "Get-Timeline",
+      "kind": "Cmdlet",
+      "params": [],
+      "help": "Show the year-by-year timeline",
+      "aliases": [],
+      "streamsOutput": false,
+      "offersPaths": false
+    },
+    {
+      "name": "git",
+      "display": "git",
+      "kind": "Application",
+      "params": [],
+      "help": "the stupid content tracker",
+      "aliases": [],
+      "streamsOutput": false,
+      "offersPaths": false
+    },
+    {
+      "name": "grep",
+      "display": "grep",
+      "kind": "Application",
+      "params": [],
+      "help": "print lines that match patterns",
+      "aliases": [],
+      "streamsOutput": false,
+      "offersPaths": true
+    },
+    {
+      "name": "help",
+      "display": "help",
+      "kind": "Cmdlet",
+      "params": [],
+      "help": "Quick start guide",
+      "aliases": [],
+      "streamsOutput": false,
+      "offersPaths": false
+    },
+    {
+      "name": "hostname",
+      "display": "hostname",
+      "kind": "Application",
+      "params": [],
+      "help": "show the system's host name",
+      "aliases": [],
+      "streamsOutput": false,
+      "offersPaths": false
+    },
+    {
+      "name": "ifconfig",
+      "display": "ifconfig",
+      "kind": "Application",
+      "params": [],
+      "help": "configure a network interface",
+      "aliases": [],
+      "streamsOutput": false,
+      "offersPaths": false
+    },
+    {
+      "name": "ip",
+      "display": "ip",
+      "kind": "Application",
+      "params": [],
+      "help": "show / manipulate routing, network devices, interfaces and tunnels",
+      "aliases": [],
+      "streamsOutput": false,
+      "offersPaths": false
+    },
+    {
+      "name": "ls",
+      "display": "ls",
+      "kind": "Application",
+      "params": [],
+      "help": "list directory contents",
+      "aliases": [],
+      "streamsOutput": false,
+      "offersPaths": true
+    },
+    {
+      "name": "lsb_release",
+      "display": "lsb_release",
+      "kind": "Application",
+      "params": [],
+      "help": "print distribution-specific information",
+      "aliases": [],
+      "streamsOutput": false,
+      "offersPaths": false
+    },
+    {
+      "name": "measure-object",
+      "display": "Measure-Object",
+      "kind": "Cmdlet",
+      "params": [],
+      "help": "Count objects in the pipeline",
+      "aliases": [
+        "measure"
+      ],
+      "streamsOutput": false,
+      "offersPaths": false
+    },
+    {
+      "name": "mkdir",
+      "display": "mkdir",
+      "kind": "Application",
+      "params": [],
+      "help": "make directories",
+      "aliases": [],
+      "streamsOutput": false,
+      "offersPaths": true
+    },
+    {
+      "name": "move-item",
+      "display": "Move-Item",
+      "kind": "Cmdlet",
+      "params": [
+        "-Path",
+        "-Destination",
+        "-Force"
+      ],
+      "help": "Move an item to another location (mv)",
+      "aliases": [
+        "mi",
+        "move"
+      ],
+      "streamsOutput": false,
+      "offersPaths": true
+    },
+    {
+      "name": "mv",
+      "display": "mv",
+      "kind": "Application",
+      "params": [],
+      "help": "move (rename) files",
+      "aliases": [],
+      "streamsOutput": false,
+      "offersPaths": true
+    },
+    {
+      "name": "nano",
+      "display": "nano",
+      "kind": "Application",
+      "params": [],
+      "help": "Nano's ANOther editor, inspired by Pico",
+      "aliases": [],
+      "streamsOutput": false,
+      "offersPaths": true
+    },
+    {
+      "name": "new-item",
+      "display": "New-Item",
+      "kind": "Cmdlet",
+      "params": [
+        "-Path",
+        "-ItemType",
+        "-Force"
+      ],
+      "help": "Create a new file or directory (mkdir/ni)",
+      "aliases": [
+        "md",
+        "ni"
+      ],
+      "streamsOutput": false,
+      "offersPaths": true
+    },
+    {
+      "name": "out-null",
+      "display": "Out-Null",
+      "kind": "Cmdlet",
+      "params": [],
+      "help": "Discard pipeline output",
+      "aliases": [],
+      "streamsOutput": false,
+      "offersPaths": false
+    },
+    {
+      "name": "ping",
+      "display": "ping",
+      "kind": "Application",
+      "params": [],
+      "help": "send ICMP ECHO_REQUEST to network hosts",
+      "aliases": [],
+      "streamsOutput": true,
+      "offersPaths": false
+    },
+    {
+      "name": "ps",
+      "display": "ps",
+      "kind": "Application",
+      "params": [],
+      "help": "report a snapshot of the current processes",
+      "aliases": [],
+      "streamsOutput": false,
+      "offersPaths": false
+    },
+    {
+      "name": "remove-item",
+      "display": "Remove-Item",
+      "kind": "Cmdlet",
+      "params": [
+        "-Path",
+        "-Recurse",
+        "-Force"
+      ],
+      "help": "Delete a file or directory (rm/del)",
+      "aliases": [
+        "del",
+        "erase",
+        "rd",
+        "ri",
+        "rmdir"
+      ],
+      "streamsOutput": false,
+      "offersPaths": true
+    },
+    {
+      "name": "rename-item",
+      "display": "Rename-Item",
+      "kind": "Cmdlet",
+      "params": [
+        "-Path",
+        "-NewName"
+      ],
+      "help": "Rename an item (ren)",
+      "aliases": [
+        "ren",
+        "rni"
+      ],
+      "streamsOutput": false,
+      "offersPaths": true
+    },
+    {
+      "name": "reset-filesystem",
+      "display": "Reset-FileSystem",
+      "kind": "Cmdlet",
+      "params": [],
+      "help": "Restore the file system to its initial state",
+      "aliases": [],
+      "streamsOutput": false,
+      "offersPaths": false
+    },
+    {
+      "name": "rm",
+      "display": "rm",
+      "kind": "Application",
+      "params": [],
+      "help": "remove files or directories",
+      "aliases": [],
+      "streamsOutput": false,
+      "offersPaths": true
+    },
+    {
+      "name": "select-object",
+      "display": "Select-Object",
+      "kind": "Cmdlet",
+      "params": [
+        "-First",
+        "-Last"
+      ],
+      "help": "Select the first or last N objects",
+      "aliases": [
+        "select"
+      ],
+      "streamsOutput": false,
+      "offersPaths": false
+    },
+    {
+      "name": "select-string",
+      "display": "Select-String",
+      "kind": "Cmdlet",
+      "params": [
+        "-Pattern"
+      ],
+      "help": "Find text in files (grep)",
+      "aliases": [
+        "sls"
+      ],
+      "streamsOutput": false,
+      "offersPaths": false
+    },
+    {
+      "name": "set-content",
+      "display": "Set-Content",
+      "kind": "Cmdlet",
+      "params": [
+        "-Path",
+        "-Value"
+      ],
+      "help": "Write new content to a file (sc)",
+      "aliases": [
+        "sc"
+      ],
+      "streamsOutput": false,
+      "offersPaths": true
+    },
+    {
+      "name": "set-location",
+      "display": "Set-Location",
+      "kind": "Cmdlet",
+      "params": [
+        "-Path"
+      ],
+      "help": "Set the current working location (cd)",
+      "aliases": [
+        "cd",
+        "chdir",
+        "sl"
+      ],
+      "streamsOutput": false,
+      "offersPaths": true
+    },
+    {
+      "name": "set-theme",
+      "display": "Set-Theme",
+      "kind": "Cmdlet",
+      "params": [
+        "-Name"
+      ],
+      "help": "Switch the color scheme: campbell|pi|blue",
+      "aliases": [
+        "theme"
+      ],
+      "streamsOutput": false,
+      "offersPaths": false
+    },
+    {
+      "name": "sort-object",
+      "display": "Sort-Object",
+      "kind": "Cmdlet",
+      "params": [
+        "-Descending"
+      ],
+      "help": "Sort objects by property value",
+      "aliases": [
+        "sort"
+      ],
+      "streamsOutput": false,
+      "offersPaths": false
+    },
+    {
+      "name": "test-connection",
+      "display": "Test-Connection",
+      "kind": "Cmdlet",
+      "params": [
+        "-TargetName"
+      ],
+      "help": "Send ICMP echo requests (ping)",
+      "aliases": [],
+      "streamsOutput": true,
+      "offersPaths": false
+    },
+    {
+      "name": "test-path",
+      "display": "Test-Path",
+      "kind": "Cmdlet",
+      "params": [
+        "-Path"
+      ],
+      "help": "Determine whether a path exists",
+      "aliases": [],
+      "streamsOutput": false,
+      "offersPaths": true
+    },
+    {
+      "name": "touch",
+      "display": "touch",
+      "kind": "Application",
+      "params": [],
+      "help": "change file timestamps",
+      "aliases": [],
+      "streamsOutput": false,
+      "offersPaths": true
+    },
+    {
+      "name": "traceroute",
+      "display": "traceroute",
+      "kind": "Application",
+      "params": [],
+      "help": "print the route packets trace to network host",
+      "aliases": [
+        "tracepath"
+      ],
+      "streamsOutput": true,
+      "offersPaths": false
+    },
+    {
+      "name": "tree",
+      "display": "tree",
+      "kind": "Application",
+      "params": [],
+      "help": "list contents of directories in a tree-like format",
+      "aliases": [],
+      "streamsOutput": false,
+      "offersPaths": false
+    },
+    {
+      "name": "uname",
+      "display": "uname",
+      "kind": "Application",
+      "params": [],
+      "help": "print system information",
+      "aliases": [],
+      "streamsOutput": false,
+      "offersPaths": false
+    },
+    {
+      "name": "uptime",
+      "display": "uptime",
+      "kind": "Application",
+      "params": [],
+      "help": "Tell how long the system has been running",
+      "aliases": [],
+      "streamsOutput": false,
+      "offersPaths": false
+    },
+    {
+      "name": "vi",
+      "display": "vi",
+      "kind": "Application",
+      "params": [],
+      "help": "Vi IMproved, a programmer's text editor",
+      "aliases": [],
+      "streamsOutput": false,
+      "offersPaths": true
+    },
+    {
+      "name": "vim",
+      "display": "vim",
+      "kind": "Application",
+      "params": [],
+      "help": "Vi IMproved, a programmer's text editor",
+      "aliases": [],
+      "streamsOutput": false,
+      "offersPaths": true
+    },
+    {
+      "name": "where-object",
+      "display": "Where-Object",
+      "kind": "Cmdlet",
+      "params": [
+        "-Match",
+        "-Like"
+      ],
+      "help": "Filter objects in the pipeline",
+      "aliases": [
+        "where"
+      ],
+      "streamsOutput": false,
+      "offersPaths": false
+    },
+    {
+      "name": "which",
+      "display": "which",
+      "kind": "Application",
+      "params": [],
+      "help": "locate a command",
+      "aliases": [],
+      "streamsOutput": false,
+      "offersPaths": false
+    },
+    {
+      "name": "whoami",
+      "display": "whoami",
+      "kind": "Application",
+      "params": [],
+      "help": "print effective user name, with a profile summary",
+      "aliases": [
+        "profile",
+        "whois"
+      ],
+      "streamsOutput": false,
+      "offersPaths": false
+    },
+    {
+      "name": "write-output",
+      "display": "Write-Output",
+      "kind": "Cmdlet",
+      "params": [],
+      "help": "Send objects to the pipeline (echo)",
+      "aliases": [
+        "echo"
+      ],
+      "streamsOutput": false,
+      "offersPaths": false
+    }
+  ],
+  "easterEggs": [
+    "bash",
+    "classic",
+    "coffee",
+    "fortune",
+    "konami",
+    "matrix",
+    "rocket",
+    "secret",
+    "sl",
+    "sudo",
+    "thc1006"
+  ],
+  "applications": [
+    "tree"
+  ]
+}

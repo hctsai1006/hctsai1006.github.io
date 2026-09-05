@@ -1,0 +1,1392 @@
+{
+  "schemaVersion": 1,
+  "profile": "powershell/7.7.0-preview.4/linux",
+  "channel": "preview",
+  "displayVersion": "7.7.0-preview.4",
+  "inherits": "powershell/7.6.5/linux",
+  "supported": {
+    "isSupportedUpstream": false,
+    "endOfSupport": null,
+    "notes": "Preview releases are not supported upstream and must never own durable state. This profile is for exploring 7.7 semantics, not for persistence."
+  },
+  "source": {
+    "releaseTag": "v7.7.0-preview.4",
+    "publishedAt": "2026-09-01T00:57:32Z",
+    "dotnetSdk": "11.0.100-preview.6.26359.118",
+    "sourceCommit": "1481b98f0079f979f658e49a7281024cc754049b",
+    "snapshotDigest": "sha256:a828af31a3c946f1e1321fc082acff249528d54027265e47effd8ba64d773bff",
+    "derivedFrom": "releases.lock.json generated 2026-09-05T02:51:20.911Z"
+  },
+  "bundledModules": {
+    "Microsoft.PowerShell.Archive": "1.2.6",
+    "Microsoft.PowerShell.PSResourceGet": "1.3.0-preview1",
+    "Microsoft.PowerShell.ThreadJob": "2.2.0",
+    "PSReadLine": "2.4.5",
+    "PackageManagement": "1.4.8.1",
+    "PowerShellGet": "2.2.5"
+  },
+  "behaviors": {
+    "format.property.rejectNullOrEmpty": true,
+    "newGuid.defaultVersion": 7,
+    "switchParameter.Get-Random.Shuffle.honourExplicitFalse": true,
+    "switchParameter.New-Guid.Empty.honourExplicitFalse": true,
+    "validation.throwsArgumentException": true
+  },
+  "behaviorDocs": {
+    "format.property.rejectNullOrEmpty": {
+      "summary": "`ValidateNotNullOrEmpty` added to `-Property`",
+      "upstreamPr": 26552,
+      "breaking": true,
+      "since": "7.7.0-preview.4"
+    },
+    "newGuid.defaultVersion": {
+      "summary": "`New-Guid` emits a time-sortable UUID v7 by default instead of a random UUID v4",
+      "upstreamPr": 27033,
+      "breaking": true,
+      "since": "7.7.0-preview.4"
+    },
+    "switchParameter.Get-Random.Shuffle.honourExplicitFalse": {
+      "summary": "Explicit `-Shuffle:$false` is honoured rather than treated as present",
+      "upstreamPr": 26457,
+      "breaking": false,
+      "since": "7.7.0-preview.4"
+    },
+    "switchParameter.New-Guid.Empty.honourExplicitFalse": {
+      "summary": "Explicit `-Empty:$false` is honoured rather than treated as present",
+      "upstreamPr": 26140,
+      "breaking": false,
+      "since": "7.7.0-preview.4"
+    },
+    "validation.throwsArgumentException": {
+      "summary": "Not-null-not-empty validation now throws ArgumentException instead of PSArgumentNullException",
+      "upstreamPr": 26668,
+      "breaking": true,
+      "since": "7.7.0-preview.4"
+    }
+  },
+  "documentedBehaviors": {
+    "ansi.resetMidStringHandled": {
+      "summary": "VT Reset sequences appearing mid-string are handled correctly",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 26424,
+      "breaking": false,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": null,
+        "parameters": []
+      }
+    },
+    "application.outputEncodingVariable": {
+      "summary": "Automatic variable controlling how native command output is decoded",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 21219,
+      "breaking": false,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": null,
+        "parameters": []
+      }
+    },
+    "csv.noTypeInformationObsolete": {
+      "summary": "`-NoTypeInformation` is an obsolete no-op; `-IncludeTypeInformation` is evaluated by value",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 26719,
+      "breaking": false,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "ConvertTo-Csv, Export-Csv",
+        "parameters": [
+          "NoTypeInformation",
+          "IncludeTypeInformation"
+        ]
+      }
+    },
+    "exportCsv.appendNoHeaderExclusive": {
+      "summary": "`-Append` and `-NoHeader` are now mutually exclusive",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 26472,
+      "breaking": false,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "Export-Csv",
+        "parameters": [
+          "Append",
+          "NoHeader"
+        ]
+      }
+    },
+    "format.excludeProperty": {
+      "summary": "`-ExcludeProperty` parameter added to Format-* cmdlets",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 26514,
+      "breaking": false,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "Format-Table, Format-List, Format-Custom",
+        "parameters": [
+          "ExcludeProperty"
+        ]
+      }
+    },
+    "format.property.rejectNullOrEmpty": {
+      "summary": "`ValidateNotNullOrEmpty` added to `-Property`",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "implemented",
+      "emulated": true,
+      "upstreamPr": 26552,
+      "breaking": true,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "Format-Table, Format-List, Format-Custom",
+        "parameters": [
+          "Property"
+        ]
+      }
+    },
+    "joinPath.extension": {
+      "summary": "`-Extension` parameter added",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 26482,
+      "breaking": false,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "Join-Path",
+        "parameters": [
+          "Extension"
+        ]
+      }
+    },
+    "newGuid.defaultVersion": {
+      "summary": "`New-Guid` emits a time-sortable UUID v7 by default instead of a random UUID v4",
+      "value": 7,
+      "upstreamValue": 7,
+      "baselineValue": 4,
+      "implementation": "implemented",
+      "emulated": true,
+      "upstreamPr": 27033,
+      "breaking": true,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "New-Guid",
+        "parameters": []
+      }
+    },
+    "progress.doubleWidthAware": {
+      "summary": "Progress bar renders correctly with double-width Unicode characters",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 26185,
+      "breaking": false,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": null,
+        "parameters": []
+      }
+    },
+    "switchParameter.Get-Random.Shuffle.honourExplicitFalse": {
+      "summary": "Explicit `-Shuffle:$false` is honoured rather than treated as present",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "verified",
+      "emulated": true,
+      "upstreamPr": 26457,
+      "breaking": false,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "Get-Random",
+        "parameters": [
+          "Shuffle"
+        ]
+      }
+    },
+    "switchParameter.Get-SecureRandom.Shuffle.honourExplicitFalse": {
+      "summary": "Explicit `-Shuffle:$false` is honoured rather than treated as present",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 26460,
+      "breaking": false,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "Get-SecureRandom",
+        "parameters": [
+          "Shuffle"
+        ]
+      }
+    },
+    "switchParameter.Get-TimeZone.ListAvailable.honourExplicitFalse": {
+      "summary": "Explicit `-ListAvailable:$false` is honoured rather than treated as present",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 26463,
+      "breaking": false,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "Get-TimeZone",
+        "parameters": [
+          "ListAvailable"
+        ]
+      }
+    },
+    "switchParameter.Get-Uptime.Since.honourExplicitFalse": {
+      "summary": "Explicit `-Since:$false` is honoured rather than treated as present",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 26141,
+      "breaking": false,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "Get-Uptime",
+        "parameters": [
+          "Since"
+        ]
+      }
+    },
+    "switchParameter.New-Guid.Empty.honourExplicitFalse": {
+      "summary": "Explicit `-Empty:$false` is honoured rather than treated as present",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "verified",
+      "emulated": true,
+      "upstreamPr": 26140,
+      "breaking": false,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "New-Guid",
+        "parameters": [
+          "Empty"
+        ]
+      }
+    },
+    "switchParameter.New-PSSession.AllowRedirection.honourExplicitFalse": {
+      "summary": "Explicit `-<Switch>:$false` is honoured rather than treated as present",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 26469,
+      "breaking": false,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "New-PSSession",
+        "parameters": [
+          "AllowRedirection",
+          "EnableNetworkAccess",
+          "RunAsAdministrator",
+          "SSHTransport",
+          "UseSSL",
+          "UseWindowsPowerShell"
+        ]
+      }
+    },
+    "switchParameter.New-PSSession.EnableNetworkAccess.honourExplicitFalse": {
+      "summary": "Explicit `-<Switch>:$false` is honoured rather than treated as present",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 26469,
+      "breaking": false,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "New-PSSession",
+        "parameters": [
+          "AllowRedirection",
+          "EnableNetworkAccess",
+          "RunAsAdministrator",
+          "SSHTransport",
+          "UseSSL",
+          "UseWindowsPowerShell"
+        ]
+      }
+    },
+    "switchParameter.New-PSSession.RunAsAdministrator.honourExplicitFalse": {
+      "summary": "Explicit `-<Switch>:$false` is honoured rather than treated as present",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 26469,
+      "breaking": false,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "New-PSSession",
+        "parameters": [
+          "AllowRedirection",
+          "EnableNetworkAccess",
+          "RunAsAdministrator",
+          "SSHTransport",
+          "UseSSL",
+          "UseWindowsPowerShell"
+        ]
+      }
+    },
+    "switchParameter.New-PSSession.SSHTransport.honourExplicitFalse": {
+      "summary": "Explicit `-<Switch>:$false` is honoured rather than treated as present",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 26469,
+      "breaking": false,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "New-PSSession",
+        "parameters": [
+          "AllowRedirection",
+          "EnableNetworkAccess",
+          "RunAsAdministrator",
+          "SSHTransport",
+          "UseSSL",
+          "UseWindowsPowerShell"
+        ]
+      }
+    },
+    "switchParameter.New-PSSession.UseSSL.honourExplicitFalse": {
+      "summary": "Explicit `-<Switch>:$false` is honoured rather than treated as present",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 26469,
+      "breaking": false,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "New-PSSession",
+        "parameters": [
+          "AllowRedirection",
+          "EnableNetworkAccess",
+          "RunAsAdministrator",
+          "SSHTransport",
+          "UseSSL",
+          "UseWindowsPowerShell"
+        ]
+      }
+    },
+    "switchParameter.New-PSSession.UseWindowsPowerShell.honourExplicitFalse": {
+      "summary": "Explicit `-<Switch>:$false` is honoured rather than treated as present",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 26469,
+      "breaking": false,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "New-PSSession",
+        "parameters": [
+          "AllowRedirection",
+          "EnableNetworkAccess",
+          "RunAsAdministrator",
+          "SSHTransport",
+          "UseSSL",
+          "UseWindowsPowerShell"
+        ]
+      }
+    },
+    "switchParameter.Split-Path.IsAbsolute.honourExplicitFalse": {
+      "summary": "Explicit `-Qualifier`/`-NoQualifier`/`-Leaf`/`-IsAbsolute:$false` is honoured",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 26474,
+      "breaking": false,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "Split-Path",
+        "parameters": [
+          "Qualifier",
+          "NoQualifier",
+          "Leaf",
+          "IsAbsolute"
+        ]
+      }
+    },
+    "switchParameter.Split-Path.Leaf.honourExplicitFalse": {
+      "summary": "Explicit `-Qualifier`/`-NoQualifier`/`-Leaf`/`-IsAbsolute:$false` is honoured",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 26474,
+      "breaking": false,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "Split-Path",
+        "parameters": [
+          "Qualifier",
+          "NoQualifier",
+          "Leaf",
+          "IsAbsolute"
+        ]
+      }
+    },
+    "switchParameter.Split-Path.NoQualifier.honourExplicitFalse": {
+      "summary": "Explicit `-Qualifier`/`-NoQualifier`/`-Leaf`/`-IsAbsolute:$false` is honoured",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 26474,
+      "breaking": false,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "Split-Path",
+        "parameters": [
+          "Qualifier",
+          "NoQualifier",
+          "Leaf",
+          "IsAbsolute"
+        ]
+      }
+    },
+    "switchParameter.Split-Path.Qualifier.honourExplicitFalse": {
+      "summary": "Explicit `-Qualifier`/`-NoQualifier`/`-Leaf`/`-IsAbsolute:$false` is honoured",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 26474,
+      "breaking": false,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "Split-Path",
+        "parameters": [
+          "Qualifier",
+          "NoQualifier",
+          "Leaf",
+          "IsAbsolute"
+        ]
+      }
+    },
+    "switchParameter.Test-Connection.Detailed.honourExplicitFalse": {
+      "summary": "Explicit `-<Switch>:$false` is honoured rather than treated as present",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 26479,
+      "breaking": false,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "Test-Connection",
+        "parameters": [
+          "Detailed",
+          "DontFragment",
+          "IPv4",
+          "IPv6",
+          "MtuSize",
+          "Ping",
+          "Quiet",
+          "Repeat",
+          "ResolveDestination",
+          "Traceroute"
+        ]
+      }
+    },
+    "switchParameter.Test-Connection.DontFragment.honourExplicitFalse": {
+      "summary": "Explicit `-<Switch>:$false` is honoured rather than treated as present",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 26479,
+      "breaking": false,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "Test-Connection",
+        "parameters": [
+          "Detailed",
+          "DontFragment",
+          "IPv4",
+          "IPv6",
+          "MtuSize",
+          "Ping",
+          "Quiet",
+          "Repeat",
+          "ResolveDestination",
+          "Traceroute"
+        ]
+      }
+    },
+    "switchParameter.Test-Connection.IPv4.honourExplicitFalse": {
+      "summary": "Explicit `-<Switch>:$false` is honoured rather than treated as present",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 26479,
+      "breaking": false,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "Test-Connection",
+        "parameters": [
+          "Detailed",
+          "DontFragment",
+          "IPv4",
+          "IPv6",
+          "MtuSize",
+          "Ping",
+          "Quiet",
+          "Repeat",
+          "ResolveDestination",
+          "Traceroute"
+        ]
+      }
+    },
+    "switchParameter.Test-Connection.IPv6.honourExplicitFalse": {
+      "summary": "Explicit `-<Switch>:$false` is honoured rather than treated as present",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 26479,
+      "breaking": false,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "Test-Connection",
+        "parameters": [
+          "Detailed",
+          "DontFragment",
+          "IPv4",
+          "IPv6",
+          "MtuSize",
+          "Ping",
+          "Quiet",
+          "Repeat",
+          "ResolveDestination",
+          "Traceroute"
+        ]
+      }
+    },
+    "switchParameter.Test-Connection.MtuSize.honourExplicitFalse": {
+      "summary": "Explicit `-<Switch>:$false` is honoured rather than treated as present",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 26479,
+      "breaking": false,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "Test-Connection",
+        "parameters": [
+          "Detailed",
+          "DontFragment",
+          "IPv4",
+          "IPv6",
+          "MtuSize",
+          "Ping",
+          "Quiet",
+          "Repeat",
+          "ResolveDestination",
+          "Traceroute"
+        ]
+      }
+    },
+    "switchParameter.Test-Connection.Ping.honourExplicitFalse": {
+      "summary": "Explicit `-<Switch>:$false` is honoured rather than treated as present",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 26479,
+      "breaking": false,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "Test-Connection",
+        "parameters": [
+          "Detailed",
+          "DontFragment",
+          "IPv4",
+          "IPv6",
+          "MtuSize",
+          "Ping",
+          "Quiet",
+          "Repeat",
+          "ResolveDestination",
+          "Traceroute"
+        ]
+      }
+    },
+    "switchParameter.Test-Connection.Quiet.honourExplicitFalse": {
+      "summary": "Explicit `-<Switch>:$false` is honoured rather than treated as present",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 26479,
+      "breaking": false,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "Test-Connection",
+        "parameters": [
+          "Detailed",
+          "DontFragment",
+          "IPv4",
+          "IPv6",
+          "MtuSize",
+          "Ping",
+          "Quiet",
+          "Repeat",
+          "ResolveDestination",
+          "Traceroute"
+        ]
+      }
+    },
+    "switchParameter.Test-Connection.Repeat.honourExplicitFalse": {
+      "summary": "Explicit `-<Switch>:$false` is honoured rather than treated as present",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 26479,
+      "breaking": false,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "Test-Connection",
+        "parameters": [
+          "Detailed",
+          "DontFragment",
+          "IPv4",
+          "IPv6",
+          "MtuSize",
+          "Ping",
+          "Quiet",
+          "Repeat",
+          "ResolveDestination",
+          "Traceroute"
+        ]
+      }
+    },
+    "switchParameter.Test-Connection.ResolveDestination.honourExplicitFalse": {
+      "summary": "Explicit `-<Switch>:$false` is honoured rather than treated as present",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 26479,
+      "breaking": false,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "Test-Connection",
+        "parameters": [
+          "Detailed",
+          "DontFragment",
+          "IPv4",
+          "IPv6",
+          "MtuSize",
+          "Ping",
+          "Quiet",
+          "Repeat",
+          "ResolveDestination",
+          "Traceroute"
+        ]
+      }
+    },
+    "switchParameter.Test-Connection.Traceroute.honourExplicitFalse": {
+      "summary": "Explicit `-<Switch>:$false` is honoured rather than treated as present",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 26479,
+      "breaking": false,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "Test-Connection",
+        "parameters": [
+          "Detailed",
+          "DontFragment",
+          "IPv4",
+          "IPv6",
+          "MtuSize",
+          "Ping",
+          "Quiet",
+          "Repeat",
+          "ResolveDestination",
+          "Traceroute"
+        ]
+      }
+    },
+    "switchParameter.Where-Object.Contains.honourExplicitFalse": {
+      "summary": "Explicit `-<Operator>:$false` is honoured rather than treated as present",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 26485,
+      "breaking": true,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "Where-Object",
+        "parameters": [
+          "EQ",
+          "NE",
+          "GT",
+          "LT",
+          "GE",
+          "LE",
+          "Like",
+          "NotLike",
+          "Match",
+          "NotMatch",
+          "Contains",
+          "NotContains",
+          "In",
+          "NotIn",
+          "Is",
+          "IsNot",
+          "Not"
+        ]
+      }
+    },
+    "switchParameter.Where-Object.EQ.honourExplicitFalse": {
+      "summary": "Explicit `-<Operator>:$false` is honoured rather than treated as present",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 26485,
+      "breaking": true,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "Where-Object",
+        "parameters": [
+          "EQ",
+          "NE",
+          "GT",
+          "LT",
+          "GE",
+          "LE",
+          "Like",
+          "NotLike",
+          "Match",
+          "NotMatch",
+          "Contains",
+          "NotContains",
+          "In",
+          "NotIn",
+          "Is",
+          "IsNot",
+          "Not"
+        ]
+      }
+    },
+    "switchParameter.Where-Object.GE.honourExplicitFalse": {
+      "summary": "Explicit `-<Operator>:$false` is honoured rather than treated as present",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 26485,
+      "breaking": true,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "Where-Object",
+        "parameters": [
+          "EQ",
+          "NE",
+          "GT",
+          "LT",
+          "GE",
+          "LE",
+          "Like",
+          "NotLike",
+          "Match",
+          "NotMatch",
+          "Contains",
+          "NotContains",
+          "In",
+          "NotIn",
+          "Is",
+          "IsNot",
+          "Not"
+        ]
+      }
+    },
+    "switchParameter.Where-Object.GT.honourExplicitFalse": {
+      "summary": "Explicit `-<Operator>:$false` is honoured rather than treated as present",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 26485,
+      "breaking": true,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "Where-Object",
+        "parameters": [
+          "EQ",
+          "NE",
+          "GT",
+          "LT",
+          "GE",
+          "LE",
+          "Like",
+          "NotLike",
+          "Match",
+          "NotMatch",
+          "Contains",
+          "NotContains",
+          "In",
+          "NotIn",
+          "Is",
+          "IsNot",
+          "Not"
+        ]
+      }
+    },
+    "switchParameter.Where-Object.In.honourExplicitFalse": {
+      "summary": "Explicit `-<Operator>:$false` is honoured rather than treated as present",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 26485,
+      "breaking": true,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "Where-Object",
+        "parameters": [
+          "EQ",
+          "NE",
+          "GT",
+          "LT",
+          "GE",
+          "LE",
+          "Like",
+          "NotLike",
+          "Match",
+          "NotMatch",
+          "Contains",
+          "NotContains",
+          "In",
+          "NotIn",
+          "Is",
+          "IsNot",
+          "Not"
+        ]
+      }
+    },
+    "switchParameter.Where-Object.Is.honourExplicitFalse": {
+      "summary": "Explicit `-<Operator>:$false` is honoured rather than treated as present",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 26485,
+      "breaking": true,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "Where-Object",
+        "parameters": [
+          "EQ",
+          "NE",
+          "GT",
+          "LT",
+          "GE",
+          "LE",
+          "Like",
+          "NotLike",
+          "Match",
+          "NotMatch",
+          "Contains",
+          "NotContains",
+          "In",
+          "NotIn",
+          "Is",
+          "IsNot",
+          "Not"
+        ]
+      }
+    },
+    "switchParameter.Where-Object.IsNot.honourExplicitFalse": {
+      "summary": "Explicit `-<Operator>:$false` is honoured rather than treated as present",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 26485,
+      "breaking": true,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "Where-Object",
+        "parameters": [
+          "EQ",
+          "NE",
+          "GT",
+          "LT",
+          "GE",
+          "LE",
+          "Like",
+          "NotLike",
+          "Match",
+          "NotMatch",
+          "Contains",
+          "NotContains",
+          "In",
+          "NotIn",
+          "Is",
+          "IsNot",
+          "Not"
+        ]
+      }
+    },
+    "switchParameter.Where-Object.LE.honourExplicitFalse": {
+      "summary": "Explicit `-<Operator>:$false` is honoured rather than treated as present",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 26485,
+      "breaking": true,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "Where-Object",
+        "parameters": [
+          "EQ",
+          "NE",
+          "GT",
+          "LT",
+          "GE",
+          "LE",
+          "Like",
+          "NotLike",
+          "Match",
+          "NotMatch",
+          "Contains",
+          "NotContains",
+          "In",
+          "NotIn",
+          "Is",
+          "IsNot",
+          "Not"
+        ]
+      }
+    },
+    "switchParameter.Where-Object.LT.honourExplicitFalse": {
+      "summary": "Explicit `-<Operator>:$false` is honoured rather than treated as present",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 26485,
+      "breaking": true,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "Where-Object",
+        "parameters": [
+          "EQ",
+          "NE",
+          "GT",
+          "LT",
+          "GE",
+          "LE",
+          "Like",
+          "NotLike",
+          "Match",
+          "NotMatch",
+          "Contains",
+          "NotContains",
+          "In",
+          "NotIn",
+          "Is",
+          "IsNot",
+          "Not"
+        ]
+      }
+    },
+    "switchParameter.Where-Object.Like.honourExplicitFalse": {
+      "summary": "Explicit `-<Operator>:$false` is honoured rather than treated as present",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 26485,
+      "breaking": true,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "Where-Object",
+        "parameters": [
+          "EQ",
+          "NE",
+          "GT",
+          "LT",
+          "GE",
+          "LE",
+          "Like",
+          "NotLike",
+          "Match",
+          "NotMatch",
+          "Contains",
+          "NotContains",
+          "In",
+          "NotIn",
+          "Is",
+          "IsNot",
+          "Not"
+        ]
+      }
+    },
+    "switchParameter.Where-Object.Match.honourExplicitFalse": {
+      "summary": "Explicit `-<Operator>:$false` is honoured rather than treated as present",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 26485,
+      "breaking": true,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "Where-Object",
+        "parameters": [
+          "EQ",
+          "NE",
+          "GT",
+          "LT",
+          "GE",
+          "LE",
+          "Like",
+          "NotLike",
+          "Match",
+          "NotMatch",
+          "Contains",
+          "NotContains",
+          "In",
+          "NotIn",
+          "Is",
+          "IsNot",
+          "Not"
+        ]
+      }
+    },
+    "switchParameter.Where-Object.NE.honourExplicitFalse": {
+      "summary": "Explicit `-<Operator>:$false` is honoured rather than treated as present",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 26485,
+      "breaking": true,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "Where-Object",
+        "parameters": [
+          "EQ",
+          "NE",
+          "GT",
+          "LT",
+          "GE",
+          "LE",
+          "Like",
+          "NotLike",
+          "Match",
+          "NotMatch",
+          "Contains",
+          "NotContains",
+          "In",
+          "NotIn",
+          "Is",
+          "IsNot",
+          "Not"
+        ]
+      }
+    },
+    "switchParameter.Where-Object.Not.honourExplicitFalse": {
+      "summary": "Explicit `-<Operator>:$false` is honoured rather than treated as present",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 26485,
+      "breaking": true,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "Where-Object",
+        "parameters": [
+          "EQ",
+          "NE",
+          "GT",
+          "LT",
+          "GE",
+          "LE",
+          "Like",
+          "NotLike",
+          "Match",
+          "NotMatch",
+          "Contains",
+          "NotContains",
+          "In",
+          "NotIn",
+          "Is",
+          "IsNot",
+          "Not"
+        ]
+      }
+    },
+    "switchParameter.Where-Object.NotContains.honourExplicitFalse": {
+      "summary": "Explicit `-<Operator>:$false` is honoured rather than treated as present",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 26485,
+      "breaking": true,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "Where-Object",
+        "parameters": [
+          "EQ",
+          "NE",
+          "GT",
+          "LT",
+          "GE",
+          "LE",
+          "Like",
+          "NotLike",
+          "Match",
+          "NotMatch",
+          "Contains",
+          "NotContains",
+          "In",
+          "NotIn",
+          "Is",
+          "IsNot",
+          "Not"
+        ]
+      }
+    },
+    "switchParameter.Where-Object.NotIn.honourExplicitFalse": {
+      "summary": "Explicit `-<Operator>:$false` is honoured rather than treated as present",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 26485,
+      "breaking": true,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "Where-Object",
+        "parameters": [
+          "EQ",
+          "NE",
+          "GT",
+          "LT",
+          "GE",
+          "LE",
+          "Like",
+          "NotLike",
+          "Match",
+          "NotMatch",
+          "Contains",
+          "NotContains",
+          "In",
+          "NotIn",
+          "Is",
+          "IsNot",
+          "Not"
+        ]
+      }
+    },
+    "switchParameter.Where-Object.NotLike.honourExplicitFalse": {
+      "summary": "Explicit `-<Operator>:$false` is honoured rather than treated as present",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 26485,
+      "breaking": true,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "Where-Object",
+        "parameters": [
+          "EQ",
+          "NE",
+          "GT",
+          "LT",
+          "GE",
+          "LE",
+          "Like",
+          "NotLike",
+          "Match",
+          "NotMatch",
+          "Contains",
+          "NotContains",
+          "In",
+          "NotIn",
+          "Is",
+          "IsNot",
+          "Not"
+        ]
+      }
+    },
+    "switchParameter.Where-Object.NotMatch.honourExplicitFalse": {
+      "summary": "Explicit `-<Operator>:$false` is honoured rather than treated as present",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 26485,
+      "breaking": true,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "Where-Object",
+        "parameters": [
+          "EQ",
+          "NE",
+          "GT",
+          "LT",
+          "GE",
+          "LE",
+          "Like",
+          "NotLike",
+          "Match",
+          "NotMatch",
+          "Contains",
+          "NotContains",
+          "In",
+          "NotIn",
+          "Is",
+          "IsNot",
+          "Not"
+        ]
+      }
+    },
+    "temporaryDirectory.cmdlet": {
+      "summary": "`New-TemporaryDirectory` cmdlet added",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 27549,
+      "breaking": false,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": "New-TemporaryDirectory",
+        "parameters": []
+      }
+    },
+    "unix.lastWriteTime.dynamicWidth": {
+      "summary": "LastWriteTime column width is computed dynamically on Unix",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "documented",
+      "emulated": false,
+      "upstreamPr": 24624,
+      "breaking": false,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": null,
+        "parameters": []
+      }
+    },
+    "validation.throwsArgumentException": {
+      "summary": "Not-null-not-empty validation now throws ArgumentException instead of PSArgumentNullException",
+      "value": true,
+      "upstreamValue": true,
+      "baselineValue": false,
+      "implementation": "implemented",
+      "emulated": true,
+      "upstreamPr": 26668,
+      "breaking": true,
+      "since": "7.7.0-preview.4",
+      "scope": {
+        "command": null,
+        "parameters": []
+      }
+    }
+  },
+  "commands": {
+    "New-TemporaryDirectory": {
+      "availability": "added",
+      "since": "7.7.0-preview.4",
+      "notes": "`New-TemporaryDirectory` cmdlet added (upstream #27549). Upstream only: BrowserShell does not implement this cmdlet."
+    }
+  },
+  "experimentalFeatures": [],
+  "engineLimits": {
+    "nativePowerShellEngine": false,
+    "unimplementedAstNodes": [],
+    "notes": "BrowserShell emulates observable semantics; it does not execute PowerShell. Recognised-but-unimplemented syntax must fail with an explicit error naming the AST node rather than silently doing something approximate."
+  }
+}

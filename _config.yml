@@ -1,0 +1,72 @@
+# GitHub Pages build configuration.
+#
+# This repository's Pages source is the `main` branch at `/`, with the legacy
+# (Jekyll) build type — so by default EVERY tracked file becomes a public URL.
+# That is not theoretical: before this file existed,
+#
+#     https://hctsai1006.github.io/tools/check-numbers.js   ->  HTTP 200
+#     https://hctsai1006.github.io/LICENSE                  ->  HTTP 200
+#
+# The workstation rewrite adds ~59,000 lines of source, tests, tooling and
+# roadmap documents to that surface, plus two standalone HTML pages. None of it
+# is meant to be served: the site is `index.html` and its siblings, and the rest
+# is how the site is built and checked.
+#
+# `legacy/terminal-v1.html` matters most. It is a verbatim copy of the shipped
+# terminal, so it carries `<meta name="robots" content="index,follow">` and
+# `<link rel="canonical" href="https://hctsai1006.github.io/">` — an indexable
+# duplicate of the homepage. The canonical tag would point search engines back
+# to `/`, but the honest fix is not to publish a second copy at all. Nothing
+# links to it: the `classic` command in the terminal points at `classic.html`
+# in the root, which is a different, already-published page.
+#
+# Setting `exclude` REPLACES Jekyll's default list rather than adding to it, so
+# the defaults are repeated here. Removing an entry publishes that path.
+exclude:
+  # Jekyll's defaults, which must be restated because this key overrides them.
+  - .sass-cache
+  - .jekyll-cache
+  - gemfiles
+  - Gemfile
+  - Gemfile.lock
+  - node_modules
+  - vendor/bundle/
+  - vendor/cache/
+  - vendor/gems/
+  - vendor/ruby/
+
+  # The workstation source. Build-time only.
+  - src/
+  - tools/
+  - tests/
+  - roadmap/
+  - legacy/
+
+  # compat/ IS NOT build-time only, and saying so was wrong. It holds
+  # `explorer.html`, a designed, human-facing page -- hero, palette, two
+  # typefaces with semantic roles, dark mode -- whose whole job is to show a
+  # visitor which PowerShell version's semantics this project claims and which
+  # differences it actually emulates. That is the honesty surface, and it only
+  # works when someone can read it.
+  #
+  # It stays excluded ON PURPOSE, for now. Nothing links to it yet: the
+  # workstation is not wired into index.html, so publishing it would add a
+  # public URL nobody can reach from the site, and it would make this change
+  # alter the live site when it otherwise does not. MEASURED: of 292 files this
+  # branch changes, six fall outside this list, and all six are dotfiles Jekyll
+  # does not publish -- so merging serves exactly what it served before.
+  #
+  # Remove this line in the change that links to the explorer, not before.
+  - compat/
+  # Committed snapshots of external authorities, read by the checks in tools/.
+  # Nothing about them is meant to be a URL, and a new top-level directory
+  # becomes one by default under this build type.
+  - snapshots/
+
+  # Build and project files.
+  - package.json
+  - package-lock.json
+  - tsconfig.json
+  - ROADMAP.md
+  - .npmrc
+  - .node-version

@@ -1,0 +1,260 @@
+name: upstream-sync
+
+# Watch upstream for movement and RAISE IT, never act on it.
+#
+# The deliberate non-goals matter as much as the goal:
+#   - it does not auto-merge
+#   - it does not switch the production compatibility profile
+#   - it does not "fix" a discrepancy by regenerating and pushing to main
+#
+# A new PowerShell preview is not an emergency, and a job that silently retargets
+# the site the moment upstream ships is the same failure as the hardcoded version
+# string it replaced — only faster. So this maintains ONE pull request describing
+# what changed, and stops. A human decides.
+#
+# ONE pull request, literally
+# ---------------------------
+# The previous version built its branch as
+#
+#     BRANCH="upstream-sync/$(date -u +%Y-%m-%d)-${{ github.run_id }}"
+#
+# and never looked for an already-open sync pull request. Drift that was not
+# merged within a day therefore produced a second near-identical pull request,
+# then a third, indefinitely. `concurrency` does not prevent that: it stops two
+# runs OVERLAPPING, not two runs on consecutive days each opening their own.
+#
+# So the branch is a constant, owned by this workflow, rebuilt from the base on
+# every run and force-pushed; and the pull request is looked up, updated in place
+# if it exists, created if it does not, and closed when the drift is gone. The
+# decisions live in tools/upstream-sync.mts with tests, because a workflow step
+# can only be executed by running the workflow — on a schedule, from the default
+# branch, holding write permissions — which is the worst available place to find
+# out that a branch of the logic was never right.
+#
+# PREREQUISITE — a repository setting this workflow cannot check for itself
+# -------------------------------------------------------------------------
+# Settings → Actions → General → Workflow permissions →
+#     [x] Allow GitHub Actions to create and approve pull requests
+#
+# Without it, `gh pr create` fails with "GitHub Actions is not permitted to create
+# or approve pull requests" and this workflow cannot do the one thing it exists to
+# do. Per GitHub's documentation: "By default, when you create a new repository in
+# your personal account, workflows are not allowed to create or approve pull
+# requests. If you create a new repository in an organization, the setting is
+# inherited from what is configured in the organization settings."
+#
+# There is no preflight for it. GITHUB_TOKEN has no `administration` permission
+# and `permissions:` below cannot grant one, so the setting is observable only by
+# trying. What tools/upstream-sync.mts does instead is refuse to fail obscurely:
+# it recognises that message and prints the exact switch to flip.
+#
+# CI ON THE PULL REQUEST IT OPENS
+# -------------------------------
+# Checked against docs.github.com on 2026-09-05, because the note this replaces
+# had gone stale. Current behaviour, quoting the documentation:
+#
+#     "`pull_request` events with the `opened`, `synchronize`, or `reopened`
+#      activity types: when a workflow using `GITHUB_TOKEN` creates or updates a
+#      pull request, the resulting `pull_request` event creates workflow runs in
+#      an approval-required state. The pull request displays a banner in the merge
+#      box, and a user with write access to the repository can start the runs by
+#      selecting Approve workflows to run."
+#
+# So verify.yml DOES get a run for this pull request — it just waits for a human
+# to approve it. The old body said the opposite ("do not trigger `on:
+# pull_request` … close and reopen the PR to trigger the checks") and advised a
+# workaround for a problem that no longer exists.
+
+on:
+  schedule:
+    # 06:15 UTC daily. Off the hour: scheduled jobs cluster there and get delayed.
+    - cron: '15 6 * * *'
+  workflow_dispatch:
+
+# None by default. Each job asks for exactly what it needs, and the job that
+# writes is the one that runs no third-party code.
+permissions: {}
+
+concurrency:
+  group: upstream-sync
+  cancel-in-progress: false
+
+env:
+  # A constant, not a date. This is the whole fix for the duplicate-PR defect.
+  SYNC_BRANCH: automation/upstream-release-truth
+  SYNC_BASE: main
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Read-only. Everything that runs dependency code lives here, with no ability
+  # to write to the repository or to pull requests.
+  # ---------------------------------------------------------------------------
+  observe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      decision: ${{ steps.decide.outputs.decision }}
+      open-prs: ${{ steps.open.outputs.count }}
+    steps:
+      # Pinned to a full commit sha, with the tag alongside for humans. A tag is
+      # a mutable pointer: the same `@v7` can be a different tree tomorrow, and
+      # this workflow runs unattended against the default branch with write
+      # permissions one job away.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+
+      - run: npm ci
+
+      - name: ask whether upstream still matches the committed lockfile
+        id: check
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # The tool is called directly, not through `npm run truth:check`. The
+          # exit code IS the contract here, and npm has exit codes of its own: a
+          # renamed script or a malformed package.json exits 1, which this
+          # workflow would otherwise read as "upstream moved".
+          set +e
+          node tools/verify-release-truth.mts --check > truth-check.log 2>&1
+          code=$?
+          set -e
+          echo "exit=$code" >> "$GITHUB_OUTPUT"
+          cat truth-check.log
+
+      # Exit codes are distinct on purpose:
+      #   0 clean · 1 drift or an error-severity discrepancy · 2 could not run
+      #   3 a bug in the tool itself
+      #
+      # The previous version failed only on 2 and 3:
+      #
+      #     if: steps.check.outputs.exit == '2' || steps.check.outputs.exit == '3'
+      #
+      # so 4, 124, 126, 127, 137 — missing interpreter, command not found, OOM
+      # kill, timeout — matched no condition, skipped the failure step, skipped
+      # the regeneration, skipped the pull request, and the job went GREEN. The
+      # most alarming outcomes were the only ones that produced no signal.
+      #
+      # `decide` is total and fails closed on everything it does not recognise,
+      # including an empty output from a step that was cancelled.
+      - name: decide what that exit code means
+        id: decide
+        env:
+          VERIFIER_EXIT: ${{ steps.check.outputs.exit }}
+        run: node tools/upstream-sync.mts decide --exit "$VERIFIER_EXIT"
+
+      - name: regenerate the lockfile
+        if: steps.decide.outputs.decision == 'drift'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # `|| true` would swallow a genuine failure here. Exit 1 is expected
+          # (the run records an error-severity discrepancy and still writes);
+          # anything else is not.
+          set +e
+          node tools/verify-release-truth.mts --write
+          code=$?
+          set -e
+          if [ "$code" -gt 1 ]; then
+            echo "::error::verify-release-truth --write failed with exit $code"
+            exit "$code"
+          fi
+
+      - name: is there already a sync pull request open
+        id: open
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # `set -e` on purpose: if this query cannot be answered — a rate limit,
+          # a revoked token — the job fails. An unanswered question is not the
+          # answer "none", and treating it as one is how the second pull request
+          # gets opened.
+          set -euo pipefail
+          count=$(gh pr list \
+            --repo "$GITHUB_REPOSITORY" \
+            --state open \
+            --head "$SYNC_BRANCH" \
+            --base "$SYNC_BASE" \
+            --json number --jq 'length')
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          echo "  $count open pull request(s) from $SYNC_BRANCH"
+
+      # Handing the next job the artifacts means it needs no `npm ci`, so no
+      # dependency code ever runs while `contents: write` is held.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: upstream-truth
+          path: |
+            compat/upstream/releases.lock.json
+            truth-check.log
+          retention-days: 7
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # The only job with write permissions, and the only one that runs no code from
+  # node_modules. It runs at all only when there is something to say.
+  # ---------------------------------------------------------------------------
+  propose:
+    needs: observe
+    if: needs.observe.outputs.decision == 'drift' || needs.observe.outputs.open-prs != '0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # For Node 24's type stripping, which is what runs the .mts tools. No
+      # `npm ci` and no cache: tools/upstream-sync.mts imports node builtins only.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: upstream-truth
+
+      - name: publish the workflow-owned branch
+        id: publish
+        if: needs.observe.outputs.decision == 'drift'
+        run: |
+          set -euo pipefail
+          node tools/upstream-sync.mts publish \
+            --branch "$SYNC_BRANCH" \
+            --message "Sync upstream release truth" \
+            --path compat/upstream/releases.lock.json
+
+      - name: reconcile the one pull request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # `changed` is false when the verifier reported exit 1 for a
+          # discrepancy that left the lockfile byte-identical: a real problem,
+          # but not drift, and not something to open a pull request headed
+          # "Upstream moved." about.
+          PUBLISHED: ${{ steps.publish.outputs.changed }}
+          PUBLISHED_SHA: ${{ steps.publish.outputs.sha }}
+        run: |
+          set -euo pipefail
+          args=()
+          if [ "${PUBLISHED:-false}" = "true" ]; then
+            args+=(--drifted --head-sha "$PUBLISHED_SHA")
+          fi
+          # `${args[@]+...}` rather than a bare `"${args[@]}"`: under `set -u` an
+          # empty array is an unbound variable on bash before 4.4, and the day
+          # this runs on such a host is the day it fails for a reason nobody
+          # would look for.
+          node tools/upstream-sync.mts reconcile \
+            --repo "$GITHUB_REPOSITORY" \
+            --branch "$SYNC_BRANCH" \
+            --base "$SYNC_BASE" \
+            --lock compat/upstream/releases.lock.json \
+            --log truth-check.log \
+            --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            ${args[@]+"${args[@]}"}

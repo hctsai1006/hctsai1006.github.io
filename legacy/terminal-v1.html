@@ -1,0 +1,2113 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0C0C0C">
+<meta name="robots" content="index,follow">
+<link rel="canonical" href="https://hctsai1006.github.io/">
+<meta property="og:type" content="profile">
+<meta property="og:url" content="https://hctsai1006.github.io/">
+<meta property="og:title" content="Hsiu-Chi Tsai (thc1006) — Open Source Portfolio">
+<meta property="og:description" content="互動式 PowerShell 網頁終端機:開源貢獻、著作與獲獎紀錄。純前端、單一檔案、零外部相依。">
+<meta name="twitter:card" content="summary">
+<link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNiIgZmlsbD0iIzBDMEMwQyIvPjxwYXRoIGQ9Ik04IDExbDUgNS01IDUiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzNCNzhGRiIgc3Ryb2tlLXdpZHRoPSIzIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz48cGF0aCBkPSJNMTcgMjFoNyIgc3Ryb2tlPSIjM0I3OEZGIiBzdHJva2Utd2lkdGg9IjMiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPjwvc3ZnPg==">
+<meta name="description" content="蔡秀吉 (Hsiu-Chi Tsai / thc1006) 的互動式 PowerShell 終端機作品集 — 開源貢獻、著作、獲獎與隱藏彩蛋。">
+<title>PS /home/thc1006 — Hsiu-Chi Tsai</title>
+<style>
+  :root, :root[data-theme="campbell"]{
+    --bg:#0C0C0C; --tab:#1a1a1a; --fg:#CCCCCC; --head:#F2F2F2;
+    --cmd:#F9F1A5; --param:#3B78FF; --str:#61D6D6; --num:#C9A6FF; --op:#CCCCCC;
+    --var:#16C60C; --err:#E74856; --ok:#16C60C; --accent:#3B78FF;
+    --ghost:#8A8A8A; --sel:#264F78; --caret:#FFFFFF; --line:#3a3a3a; --focus:#3B78FF;
+  }
+  :root[data-theme="pi"]{
+    --bg:#2A1A16; --tab:#3a2620; --fg:#EDE4DE; --head:#FFFFFF;
+    --cmd:#E6B450; --param:#8FBEEA; --str:#8CD3C4; --num:#E0A9D6; --op:#EDE4DE;
+    --var:#9CCB6A; --err:#FF7A7A; --ok:#9CCB6A; --accent:#F06A8C;
+    --ghost:#B39A8F; --sel:#5a2f3a; --caret:#F0E6DE; --line:#5a4038; --focus:#F06A8C;
+  }
+  :root[data-theme="blue"]{
+    --bg:#012456; --tab:#0b0e17; --fg:#EEEDF0; --head:#FFFFFF;
+    --cmd:#F9F1A5; --param:#7CB3FF; --str:#79E0E0; --num:#D7BFFF; --op:#EEEDF0;
+    --var:#4FD44F; --err:#FF8A94; --ok:#7CE07C; --accent:#7CB3FF;
+    --ghost:#93A0C8; --sel:#1e57c6; --caret:#FFFFFF; --line:#2b57a8; --focus:#7CB3FF;
+  }
+  *{box-sizing:border-box}
+  html{height:100%; -webkit-text-size-adjust:100%; text-size-adjust:100%}
+  body{margin:0;min-height:100%;background:var(--bg);color:var(--fg);
+    font-family:"Cascadia Mono",Consolas,"SFMono-Regular","Roboto Mono",ui-monospace,Menlo,monospace;
+    font-size:15px;line-height:1.25;-webkit-font-smoothing:antialiased;
+    font-variant-ligatures:none;font-feature-settings:"liga" 0,"calt" 0,"dlig" 0;
+    touch-action:manipulation}
+  .sr-only{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+    clip:rect(0 0 0 0);white-space:nowrap;border:0}
+  .noscript{max-width:70ch;margin:0 auto;padding:24px 20px;line-height:1.6}
+  .noscript h2{color:var(--head)} .noscript a{color:var(--accent)}
+  /* 頂部 accent 線:沿用 Campbell 配色的藍,但不做假的視窗外框 */
+  .win{display:flex;flex-direction:column;height:100vh;height:100dvh;
+    border-top:2px solid var(--accent)}
+
+  .console{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;outline:none;
+    padding:12px 16px 16px;   /* 後備:不支援 env()/max() 的瀏覽器用這條,下一條會被丟棄 */
+    padding:12px max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));
+    scrollbar-color:var(--ghost) transparent;   /* 捲軸滑塊沿用 ghost 色,對背景 ≥3:1(WCAG 1.4.11)*/
+    overscroll-behavior:contain;                /* 只阻斷捲動連鎖,不剝奪瀏覽器的下拉重整手勢 */
+    contain:content}   /* 渲染隔離:大量輸出時限制 reflow/repaint 範圍(不含 size,避免壓垮 flex 高度)*/
+  .console.focused{box-shadow:inset 0 0 0 2px var(--focus)}
+  .console::-webkit-scrollbar{width:12px}
+  .console::-webkit-scrollbar-thumb{background:var(--ghost);border-radius:6px}
+
+  /* content-visibility:auto —— 累積上千行後,螢幕外的舊行跳過 layout/paint,
+     大量輸出與捲動在行動裝置上才不會隨歷史長度變慢;contain-intrinsic-size 提供
+     未渲染時的高度估計(auto 前綴會記住實際渲染過的尺寸),避免捲動條跳動。 */
+  .row{white-space:pre-wrap;word-break:break-word;min-height:1.25em;
+    content-visibility:auto;contain-intrinsic-size:auto 1.25em}
+  .banner{color:var(--fg)} .banner b{color:var(--head);font-weight:600}
+  .ok{color:var(--ok)} .err{color:var(--err)} .muted{color:var(--ghost)}
+  .head{color:var(--head);font-weight:600} .rule{color:var(--ghost)}
+  .cmd{color:var(--cmd)} .param{color:var(--param)} .str{color:var(--str)}
+  .num{color:var(--num)} .op{color:var(--op)} .var{color:var(--var)}
+  .accent{color:var(--accent)} .yellow{color:var(--cmd)}
+
+  #iw{display:flex;align-items:flex-start;white-space:pre-wrap;word-break:break-word}
+  .prompt{flex:none;color:var(--accent);white-space:pre} .prompt .path{color:var(--cmd)}
+  .editzone{position:relative;flex:1;min-width:0;white-space:normal}
+  #edit{display:block;width:100%;font:inherit;line-height:inherit;color:var(--fg);
+    background:transparent;border:0;outline:none;padding:0;margin:0;resize:none;overflow:hidden;
+    caret-color:var(--caret);white-space:pre-wrap;word-break:break-word;min-height:1.25em}
+  .ghost{position:absolute;left:0;top:0;right:0;color:var(--ghost);pointer-events:none;
+    white-space:pre;overflow:hidden}
+  .mirror{position:absolute;left:0;top:0;width:100%;visibility:hidden;white-space:pre-wrap;
+    word-break:break-word;pointer-events:none}
+
+  .menu{position:absolute;top:1.7em;left:0;z-index:5;background:var(--tab);
+    border:1px solid var(--line);box-shadow:0 8px 30px rgba(0,0,0,.55);max-height:44vh;
+    overflow:auto;-webkit-overflow-scrolling:touch;min-width:190px;font-size:.95em;padding:2px 0}
+  .menu .opt{display:block;width:100%;text-align:left;font:inherit;background:transparent;
+    border:0;padding:6px 14px;white-space:pre;color:var(--fg);cursor:pointer}
+  .menu .opt.sel,.menu .opt:hover{background:var(--sel);color:#fff}
+
+  /* ---------- nano / vim 的全螢幕編輯器 ---------- */
+  .ed{position:fixed;inset:0;z-index:20;background:var(--bg);color:var(--fg);
+    display:flex;flex-direction:column;
+    padding-bottom:env(safe-area-inset-bottom)}
+  .ed[hidden]{display:none}
+  /* nano 的反白標題列 */
+  .ed-top{flex:none;background:var(--fg);color:var(--bg);white-space:pre;overflow:hidden;
+    padding:0 2px;font-weight:600}
+  .ed-body{position:relative;flex:1;min-height:0;overflow:hidden}
+  /* vim 的 ~ 填充層:與 textarea 同字體同寬度,先放一份隱形的內文佔位,
+     後面接 ~ —— 這樣即使長行換行,~ 也會落在正確的位置 */
+  .ed-tilde{position:absolute;inset:0;margin:0;padding:0 2px;overflow:hidden;
+    white-space:pre-wrap;word-break:break-word;font:inherit;line-height:inherit;
+    color:var(--accent);pointer-events:none}
+  .ed-tilde .inv{visibility:hidden}
+  .ed-buf{position:absolute;inset:0;width:100%;height:100%;font:inherit;line-height:inherit;
+    color:var(--fg);background:transparent;border:0;outline:none;padding:0 2px;margin:0;resize:none;
+    caret-color:var(--caret);white-space:pre-wrap;word-break:break-word;overflow-y:auto}
+  .ed-buf.ro{caret-color:transparent}
+  .ed-msg{flex:none;white-space:pre;overflow:hidden;padding:0 2px;min-height:1.25em}
+  .ed-msg.center{text-align:center}
+  .ed-msg b{background:var(--fg);color:var(--bg);font-weight:600}
+  .ed-prompt{flex:none;display:flex;align-items:baseline;padding:0 2px;gap:0}
+  .ed-prompt[hidden]{display:none}
+  .ed-prompt .lab{flex:none;background:var(--fg);color:var(--bg);white-space:pre}
+  .ed-prompt input{flex:1;min-width:0;font:inherit;line-height:inherit;color:var(--fg);
+    background:transparent;border:0;outline:none;padding:0 0 0 .5ch;margin:0;caret-color:var(--caret)}
+  /* nano 底部快捷列:看起來是 nano 的兩排說明,實際是可點的按鈕(手機沒有 Ctrl) */
+  .ed-bar{flex:none;display:grid;grid-template-columns:repeat(6,1fr);gap:0 1ch;padding:2px 0 0}
+  .ed-bar button{display:block;text-align:left;font:inherit;line-height:1.35;background:transparent;
+    border:0;padding:0;margin:0;color:var(--fg);cursor:pointer;white-space:pre;overflow:hidden;
+    text-overflow:ellipsis}
+  .ed-bar button:hover{color:var(--head)}
+  .ed-bar button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
+  .ed-bar .k{background:var(--fg);color:var(--bg)}
+  .ed-bar.vimbar{grid-template-columns:repeat(auto-fit,minmax(4ch,auto));gap:0 2ch;
+    justify-content:start;padding:4px 2px}
+  .ed-bar.vimbar button{border:1px solid var(--line);padding:4px 10px;text-align:center}
+
+  @media (max-width:560px){
+    body{font-size:16px}                 /* ≥16px:iOS 聚焦不放大 + 可讀 */
+    .ed-bar{grid-template-columns:repeat(3,1fr);font-size:.9em}
+    .ed-buf,.ed-tilde{font-size:16px}
+    .console{padding:10px 12px 14px}   /* 後備 */
+    .console{padding:10px max(12px,env(safe-area-inset-right)) max(14px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left))}
+    #edit{font-size:16px}
+    .menu .opt{padding:10px 14px}        /* 觸控目標放大 */
+  }
+  @media (prefers-reduced-motion:reduce){ #edit{caret-color:var(--caret)} }
+  @media (forced-colors:active){
+    .menu .opt.sel{background:Highlight;color:HighlightText}
+    .console.focused{box-shadow:inset 0 0 0 2px CanvasText}
+  }
+</style>
+</head>
+<body>
+<h1 class="sr-only">蔡秀吉 Hsiu-Chi Tsai (thc1006) — 開源貢獻作品集,互動式 PowerShell 網頁終端機</h1>
+<noscript>
+  <section class="noscript">
+    <h2>蔡秀吉 Hsiu-Chi Tsai (thc1006)</h2>
+    <p>國立陽明交通大學 資訊工程。CNCF Ambassador;Nephio (Linux Foundation Networking)
+       Technical Steering Committee member;Zephyr RTOS 與 M5Stack platforms maintainer。</p>
+    <!-- ⚠️ 下面這行是 SEO/無 JS 用的靜態文字,不能由 JS 產生,所以是唯一還要手動同步的計數。
+         改 D.stats 時記得一起改,tools/check-numbers.js 會比對兩邊。 -->
+    <p>276 個已合併的上游 pull request,橫跨 79 個專案與 8 個基金會。</p>
+    <ul>
+      <li>著作:IEEE SCC 2026、IEEE WF-PST 2026、ICAIMS 2026 (IEEE) 已接受,另有預印本。ORCID 0000-0001-7421-8027</li>
+      <li>獲獎:2023 總統教育獎 · 奮發向上獎;2026 國科會大專學生研究創作獎;2026 Make NTU 強茂企業獎第一名;2026 臺灣太空事務青年人才選訓計畫入選</li>
+      <li>專案:Nephio TSC 治理、Kubernetes DRA 正確性稽核、O-RAN × LEO NTN</li>
+      <li>安全:istio GHSA-qm8v-g4f9-qhjx 與 volcano GHSA-j38h-7pfq-cxmw 兩則已發佈的 advisory,皆具名為回報者</li>
+    </ul>
+    <p>權威來源(所有內容以個人網站為準):
+       <a href="https://people.cs.nycu.edu.tw/~hctsai1006/">個人網站</a> ·
+       <a href="https://people.cs.nycu.edu.tw/~hctsai1006/publications/">著作</a> ·
+       <a href="https://people.cs.nycu.edu.tw/~hctsai1006/open-source/">開源貢獻</a> ·
+       <a href="https://people.cs.nycu.edu.tw/~hctsai1006/honors/">榮譽</a> ·
+       <a href="https://orcid.org/0000-0001-7421-8027">ORCID</a> ·
+       <a href="https://github.com/thc1006">GitHub</a></p>
+    <p>這個頁面的互動終端機需要 JavaScript。也可以看
+       <a href="classic.html">舊版終端機 classic.html</a>。</p>
+  </section>
+</noscript>
+<div class="win" role="main">
+  <div class="console" id="con" role="group"
+       aria-label="PowerShell 主控台。輸入指令例如 help;輸出會被螢幕報讀器朗讀。">
+    <div id="out" role="log" aria-live="polite" aria-atomic="false" aria-label="主控台輸出"></div>
+    <div id="iw">
+      <span class="prompt" aria-hidden="true">PS <span class="path">/home/thc1006</span>&gt;&nbsp;</span>
+      <span class="editzone" id="ez"><span class="mirror" id="mirror" aria-hidden="true"><span id="mk"></span></span><span class="ghost" id="ghost" aria-hidden="true"></span><textarea id="edit" rows="1" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="text" enterkeyhint="go" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="cmdmenu" aria-label="PowerShell 指令輸入" aria-describedby="eh"></textarea><div class="menu" id="cmdmenu" role="listbox" aria-label="指令補完候選" hidden></div></span>
+    </div>
+  </div>
+</div>
+<div class="ed" id="ed" role="dialog" aria-modal="true" aria-label="Text editor" hidden>
+  <div class="ed-top" id="edtop"></div>
+  <div class="ed-body">
+    <pre class="ed-tilde" id="edtil" aria-hidden="true"></pre>
+    <textarea class="ed-buf" id="edta" spellcheck="false" autocomplete="off" autocapitalize="off"
+      autocorrect="off" wrap="soft" aria-label="File contents"></textarea>
+  </div>
+  <div class="ed-msg" id="edmsg"></div>
+  <div class="ed-prompt" id="edpr" hidden><span class="lab" id="edprlab"></span><input id="edprin"
+    type="text" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off"></div>
+  <div class="ed-bar" id="edbar"></div>
+</div>
+<span id="eh" class="sr-only">輸入指令後按 Enter 執行。行動裝置直接打字即可。</span>
+
+<script>
+"use strict";
+const con=document.getElementById('con'), out=document.getElementById('out'),
+    edit=document.getElementById('edit'), ghost=document.getElementById('ghost'), mirror=document.getElementById('mirror'),
+    ez=document.getElementById('ez'), mk=document.getElementById('mk'),
+    cmdmenu=document.getElementById('cmdmenu');
+/* mirror 內是「文字節點 + 零寬標記」,標記的位置就是游標所在的視覺座標 */
+const mirrorText=document.createTextNode('');
+mirror.insertBefore(mirrorText, mk);
+function dw(s){let n=0,a=String(s);for(let i=0;i<a.length;i++){let c=a.codePointAt(i);
+  n+=(c>=0x1100&&(c<=0x115f||(c>=0x2e80&&c<=0xa4cf)||(c>=0xac00&&c<=0xd7a3)||(c>=0xf900&&c<=0xfaff)||
+     (c>=0xfe30&&c<=0xfe4f)||(c>=0xff00&&c<=0xff60)||(c>=0xffe0&&c<=0xffe6)||(c>=0x20000&&c<=0x3fffd)))?2:1;
+  if(c>0xffff)i++;}
+  return n;}
+function padw(s,n){s=String(s);return s+new Array(Math.max(0,n-dw(s))+1).join(' ');}
+
+/* ---------- 真實資料 ---------- */
+const D={
+  /* ⚠️ 計數的唯一來源。以前這三個數字散在 5 個地方手動同步,結果從 115 漂到跟權威頁差 148 才被發現。
+     現在 profile / README 種子 / timeline / Get-Contribution 全部從這裡算,改一次就好。
+     唯一還要手動改的是 <noscript> 那段(SEO 用、不能靠 JS 產生)——tools/check-numbers.js 會盯著它。
+     權威來源:people.cs.nycu.edu.tw/~hctsai1006/open-source/ 的 os-metrics。 */
+  stats:{merged:276, projects:79, foundations:8, asOf:'2026-09-04'},
+  profile:[['head','thc1006  (蔡秀吉 · Hsiu-Chi Tsai)'],
+    ['','CNCF Ambassador'],
+    ['','Nephio (Linux Foundation Networking) Technical Steering Committee Member'],
+    ['','Zephyr RTOS · M5Stack Platforms Maintainer'],
+    ['accent','__STATS__'],
+    ['muted','National Yang Ming Chiao Tung University — Computer Science']],
+  /* contribTop 只記已合併的 PR,而且是 **top 清單不是全集**,逐列加總本來就不等於 stats.merged,別去「修正」。
+     審查中的一律寫進 buildSeed 的 in-review.md。
+     數字全部來自 NYCU CS /open-source/ 的 Ledger 逐 repo 實際計數(2026-08-27 對帳過)。 */
+  /* 第三欄 1 = 該 repo 屬 CNCF（Sandbox/Incubating/Graduated 都算），-Foundation CNCF 依它過濾。
+     以前這裡靠一條寫死的關鍵字 regex 判斷，換 repo 就會判錯 —— 2026-08-27 實測 argo-workflows
+     與 community-operators 明明是 CNCF 卻被漏掉。分桶以 /open-source/ 的 Ledger 為準，
+     tools/check-numbers.js 會拿權威頁的 CNCF section 逐列核對這個旗標。 */
+  contribTop:[['kubernetes-sigs/kueue',49,1],['open-telemetry/opentelemetry-cpp',37,1],
+    ['RocketPy-Team/RocketPy',18,0],['kubernetes/kubernetes',22,1],['zephyrproject-rtos/zephyr',10,0],
+    ['ocudu/ocudu',10,0],['kubernetes-sigs/dra-driver-cpu',9,1],['kubernetes-sigs/dranet',6,1],
+    ['sysprog21/muxleq',6,0],['llm-d/llm-d-router',6,1],['jaegertracing/jaeger-ui',6,1],
+    ['ROCm/k8s-gpu-dra-driver',4,0],['kptdev/porch',4,1],['volcano-sh/volcano',3,1],
+    ['argoproj/argo-workflows',3,1],['k8s-operatorhub/community-operators',3,1],
+    ['nephio-project/test-infra',3,0],['AverageMarcus/devstats-viewer',3,0]],
+  cncf:['CNCF',191,46],
+  /* 已發佈且在 credits 欄具名的安全 advisory。⚠️ 兩則都還沒有 CVE、也都還沒進 GitHub 全域
+     advisory DB 與 OSV(repo 已發佈 != 全域收錄)——Get-Advisory 會照實講,別擅自拿掉那兩句。
+     狀態查法:gh api repos/<repo>/security-advisories,或跑 personal-homepage/tools/security-watch.sh。 */
+  advisories:[
+    {id:'GHSA-qm8v-g4f9-qhjx', repo:'istio/istio', sev:'6.8 medium', role:'reporter', pub:'2026-08-27',
+     fdn:'CNCF Graduated', fix:'1.30.4 / 1.29.7',
+     what:'BackendTLSPolicy 的 caCertificateRefs 解不出來時,sidecar 丟掉 upstream 的 TLS socket 改送明文,加密與 CA 驗證同時失效且無聲;gateway 則 fail closed 不受影響。',
+     href:'https://github.com/istio/istio/security/advisories/GHSA-qm8v-g4f9-qhjx',
+     bul:'https://istio.io/latest/news/security/istio-security-2026-006/'},
+    {id:'GHSA-j38h-7pfq-cxmw', repo:'volcano-sh/volcano', sev:'medium', role:'finder', pub:'2026-08-26',
+     fdn:'CNCF Incubating', fix:'v1.15.2 (2026-08-29 已發布)',
+     what:'DRA 容量會計的迭代量隨租戶可控的數字成長,已驗證的租戶可用可控的 device count 吃光 scheduler CPU,癱瘓整個叢集的排程(CWE-400 經由 CWE-834)。',
+     href:'https://github.com/volcano-sh/volcano/security/advisories/GHSA-j38h-7pfq-cxmw', bul:''}],
+  /* 資料來源:people.cs.nycu.edu.tw/~hctsai1006/publications/(ORCID 同步),13 篇。
+     摘要表只放前 5 筆,完整清單見 pubsFull(Get-Publication -Full)。 */
+  publications:[['IEEE SCC 2026','Ground-Side Mission Plan Compilation','Accepted'],
+    ['IEEE WF-PST 2026','OOBWatch-S3: Zephyr Cold-Boot Race','Accepted'],
+    ['ICAIMS 2026 (IEEE)','Band-as-Modality Learning','Accepted'],
+    ['arXiv:2607.09992','Trusted Floors Under Untrusted Learners','preprint'],
+    ['engrXiv 7541','Physics-Grounded DRL for LEO NTN','preprint']],
+  pubTotal:13,
+  pubsFull:[
+    {y:'2026',st:'Accepted',venue:'IEEE SCC 2026 (Space Computing Conference)',
+     title:'Ground-Side Mission Plan Compilation with Policy-as-Code Guardrails for Cloud-Native Satellite Platforms',
+     id:'arXiv:2607.14798',au:'Hsiu-Chi Tsai, Chia-Tung Chung'},
+    {y:'2026',st:'Accepted',venue:'IEEE WF-PST 2026 (World Forum on Public Safety Technology)',
+     title:'OOBWatch-S3: Surfacing a Zephyr Wi-Fi Cold-Boot Race Family on ESP32-S3 via a Public-Safety Watchdog Deployment',
+     id:'',au:'Hsiu-Chi Tsai, Chia-Tung Chung'},
+    {y:'2026',st:'Accepted',venue:'IEEE ICAIMS 2026',
+     title:'Band-as-Modality Learning for Multispectral and Hyperspectral Segmentation: Spectral Group Masked Pretraining and Cross-Band Attention for Missing-Band Robustness',
+     id:'',au:'Chia-Tung Chung, Hsiu-Chi Tsai'},
+    {y:'2026',st:'preprint',venue:'arXiv (cs.DC)',
+     title:'Trusted Floors Under Untrusted Learners: A Runtime Assured-SLO Guard for ML Serving',
+     id:'arXiv:2607.09992',au:'Hsiu-Chi Tsai'},
+    {y:'2026',st:'preprint',venue:'engrXiv',
+     title:'Physics-Grounded Deep Reinforcement Learning for Power Control in LEO Non-Terrestrial O-RAN: A QoS-Power Pareto and Cross-Orbit Robustness Study',
+     id:'10.31224/7541',au:'Hsiu-Chi Tsai, Chia-Tung Chung'},
+    {y:'2026',st:'preprint',venue:'arXiv (physics.chem-ph / quant-ph)',
+     title:'An Iterative Dual-Channel Neural Quantum State Algorithm for Selected Configuration Interaction',
+     id:'arXiv:2606.26760',au:'Jen-Yu Chang, Yi-Chun Chang, Yu-Jui Lin, Ming-Chun Yang, Hsiu-Chi Tsai, Tai-Yue Li, Nan-Yow Chen, Tsung-Wei Huang, En-Jui Kuo'},
+    {y:'2026',st:'preprint',venue:'engrXiv',
+     title:'A Large-Scale Empirical Study of Deep Learning for MEMS Gyroscope Bias Estimation',
+     id:'10.31224/7144',au:'Hsiu-Chi Tsai, Chia-Tung Chung'},
+    {y:'2026',st:'preprint',venue:'engrXiv',
+     title:'Cross-Layer Diagnostics for Operator-Side Platform Porting of GPU-Accelerated 5G RAN: An Experience Report on Cable-on Validation of NVIDIA Aerial cuBB on DGX Spark',
+     id:'10.31224/7056',au:'Hsiu-Chi Tsai'},
+    {y:'2026',st:'preprint',venue:'Zenodo',
+     title:'Federated O-RAN Slice SLA Prediction: A Cross-Architecture Empirical Benchmark on Colosseum/ColO-RAN',
+     id:'10.5281/zenodo.20075433',au:'Hsiu-Chi Tsai'},
+    {y:'2026',st:'preprint',venue:'Research Square',
+     title:'ECD length and fold identity shape the calibration of AI-predicted immune-receptor interactions: lessons from 834 experimentally tested pairs',
+     id:'10.21203/rs.3.rs-9526911/v1',au:'Hsiu-Chi Tsai'},
+    {y:'2026',st:'preprint',venue:'Preprints.org (MDPI)',
+     title:'Sub-Millijoule Intrusion Detection on a Commodity MCU Neural Processing Unit: A Four-Dataset Deployment Study',
+     id:'10.20944/preprints202603.0817.v3',au:'Hsiu-Chi Tsai'},
+    {y:'2023',st:'published',venue:'NYCU Capstone',
+     title:'Intelligent Management System of O-RAN Private Network in Internal Medicine Environment',
+     id:'10.13140/RG.2.2.28996.30081',au:'Hsiu-Chi Tsai, Yu-Te Wu'},
+    {y:'2023',st:'published',venue:'NYCU Thesis',
+     title:'The Development and Prospect of O-RAN Integrated LEO Satellite Communication System for Marine Vessel',
+     id:'10.13140/RG.2.2.12387.02085',au:'Hsiu-Chi Tsai, Chi-Hsuan Wang, Yu-Tang You, An-Tai Yeh'}],
+  awards:[['2023','總統教育獎 · 奮發向上獎 (教育部)'],['2026','國科會 大專學生研究創作獎 (NSTC)'],
+    ['2026','Make NTU · 強茂企業獎 第一名'],['2026','臺灣太空事務青年人才選訓計畫 · 入選 (TASA)'],
+    ['2023','臺灣海洋治理國際研討會 · 海洋工程組 第三名']],
+  projects:[['Nephio (LFN)','TSC 治理 + Intent-based O-RAN 自動化'],
+    ['DRA correctness audit','Kubernetes 動態資源配置的端到端正確性稽核'],
+    ['Upstream correctness audits','上游專案的靜默失效與重現性缺陷稽核 · CNCF / NASA / 學術'],
+    ['O-RAN × NTN','LEO 衛星地面段 · 3GPP R17 NTN 參數驗證'],
+    ['COSCUP 2026','體驗火箭導控 Balloon Popping Challenge workshop']],
+  timeline:[['2023','總統教育獎 · 捷克進修 · 首次 COSCUP 講者'],
+    ['2024','Nephio TSC · CTU GDSC Lead · O-RAN organizer'],
+    ['2025','IEEE R10 ACEI · O-RAN × NTN 研究'],
+    ['2026','CNCF Ambassador · 國科會研究創作獎 (114) · TASA 青年人才 · DRA 稽核']],
+};
+/* 計數字串只在這裡組一次；profile / README 種子 / Get-Contribution 全部用它。
+   要改數字只改 D.stats，不要再去各處手改。 */
+const STATSLINE=D.stats.merged+' merged upstream PRs  ·  '+D.stats.projects+' projects  ·  '+D.stats.foundations+' foundations';
+D.profile.forEach(function(r){ if(r[1]==='__STATS__') r[1]=STATSLINE; });
+function line(cls,txt){return {cls:cls,txt:txt};}
+/* 主控台目前可容納幾個字元寬 —— 量一次快取,視窗改變時作廢 */
+let charW=0;
+function charWidth(){
+  if(charW) return charW;
+  const s=document.createElement('span');
+  s.style.cssText='position:absolute;visibility:hidden;white-space:pre;left:-9999px';
+  s.textContent=new Array(51).join('0');
+  out.appendChild(s);
+  charW=s.getBoundingClientRect().width/50;
+  s.remove();
+  return charW||8;
+}
+function availCols(){ return Math.max(24, Math.floor((con.clientWidth-32)/charWidth())); }
+/* 放不下就改用清單格式(等同 PowerShell 的 Format-List),欄位才不會因換行而錯位 */
+function listFormat(headers,rows){
+  const hw=Math.max.apply(null,headers.map(dw));
+  const o=[];
+  rows.forEach(function(r,idx){
+    if(idx) o.push(line(''));
+    headers.forEach(function(h,i){
+      const label=padw(h,hw), value=String(r[i]);
+      o.push({kv:[label,value], txt:label+' : '+value, indent:hw+3});   // 續行懸掛縮排到值的起點
+    });
+  });
+  return o;
+}
+function table(headers,rows){
+  let w=headers.map(function(h,i){return Math.max.apply(null,[dw(h)].concat(rows.map(function(r){return dw(String(r[i]));})));});
+  const total=w.reduce(function(a,b){return a+b;},0)+2*(w.length-1);
+  if(total>availCols() && rows.length<=12) return listFormat(headers,rows);
+  let H=headers.map(function(h,i){return padw(h,w[i]);}).join('  ');
+  let R=w.map(function(x){return new Array(x+1).join('-');}).join('  ');
+  let o=[{cls:'head',txt:H},{cls:'rule',txt:R}];
+  rows.forEach(function(r){o.push({cls:'',txt:r.map(function(c,i){return padw(c,w[i]);}).join('  ')});});
+  return o;
+}
+/* campbell = 這組深色配色的正式名稱(終端機預設);windows/dark 當舊名相容 */
+const THEMES=['campbell','pi','blue'];
+const THEME_ALIAS={windows:'campbell',dark:'campbell',default:'campbell'};
+const THEME_BG={campbell:'#0C0C0C',pi:'#2A1A16',blue:'#012456'};
+function setTheme(t){ t=THEME_ALIAS[t]||t; if(THEMES.indexOf(t)<0) return false;
+  document.documentElement.setAttribute('data-theme',t);
+  const tc=document.querySelector('meta[name="theme-color"]');   // 手機瀏覽器工具列跟著換色
+  if(tc && THEME_BG[t]) tc.setAttribute('content',THEME_BG[t]);
+  try{ localStorage.setItem('thc1006.theme',t); }catch(e){}
+  return true; }
+
+/* ---------- 權威資料來源 ----------
+   這個終端機是次要展示面;所有數字與清單以個人網站為準。
+   每個資料型指令都附上可點的來源連結,訪客能自行查證,避免兩邊分歧時取得錯誤資訊。
+   (所有連結已於 2026-07-20 逐一驗證回應 200;/projects/ 已於 2026-07-09 移除故不連。) */
+const SITE='https://people.cs.nycu.edu.tw/~hctsai1006';
+const SRC={ home:SITE+'/', pubs:SITE+'/publications/', oss:SITE+'/open-source/',
+  honors:SITE+'/honors/', exp:SITE+'/experience/', contact:SITE+'/contact/',
+  medical:SITE+'/medical/', teaching:SITE+'/teaching/', blog:SITE+'/blog/',
+  cv:SITE+'/cv.pdf', orcid:'https://orcid.org/0000-0001-7421-8027',
+  github:'https://github.com/thc1006' };
+function srcRow(label,href,prefix){ const p=(prefix==null?'  來源: ':prefix);
+  return {parts:[['muted',p],['a',label,href]], txt:p+label}; }
+function idHref(id){
+  if(!id) return '';
+  if(/^arxiv:/i.test(id)) return 'https://arxiv.org/abs/'+String(id).replace(/^arXiv:/i,'');
+  if(/^10\./.test(id)) return 'https://doi.org/'+id;
+  return '';
+}
+
+/* ---------- 虛擬檔案系統(可讀寫 · localStorage 持久化)----------
+   模擬 PowerShell 7 跑在 Linux(Ubuntu)上:POSIX 路徑、**大小寫敏感**、有 Unix 權限位與 mtime。
+   架構參考 ZenFS / BrowserFS 與 daedalOS 的 overlay 模型:唯讀「種子」作品集樹 + 使用者可寫層。
+   fsLoad() 只把「非種子」節點嫁接回一棵新鮮的種子樹(graftUser),所以作品集更新後
+   回訪者看得到新內容,他自己建立/改過的檔案也完整保留。 */
+const HOME='/home/thc1006', USERNAME='thc1006', GROUPNAME='thc1006', HOSTN='thc1006-dev';
+const FSKEY='thc1006.fs.v3';   /* v3:路徑改 POSIX、節點新增 mode/mtime,舊格式不相容 */
+let CWD=HOME;
+function slug(s){return String(s).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');}
+let SEEDROWS={}, ROOT=null;
+/* 必須是「固定且早於部署時刻」的常數:固定才能讓 fsSer 只存偏離預設的 mtime;
+   早於現在才不會出現種子檔比你剛建立的檔案還新的未來時間。 */
+const SEEDTIME=Date.parse('2026-07-19T12:00:00Z');
+/* 只有偏離這兩個預設的 mode 才寫進 localStorage,種子節點的權限才能隨網站改版更新 */
+const DEFMODE={d:'rwxr-xr-x',f:'rw-r--r--'};
+/* 執行期新建或更動的節點要蓋上真實時間,不能沿用種子時間 */
+function stamp(n){ n.mt=Date.now(); return n; }
+/* ch 用 null 原型的字典:檔名 __proto__ 才會變成正常的項目,
+   而不是去改寫物件的原型(那會讓該目錄的結構整個壞掉)。 */
+function dnode(mode,own){return {t:'d',ch:Object.create(null),mode:mode||DEFMODE.d,mt:SEEDTIME,own:own||null};}
+const FLAGRE=/^-{1,2}[A-Za-z]/;   /* 只有 -Name 這種才算參數;-1 是負數值,不是參數 */
+function lpad(s,n){ s=String(s); return new Array(Math.max(0,n-s.length)+1).join(' ')+s; }
+function joinPath(dir,name){ return String(dir).replace(/\/+$/,'')+'/'+name; }
+function dirOf(p){ const s=segsOf(p); return '/'+s.slice(0,-1).join('/'); }
+function normPath(p){ const s=String(p).replace(/\/+$/,''); return s===''?'/':s; }   /* Linux 大小寫敏感,不可 lowercase */
+function samePath(a,b){ return normPath(a)===normPath(b); }
+function isDescendant(child,ancestor){ const a=normPath(ancestor);
+  return normPath(child).indexOf((a==='/'?'':a)+'/')===0; }
+/* 真實 Unix:在目錄裡新增或移除項目會更新該目錄的 mtime(種子建構不走這兩個函式) */
+function setChild(parent,name,node){ parent.ch[name]=node; parent.mt=Date.now(); }
+function rmChild(parent,name){ delete parent.ch[name]; parent.mt=Date.now(); }
+function fnode(rows,seed,text,mode,own){return {t:'f',rows:rows||null,seed:!!seed,text:text||null,
+  mode:mode||DEFMODE.f,mt:SEEDTIME,own:own||null};}
+/* 擁有者:種子把 / /etc /home 這些系統目錄標成 root,其餘(含使用者新建的)都是本人。
+   真機對照(Ubuntu 24.04):非 root 只能改自己擁有的目錄,所以連 `rm -rf ~` 都會被擋 ——
+   家目錄的父層 /home 屬 root、不可寫。這一條 predicate 取代了原本用路徑深度的土法判斷。 */
+function ownerOf(n){ return (n&&n.own)||USERNAME; }
+/* Unix 權限位:擁有者看 owner 三元組[0-2],其他人看 other 三元組[6-8]
+   (此單使用者模型省略 group)。x 位可能是 x/s/t —— setuid/setgid/sticky 都含執行權。 */
+function permBit(node,idx){ const m=node.mode||(node&&node.t==='d'?DEFMODE.d:DEFMODE.f);
+  return ownerOf(node)===USERNAME?m.charAt(idx):m.charAt(idx+6); }
+function canWriteNode(node){ return !!node && permBit(node,1)==='w'; }   /* 覆寫檔案內容要有 w */
+function canSearch(dir){ if(!dir||dir.t!=='d') return false;
+  const c=permBit(dir,2); return c==='x'||c==='s'||c==='t'; }            /* 進入/穿越目錄要有 x(t/s 也算) */
+/* cd 要能穿越路徑每一層目錄(含目標);回傳第一個沒有 search 權限的目錄,否則 null */
+function firstUnsearchable(path){ const segs=segsOf(path); let n=ROOT;
+  for(let i=0;i<segs.length;i++){ const k=keyIn(n,segs[i]); if(!k) return null; n=n.ch[k];
+    if(n.t==='d' && !canSearch(n)) return '/'+segs.slice(0,i+1).join('/'); }
+  return null; }
+/* mkdir -p 之前找最深的現存祖先:權限要在那裡驗,不能靠 fsMkdirp 偷偷把中間層建完再驗新層 */
+function deepestExisting(path){ const segs=segsOf(path); let n=ROOT;
+  for(let i=0;i<segs.length;i++){ const k=keyIn(n,segs[i]); if(!k) break; n=n.ch[k]; }
+  return n; }
+/* 目錄能否新增/移除子項:owner 看自己的 w 位,其他人看 other 的 w 位。
+   這樣使用者 chmod 掉自己目錄的 w 之後就真的寫不進去了(修掉「chmod 對 owner 無效」)。 */
+function writable(dir){ if(!dir||dir.t!=='d') return false; return permBit(dir,1)==='w'; }
+function markOwn(n,who){ n.own=who;
+  if(n.t==='d') Object.keys(n.ch).forEach(function(k){ markOwn(n.ch[k],who); }); }
+function segsOf(p){ return String(p).split('/').filter(function(x){return x && x!=='.';}); }
+/* Linux 檔名大小寫敏感:README.md 與 readme.md 是**不同**檔案(Windows 版當初的合併邏輯在此不成立) */
+function keyIn(n,name){ if(!n||n.t!=='d') return null;
+  return Object.prototype.hasOwnProperty.call(n.ch,name)?name:null; }
+function fsGet(path){ const segs=segsOf(path); let n=ROOT;
+  for(let i=0;i<segs.length;i++){ const k=keyIn(n,segs[i]); if(!k) return null; n=n.ch[k]; }
+  return n; }
+function fsCanon(path){ const segs=segsOf(path); let n=ROOT; const o=[];
+  for(let i=0;i<segs.length;i++){ const k=keyIn(n,segs[i]); if(!k) return null; o.push(k); n=n.ch[k]; }
+  return '/'+o.join('/'); }
+function fsParent(path){ const segs=segsOf(path); if(!segs.length) return null;
+  return fsGet('/'+segs.slice(0,-1).join('/')); }
+function baseOf(path){ const s=segsOf(path); return s.length?s[s.length-1]:''; }
+function fsMkdirp(path){ const segs=segsOf(path); let n=ROOT;
+  for(let i=0;i<segs.length;i++){ let k=keyIn(n,segs[i]);
+    if(!k){ n.ch[segs[i]]=dnode(); k=segs[i]; }
+    n=n.ch[k]; if(n.t!=='d') return null; }
+  return n; }
+function fsClone(n){ if(n.t==='d'){ const o=dnode(n.mode,n.own); o.mt=n.mt;
+    Object.keys(n.ch).forEach(function(k){ o.ch[k]=fsClone(n.ch[k]); }); return o; }
+  const f=fnode(n.rows,n.seed,n.text?n.text.slice():null,n.mode,n.own); f.mt=n.mt; return f; }
+function fsText(n){ if(!n||n.t!=='f') return [];
+  if(n.rows) return n.rows;
+  return (n.text||[]).map(function(s){return line('',s);}); }
+/* 檔案大小要算 UTF-8 位元組數,不是 UTF-16 code unit —— 「蔡」在 ls 該顯示 3 bytes 不是 1 */
+const _utf8enc=(typeof TextEncoder!=='undefined')?new TextEncoder():null;
+function utf8len(s){ s=String(s);
+  return _utf8enc?_utf8enc.encode(s).length:unescape(encodeURIComponent(s)).length; }
+/* 大小:使用者檔算實際位元組數,種子檔用渲染文字估算,目錄固定 4096(同 ext4) */
+function fsSize(n){ if(!n) return 0;
+  if(n.t==='d') return 4096;
+  if(n.text) return n.text.reduce(function(a,s){return a+utf8len(s)+1;},0);
+  return (n.rows||[]).reduce(function(a,r){return a+utf8len(String(r&&r.txt!=null?r.txt:''))+1;},0); }
+function modeStr(n){ return (n.t==='d'?'d':'-')+(n.mode||DEFMODE.f); }
+const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function lsTime(ms){ const d=new Date(ms||SEEDTIME);
+  return MON[d.getMonth()]+' '+lpad(d.getDate(),2)+' '
+    +('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2); }
+function psTime(ms){ const d=new Date(ms||SEEDTIME);
+  return (d.getMonth()+1)+'/'+d.getDate()+'/'+d.getFullYear()+' '
+    +('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2); }
+function resolvePath(p){
+  if(p==null||p==='') return CWD;
+  p=String(p).replace(/^["']|["']$/g,'');
+  if(p==='~') return HOME;
+  let abs;
+  if(p.indexOf('~/')===0) abs=HOME+'/'+p.slice(2);
+  else if(p.charAt(0)==='/') abs=p;
+  else abs=CWD+'/'+p;
+  const segs=abs.split('/'), o=[];
+  for(let i=0;i<segs.length;i++){ const s=segs[i];
+    if(!s||s==='.') continue;
+    if(s==='..'){ o.pop(); continue; }
+    o.push(s); }
+  return '/'+o.join('/');
+}
+function pathCandidates(){ const n=fsGet(CWD); if(!n||n.t!=='d') return [];
+  return Object.keys(n.ch).concat(['..','~','/']); }
+function argOf(a,n){ let k=Object.keys(a),i; for(i=0;i<k.length;i++){ if(k[i].toLowerCase()===String(n).toLowerCase()) return a[k[i]]; } return undefined; }
+function stripQ(s){ return String(s).replace(/^["']|["']$/g,''); }
+function firstArg(raw){ for(let i=1;i<raw.length;i++){ if(!/^-/.test(raw[i])) return stripQ(raw[i]); } return ''; }
+/* 位置參數的原始 token 位置:引號檔名(如 "my file")在 raw 裡帶著引號,
+   直接 raw.indexOf(去引號後的值) 會 miss,害 Set-Content 把整條指令當內容寫進檔。 */
+function rawIndexOf(raw,val){ for(let i=1;i<raw.length;i++){ if(stripQ(raw[i])===val) return i; } return -1; }
+
+/* 種子樹:作品集內容 */
+function buildSeed(){
+  ROOT=dnode(); SEEDROWS={};
+  function put(dir,name,rows,mode){ const d=fsMkdirp(dir); d.ch[name]=fnode(rows,true,null,mode);
+    SEEDROWS[dir+'/'+name]=rows; }   /* 大小寫敏感,不再 lowercase */
+  fsMkdirp(HOME+'/contributions'); fsMkdirp(HOME+'/publications');
+  fsMkdirp(HOME+'/awards'); fsMkdirp(HOME+'/projects');
+  put(HOME,'README.md',[
+    line('head','# thc1006 — Hsiu-Chi Tsai (蔡秀吉)'),line(''),
+    line('','National Yang Ming Chiao Tung University — Computer Science'),
+    line('','CNCF Ambassador'),
+    line('','Nephio (LFN) Technical Steering Committee member'),
+    line('','Zephyr RTOS / M5Stack platforms maintainer'),line(''),
+    line('accent',STATSLINE),line(''),
+    line('muted','whoami / Get-Contribution / Get-Advisory / Get-Publication / Get-Award'),line(''),
+    line('muted','所有內容以個人網站為準,打 Get-Source 看全部來源:'),
+    srcRow('people.cs.nycu.edu.tw/~hctsai1006', SRC.home, '  ')]);
+  put(HOME,'profile.ps1',[
+    line('muted','# ~/.config/powershell/Microsoft.PowerShell_profile.ps1'),
+    codeLine('Set-PSReadLineOption -PredictionSource HistoryAndPlugin'),
+    codeLine('Set-PSReadLineOption -EditMode Emacs'),
+    codeLine('Set-Alias k kubectl'),
+    codeLine('Set-Alias g git'),line(''),
+    line('muted','# Linux 上 ls/cat/rm 這些別名被拿掉了,原生指令會直接跑'),
+    codeLine('Set-Alias ll "/bin/ls -l"'),line(''),
+    line('muted','# 每天早上先看看有沒有 PR 被合併'),
+    codeLine('function Get-MergedPRs { gh search prs --author thc1006 --merged }'),line(''),
+    codeLine('Write-Host "Welcome back, thc1006." -ForegroundColor Cyan')]);
+  /* 幾個真實存在的系統檔,讓 cat /etc/os-release 這種操作是真的 */
+  put('/etc','os-release',[
+    line('','PRETTY_NAME="Ubuntu 24.04.4 LTS"'),
+    line('','NAME="Ubuntu"'),
+    line('','VERSION_ID="24.04"'),
+    line('','VERSION="24.04.4 LTS (Noble Numbat)"'),
+    line('','ID=ubuntu'),
+    line('','ID_LIKE=debian'),
+    line('','HOME_URL="https://www.ubuntu.com/"')]);
+  put('/etc','hostname',[line('',HOSTN)]);
+  put('/etc','shells',[line('muted','# /etc/shells: valid login shells'),
+    line('','/bin/sh'),line('','/usr/bin/sh'),
+    line('','/bin/bash'),line('','/usr/bin/bash'),
+    line('','/bin/rbash'),line('','/usr/bin/rbash'),
+    line('','/usr/bin/dash'),line('','/usr/bin/pwsh')]);
+  D.contribTop.forEach(function(r){
+    put(HOME+'/contributions', r[0].split('/')[1]+'.md', [
+      line('head',r[0]),line(''),
+      line('accent',r[1]+' merged pull requests'),
+      line('muted','https://github.com/'+r[0])]); });
+  /* ⚠️ 這份是「代表性」清單,不是全集——長清單一定會爛(2026-07-22 那版到 8 月已有三分之二失效:
+     keda #7918、keda-docs #1811、yunikorn #1053、u-root/uio #28 都 closed 未合併,DOFA #31/#32 早已合併)。
+     所以只留 7 筆、把日期戳寫在最上面,完整且即時的清單一律指向 /open-source/ 的進行中區。 */
+  put(HOME+'/contributions','in-review.md',[
+    line('head','# 審查中的上游 PR(代表性,非全集)'),line(''),
+    line('muted','狀態擷取於 '+D.stats.asOf+'。下列全部尚未合併,不計入 Get-Contribution。'),line(''),
+    line('accent','kubernetes/kubernetes  ·  CNCF Graduated'),
+    line('','  PR    #141626  新增 image_exclude_regex,精確排除 -cgroupsv1 image 而不誤傷正常名稱'),line(''),
+    line('accent','kubernetes-sigs/external-dns  ·  CNCF Sandbox'),
+    line('','  PR    #6679    明確空 parentRef.group 必須代表 core API group,不得誤對同名 Gateway'),
+    line('','  PR    #6640    Route 53 stub + 完整 registry/provider reconcile-loop regression tests'),line(''),
+    line('accent','kubernetes/test-infra  ·  CNCF'),
+    line('','  PR    #37777   KRTE cgroup contract probe,量 outer wrapper、nested Docker 與 kind node'),line(''),
+    line('accent','insomniacslk/dhcp  ·  Go networking · 非 CNCF'),
+    line('','  PR    #588     BroadcastRawUDPConn.ReadFrom fuzz target + 獨立 reference model'),
+    line('','  PR    #589     回傳 DHCP payload 前驗 UDP length'),
+    line('','  PR    #591     raw receive path 拒絕 IPv4 fragments'),line(''),
+    srcRow('完整且即時的進行中清單見 /open-source/', SRC.oss, '  '),
+    line('muted','  合併後移入 Get-Contribution,並更新 D.stats 這一個地方就好。')]);
+  D.pubsFull.forEach(function(p){
+    const href=idHref(p.id);
+    put(HOME+'/publications', slug(p.title.split(/\s+/).slice(0,4).join(' '))+'.md', [
+      line('head',p.title),line(''),
+      line('accent',p.venue),
+      line(p.st==='preprint'?'muted':'ok','Status: '+p.st+'  ·  '+p.y),
+      href?{parts:[['muted','DOI: '],['a',p.id,href]],txt:'DOI: '+p.id}:(p.id?line('muted',p.id):line('')),
+      line('muted',p.au),line(''),
+      srcRow('/publications/', SRC.pubs)]); });
+  let awardFiles=['2023-presidential-education-award.md','2026-nstc-research-award.md',
+    '2026-make-ntu.md','2026-tasa-space-talent.md','2023-ocean-governance.md'];
+  D.awards.forEach(function(w,i){
+    put(HOME+'/awards', awardFiles[i]||('award-'+(i+1)+'.md'), [
+      line('head',w[1]),line(''),line('accent',w[0])]); });
+  D.projects.forEach(function(p){
+    put(HOME+'/projects', slug(p[0])+'.md', [
+      line('head',p[0]),line(''),line('',p[1])]); });
+  /* FHS 頂層目錄:cd / 之後只看到 etc 和 home 會很出戲 */
+  ['/bin','/boot','/dev','/lib','/media','/mnt','/opt','/proc','/root','/run',
+   '/sbin','/srv','/sys','/tmp','/usr','/var'].forEach(function(d){ fsMkdirp(d); });
+  /* /usr/bin 要跟 which 的答案對得起來 —— 原生指令在真機上就是這裡的執行檔,
+     /etc/shells 也指名了 /bin/sh 與 /usr/bin/pwsh。
+     Ubuntu 的 usr-merge 讓 /bin 其實是指向 usr/bin 的 symlink;這裡用「同內容的實體
+     目錄」表示,內容是真的,只是沒把 symlink 本身模型化(要模型化就得動到 fsGet)。 */
+  const bins=Object.keys(CMDLETS).filter(function(k){ return CMDLETS[k].type==='Application'; })
+    .concat(['pwsh','sh','bash','dash','rbash']).sort();
+  ['/usr/bin','/bin'].forEach(function(d){
+    bins.forEach(function(k){ put(d,k,[line('muted','(binary file)')],'rwxr-xr-x'); }); });
+  /* 擁有權(真機對照 Ubuntu 24.04):/ 與底下的系統目錄都屬 root;
+     家目錄自己所有,權限是 adduser 的 HOME_MODE 預設 750,不是 755。 */
+  markOwn(ROOT,'root');
+  const rd=fsGet('/root'); if(rd) rd.mode='rwx------';       /* drwx------ root root */
+  const td=fsGet('/tmp');  if(td) td.mode='rwxrwxrwt';       /* sticky、人人可寫 */
+  const hn=fsGet(HOME); if(hn){ markOwn(hn,USERNAME); hn.mode='rwxr-x---'; }
+}
+/* mode 與 mtime 只在偏離預設時序列化。少了這段,chmod 過的種子檔在重整後會悄悄變回原權限,
+   而 saved() 又回報成功 —— 正是本專案修過一次的「靜默失效」類別。 */
+function fsSer(n){ let o;
+  /* ch 必須是 null 原型:否則檔名 __proto__ 會觸發 setter 改寫原型,
+     序列化成 JSON 時整個 key 消失 —— 重整後那個檔案靜默不見。 */
+  if(n.t==='d'){ o={t:'d',ch:Object.create(null)}; Object.keys(n.ch).forEach(function(k){ o.ch[k]=fsSer(n.ch[k]); }); }
+  else o=n.seed?{t:'f',s:1}:{t:'f',x:n.text||[]};
+  if(n.mode!==DEFMODE[n.t]) o.m=n.mode;
+  if(n.mt!==SEEDTIME) o.mt=n.mt;
+  return o; }
+function isSerNode(v){ if(!v||typeof v!=='object') return false;
+  if(v.t==='f') return v.s===1 || Array.isArray(v.x);
+  if(v.t==='d') return !!v.ch && typeof v.ch==='object' && !Array.isArray(v.ch);
+  return false; }
+/* localStorage 是使用者可以直接編輯的,反序列化時中繼資料一律驗過才採用 */
+function applyMeta(n,o){
+  if(typeof o.m==='string' && /^[rwxsStT-]{9}$/.test(o.m)) n.mode=o.m;
+  if(typeof o.mt==='number' && isFinite(o.mt) && o.mt>0) n.mt=o.mt;
+  return n; }
+function fsDeser(o,path){ if(o.t==='d'){ const n=dnode();
+    Object.keys(o.ch).forEach(function(k){ if(isSerNode(o.ch[k])) n.ch[k]=fsDeser(o.ch[k],path+'/'+k); });
+    return applyMeta(n,o); }
+  if(o.s) return applyMeta(fnode(SEEDROWS[path]||[line('muted','(seed content unavailable)')],true),o);
+  return applyMeta(fnode(null,false,o.x||[]),o); }
+/* 儲存失敗(配額用盡、隱私模式)不能悄悄吞掉 —— 使用者會以為存好了,重整後才發現不見。 */
+function fsSave(){
+  try{ localStorage.setItem(FSKEY,JSON.stringify(fsSer(ROOT))); return null; }
+  catch(e){ return line('err','Warning: changes are in memory only; browser storage is unavailable ('+((e&&e.name)||'StorageError')+'). They will be lost on reload.'); }
+}
+function saved(rows){ const w=fsSave(); if(!w) return rows; return (rows||[]).concat([w]); }
+/* 真正的 overlay:種子樹每次開機都重建成「這一版」的內容,localStorage 只回填
+   使用者自己建立或改過的節點。否則作品集更新後,曾經造訪過的人會永遠停在舊樹,
+   看不到新增的檔案(例如 in-review.md)。
+   取捨:使用者刪掉種子檔後重新載入會復原 —— 作品集內容以站上這一版為準,
+   使用者自己建立的檔案則完整保留。要全部歸零請用 Reset-FileSystem。 */
+function graftUser(stored,target){
+  if(!stored||stored.t!=='d'||!target||target.t!=='d') return;
+  Object.keys(stored.ch).forEach(function(k){
+    const s=stored.ch[k], ek=keyIn(target,k);
+    if(s.t==='f'){
+      if(!s.seed){ target.ch[ek||k]=s; return; }               // 使用者建立或改寫過的檔案
+      const tf=ek?target.ch[ek]:null;                          // 種子檔只回填 chmod/touch 過的中繼資料
+      if(tf&&tf.t==='f'){ tf.mode=s.mode; tf.mt=s.mt; }
+      return; }
+    if(!ek) target.ch[k]=dnode();                              // 使用者建立的資料夾
+    const td=target.ch[ek||k];
+    if(!td||td.t!=='d') return;                                // 種子把同名項目改成檔案了,以種子為準
+    td.mode=s.mode; td.mt=s.mt;
+    graftUser(s, td);
+  });
+}
+function fsLoad(){ try{ const s=localStorage.getItem(FSKEY); if(!s) return false;
+  const o=JSON.parse(s); if(!o||o.t!=='d') return false;
+  graftUser(fsDeser(o,''), ROOT); return true; }catch(e){ return false; } }
+function fsReset(){ buildSeed(); try{ localStorage.removeItem(FSKEY); }catch(e){} CWD=HOME; updatePrompt(); }
+function fsInit(){ buildSeed(); fsLoad(); if(!fsGet(HOME)) buildSeed(); }
+
+/* ---------- cmdlet ---------- */
+const CMDLETS={
+  'whoami':{type:'Application',params:[],help:'print effective user name, with a profile summary',run:function(){
+    return [line('',USERNAME),line('')]
+      .concat(D.profile.map(function(p){return line(p[0],p[1]);}))
+      .concat([line(''), srcRow('people.cs.nycu.edu.tw/~hctsai1006', SRC.home),
+               srcRow('github.com/thc1006', SRC.github, '        ')]);}},
+  'get-contribution':{params:['-Foundation'],help:'List merged upstream contributions',run:function(a){
+    let o=[line('accent',D.stats.merged+' merged pull requests · '+D.stats.projects+' projects · '+D.stats.foundations+' foundations'),line('','')], rows=D.contribTop;
+    if(String(argOf(a,'Foundation')||'').toLowerCase()==='cncf'){
+      o=[line('accent','CNCF — '+D.cncf[1]+' merged · '+D.cncf[2]+' repos'),line('','')];
+      /* 依 contribTop 第三欄的旗標過濾,不再用關鍵字猜 repo 名 */
+      rows=D.contribTop.filter(function(r){return r[2]===1;});
+    }
+    return o.concat(table(['Repository','Merged'],rows.map(function(r){return [r[0],r[1]];})),
+      [line(''), srcRow('/open-source/ 逐筆清單與計數規則', SRC.oss)]);
+  }},
+  'get-publication':{params:['-Full'],help:'List publications (-Full shows every entry)',run:function(a,raw){
+    const n=function(s){ return D.pubsFull.filter(function(p){return p.st===s;}).length; };
+    if(argOf(a,'Full')){
+      const o=[line('accent',D.pubsFull.length+' publications  ·  '+n('Accepted')+' IEEE accepted  ·  '
+        +n('preprint')+' preprints  ·  '+n('published')+' earlier'),
+        line('muted','ORCID 0000-0001-7421-8027')];
+      let year='';
+      D.pubsFull.forEach(function(p){
+        if(p.y!==year){ year=p.y; o.push(line(''),line('head',year)); }
+        o.push(line(p.st==='preprint'?'':'ok','  '+p.title));
+        const href=idHref(p.id), head='    '+p.venue+(p.id?'  ·  ':'');
+        if(href) o.push({parts:[['muted',head],['a',p.id,href],['muted','  ·  '+p.st]],
+                         txt:head+p.id+'  ·  '+p.st});
+        else o.push(line('muted','    '+p.venue+(p.id?'  ·  '+p.id:'')+'  ·  '+p.st));
+        o.push(line('muted','    '+p.au));
+      });
+      return o.concat([line(''), srcRow('/publications/', SRC.pubs),
+        srcRow('ORCID 0000-0001-7421-8027', SRC.orcid, '        ')]);
+    }
+    return [line('accent',D.pubTotal+' publications ('+n('Accepted')+' IEEE accepted + preprints)'),line('','')]
+      .concat(table(['Venue','Title','Status'],D.publications))
+      .concat([line('muted','  … '+(D.pubTotal-D.publications.length)+' more · run -Full for the complete list'),
+        line(''), srcRow('/publications/', SRC.pubs)]);}},
+  'get-award':{params:['-Year'],help:'List awards and honors',run:function(a,raw){
+    let y=argOf(a,'Year')||firstArg(raw);
+    let rows=D.awards; if(y) rows=rows.filter(function(r){return r[0]===String(y);});
+    if(!rows.length) return [line('muted','No entries for that year.')];
+    return table(['Year','Award'],rows).concat([line(''), srcRow('/honors/ 完整 80+ 筆時間軸', SRC.honors)]);}},
+  'get-advisory':{params:[],help:'List published security advisories that credit me',run:function(){
+    let o=table(['Advisory','Project','Severity','Role','Published'],
+      D.advisories.map(function(v){return [v.id,v.repo,v.sev,v.role,v.pub];}));
+    D.advisories.forEach(function(v){
+      o.push(line(''));
+      o.push({parts:[['accent',v.id+'  '],['a',v.repo,v.href]], txt:v.id+'  '+v.repo});
+      o.push(line('','  '+v.what));
+      o.push(line('muted','  '+v.fdn+'  ·  fixed in '+v.fix));
+      if(v.bul) o.push({parts:[['muted','  bulletin: '],['a',v.bul.replace('https://',''),v.bul]], txt:'  bulletin: '+v.bul});
+    });
+    o.push(line(''));
+    o.push(line('muted','兩則都在 advisory 的 credits 欄具名、狀態 accepted。'));
+    o.push(line('muted','兩則目前都還沒有 CVE,也都還沒進 GitHub 全域 advisory 資料庫與 OSV。'));
+    return o.concat([line(''), srcRow('/open-source/#advisories', SRC.oss+'#advisories')]);}},
+  'get-project':{params:[],help:'List representative projects',run:function(){
+    return table(['Project','Focus'],D.projects).concat([line(''), srcRow('/experience/', SRC.exp)]);}},
+  'get-timeline':{params:[],help:'Show the year-by-year timeline',run:function(){
+    return table(['Year','Highlights'],D.timeline).concat([line(''), srcRow('/experience/', SRC.exp)]);}},
+  'get-source':{params:[],help:'List every authoritative source, with links',run:function(){
+    const rows=[['個人網站','people.cs.nycu.edu.tw/~hctsai1006',SRC.home],
+      ['著作','/publications/',SRC.pubs],['開源','/open-source/',SRC.oss],
+      ['榮譽','/honors/',SRC.honors],['經歷','/experience/',SRC.exp],
+      ['醫學','/medical/',SRC.medical],['教學','/teaching/',SRC.teaching],
+      ['部落格','/blog/',SRC.blog],['聯絡','/contact/',SRC.contact],
+      ['CV','cv.pdf',SRC.cv],['ORCID','0000-0001-7421-8027',SRC.orcid],
+      ['GitHub','@thc1006',SRC.github],['舊版終端機','classic.html','classic.html']];
+    const w=Math.max.apply(null,rows.map(function(r){return dw(r[0]);}));
+    const o=[line('banner','這個終端機是次要展示面。所有內容以個人網站為準,'),
+      line('banner','若兩邊有出入,請以下列來源為準:'),line('')];
+    rows.forEach(function(r){
+      o.push({parts:[['head','  '+padw(r[0],w)+'  '],['a',r[1],r[2]]], txt:'  '+r[0]+'  '+r[1]}); });
+    return o;}},
+  'get-history':{params:[],help:'Get the commands entered during the current session',run:function(){return hist.length?
+    hist.map(function(h,i){return line('',padw(String(i+1),4)+' '+h);}):[line('muted','(no history)')];}},
+  'get-command':{params:['-Name'],help:'Get all commands (gcm)',run:function(a,raw){
+    let f=String(argOf(a,'Name')||firstArg(raw)||'').toLowerCase().replace(/\*/g,''), rows=[];
+    Object.keys(CMDLETS).forEach(function(n){ let c=CMDLETS[n]; if(c.hidden) return;
+      let nm=c.disp||n; if(f && nm.toLowerCase().indexOf(f)<0) return;
+      rows.push([c.type||'Cmdlet',nm]); });
+    Object.keys(ALIAS).forEach(function(al){ let t=CMDLETS[ALIAS[al]]; if(!t||t.hidden) return;
+      if(f && al.indexOf(f)<0) return; rows.push(['Alias',al+' -> '+(t.disp||ALIAS[al])]); });
+    rows.sort(function(x,y){ return x[0]===y[0] ? (x[1].toLowerCase()<y[1].toLowerCase()?-1:1) : (x[0]<y[0]?-1:1); });
+    if(!rows.length) return [line('err','Get-Command: The term \''+f+'\' is not recognized as a name of a cmdlet, '
+      +'function, script file, or executable program.')];
+    return table(['CommandType','Name'],rows);}},
+  'get-help':{params:['-Name'],help:'Display information about commands (man)',run:function(a,raw){
+    let t=String(argOf(a,'Name')||firstArg(raw)||'').toLowerCase();
+    let n=alias(t), c=CMDLETS[n];
+    if(!c) return [line('muted','Usage: Get-Help <command>  ·  run Get-Command for the full list')];
+    let nm=c.disp||n;
+    return [line('head','NAME'),line('','    '+nm),line('head','SYNOPSIS'),line('','    '+c.help),
+      line('head','SYNTAX'),line('','    '+nm+(c.params.length?' '+c.params.map(function(p){return '['+p+' <String>]';}).join(' '):''))];}},
+  'set-theme':{params:['-Name'],help:'Switch the color scheme: campbell|pi|blue',run:function(a,raw){
+    let t=String(argOf(a,'Name')||firstArg(raw)||'').toLowerCase();
+    if(setTheme(t)) return [line('ok','Theme set to '+t)];
+    return [line('muted','Available themes: '+THEMES.join(' · ')+'  (e.g. Set-Theme pi)')];}},
+  'clear-host':{params:[],help:'Clear the display in the host program (cls)',run:function(){ clearOut(); return null; }},
+  /* PowerShell 7 在 Unix 上的 Get-ChildItem 欄位是 UnixMode/User/Group/LastWriteTime/Size/Name */
+  'get-childitem':{params:['-Path'],paths:true,help:'Get the items in a directory (dir/gci)',run:function(a,raw){
+    const t=argOf(a,'Path')||firstArg(raw), p=t?resolvePath(t):CWD, n=fsGet(p);
+    if(!n) return [line('err','Get-ChildItem: Cannot find path \''+p+'\' because it does not exist.')];
+    const row=function(name,node){ return [modeStr(node),ownerOf(node),ownerOf(node),psTime(node.mt),String(fsSize(node)),name]; };
+    if(n.t==='f') return table(['UnixMode','User','Group','LastWriteTime','Size','Name'],[row(baseOf(p),n)]);
+    const ks=Object.keys(n.ch).sort(), rows=[];
+    ks.filter(function(k){return n.ch[k].t==='d';}).forEach(function(k){ rows.push(row(k,n.ch[k])); });
+    ks.filter(function(k){return n.ch[k].t==='f';}).forEach(function(k){ rows.push(row(k,n.ch[k])); });
+    if(!rows.length) return [line('muted','(empty directory)')];
+    const head=[line('muted','    Directory: '+fsCanon(p)),line('')];
+    /* 窄螢幕收成三欄:六欄會撐爆手機,而 table() 的清單退化在檔案列表上完全不可讀 */
+    if(availCols()<100) return head.concat(table(['UnixMode','Size','Name'],
+      rows.map(function(r){return [r[0],r[4],r[5]];})));
+    return head.concat(table(['UnixMode','User','Group','LastWriteTime','Size','Name'],rows));}},
+  'get-location':{params:[],help:'Get the current working location (pwd)',run:function(){
+    return [line('head','Path'),line('rule',new Array(dw(CWD)+1).join('-')),line('',CWD)];}},
+  'set-location':{params:['-Path'],paths:true,help:'Set the current working location (cd)',run:function(a,raw){
+    if(String(raw[0]).toLowerCase()==='sl' && raw.length===1) return EGGS.sl();
+    let t=argOf(a,'Path')||firstArg(raw);
+    if(!t){ CWD=HOME; updatePrompt(); return null; }
+    let p=resolvePath(t), n=fsGet(p);
+    if(!n) return [line('err','Set-Location: Cannot find path \''+p+'\' because it does not exist.')];
+    if(n.t!=='d') return [line('err','Set-Location: \''+p+'\' is not a directory.')];
+    const blk=firstUnsearchable(p);   /* 路徑上任一層沒有 search 權限就進不去(例如 root 的 /root 700) */
+    if(blk) return [line('err','Set-Location: Access to the path \''+blk+'\' is denied.')];
+    CWD=fsCanon(p); updatePrompt(); return null;}},
+  'get-content':{params:['-Path'],paths:true,help:'Get the contents of a file (cat/type)',run:function(a,raw){
+    let t=argOf(a,'Path')||firstArg(raw);
+    if(!t) return [line('err','Get-Content: Cannot process command because of one or more missing mandatory parameters: Path.')];
+    let p=resolvePath(t), n=fsGet(p);
+    if(!n) return [line('err','Get-Content: Cannot find path \''+p+'\' because it does not exist.')];
+    if(n.t==='d') return [line('err','Get-Content: Cannot read \''+p+'\' because it is a directory.')];
+    let r=fsText(n); return r.length?r:[line('muted','(empty file)')];}},
+  'set-content':{params:['-Path','-Value'],paths:true,help:'Write new content to a file (sc)',run:function(a,raw){
+    let t=argOf(a,'Path')||firstArg(raw);
+    if(!t) return [line('err','Set-Content: Cannot process command because of one or more missing mandatory parameters: Path.')];
+    let v=argOf(a,'Value');
+    if(v===undefined||v===true){ const i=rawIndexOf(raw,t);
+      v=(i<0?[]:raw.slice(i+1)).filter(function(x){return !FLAGRE.test(x);}).map(stripQ).join(' '); }
+    v=stripQ(v);
+    const p=resolvePath(t), par=fsParent(p);
+    if(!par||par.t!=='d') return [line('err','Set-Content: Could not find part of the path \''+p+'\'.')];
+    const ex=keyIn(par,baseOf(p));
+    if(ex && par.ch[ex].t==='d') return [line('err','Set-Content: \''+p+'\' is a directory.')];
+    /* 覆寫看檔案本身的 w 權限,新建看父目錄的 w —— root 檔案、或自己 chmod 唯讀過的檔都擋得住 */
+    if(ex ? !canWriteNode(par.ch[ex]) : !writable(par))
+      return [line('err','Set-Content: Access to the path \''+p+'\' is denied.')];
+    setChild(par, ex||baseOf(p), stamp(fnode(null,false,v?[v]:[])));
+    return saved(null);}},
+  'add-content':{params:['-Path','-Value'],paths:true,help:'Append content to a file (ac)',run:function(a,raw){
+    let t=argOf(a,'Path')||firstArg(raw);
+    if(!t) return [line('err','Add-Content: Cannot process command because of one or more missing mandatory parameters: Path.')];
+    let v=argOf(a,'Value');
+    if(v===undefined||v===true){ const i=rawIndexOf(raw,t);
+      v=(i<0?[]:raw.slice(i+1)).filter(function(x){return !FLAGRE.test(x);}).map(stripQ).join(' '); }
+    v=stripQ(v);
+    const p=resolvePath(t), n=fsGet(p);
+    if(!n){ const par=fsParent(p); if(!par||par.t!=='d') return [line('err','Add-Content: Could not find part of the path \''+p+'\'.')];
+      if(!writable(par)) return [line('err','Add-Content: Access to the path \''+p+'\' is denied.')];
+      setChild(par, baseOf(p), stamp(fnode(null,false,[v]))); return saved(null); }
+    if(n.t==='d') return [line('err','Add-Content: \''+p+'\' is a directory.')];
+    if(!canWriteNode(n)) return [line('err','Add-Content: Access to the path \''+p+'\' is denied.')];
+    if(n.seed){ n.seed=false; n.text=(n.rows||[]).map(function(r){return r.txt||'';}); n.rows=null; }
+    n.text=(n.text||[]).concat([v]); stamp(n); return saved(null);}},
+  'test-path':{params:['-Path'],paths:true,help:'Determine whether a path exists',run:function(a,raw){
+    const t=argOf(a,'Path')||firstArg(raw);
+    if(!t) return [line('err','Test-Path: Cannot process command because of one or more missing mandatory parameters: Path.')];
+    const hit=!!fsGet(resolvePath(t));
+    return [line(hit?'ok':'muted', hit?'True':'False')];}},
+  'new-item':{params:['-Path','-ItemType','-Force'],paths:true,help:'Create a new file or directory (mkdir/ni)',run:function(a,raw){
+    let t=argOf(a,'Path')||firstArg(raw);
+    let head=String(raw[0]).toLowerCase();
+    if(!t) return [line('err','New-Item: Cannot process command because of one or more missing mandatory parameters: Path.')];
+    let it=String(argOf(a,'ItemType')||'').toLowerCase();
+    let wantDir = it.indexOf('dir')===0 || head==='mkdir' || head==='md';
+    let p=resolvePath(t);
+    if(fsGet(p)) return [line('err','New-Item: An item with the specified name \''+p+'\' already exists.')];
+    let segs=segsOf(p);
+    if(!segs.length) return [line('err','New-Item: Cannot bind argument to parameter \'Path\' because it is an empty string.')];
+    const parentPath='/'+segs.slice(0,-1).join('/'); let par=fsGet(parentPath);
+    if(!par){ if(!wantDir && !argOf(a,'Force')) return [line('err','New-Item: Could not find part of the path \''+p+'\'.')];
+      /* mkdir -p 要建中間層:先在「最深的現存祖先」驗權限,否則會在 root 的 /etc 底下憑空長出目錄鏈 */
+      const anc=deepestExisting(parentPath);
+      if(!writable(anc)) return [line('err','New-Item: Access to the path \''+parentPath+'\' is denied.')];
+      par=fsMkdirp(parentPath); }
+    if(!par||par.t!=='d') return [line('err','New-Item: Could not find part of the path \''+p+'\'.')];
+    if(!writable(par)) return [line('err','New-Item: Access to the path \''+p+'\' is denied.')];
+    let name=segs[segs.length-1];
+    const nn=stamp(wantDir?dnode():fnode(null,false,[]));
+    setChild(par,name,nn);
+    /* Unix 上的 New-Item 走的是 FileSystem provider 在 Unix 的格式,不是 Windows 的 d----/-a--- */
+    return saved([line('muted','    Directory: '+(fsCanon(parentPath)||'/')),line('')]
+      .concat(table(['UnixMode','User','Group','LastWriteTime','Size','Name'],
+        [[modeStr(nn),ownerOf(nn),ownerOf(nn),psTime(nn.mt),String(fsSize(nn)),name]])));}},
+  'remove-item':{params:['-Path','-Recurse','-Force'],paths:true,help:'Delete a file or directory (rm/del)',run:function(a,raw){
+    let t=argOf(a,'Path')||firstArg(raw);
+    if(!t) return [line('err','Remove-Item: Cannot process command because of one or more missing mandatory parameters: Path.')];
+    let p=resolvePath(t), n=fsGet(p);
+    if(!n) return [line('err','Remove-Item: Cannot find path \''+p+'\' because it does not exist.')];
+    /* 刪除是改父目錄,所以看的是父目錄的擁有權 —— 連 ~ 本身都刪不掉,因為 /home 屬 root */
+    if(!writable(fsParent(p))) return [line('err','Remove-Item: Access to the path \''+p+'\' is denied.')];
+    if(n.t==='d' && Object.keys(n.ch).length && !(argOf(a,'Recurse')||argOf(a,'Force')))
+      return [line('err','Remove-Item: The directory \''+baseOf(p)+'\' is not empty.'),
+              line('muted','Use -Recurse to remove the directory and everything in it.')];
+    let par=fsParent(p), k=keyIn(par,baseOf(p));
+    if(k) rmChild(par,k);
+    if(samePath(CWD,p) || isDescendant(CWD,p)){ CWD=HOME; updatePrompt(); }   // 刪到自己所在的目錄就退回 HOME
+    return saved(null);}},
+  /* 目的地是既有資料夾時,真正的落點是「資料夾 + 來源名稱」;所有檢查都要針對這個落點。 */
+  'copy-item':{params:['-Path','-Destination','-Recurse'],paths:true,help:'Copy an item to another location (cp)',run:function(a,raw){
+    const s=argOf(a,'Path')||raw[1], d=argOf(a,'Destination')||raw[2];
+    if(!s||!d) return [line('err','Copy-Item: Cannot process command because of one or more missing mandatory parameters: Path Destination.')];
+    const sp=resolvePath(String(s).replace(/^["']|["']$/g,'')), sn=fsGet(sp);
+    if(!sn) return [line('err','Copy-Item: Cannot find path \''+sp+'\' because it does not exist.')];
+    const dp=resolvePath(String(d).replace(/^["']|["']$/g,'')), dn=fsGet(dp);
+    const finalPath=(dn && dn.t==='d' && !samePath(dp,sp)) ? joinPath(fsCanon(dp)||dp, baseOf(sp)) : dp;
+    if(samePath(sp,finalPath)) return [line('err','Copy-Item: The source and destination path must be different.')];
+    if(sn.t==='d' && isDescendant(finalPath,sp))
+      return [line('err','Copy-Item: Cannot copy a directory into itself or one of its descendants.')];
+    const par=fsGet(dirOf(finalPath));
+    if(!par||par.t!=='d') return [line('err','Copy-Item: Could not find part of the path \''+finalPath+'\'.')];
+    if(!writable(par)) return [line('err','Copy-Item: Access to the path \''+finalPath+'\' is denied.')];
+    /* 目錄沒有 -Recurse 只複製空目錄(與真實 PowerShell 一致);複製品整棵改歸執行者所有,
+       不能保留原 root 擁有權 —— 否則把 /etc 複製到家目錄後,子節點還顯示 root。 */
+    const cc=(sn.t==='d'&&!argOf(a,'Recurse'))?stamp(dnode(sn.mode)):stamp(fsClone(sn));
+    markOwn(cc,USERNAME);
+    setChild(par, baseOf(finalPath), cc);             // Copy-Item 覆寫既有目的地(與真實 PowerShell 一致)
+    return saved(null);}},
+  'move-item':{params:['-Path','-Destination','-Force'],paths:true,help:'Move an item to another location (mv)',run:function(a,raw){
+    const s=argOf(a,'Path')||raw[1], d=argOf(a,'Destination')||raw[2];
+    if(!s||!d) return [line('err','Move-Item: Cannot process command because of one or more missing mandatory parameters: Path Destination.')];
+    const sp=resolvePath(String(s).replace(/^["']|["']$/g,'')), sn=fsGet(sp);
+    if(!sn) return [line('err','Move-Item: Cannot find path \''+sp+'\' because it does not exist.')];
+    if(!writable(fsParent(sp))) return [line('err','Move-Item: Access to the path \''+sp+'\' is denied.')];
+    const dp=resolvePath(String(d).replace(/^["']|["']$/g,'')), dn=fsGet(dp);
+    const finalPath=(dn && dn.t==='d' && !samePath(dp,sp)) ? joinPath(fsCanon(dp)||dp, baseOf(sp)) : dp;
+    if(samePath(sp,finalPath)) return null;                    // 移到自己:PowerShell 視為成功且不動作
+    if(sn.t==='d' && isDescendant(finalPath,sp))               // 移進自己的子孫會產生環,整棵子樹會消失
+      return [line('err','Move-Item: Cannot move a directory into itself or one of its descendants.')];
+    const par=fsGet(dirOf(finalPath));
+    if(!par||par.t!=='d') return [line('err','Move-Item: Could not find part of the path \''+finalPath+'\'.')];
+    if(!writable(par)) return [line('err','Move-Item: Access to the path \''+finalPath+'\' is denied.')];
+    if(fsGet(finalPath) && !argOf(a,'Force'))
+      return [line('err','Move-Item: Cannot create a file when that file already exists.'),
+              line('muted','Use -Force to overwrite.')];
+    const sPar=fsParent(sp), sk=keyIn(sPar,baseOf(sp));
+    if(sk) rmChild(sPar,sk);                                   // 先摘除來源,再放到目的地(避免大小寫改名時自我抵銷)
+    stamp(sn); setChild(par, baseOf(finalPath), sn);
+    if(samePath(CWD,sp) || isDescendant(CWD,sp)){ CWD=HOME; updatePrompt(); }
+    return saved(null);}},
+  'rename-item':{params:['-Path','-NewName'],paths:true,help:'Rename an item (ren)',run:function(a,raw){
+    const s=argOf(a,'Path')||raw[1], d=argOf(a,'NewName')||raw[2];
+    if(!s||!d) return [line('err','Rename-Item: Cannot process command because of one or more missing mandatory parameters: Path NewName.')];
+    const nn=String(d).replace(/^["']|["']$/g,'');
+    if(/[\\/:]/.test(nn)) return [line('err','Rename-Item: Cannot rename the specified target, because it represents a path or device name.')];
+    const sp=resolvePath(String(s).replace(/^["']|["']$/g,''));   // 新名稱相對「來源所在目錄」,不是目前目錄
+    return CMDLETS['move-item'].run({Path:sp,Destination:joinPath(dirOf(sp),nn)},['move-item']);}},
+  'select-string':{params:['-Pattern'],help:'Find text in files (grep)',run:function(a,raw){
+    const pat=String(argOf(a,'Pattern')||firstArg(raw)||'');
+    if(!pat) return [line('err','Select-String: Cannot process command because of one or more missing mandatory parameters: Pattern.')];
+    if(pat.length>200) return [line('err','Select-String: Pattern exceeds the 200 character limit.')];
+    let re; try{ re=new RegExp(pat,'i'); }catch(e){ return [line('err','Select-String: Invalid regular expression pattern.')]; }
+    const hits=[];
+    (function walk(n,path){ if(n.t==='d'){ Object.keys(n.ch).forEach(function(k){ walk(n.ch[k],path+'/'+k); }); return; }
+      fsText(n).forEach(function(r){ let t=r&&r.txt?r.txt:''; if(t && re.test(t))
+        hits.push([baseOf(path), t.length>40?t.slice(0,40)+'...':t]); }); })(ROOT,'');
+    if(!hits.length) return [line('muted','(no matches)')];
+    return table(['File','Match'],hits.slice(0,14));},
+    pipe:function(rows,a,raw){ let pat=String(argOf(a,'Pattern')||firstArg(raw)||'');
+      let re; try{ re=new RegExp(pat,'i'); }catch(e){ return [line('err','Select-String: Invalid regular expression pattern.')]; }
+      let o=rows.filter(function(r){ return r && r.txt && re.test(r.txt); });
+      return o.length?o:[line('muted','(no matches)')];}},
+  'tree':{params:[],help:'list contents of directories in a tree-like format',run:function(){
+    let o=[line('',CWD)];
+    (function walk(n,prefix){
+      let ks=Object.keys(n.ch).sort(function(x,y){
+        let dx=n.ch[x].t==='d'?0:1, dy=n.ch[y].t==='d'?0:1; return dx!==dy?dx-dy:(x.toLowerCase()<y.toLowerCase()?-1:1); });
+      ks.forEach(function(k,i){
+        let last=(i===ks.length-1), c=n.ch[k];
+        o.push(line(c.t==='d'?'':'muted', prefix+(last?'└── ':'├── ')+k));
+        if(c.t==='d' && prefix.length<8) walk(c, prefix+(last?'    ':'│   '));
+      });
+    })(fsGet(CWD)||dnode(),'');
+    return o;}},
+  'reset-filesystem':{params:[],help:'Restore the file system to its initial state',run:function(){
+    fsReset(); return [line('ok','File system restored to its initial state.')];}},
+  'get-process':{params:[],help:'Get the processes running on the local computer',run:function(){
+    return table(['Id','CPU(s)','RSS(M)','ProcessName'],
+      [['1006','12.83','182','pwsh'],['1142','48.21','1204','code-server'],['2612','96.44','2048','chromium'],
+       ['8890','0.77','96','kubectl'],['3120','2.15','154','containerd'],['4471','0.31','42','sshd']]);}},
+  'ps':{type:'Application',params:[],help:'report a snapshot of the current processes',run:function(a,raw){
+    const wide=/aux|-e|-f/.test(raw.slice(1).join(' '));
+    if(!wide) return [line('head','    PID TTY          TIME CMD'),
+      line('','   1006 pts/0    00:00:12 pwsh'),
+      line('','   9021 pts/0    00:00:00 ps')];
+    return [line('head','USER         PID %CPU %MEM    RSS TTY      STAT START   TIME COMMAND'),
+      line('',USERNAME+'      1006  0.4  1.1 186320 pts/0    Ss   09:12   0:12 pwsh'),
+      line('',USERNAME+'      1142  2.1  7.6 1232400 ?       Sl   09:12   0:48 code-server'),
+      line('',USERNAME+'      2612  6.8 12.8 2097664 ?       Sl   09:13   1:36 chromium'),
+      line('','root         3120  0.2  0.9 157696 ?        Ssl  09:10   0:02 containerd'),
+      line('','root         4471  0.0  0.2  43008 ?        Ss   09:10   0:00 sshd')];}},
+  'get-date':{params:[],help:'Get the current date and time',run:function(){return [line('',new Date().toString())];}},
+  'write-output':{params:[],help:'Send objects to the pipeline (echo)',run:function(a,raw){return [line('',raw.slice(1).join(' ').replace(/^["']|["']$/g,''))];}},
+  'measure-object':{params:[],help:'Count objects in the pipeline',run:function(){return [line('muted','Usage: <command> | Measure-Object')];},
+    pipe:function(rows){ let n=rows.filter(function(r){return r && r.txt!==undefined && String(r.txt).replace(/\s/g,'').length;}).length;
+      return table(['Property','Value'],[['Count',String(n)],['Lines',String(rows.length)]]);}},
+  'sort-object':{params:['-Descending'],help:'Sort objects by property value',run:function(){return [line('muted','Usage: <command> | Sort-Object')];},
+    pipe:function(rows,a){ const o=rows.slice().sort(function(x,y){   // 相等必須回 0,否則排序不穩定
+        return String((x&&x.txt)||'').localeCompare(String((y&&y.txt)||''),undefined,{sensitivity:'base',numeric:true}); });
+      if(argOf(a,'Descending')) o.reverse(); return o;}},
+  'select-object':{params:['-First','-Last'],help:'Select the first or last N objects',run:function(){return [line('muted','Usage: <command> | Select-Object -First 5')];},
+    pipe:function(rows,a){ let f=parseInt(argOf(a,'First'),10), l=parseInt(argOf(a,'Last'),10);
+      if(f>0) return rows.slice(0,f); if(l>0) return rows.slice(-l); return rows;}},
+  'where-object':{params:['-Match','-Like'],help:'Filter objects in the pipeline',run:function(){return [line('muted','Usage: <command> | Where-Object -Match kube')];},
+    pipe:function(rows,a,raw){ let p=String(argOf(a,'Match')||argOf(a,'Like')||firstArg(raw)||'');
+      if(!p) return rows; let re; try{ re=new RegExp(p.replace(/\*/g,'.*'),'i'); }catch(e){ return rows; }
+      let o=rows.filter(function(r){ return r && r.txt && re.test(r.txt); });
+      return o.length?o:[line('muted','(no matches)')];}},
+  'out-null':{params:[],help:'Discard pipeline output',run:function(){return null;},pipe:function(){return null;}},
+  'get-random':{params:['-Maximum'],help:'Get a random number',run:function(a,raw){
+    const rawMax=argOf(a,'Maximum')||firstArg(raw);
+    if(rawMax===''||rawMax==null) return [line('num',String(Math.floor(Math.random()*2147483647)))];
+    const m=parseInt(rawMax,10);   /* 無效上限不再靜默改成 100 —— 真 PowerShell 會報範圍錯誤 */
+    if(!(m>0)) return [line('err','Get-Random: The Maximum value ('+rawMax+') must be greater than the Minimum value (0).')];
+    return [line('num',String(Math.floor(Math.random()*m)))];}},
+  'test-connection':{params:['-TargetName'],asyncOut:true,help:'Send ICMP echo requests (ping)',run:function(a,raw){return pingRun(a,raw);}},
+  'ping':{type:'Application',params:[],asyncOut:true,help:'send ICMP ECHO_REQUEST to network hosts',run:function(a,raw){return pingRun(a,raw);}},
+  'traceroute':{type:'Application',params:[],asyncOut:true,help:'print the route packets trace to network host',run:function(a,raw){
+    const t=firstArg(raw)||'nycu.edu.tw';
+    const hops=[['1','_gateway (10.6.1.1)','1.204','1.118','1.083'],
+      ['2','140.113.1.254','3.912','3.845','4.201'],
+      ['3','tpe-core.twaren.net (211.79.48.1)','8.774','9.012','8.660'],
+      ['4',t+' (140.113.207.85)','12.331','11.907','12.114']];
+    const seq=[line('','traceroute to '+t+' (140.113.207.85), 30 hops max, 60 byte packets')];
+    hops.forEach(function(h){ seq.push(line('',lpad(h[0],2)+'  '+h[1]+'  '+h[2]+' ms  '+h[3]+' ms  '+h[4]+' ms')); });
+    asyncPrint(seq,240); return null;}},
+  /* ipconfig 是 Windows 的,Linux 上不存在 → 交給預設的 command not found;網路資訊走 ip addr */
+  'ifconfig':{type:'Application',params:[],help:'configure a network interface',run:function(){
+    if(netToolsInstalled){ ifconfigFail++;
+      return ifconfigFail>=2
+        ? [line('err','ifconfig: SIOCGIFCONF: Function not implemented')]
+        : [line('err','ifconfig: command failed')]; }
+    return [line('','Command \'ifconfig\' not found, but can be installed with:'),
+      line('cmd','  sudo apt install net-tools')];}},
+  'hostname':{type:'Application',params:[],help:'show the system\'s host name',run:function(){return [line('',HOSTN)];}},
+  '$psversiontable':{disp:'$PSVersionTable',type:'Variable',params:[],help:'PowerShell version information',run:function(){
+    return table(['Name','Value'],[['PSVersion','7.6.5'],['PSEdition','Core'],
+      ['OS','Linux 6.8.0-51-generic #52-Ubuntu SMP PREEMPT_DYNAMIC'],
+      ['Platform','Unix'],['GitCommitId','7.6.5']]);}},
+  'git':{type:'Application',params:[],help:'the stupid content tracker',run:function(a,raw){
+    let sub=String(raw[1]||'').toLowerCase();
+    if(sub==='status') return [line('','On branch main'),line('','Your branch is up to date with \'origin/main\'.'),line(''),
+      line('ok','nothing to commit, working tree clean')];
+    if(sub==='log') return D.timeline.slice().reverse().map(function(t,i){
+      return line('', (i===0?'* ':'* ')+t[0]+'  '+t[1]); });
+    if(sub==='remote') return [line('','origin  https://github.com/thc1006 (fetch)'),line('','origin  https://github.com/thc1006 (push)')];
+    return [line('muted','usage: git <status|log|remote>')];}},
+  'vim':{type:'Application',params:[],paths:true,help:'Vi IMproved, a programmer\'s text editor',
+    run:function(a,raw){ return edStart('vim',firstArg(raw)); }},
+  'vi':{type:'Application',params:[],paths:true,help:'Vi IMproved, a programmer\'s text editor',
+    run:function(a,raw){ return edStart('vim',firstArg(raw)); }},
+  'nano':{type:'Application',params:[],paths:true,help:'Nano\'s ANOther editor, inspired by Pico',
+    run:function(a,raw){ return edStart('nano',firstArg(raw)); }},
+  'touch':{type:'Application',params:[],paths:true,help:'change file timestamps',run:function(a,raw){
+    let t=firstArg(raw); if(!t) return [line('err','touch: missing file operand')];
+    const p=resolvePath(t), ex=fsGet(p);
+    if(ex){                                    /* 真 touch 對既有檔案就是更新 mtime,不是什麼都不做 */
+      if(ownerOf(ex)!==USERNAME) return [line('err',"touch: cannot touch '"+t+"': Permission denied")];
+      stamp(ex); return saved(null); }
+    const par=fsParent(p);
+    if(!par||par.t!=='d') return [line('err',"touch: cannot touch '"+t+"': No such file or directory")];
+    if(!writable(par)) return [line('err',"touch: cannot touch '"+t+"': Permission denied")];
+    setChild(par, baseOf(p), stamp(fnode(null,false,[]))); return saved(null);}},
+  /* ===== 原生 Unix 指令 =====
+     PowerShell 在 Linux/macOS 上「刻意移除」ls/cp/mv/rm/cat/man/mount/ps 這幾個別名,
+     好讓原生執行檔直接跑。所以這些走 coreutils 的旗標與錯誤訊息,不是 cmdlet。 */
+  'ls':{type:'Application',params:[],paths:true,help:'list directory contents',run:function(a,raw){
+    let long=false,all=false,almostAll=false,human=false,one=false,target='';
+    for(let i=1;i<raw.length;i++){
+      const t=stripQ(raw[i]);
+      if(/^--/.test(t)){ if(t==='--all')all=true; else if(t==='--almost-all'){all=true;almostAll=true;}
+        else if(t==='--human-readable')human=true; continue; }
+      if(t.charAt(0)==='-'&&t.length>1){
+        for(let j=1;j<t.length;j++){ const c=t.charAt(j);
+          if(c==='l')long=true; else if(c==='a')all=true; else if(c==='A'){all=true;almostAll=true;}
+          else if(c==='h')human=true; else if(c==='1')one=true; }
+        continue; }
+      target=t; }
+    const p=target?resolvePath(target):CWD, n=fsGet(p);
+    if(!n) return [line('err',"ls: cannot access '"+(target||p)+"': No such file or directory")];
+    const humanSize=function(node){ const s=fsSize(node);
+      if(!human) return String(s);
+      if(s>=1048576) return (s/1048576).toFixed(1)+'M';
+      if(s>=1024) return (s/1024).toFixed(1)+'K';
+      return String(s); };
+    if(n.t==='f'){                       /* ls -l <file> 要給該檔的長格式,不是只印檔名 */
+      if(!long) return [line('',baseOf(p))];
+      return [line('', modeStr(n)+' 1 '+ownerOf(n)+' '+ownerOf(n)+' '
+        +humanSize(n)+' '+lsTime(n.mt)+' '+baseOf(p))]; }
+    let names=Object.keys(n.ch).sort();
+    if(!all) names=names.filter(function(k){return k.charAt(0)!=='.';});
+    else if(!almostAll) names=['.','..'].concat(names);   /* -A 保留隱藏檔,但不列出 . 與 .. */
+    if(!names.length) return [];
+    const nodeOf=function(name){ return name==='.'?n:(name==='..'?(fsParent(p)||n):n.ch[name]); };
+    const nlink=function(node){ return node.t!=='d'?1:
+      2+Object.keys(node.ch).filter(function(k){return node.ch[k].t==='d';}).length; };
+    if(!long) return one?names.map(function(x){return line('',x);}):[line('',names.join('  '))];
+    const rows=names.map(function(name){ const node=nodeOf(name);
+      return [modeStr(node),String(nlink(node)),ownerOf(node),ownerOf(node),humanSize(node),lsTime(node.mt),name]; });
+    const wN=Math.max.apply(null,rows.map(function(r){return r[1].length;}));
+    const wU=Math.max.apply(null,rows.map(function(r){return dw(r[2]);}));
+    const wG=Math.max.apply(null,rows.map(function(r){return dw(r[3]);}));
+    const wS=Math.max.apply(null,rows.map(function(r){return r[4].length;}));
+    const blocks=names.reduce(function(acc,name){ return acc+Math.ceil(fsSize(nodeOf(name))/1024); },0);
+    return [line('','total '+blocks)].concat(rows.map(function(r){
+      return line('', r[0]+' '+lpad(r[1],wN)+' '+padw(r[2],wU)+' '+padw(r[3],wG)+' '
+        +lpad(r[4],wS)+' '+r[5]+' '+r[6]); }));}},
+  'cat':{type:'Application',params:[],paths:true,help:'concatenate files and print on the standard output',run:function(a,raw){
+    const files=raw.slice(1).filter(function(x){return !/^-/.test(x);}).map(stripQ);
+    if(!files.length) return [line('muted','Usage: cat [FILE]...')];
+    let o=[];   /* cat 會串接所有指定的檔案;讀不到的檔印錯誤後繼續下一個 */
+    for(let i=0;i<files.length;i++){ const t=files[i], p=resolvePath(t), n=fsGet(p);
+      if(!n){ o.push(line('err','cat: '+t+': No such file or directory')); continue; }
+      if(n.t==='d'){ o.push(line('err','cat: '+t+': Is a directory')); continue; }
+      o=o.concat(fsText(n)); }
+    return o;}},
+  /* native coreutils mkdir:遵循 GNU 語意(無 -p 父不存在就報錯、多目標、GNU 訊息)。
+     PowerShell 的 md 仍走 New-Item(自動建中間層),兩套並存與 ls/cat/rm 一致。 */
+  'mkdir':{type:'Application',params:[],paths:true,help:'make directories',run:function(a,raw){
+    let parents=false, verbose=false; const targets=[];
+    for(let i=1;i<raw.length;i++){ const t=stripQ(raw[i]);
+      if(t==='--parents'){ parents=true; continue; }
+      if(t==='--verbose'){ verbose=true; continue; }
+      if(/^--/.test(t)) continue;                       /* --mode 等未實作的長選項,忽略 */
+      if(t.charAt(0)==='-'&&t.length>1){ for(let j=1;j<t.length;j++){ const c=t.charAt(j);
+        if(c==='p')parents=true; else if(c==='v')verbose=true; } continue; }
+      targets.push(t); }
+    if(!targets.length) return [line('err','mkdir: missing operand'),
+      line('muted',"Try 'mkdir --help' for more information.")];
+    const o=[]; let changed=false;
+    targets.forEach(function(tg){
+      const p=resolvePath(tg), existing=fsGet(p);
+      /* -p 只對「已存在的目錄」靜默成功;已存在的是檔案就仍報 File exists(GNU 精確語意) */
+      if(existing){ if(!parents || existing.t!=='d') o.push(line('err',"mkdir: cannot create directory '"+tg+"': File exists")); return; }
+      const parentPath=dirOf(p), par=fsGet(parentPath);
+      if(!par){
+        if(!parents){ o.push(line('err',"mkdir: cannot create directory '"+tg+"': No such file or directory")); return; }
+        if(!writable(deepestExisting(parentPath))){ o.push(line('err',"mkdir: cannot create directory '"+tg+"': Permission denied")); return; }
+        fsMkdirp(parentPath);
+      } else if(par.t!=='d'){ o.push(line('err',"mkdir: cannot create directory '"+tg+"': Not a directory")); return; }
+      else if(!writable(par)){ o.push(line('err',"mkdir: cannot create directory '"+tg+"': Permission denied")); return; }
+      setChild(fsGet(dirOf(p)), baseOf(p), stamp(dnode()));
+      changed=true;
+      if(verbose) o.push(line('',"mkdir: created directory '"+tg+"'")); });
+    if(changed){ const w=fsSave(); if(w) o.push(w); }
+    return o.length?o:null;}},
+  'rm':{type:'Application',params:[],paths:true,help:'remove files or directories',run:function(a,raw){
+    let rec=false,force=false,target='';
+    for(let i=1;i<raw.length;i++){ const t=String(raw[i]);
+      if(t==='--recursive'){rec=true;continue;} if(t==='--force'){force=true;continue;}
+      if(t.charAt(0)==='-'&&t.length>1&&!/^--/.test(t)){
+        for(let j=1;j<t.length;j++){ const c=t.charAt(j); if(c==='r'||c==='R')rec=true; else if(c==='f')force=true; }
+        continue; }
+      if(!/^-/.test(t)) target=t.replace(/^["']|["']$/g,''); }
+    if(!target) return force?null:[line('err','rm: missing operand')];
+    const p=resolvePath(target), n=fsGet(p);
+    if(!n) return force?null:[line('err',"rm: cannot remove '"+target+"': No such file or directory")];
+    if(n.t==='d'&&!rec) return [line('err',"rm: cannot remove '"+target+"': Is a directory")];
+    /* GNU rm 的 --preserve-root 只保護 /,其餘全靠檔案權限 —— 真機驗證過的兩行訊息 */
+    if(samePath(p,'/')) return [line('err',"rm: it is dangerous to operate recursively on '/'"),
+      line('err','rm: use --no-preserve-root to override this failsafe')];
+    if(!writable(fsParent(p))) return [line('err',"rm: cannot remove '"+target+"': Permission denied")];
+    const par=fsParent(p), k=keyIn(par,baseOf(p)); if(k) rmChild(par,k);
+    if(samePath(CWD,p)||isDescendant(CWD,p)){ CWD=HOME; updatePrompt(); }
+    return saved(null);}},
+  'cp':{type:'Application',params:[],paths:true,help:'copy files and directories',run:function(a,raw){
+    const args=raw.slice(1).filter(function(x){return !/^-/.test(x);}).map(function(x){return String(x).replace(/^["']|["']$/g,'');});
+    const rec=raw.some(function(x){return /^-[a-zA-Z]*[rR]/.test(String(x));});
+    if(args.length<2) return [line('err','cp: missing destination file operand')];
+    const sp=resolvePath(args[0]), sn=fsGet(sp);
+    if(!sn) return [line('err',"cp: cannot stat '"+args[0]+"': No such file or directory")];
+    if(sn.t==='d'&&!rec) return [line('err',"cp: -r not specified; omitting directory '"+args[0]+"'")];
+    const dp=resolvePath(args[1]), dn=fsGet(dp);
+    const finalPath=(dn&&dn.t==='d'&&!samePath(dp,sp))?joinPath(fsCanon(dp)||dp,baseOf(sp)):dp;
+    if(samePath(sp,finalPath)) return [line('err',"cp: '"+args[0]+"' and '"+args[1]+"' are the same file")];
+    if(sn.t==='d'&&isDescendant(finalPath,sp)) return [line('err',"cp: cannot copy a directory into itself")];
+    const par=fsGet(dirOf(finalPath));
+    if(!par||par.t!=='d') return [line('err',"cp: cannot create regular file '"+args[1]+"': No such file or directory")];
+    if(!writable(par)) return [line('err',"cp: cannot create regular file '"+args[1]+"': Permission denied")];
+    const c=stamp(fsClone(sn)); markOwn(c,USERNAME);   /* 複製品整棵都屬於執行的人 */
+    setChild(par,baseOf(finalPath),c);
+    return saved(null);}},
+  'mv':{type:'Application',params:[],paths:true,help:'move (rename) files',run:function(a,raw){
+    const args=raw.slice(1).filter(function(x){return !/^-/.test(x);}).map(function(x){return String(x).replace(/^["']|["']$/g,'');});
+    if(args.length<2) return [line('err','mv: missing destination file operand')];
+    const sp=resolvePath(args[0]), sn=fsGet(sp);
+    if(!sn) return [line('err',"mv: cannot stat '"+args[0]+"': No such file or directory")];
+    const dp=resolvePath(args[1]), dn=fsGet(dp);
+    const finalPath=(dn&&dn.t==='d'&&!samePath(dp,sp))?joinPath(fsCanon(dp)||dp,baseOf(sp)):dp;
+    if(samePath(sp,finalPath)) return null;                       /* mv 檔案到自己:GNU mv 視為成功不動作 */
+    if(sn.t==='d'&&isDescendant(finalPath,sp))
+      return [line('err',"mv: cannot move '"+args[0]+"' to a subdirectory of itself")];
+    const par=fsGet(dirOf(finalPath));
+    if(!par||par.t!=='d') return [line('err',"mv: cannot move '"+args[0]+"': No such file or directory")];
+    /* 改名要同時能寫來源與目的地的父目錄 —— 這就是 `mv ~ /tmp` 在真機失敗的原因 */
+    if(!writable(fsParent(sp))||!writable(par))
+      return [line('err',"mv: cannot move '"+args[0]+"' to '"+args[1]+"': Permission denied")];
+    const sPar=fsParent(sp), sk=keyIn(sPar,baseOf(sp)); if(sk) rmChild(sPar,sk);
+    stamp(sn); setChild(par,baseOf(finalPath),sn);                /* GNU mv 預設就覆寫,不像 Move-Item 要 -Force */
+    if(samePath(CWD,sp)||isDescendant(CWD,sp)){ CWD=HOME; updatePrompt(); }
+    return saved(null);}},
+  'grep':{type:'Application',params:[],paths:true,help:'print lines that match patterns',run:function(a,raw){
+    const args=raw.slice(1).filter(function(x){return !/^-/.test(x);}).map(function(x){return String(x).replace(/^["']|["']$/g,'');});
+    const pat=args[0], fileArg=args[1];
+    if(!pat) return [line('err','Usage: grep [OPTION]... PATTERNS [FILE]...'),line('muted',"Try 'grep --help' for more information.")];
+    if(pat.length>200) return [line('err','grep: pattern too long')];
+    /* GNU grep 預設大小寫敏感,只有 -i / --ignore-case 才忽略 */
+    const ci=raw.some(function(x){ x=String(x); return x==='--ignore-case'||(/^-[A-Za-z]*i/.test(x)&&!/^--/.test(x)); });
+    let re; try{ re=new RegExp(pat,ci?'i':''); }catch(e){ return [line('err','grep: invalid regular expression')]; }
+    const hits=[];
+    if(fileArg){ const p=resolvePath(fileArg), n=fsGet(p);
+      if(!n) return [line('err','grep: '+fileArg+': No such file or directory')];
+      if(n.t==='d') return [line('err','grep: '+fileArg+': Is a directory')];
+      fsText(n).forEach(function(r){ const t=r&&r.txt?r.txt:''; if(t&&re.test(t)) hits.push(line('',t)); });
+      return hits; }
+    (function walk(node,path){ if(node.t==='d'){ Object.keys(node.ch).forEach(function(k){ walk(node.ch[k],path+'/'+k); }); return; }
+      fsText(node).forEach(function(r){ const t=r&&r.txt?r.txt:''; if(t&&re.test(t))
+        hits.push({parts:[['accent',path+':'],['',' '+(t.length>56?t.slice(0,56)+'...':t)]],txt:path+': '+t}); }); })(ROOT,'');
+    return hits.length?hits.slice(0,20):[];}},
+  'chmod':{type:'Application',params:[],paths:true,help:'change file mode bits',run:function(a,raw){
+    const args=raw.slice(1).map(function(x){return String(x).replace(/^["']|["']$/g,'');});
+    const spec=args[0], target=args[1];
+    if(!spec||!target) return [line('err','chmod: missing operand'),
+      line('muted',"Try 'chmod --help' for more information.")];
+    const p=resolvePath(target), n=fsGet(p);
+    if(!n) return [line('err',"chmod: cannot access '"+target+"': No such file or directory")];
+    if(ownerOf(n)!==USERNAME)
+      return [line('err',"chmod: changing permissions of '"+target+"': Operation not permitted")];
+    let mode=n.mode||DEFMODE.f;
+    /* setuid/setgid/sticky 佔用對應的執行位:有 x 時是小寫 s/s/t,沒有 x 時是大寫 S/S/T */
+    const special=function(arr,bits){
+      if(bits&4) arr[2]=arr[2]==='x'?'s':'S';
+      if(bits&2) arr[5]=arr[5]==='x'?'s':'S';
+      if(bits&1) arr[8]=arr[8]==='x'?'t':'T';
+      return arr; };
+    if(/^[0-7]{3,4}$/.test(spec)){                    /* 0755 這種四位數寫法很常見,不能當成錯誤 */
+      const bits=['---','--x','-w-','-wx','r--','r-x','rw-','rwx'];
+      const q=spec.length===4?spec:'0'+spec;
+      mode=special((bits[+q.charAt(1)]+bits[+q.charAt(2)]+bits[+q.charAt(3)]).split(''),+q.charAt(0)).join('');
+    } else if(/^[ugoa]*[+-][rwxst]+$/.test(spec)){
+      const add=spec.indexOf('+')>=0, who=spec.split(/[+-]/)[0]||'a', letters=spec.split(/[+-]/)[1];
+      const idx={u:0,g:1,o:2}, arr=mode.split('');
+      const tgt=(who==='a')?[0,1,2]:who.split('').map(function(c){return idx[c];}).filter(function(x){return x!=null;});
+      letters.split('').forEach(function(L){
+        if(L==='s'){ tgt.forEach(function(ti){ if(ti>1) return; const i=ti*3+2;
+          arr[i]=add?(arr[i]==='x'?'s':'S'):(arr[i]==='s'?'x':(arr[i]==='S'?'-':arr[i])); }); return; }
+        if(L==='t'){ arr[8]=add?(arr[8]==='x'?'t':'T'):(arr[8]==='t'?'x':(arr[8]==='T'?'-':arr[8])); return; }
+        const pos={r:0,w:1,x:2}[L];
+        tgt.forEach(function(ti){ const i=ti*3+pos, cur=arr[i];
+          if(pos===2&&(cur==='s'||cur==='S')) arr[i]=add?'s':'S';   /* 別把 setuid 位洗掉 */
+          else arr[i]=add?L:'-'; }); });
+      mode=arr.join('');
+    } else return [line('err',"chmod: invalid mode: '"+spec+"'")];
+    n.mode=mode; stamp(n);
+    return saved(null);}},
+  'chown':{type:'Application',params:[],paths:true,help:'change file owner and group',run:function(a,raw){
+    const target=raw.slice(2).filter(function(x){return !/^-/.test(x);})[0];
+    if(!target) return [line('err','chown: missing operand')];
+    return [line('err',"chown: changing ownership of '"+target+"': Operation not permitted"),
+      line('muted','(this sandbox has a single user, '+USERNAME+'; changing ownership needs root)')];}},
+  'uname':{type:'Application',params:[],help:'print system information',run:function(a,raw){
+    const f=raw.slice(1).join(' ');
+    if(/-a|--all/.test(f)) return [line('','Linux '+HOSTN+' 6.8.0-51-generic #52-Ubuntu SMP PREEMPT_DYNAMIC x86_64 x86_64 x86_64 GNU/Linux')];
+    if(/-r/.test(f)) return [line('','6.8.0-51-generic')];
+    if(/-m/.test(f)) return [line('','x86_64')];
+    if(/-n/.test(f)) return [line('',HOSTN)];
+    return [line('','Linux')];}},
+  'lsb_release':{type:'Application',params:[],help:'print distribution-specific information',run:function(){return [
+    line('','Distributor ID:\tUbuntu'),
+    line('','Description:\tUbuntu 24.04.4 LTS'),
+    line('','Release:\t24.04'),
+    line('','Codename:\tnoble')];}},
+  'ip':{type:'Application',params:[],help:'show / manipulate routing, network devices, interfaces and tunnels',run:function(a,raw){
+    const sub=String(raw[1]||'').toLowerCase();
+    if(sub&&sub!=='a'&&sub!=='addr'&&sub!=='address')
+      return [line('muted','Usage: ip addr   (only addr is implemented in this sandbox)')];
+    return [line('','1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN'),
+      line('','    inet 127.0.0.1/8 scope host lo'),
+      line('','2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP'),
+      line('','    inet 10.6.10.6/24 brd 10.6.10.255 scope global eth0'),
+      line('','    inet6 fe80::216:3eff:fe74:1006/64 scope link')];}},
+  'which':{type:'Application',params:[],help:'locate a command',run:function(a,raw){
+    const t=firstArg(raw);
+    if(!t) return [line('muted','Usage: which <command>')];
+    const name=String(t).toLowerCase();
+    if(fsGet('/usr/bin/'+name)) return [line('','/usr/bin/'+name)];   /* 以檔案系統為準,pwsh/sh/bash 才找得到 */
+    const c=CMDLETS[alias(name)];
+    if(!c) return null;                                   /* GNU which 找不到時安靜回非零 */
+    if(c.type==='Application') return [line('','/usr/bin/'+name)];
+    return [line('',String(t)+': PowerShell cmdlet')];}},
+  'df':{type:'Application',params:[],help:'report file system space usage',run:function(){return [
+    line('head','Filesystem      Size  Used Avail Use% Mounted on'),
+    line('','/dev/root        48G   19G   27G  42% /'),
+    line('','tmpfs           7.8G     0  7.8G   0% /dev/shm')];}},
+  'free':{type:'Application',params:[],help:'Display amount of free and used memory in the system',run:function(){return [
+    line('head','               total        used        free      shared  buff/cache   available'),
+    line('','Mem:            15Gi       4.2Gi       6.1Gi       220Mi       5.1Gi        10Gi'),
+    line('','Swap:          4.0Gi          0B       4.0Gi')];}},
+  'uptime':{type:'Application',params:[],help:'Tell how long the system has been running',run:function(){
+    const d=new Date();
+    return [line('', ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2)
+      +':'+('0'+d.getSeconds()).slice(-2)+'  up 7 days,  3:24,  1 user,  load average: 0.18, 0.24, 0.21')];}},
+  'help':{params:[],help:'Quick start guide',run:function(){
+    let g=[
+      ['Portfolio',[['whoami','identity summary'],['Get-Contribution','upstream work (-Foundation CNCF)'],
+        ['Get-Advisory','published security advisories that credit me'],
+        ['Get-Publication','publications'],['Get-Award','awards (-Year 2023)'],
+        ['Get-Project','representative projects'],['Get-Timeline','year-by-year timeline']]],
+      ['File system (coreutils)',[['ls -la','list a directory with modes and sizes'],['cd <dir>','change directory'],
+        ['cat <file>','print a file'],['rm -r <path>','remove'],['cp / mv','copy / move'],
+        ['mkdir <dir>','create a directory'],['chmod 755 <p>','change modes, really applied'],
+        ['nano / vim','edit a file'],['grep <pat>','search file contents'],['tree','directory tree']]],
+      ['PowerShell cmdlets',[['Get-ChildItem','list a directory (dir/gci)'],['Get-Content','read a file (gc)'],
+        ['Set-Content','write file contents (sc)'],['Select-String','search (sls)'],
+        ['Get-Location','current path (pwd)'],['Get-Process','process list']]],
+      ['System and network',[['uname -a','kernel information'],['ip addr','network interfaces'],
+        ['ping / traceroute','network tools'],['df / free / uptime','resource state'],
+        ['ps aux','process list'],['hostname','host name']]],
+      ['Other',[['Get-Source','links to every authoritative source'],
+        ['Get-Command','full command list (gcm)'],['Get-Help <cmd>','help for one command'],
+        ['Set-Theme','theme campbell|pi|blue'],['Clear-Host','clear the screen (cls)'],
+        ['Reset-FileSystem','restore the file system']]]];
+    let o=[line('banner','PowerShell 7 on Ubuntu — common commands'),
+      line('muted','PowerShell on Linux removes the ls/cat/rm/cp/mv/man/ps aliases, so those run native coreutils.')];
+    g.forEach(function(sec){ o.push(line(''),line('head',sec[0]));
+      sec[1].forEach(function(x){ o.push(line('','  '+padw(x[0],18)+'  '+x[1])); }); });
+    o.push(line(''),line('muted','Pipelines work, for example:  Get-Command | Where-Object -Match get- | Measure-Object'));
+    return o;}},
+  'exit':{params:[],help:'Exit message',run:function(){return [line('muted','Close the tab to exit. Thanks for stopping by :)')];}},
+};
+const ALIAS={
+  'advisory':'get-advisory','advisories':'get-advisory',
+  'cls':'clear-host','clear':'clear-host',
+  /* ⛔ ls / cat / rm / cp / mv / man / ps 在 Linux 版 PowerShell 被移除別名,
+     這裡也不可再對映到 cmdlet,否則原生指令會被遮蔽。 */
+  'dir':'get-childitem','gci':'get-childitem',
+  'pwd':'get-location','gl':'get-location',
+  'cd':'set-location','chdir':'set-location','sl':'set-location',
+  'type':'get-content','gc':'get-content',
+  'sc':'set-content','ac':'add-content',
+  'md':'new-item','ni':'new-item',   /* mkdir 已是獨立 coreutils(見上),不再 alias 到 New-Item;md 仍走 cmdlet */
+  'del':'remove-item','erase':'remove-item','rd':'remove-item','rmdir':'remove-item','ri':'remove-item',
+  'copy':'copy-item','ci':'copy-item',
+  'move':'move-item','mi':'move-item','ren':'rename-item','rni':'rename-item',
+  'sls':'select-string',
+  'gps':'get-process',
+  'h':'get-history','history':'get-history','gcm':'get-command',
+  'echo':'write-output','date':'get-date','tracepath':'traceroute',
+  'sort':'sort-object','measure':'measure-object','select':'select-object','where':'where-object',
+  'profile':'whoami','whois':'whoami','theme':'set-theme',
+  'sources':'get-source','links':'get-source','src':'get-source'};
+function alias(n){return ALIAS[n]||n;}
+function toTitle(n){return n.split('-').map(function(w){return w?w.charAt(0).toUpperCase()+w.slice(1):w;}).join('-');}
+const DISP={'get-childitem':'Get-ChildItem','get-location':'Get-Location','set-location':'Set-Location',
+  'get-content':'Get-Content','set-content':'Set-Content','add-content':'Add-Content','test-path':'Test-Path',
+  'new-item':'New-Item','remove-item':'Remove-Item','copy-item':'Copy-Item','move-item':'Move-Item',
+  'rename-item':'Rename-Item','select-string':'Select-String','get-command':'Get-Command','get-help':'Get-Help',
+  'get-history':'Get-History','get-date':'Get-Date','get-process':'Get-Process','clear-host':'Clear-Host',
+  'write-output':'Write-Output','test-connection':'Test-Connection','set-theme':'Set-Theme',
+  'get-contribution':'Get-Contribution','get-publication':'Get-Publication','get-award':'Get-Award',
+  'get-project':'Get-Project','get-timeline':'Get-Timeline','measure-object':'Measure-Object',
+  'sort-object':'Sort-Object','select-object':'Select-Object','where-object':'Where-Object',
+  'out-null':'Out-Null','get-random':'Get-Random','reset-filesystem':'Reset-FileSystem',
+  'get-source':'Get-Source'};
+const APPS=['tree'];
+Object.keys(CMDLETS).forEach(function(n){ let c=CMDLETS[n];
+  if(!c.disp) c.disp=DISP[n]||(n.indexOf('-')>0?toTitle(n):n);
+  if(!c.type) c.type=(APPS.indexOf(n)>=0?'Application':'Cmdlet'); });
+
+/* ---------- 彩蛋(隱藏)---------- */
+const EGGS={
+  'sudo':function(parts){
+    let full=parts.join(' ').toLowerCase().replace(/\s+/g,' ');
+    if(full==='sudo rm -rf /'||full==='sudo rm -rf /*'){
+      return [line('muted','[sudo] password for thc1006: '),line(''),
+        line('ok','Whew! That was a close one.'),
+        line('','這是網頁,不是真的伺服器 — 我的檔案安全,你的也是。')];
+    }
+    if(full.indexOf('sudo apt install net-tools')===0){
+      if(netToolsInstalled) return [line('','net-tools is already the newest version (2.10-alpha-2).')];
+      asyncPrint(['Reading package lists... Done','Building dependency tree... Done',
+        'The following NEW packages will be installed:','  net-tools',
+        'Unpacking net-tools (2.10-alpha-2) ...','Setting up net-tools (2.10-alpha-2) ...']
+        .map(function(s){return line('',s);}),220,function(){ netToolsInstalled=true; ifconfigFail=0; });
+      return null;
+    }
+    return [line('err','sudo: command not found'),
+      line('muted','PowerShell elevates with Start-Process -Verb RunAs. (nice try)')];
+  },
+  'sl':function(){return [
+    line('accent','         _'),
+    line('accent','        | |'),
+    line('accent','       _|_|__________'),
+    line('accent','      |   thc1006    |'),
+    line('accent','      |______________|'),
+    line('accent','        (O)      (O)'),
+    line('muted','   choo choo!  (你打對指令了)')
+  ];},
+  'classic':function(){return [{parts:[['accent','舊版 bash CLI(user@hctsai1006)還在 -> '],['a','classic.html','classic.html']],
+    txt:'舊版 bash CLI(user@hctsai1006)還在 -> classic.html'}];},
+  'bash':function(){return EGGS.classic();},
+  'coffee':function(){return [
+    line('muted', '     )  ('),
+    line('muted', '     (  )'),
+    line('muted', '     )  ('),
+    line('accent','    ______'),
+    line('accent','   |      |]'),
+    line('accent','   |      |'),
+    line('accent','    \\____/'),line(''),
+    line('','   brewing... done. 給認真的你。')];},
+  'rocket':function(){return [
+    line('accent','       /\\'),
+    line('accent','      /  \\'),
+    line('accent','     /    \\'),
+    line('accent','    /      \\'),
+    line('accent','   |        |'),
+    line('head',  '   |  thc   |'),
+    line('head',  '   |  1006  |'),
+    line('accent','   |        |'),
+    line('accent','  /|        |\\'),
+    line('accent',' / |        | \\'),
+    line('accent','/  |________|  \\'),
+    line('err',   '     \\    /'),
+    line('err',   '      \\  /'),
+    line('err',   '       \\/'),line(''),
+    line('','   3... 2... 1... liftoff  (COSCUP 火箭導控 workshop, 2026)')];},
+  'matrix':function(){let cs='01THC1006<>/{}[]|=+*01',R=[];
+    for(let r=0;r<6;r++){let s='';for(let i=0;i<40;i++)s+=cs[(r*7+i*3)%cs.length];R.push(line('var',s));}
+    return [line('var','Wake up… follow the merged PRs.'),line('','')].concat(R);},
+  'fortune':function(){return [line('accent','「流淚撒種的,必歡呼收割。」'),line('muted','                    — 詩篇 126:5')];},
+  'thc1006':function(){return [line('head','That is me. 打 whoami 看更多,或 Get-Contribution。')];},
+  'konami':function(){return [line('ok','Up Up Down Down Left Right Left Right B A — 你找到了。所有主題已解鎖:Set-Theme campbell|pi|blue')];},
+  'secret':function(){return [line('accent','這個終端機藏了不少彩蛋:'),
+    line('muted','  coffee · rocket · matrix · fortune · konami · thc1006'),
+    line('muted','  sudo rm -rf /   ·   sudo apt install net-tools   後再打 ifconfig'),
+    line('muted','  sl (不帶參數)  ·  vim / nano  ·  chmod'),
+    line('muted','  classic — 回到舊版 bash 終端機 (user@hctsai1006)')];},
+};
+
+/* iputils ping 的輸出格式(Linux) */
+function pingRun(a,raw){
+  const t=String(argOf(a,'TargetName')||firstArg(raw)||'localhost');
+  const seq=[line('','PING '+t+' (10.6.10.6) 56(84) bytes of data.')], ms=[];
+  for(let i=0;i<4;i++){ const v=(Math.random()*8+3); ms.push(v);
+    seq.push(line('','64 bytes from 10.6.10.6: icmp_seq='+(i+1)+' ttl=64 time='+v.toFixed(1)+' ms')); }
+  const mn=Math.min.apply(null,ms), mx=Math.max.apply(null,ms);
+  const avg=ms.reduce(function(s,v){return s+v;},0)/ms.length;                     /* 平均,不是中程值 */
+  const mdev=Math.sqrt(ms.reduce(function(s,v){return s+(v-avg)*(v-avg);},0)/ms.length);
+  seq.push(line(''),line('','--- '+t+' ping statistics ---'),
+    line('','4 packets transmitted, 4 received, 0% packet loss, time 3005ms'),
+    line('','rtt min/avg/max/mdev = '+mn.toFixed(3)+'/'+avg.toFixed(3)+'/'+mx.toFixed(3)+'/'+mdev.toFixed(3)+' ms'));
+  asyncPrint(seq,180); return null;
+}
+const CORPUS=(function(){ let o=[];
+  Object.keys(CMDLETS).forEach(function(n){ let c=CMDLETS[n]; if(c.hidden) return; o.push(c.disp||n); });
+  Object.keys(ALIAS).forEach(function(al){ let t=CMDLETS[ALIAS[al]]; if(t&&!t.hidden) o.push(al); });
+  return o.filter(function(v,i,a){return a.indexOf(v)===i;})
+          .sort(function(x,y){ return x.toLowerCase()<y.toLowerCase()?-1:1; }); })();
+
+/* ---------- 語法高亮(僅用於 echo)---------- */
+/* 語法高亮改為直接建立 DOM 節點(textContent),
+   使用者輸入完全不經過 HTML parser —— 沒有 innerHTML sink 可言。 */
+function tokClass(t,first){
+  if(/^\s+$/.test(t)) return null;
+  if(/^["']/.test(t)) return 'str';
+  if(/^-/.test(t)) return 'param';
+  if(/^([|><=]|>>)$/.test(t)) return 'op';
+  if(/^\$/.test(t)) return 'var';
+  if(/^\d+$/.test(t)) return 'num';
+  return first?'cmd':null;
+}
+function highlightInto(parent,s){
+  const toks=String(s).match(/(\s+|"[^"]*"?|'[^']*'?|--?[A-Za-z]\w*|\||>>|>|<|=|\$[\w:]+|[^\s|><=]+)/g)||[];
+  let first=true;
+  for(let i=0;i<toks.length;i++){
+    const t=toks[i], cls=tokClass(t,first);
+    if(cls){ const sp=document.createElement('span'); sp.className=cls; sp.textContent=t; parent.appendChild(sp); }
+    else parent.appendChild(document.createTextNode(t));
+    if(!/^\s+$/.test(t)) first=false;
+  }
+  return parent;
+}
+function codeLine(s){ return {code:s, txt:s}; }
+
+/* ---------- 輸出(進 role=log)---------- */
+/* 所有輸出都必須經過這裡才會受上限保護 */
+function trimOutput(){ while(out.childElementCount>MAXROWS) out.removeChild(out.firstChild); }
+/* 批次插入:整批 rows 在記憶體組裝,只觸發一次 reflow。
+   整份檔案沒有任何 innerHTML —— 全部以 textContent / DOM 節點建立,不存在 injection sink。
+   row 的形態:{cls,txt} 純文字 · {code} 語法高亮 · {kv} 清單欄位 · {parts} 多段樣式(可含連結)。 */
+function print(rows){ if(!rows) return; if(!Array.isArray(rows)) rows=[rows];
+  const frag=document.createDocumentFragment();
+  for(let i=0;i<rows.length;i++){ const r=rows[i]; if(!r) continue;
+    const d=document.createElement('div'); d.className='row';
+    if(r.kv){ const s=document.createElement('span'); s.className='head'; s.textContent=r.kv[0];
+      d.appendChild(s); d.appendChild(document.createTextNode(' : '+r.kv[1]));
+      if(r.indent){ d.style.paddingLeft=r.indent+'ch'; d.style.textIndent=(-r.indent)+'ch'; } }
+    else if(r.code!=null){ highlightInto(d,r.code); }
+    else if(r.parts){ r.parts.forEach(function(p){
+        if(p[0]==='a'){ const a=document.createElement('a'); a.setAttribute('href',p[2]);
+          a.setAttribute('target','_blank'); a.setAttribute('rel','noopener');
+          a.className='cmd'; a.style.textDecoration='underline'; a.textContent=p[1]; d.appendChild(a); }
+        else if(p[0]){ const s=document.createElement('span'); s.className=p[0]; s.textContent=p[1]; d.appendChild(s); }
+        else d.appendChild(document.createTextNode(p[1])); }); }
+    else if(r.cls){ const s=document.createElement('span'); s.className=r.cls;
+      s.textContent=(r.txt!=null?r.txt:''); d.appendChild(s); }
+    else { d.textContent=(r.txt!=null?r.txt:''); }
+    frag.appendChild(d); }
+  out.appendChild(frag);
+  trimOutput(); }
+function updatePrompt(){ const el=document.querySelector('#iw .prompt .path'); if(el) el.textContent=CWD; }
+function printPrompt(cmd){
+  const d=document.createElement('div'); d.className='row';
+  const p=document.createElement('span'); p.className='prompt';
+  p.appendChild(document.createTextNode('PS '));
+  const pa=document.createElement('span'); pa.className='path'; pa.textContent=CWD;
+  p.appendChild(pa); p.appendChild(document.createTextNode('> '));
+  d.appendChild(p);
+  highlightInto(d,cmd);                       // 使用者輸入:純節點,不進 parser
+  out.appendChild(d); trimOutput(); }         // 提示行也要計入上限,否則空 Enter 可以繞過
+function scrollBottom(){ con.scrollTop=con.scrollHeight; }
+/* 清屏會遞增 outGen;正在串流的非同步輸出發現世代已變就整批放棄,
+   否則清屏後殘留的 setTimeout 會把舊輸出「復活」印回畫面。 */
+let outGen=0;
+const reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+function clearOut(){ outGen++; busy=false;
+  if(out.replaceChildren) out.replaceChildren();
+  else while(out.firstChild) out.removeChild(out.firstChild); }
+function asyncPrint(rows,gap,done){
+  busy=true; const gen=outGen;
+  if(reduceMotion){                       // 偏好減少動態:不做逐行動畫,一次印完
+    print(rows); print(line('','')); scrollBottom(); busy=false; if(done) done(); return; }
+  let i=0;
+  (function step(){
+    if(gen!==outGen) return;              // 已清屏,放棄
+    if(i<rows.length){ print(rows[i]); scrollBottom(); i++; setTimeout(step,gap); return; }
+    print(line('','')); scrollBottom(); busy=false; if(done) done();
+  })(); }
+
+/* ---------- 狀態 ---------- */
+let hist=[], hIdx=null, draft='', busy=false, composing=false;
+const MAXROWS=1500, MAXHIST=300;   /* 輸出/歷史上限,避免長時間使用後記憶體與捲動退化 */
+let netToolsInstalled=false, ifconfigFail=0;   /* net-tools 彩蛋鏈狀態 */
+let menu={open:false,items:[],idx:0,start:0};
+function val(){return edit.value;}
+function caretPos(){return edit.selectionStart||0;}
+function atEnd(){return edit.selectionStart===edit.value.length && edit.selectionEnd===edit.value.length;}
+function setVal(s,c){ edit.value=s; c=(c==null)?s.length:c; try{edit.setSelectionRange(c,c);}catch(e){} sync(); }
+
+/* ---------- 預測 + ghost ---------- */
+function predict(v){ if(!v)return''; let low=v.toLowerCase(),i,h;
+  for(i=hist.length-1;i>=0;i--){ h=hist[i]; if(h.length>v.length && h.toLowerCase().indexOf(low)===0) return h; }
+  for(i=0;i<CORPUS.length;i++){ if(CORPUS[i].length>v.length && CORPUS[i].toLowerCase().indexOf(low)===0) return CORPUS[i]; }
+  return ''; }
+/* sync 拆成兩段:文字更新同步做(輸入不能延遲),
+   會強制重排的幾何量測(scrollHeight / offsetWidth)交給 rAF 批次,
+   同一影格內多次 sync 只量測一次,避免 layout thrashing。 */
+const raf = window.requestAnimationFrame ? window.requestAnimationFrame.bind(window)
+                                         : function(fn){ return setTimeout(fn,16); };
+let syncPending=false;
+function syncGeometry(){
+  syncPending=false;
+  edit.style.height='auto';
+  edit.style.height=edit.scrollHeight+'px';   // 長指令換行時自動長高,不裁切
+  /* 用標記的實際座標定位 ghost:指令換行後,游標 X 是「最後一行的位置」,
+     不是整個 mirror 的寬度(那會等於整區寬,把灰字推到右邊)。 */
+  const zr=ez.getBoundingClientRect(), mr=mk.getBoundingClientRect();
+  ghost.style.left=Math.round(mr.left-zr.left)+'px';
+  ghost.style.top =Math.round(mr.top -zr.top )+'px';
+  scrollBottom();
+}
+function sync(){
+  const v=val();
+  mirrorText.nodeValue=v;
+  const p=(!composing && atEnd() && !menu.open)?predict(v):'';   // 組字中不顯示灰字建議
+  ghost.textContent=p?p.slice(v.length):'';
+  if(!syncPending){ syncPending=true; raf(syncGeometry); }
+}
+
+/* ---------- 補完選單 ---------- */
+function currentToken(){ let v=val(),c=caretPos(); let sp=v.slice(0,c).lastIndexOf(' '); return {start:sp+1,word:v.slice(sp+1,c),c:c}; }
+function replaceWord(start,pick,c){ let v=val(); setVal(v.slice(0,start)+pick+v.slice(c), start+pick.length); }
+/* WAI-ARIA APG 的 combobox + listbox 模式:焦點永遠留在 textarea,
+   目前選項透過 aria-activedescendant 告知輔助科技。 */
+/* listbox 常駐於 DOM,只切換 hidden —— aria-controls 才不會指向不存在的元素,
+   而且移動選取時不必重建整份清單。 */
+function ensureOptionVisible(el){
+  if(!el) return;
+  const top=el.offsetTop, bottom=top+el.offsetHeight;
+  if(top<cmdmenu.scrollTop) cmdmenu.scrollTop=top;
+  else if(bottom>cmdmenu.scrollTop+cmdmenu.clientHeight) cmdmenu.scrollTop=bottom-cmdmenu.clientHeight;
+}
+function renderMenu(){
+  edit.setAttribute('aria-expanded', menu.open?'true':'false');
+  if(!menu.open){
+    cmdmenu.hidden=true; cmdmenu.replaceChildren(); cmdmenu.removeAttribute('data-sig');
+    edit.removeAttribute('aria-activedescendant'); return; }
+  cmdmenu.hidden=false;
+  const sig=menu.items.join('\u0000');
+  if(cmdmenu.getAttribute('data-sig')!==sig){       // 候選集合改變才重建
+    cmdmenu.replaceChildren();
+    menu.items.forEach(function(it,i){
+      const b=document.createElement('div');
+      b.className='opt'; b.id='opt'+i;
+      b.setAttribute('role','option'); b.textContent=it;
+      b.addEventListener('mousedown',function(ev){ ev.preventDefault();
+        menu.idx=i; applyMenuPick(); closeMenu(); focusEdit(); });
+      cmdmenu.appendChild(b); });
+    cmdmenu.setAttribute('data-sig',sig);
+  }
+  for(let i=0;i<cmdmenu.children.length;i++){       // 只更新選取狀態
+    const b=cmdmenu.children[i], sel=(i===menu.idx);
+    b.classList.toggle('sel',sel);
+    b.setAttribute('aria-selected',sel?'true':'false');
+  }
+  edit.setAttribute('aria-activedescendant','opt'+menu.idx);
+  ensureOptionVisible(cmdmenu.children[menu.idx]);  // 瀏覽器不會自動捲動 activedescendant
+}
+function applyMenuPick(){ let tk=currentToken(); replaceWord(menu.start,menu.items[menu.idx],tk.c); }
+function closeMenu(){ menu.open=false; renderMenu(); }
+function openOrCycle(){
+  if(menu.open){ menu.idx=(menu.idx+1)%menu.items.length; applyMenuPick(); renderMenu(); return; }
+  let tk=currentToken(), v=val(), before=v.slice(0,tk.start), cands;
+  if(/^\s*$/.test(before) || /\|\s*$/.test(before)) cands=CORPUS.slice();
+  else{
+    let head=(before.split('|').pop()||'').replace(/^\s+/,'').split(/\s+/)[0]||'';
+    let c=CMDLETS[alias(head.toLowerCase())];
+    cands=(c&&c.params)?c.params.slice():[];
+    if(c&&c.paths) cands=cands.concat(pathCandidates());
+    if(!cands.length) cands=CORPUS.slice();
+  }
+  cands=cands.filter(function(x){return String(x).toLowerCase().indexOf(tk.word.toLowerCase())===0;});
+  if(!cands.length) return;
+  if(cands.length===1){ replaceWord(tk.start,cands[0],tk.c); return; }
+  menu={open:true,items:cands,idx:0,start:tk.start,orig:val(),origCaret:tk.c};
+  applyMenuPick(); renderMenu();
+}
+function acceptPrediction(){ let v=val(),p=predict(v); if(p&&atEnd()){ setVal(p,p.length); return true; } return false; }
+function histNav(dir){ if(!hist.length)return;
+  if(dir<0){ if(hIdx===null){draft=val();hIdx=hist.length-1;} else if(hIdx>0)hIdx--; }
+  else{ if(hIdx===null)return; hIdx++; if(hIdx>hist.length-1){hIdx=null;setVal(draft);return;} }
+  setVal(hist[hIdx]);
+}
+function splitPipe(cmd){ let o=[],cur='',q=null,i,ch;
+  for(i=0;i<cmd.length;i++){ ch=cmd.charAt(i);
+    if(q){ cur+=ch; if(ch===q) q=null; continue; }
+    if(ch==='"'||ch==="'"){ q=ch; cur+=ch; continue; }
+    if(ch==='|'){ o.push(cur); cur=''; continue; }
+    cur+=ch; }
+  o.push(cur);
+  return o.map(function(s){return s.replace(/^\s+|\s+$/g,'');}).filter(function(s){return s.length;}); }
+function parseArgsOf(parts){ const args=Object.create(null); let i,pk;
+  for(i=1;i<parts.length;i++){ if(FLAGRE.test(parts[i])){
+    pk=parts[i].replace(/^-+/,'');
+    args[pk]=(parts[i+1]&&!FLAGRE.test(parts[i+1]))?String(parts[++i]).replace(/^["']|["']$/g,''):true; } }
+  return args; }
+/* 打錯的參數名不能被當成位置參數吞掉 —— Get-Award -Yera 2026 必須報錯,而不是默默篩 2026 */
+function unknownParam(c,args){
+  if(!c.params||!c.params.length) return null;
+  const allowed=c.params.map(function(p){return String(p).replace(/^-+/,'').toLowerCase();});
+  const keys=Object.keys(args);
+  for(let i=0;i<keys.length;i++){ if(allowed.indexOf(keys[i].toLowerCase())<0) return keys[i]; }
+  return null;
+}
+function execOne(seg,input,piped){
+  let parts=seg.match(/"[^"]*"|'[^']*'|\S+/g)||[];
+  if(!parts.length) return input;
+  let key=parts[0].toLowerCase(), c=CMDLETS[alias(key)], args=parseArgsOf(parts);
+  if(c){
+    const bad=unknownParam(c,args);
+    if(bad) return [line('err',(c.disp||key)+': A parameter cannot be found that matches parameter name \''+bad+'\'.')];
+    try{ return (piped&&c.pipe)?c.pipe(input||[],args,parts):c.run(args,parts,input); }
+    catch(e){ return [line('err',(c.disp||key)+': '+e.message)]; } }
+  if(EGGS[key]){ try{ return EGGS[key](parts); }catch(e){ return [line('err',e.message)]; } }
+  return [line('err',`${parts[0]}: The term '${parts[0]}' is not recognized as a name of a cmdlet, function, script file, or executable program.`),
+    line('err','Check the spelling of the name, or if a path was included, verify that the path is correct and try again.'),
+    line('muted','Run help or Get-Command to see what is available.')];
+}
+function run(){
+  let raw=val(), cmd=raw.replace(/^\s+|\s+$/g,'');
+  printPrompt(raw);
+  if(cmd) hist.push(cmd);
+  if(hist.length>MAXHIST) hist=hist.slice(-MAXHIST);
+  hIdx=null; draft='';
+  if(cmd){
+    const segs=splitPipe(cmd);
+    let rows=null, i;
+    /* 逐行串流輸出的指令(ping/traceroute)是即時副作用,放進同步管線會讓下一段先拿到空集合。
+       與其假裝支援,不如明確拒絕。 */
+    for(i=0;i<segs.length && segs.length>1;i++){
+      const k=String((segs[i].match(/\S+/)||[''])[0]).toLowerCase(), cc=CMDLETS[alias(k)];
+      if(cc && cc.asyncOut){
+        print([line('err',(cc.disp||k)+': 這個指令是逐行串流輸出,不能用在管線中。')]);
+        print(line('','')); closeMenu(); setVal(''); scrollBottom(); return;
+      }
+    }
+    for(i=0;i<segs.length;i++) rows=execOne(segs[i],rows,i>0);
+    if(rows && rows.length){ print(rows); print(line('','')); }
+  }
+  closeMenu(); setVal(''); scrollBottom();
+}
+
+/* ---------- nano / vim ----------
+   緩衝區用真的 textarea:手機軟鍵盤、IME 組字、選取、捲動全部免費拿到,
+   自己畫字元格點會在行動裝置與注音輸入上整個壞掉。
+   ⚠️ 瀏覽器保留 Ctrl+W / Ctrl+T,preventDefault 攔不住(會關分頁/開新分頁),
+   所以 nano 的 ^W 與 ^T 只綁在可點的底部快捷列,不綁鍵盤;
+   另外緩衝區有未存檔變更時掛 beforeunload,誤觸才不會直接丟失內容。 */
+const edEl=document.getElementById('ed'), edTop=document.getElementById('edtop'),
+  edTa=document.getElementById('edta'), edTil=document.getElementById('edtil'),
+  edMsg=document.getElementById('edmsg'), edBar=document.getElementById('edbar'),
+  edPr=document.getElementById('edpr'), edPrLab=document.getElementById('edprlab'),
+  edPrIn=document.getElementById('edprin');
+const NANOVER='GNU nano 7.2';
+const ED={open:false,app:'',name:'',ro:false,isNew:false,dirty:false,
+  mode:'normal',cut:'',pending:'',undo:[],onPrompt:null};
+const coarse=!!(window.matchMedia && window.matchMedia('(pointer:coarse)').matches);
+
+function edBeforeUnload(e){ if(ED.open&&ED.dirty){ e.preventDefault(); e.returnValue=''; return ''; } }
+function edLines(){ return edTa.value.split('\n'); }
+function edBytes(){ return edLines().reduce(function(a,s){return a+s.length+1;},0); }
+function fileLines(n){ if(!n||n.t!=='f') return [];
+  if(n.text) return n.text.slice();
+  return (n.rows||[]).map(function(r){ return String(r&&r.txt!=null?r.txt:''); }); }
+/* nano 的狀態列訊息是置中反白的;vim 的訊息靠左且不反白 */
+function edSetMsg(s,inverse){ edMsg.textContent='';
+  edMsg.classList.toggle('center', ED.app==='nano');
+  if(inverse){ const b=document.createElement('b'); b.textContent=' '+s+' '; edMsg.appendChild(b); }
+  else edMsg.textContent=s; }
+function edMark(){ ED.undo.push({v:edTa.value,c:edTa.selectionStart});
+  if(ED.undo.length>200) ED.undo.shift(); }
+function edTouch(){ ED.dirty=true; if(ED.app==='nano') edRenderTop(); }
+
+/* vim 的 ~ 填充:先擺一份隱形的內文佔位,長行換行後 ~ 才會落在對的列 */
+function edRenderTilde(){
+  if(ED.app!=='vim'){ edTil.textContent=''; return; }
+  edTil.textContent='';
+  const inv=document.createElement('span'); inv.className='inv';
+  inv.textContent=edTa.value+'\n';
+  edTil.appendChild(inv);
+  edTil.appendChild(document.createTextNode(new Array(300).join('~\n')));
+  edTil.scrollTop=edTa.scrollTop;
+}
+function edRenderTop(){
+  if(ED.app!=='nano'){ edTop.hidden=true; return; }
+  edTop.hidden=false;
+  const w=Math.max(24,availCols()), left='  '+NANOVER, mid=ED.name||'New Buffer',
+    right=ED.dirty?'Modified':'';
+  let s=left;
+  const at=Math.max(s.length+2, Math.floor((w-mid.length)/2));
+  s+=new Array(Math.max(1,at-s.length)+1).join(' ')+mid;
+  if(right){ const pad=w-right.length-s.length-1;
+    if(pad>0) s+=new Array(pad+1).join(' ')+right; }
+  edTop.textContent=padw(s,w);
+}
+const NANOKEYS=[['^G','Help','help'],['^O','Write Out','write'],['^W','Where Is','find'],
+  ['^K','Cut','cut'],['^T','Execute','na'],['^C','Location','loc'],
+  ['^X','Exit','exit'],['^R','Read File','na'],['^\\','Replace','na'],
+  ['^U','Paste','paste'],['^J','Justify','na'],['^/','Go To Line','goto']];
+function edRenderBar(){
+  edBar.textContent='';
+  if(ED.app==='nano'){
+    edBar.className='ed-bar'; edBar.hidden=false;   /* vim 在桌機會把它藏起來,切回 nano 一定要復原 */
+    NANOKEYS.forEach(function(it){
+      const b=document.createElement('button'); b.type='button'; b.tabIndex=-1;   /* footer 是 ^O/^X 的視覺提示+觸控替代,不佔鍵盤 Tab 序 */
+      const k=document.createElement('span'); k.className='k'; k.textContent=it[0];
+      b.appendChild(k); b.appendChild(document.createTextNode(' '+it[1]));
+      b.addEventListener('mousedown',function(ev){ ev.preventDefault(); });
+      b.addEventListener('click',function(){ edNanoDo(it[2]); });
+      edBar.appendChild(b);
+    });
+    return;
+  }
+  /* vim 在桌機沒有底部列;觸控裝置沒有 Esc 鍵,所以補一排最小限度的按鈕 */
+  edBar.className='ed-bar vimbar';
+  if(!coarse){ edBar.hidden=true; return; }
+  edBar.hidden=false;
+  [['Esc',function(){ edVimToNormal(); }],
+   ['i',function(){ edVimToInsert(); }],
+   [':w',function(){ edVimEx('w'); }],
+   [':wq',function(){ edVimEx('wq'); }],
+   [':q!',function(){ edVimEx('q!'); }]].forEach(function(it){
+    const b=document.createElement('button'); b.type='button'; b.tabIndex=-1; b.textContent=it[0];
+    b.addEventListener('mousedown',function(ev){ ev.preventDefault(); });
+    b.addEventListener('click',function(){ if(ED.onPrompt) return; it[1](); edFocusBuf(); });
+    edBar.appendChild(b);
+  });
+}
+function edFocusBuf(){ try{ edTa.focus({preventScroll:true}); }catch(e){ try{edTa.focus();}catch(_){} } }
+
+function edStart(app,arg){
+  const rel=arg||'';
+  let p='', node=null, name='';
+  if(rel){
+    p=resolvePath(rel); node=fsGet(p); name=rel;
+    if(node&&node.t==='d'){
+      return app==='nano' ? [line('err','Error reading '+rel+': Is a directory')]
+                          : [line('err','"'+rel+'" is a directory')];
+    }
+    const par=fsParent(p);
+    if(!node&&(!par||par.t!=='d'))
+      return [line('err',app+': '+rel+': No such file or directory')];
+  }
+  ED.open=true; ED.app=app; ED.path=p; ED.name=name; ED.dirty=false;
+  ED.isNew=!node; ED.undo=[]; ED.pending=''; ED.wantCol=null; ED.onPrompt=null;
+  ED.mode = app==='vim' ? 'normal' : 'insert';
+  /* 真機驗證:readonly 只看「既有檔案是否可寫」。新檔即使開在不可寫的目錄
+     也不是 readonly —— vim 照樣開成 [New],等到 :w 才給 E212。 */
+  ED.ro = !!(node && ownerOf(node)!==USERNAME);
+  const ls=node?fileLines(node):[];
+  edTa.value=ls.join('\n');
+  edTa.readOnly=false;
+  edTa.classList.toggle('ro', app==='vim');
+  edEl.hidden=false;
+  edRenderTop(); edRenderBar(); edRenderTilde();
+  if(app==='nano'){
+    edSetMsg(!rel ? 'New Buffer'
+      : ED.isNew ? 'New File'
+      : '[ Read '+ls.length+' line'+(ls.length===1?'':'s')+' ]', true);
+  } else {
+    edSetMsg(!rel ? '' : '"'+name+'" '+(ED.isNew?'[New]'
+      :(ED.ro?'[readonly] ':'')+ls.length+'L, '+fsSize(node)+'B'));
+  }
+  try{ edTa.setSelectionRange(0,0); }catch(e){}
+  window.addEventListener('beforeunload',edBeforeUnload);
+  edFocusBuf();
+  return null;
+}
+function edClose(){
+  ED.open=false; edEl.hidden=true; edTa.value=''; edPr.hidden=true;
+  window.removeEventListener('beforeunload',edBeforeUnload);
+  focusEdit(); scrollBottom();
+}
+/* 寫入:回傳 {lines,bytes,warn} 或 {err:...} */
+function edWrite(target){
+  const rel=target||ED.name;
+  if(!rel) return {err:'nofile'};
+  const p=resolvePath(rel), node=fsGet(p), par=fsParent(p);
+  if(node&&node.t==='d') return {err:'isdir'};
+  if(!par||par.t!=='d') return {err:'nodir'};
+  if(node ? ownerOf(node)!==USERNAME : !writable(par)) return {err:'perm'};
+  const ls=edLines();
+  let n=node;
+  if(!n){ n=stamp(fnode(null,false,ls.slice())); setChild(par,baseOf(p),n); }
+  else { if(n.seed){ n.seed=false; n.rows=null; } n.text=ls.slice(); stamp(n); }
+  const warn=fsSave();
+  /* 兩個編輯器對「另存新檔」的語意不同,不能混:
+     nano 的 ^O 換檔名 = 緩衝區改綁新檔(標題列跟著變);
+     vim 的 :w foo 只是另存一份副本,目前緩衝區仍是原檔 —— 所以「未存檔」旗標
+     絕對不能清掉,否則接著 :q 會靜默丟掉原檔真正的修改。 */
+  const cur=ED.name?resolvePath(ED.name):'';
+  const rebind=(ED.app==='nano')||!cur;
+  const wroteCurrent=!target||samePath(p,cur);
+  if(rebind){ ED.name=rel; ED.ro=ownerOf(n)!==USERNAME; }
+  if(rebind||wroteCurrent){ ED.dirty=false; ED.isNew=false; }
+  return {lines:ls.length,bytes:edBytes(),warn:warn};
+}
+/* 在游標處插入文字(Tab 用)。textarea 預設會把 Tab 當成切換焦點,
+   但編輯器裡的 Tab 就該是縮排。 */
+function edInsert(s){ const st=edTa.selectionStart, en=edTa.selectionEnd, v=edTa.value;
+  edTa.value=v.slice(0,st)+s+v.slice(en);
+  try{ edTa.setSelectionRange(st+s.length,st+s.length); }catch(e){}
+  edTouch(); edRenderTilde(); }
+/* 共用的單行輸入(nano 的 ^O 檔名、^W 搜尋;vim 的 : 命令列)。
+   用真的 <input> 而不是攔鍵盤 —— 手機軟鍵盤才打得進去。 */
+function edAsk(label,initial,cb){
+  ED.onPrompt=cb; edPrLab.textContent=label; edPrIn.value=initial||'';
+  edPrIn.setAttribute('aria-label',label.replace(/\s+$/,''));
+  edPr.hidden=false;
+  try{ edPrIn.focus(); edPrIn.setSelectionRange(edPrIn.value.length,edPrIn.value.length); }catch(e){}
+}
+function edAskDone(ok){
+  const cb=ED.onPrompt, v=edPrIn.value;
+  ED.onPrompt=null; edPr.hidden=true; edFocusBuf();
+  if(cb) cb(ok?v:null);
+}
+
+/* ===== nano ===== */
+function edNanoDo(what){
+  /* 正在回答提示時忽略快捷列 —— 否則會把待處理的 callback 換掉,
+     使用者以為在回答「存成什麼檔名」,結果答到了「要不要放棄變更」。 */
+  if(ED.onPrompt) return;
+  if(what==='exit') return edNanoExit();
+  if(what==='write') return edNanoWrite();
+  if(what==='cut'){ edMark(); const P=edPos(), b=edLineBounds(P.v,P.row);
+    ED.cut=P.v.slice(b.start,b.end);
+    edTa.value=P.v.slice(0,b.start)+P.v.slice(Math.min(P.v.length,b.end+1));
+    try{ edTa.setSelectionRange(b.start,b.start); }catch(e){}
+    edTouch(); edRenderTilde(); edSetMsg(''); return; }
+  if(what==='paste'){ if(!ED.cut){ edSetMsg('Cutbuffer is empty',true); return; }
+    edMark(); const P=edPos(), b=edLineBounds(P.v,P.row);
+    edTa.value=P.v.slice(0,b.start)+ED.cut+'\n'+P.v.slice(b.start);
+    try{ edTa.setSelectionRange(b.start,b.start); }catch(e){}
+    edTouch(); edRenderTilde(); edSetMsg(''); return; }
+  if(what==='loc'){ const P=edPos(), ls=edLines(), ch=P.c+1, tot=edTa.value.length+1;
+    edSetMsg('line '+(P.row+1)+'/'+ls.length+' ('+Math.round((P.row+1)/ls.length*100)+'%), '+
+      'col '+(P.col+1)+'/'+(ls[P.row]||'').length+', char '+ch+'/'+tot,true); return; }
+  if(what==='goto'){ edAsk('Enter line number, column number: ','',function(v){
+      if(v==null){ edSetMsg('Cancelled',true); return; }
+      const nn=parseInt(String(v).split(/[ ,]/)[0],10);
+      if(!nn||nn<1){ edSetMsg('Invalid line number',true); return; }
+      const ls=edLines(), row=Math.min(nn,ls.length)-1, b=edLineBounds(edTa.value,row);
+      try{ edTa.setSelectionRange(b.start,b.start); }catch(e){}
+      edSetMsg(''); }); return; }
+  if(what==='find'){ edAsk('Search: ','',function(v){
+      if(v==null||v===''){ edSetMsg('Cancelled',true); return; }
+      const from=edTa.selectionStart+1, hay=edTa.value;
+      let i=hay.indexOf(v,from); if(i<0) i=hay.indexOf(v,0);
+      if(i<0){ edSetMsg('"'+v+'" not found',true); return; }
+      try{ edTa.setSelectionRange(i,i+v.length); }catch(e){}
+      edSetMsg(''); }); return; }
+  if(what==='help'){ edSetMsg('^O write out  ^X exit  ^K cut  ^U paste  ^C location  ^/ go to line',true); return; }
+  edSetMsg('Unavailable in this sandbox',true);
+}
+function edNanoWrite(){
+  edAsk('File Name to Write: ',ED.name,function(v){
+    if(v==null){ edSetMsg('Cancelled',true); return; }
+    if(!v){ edSetMsg('Cancelled',true); return; }
+    const r=edWrite(v);
+    if(r.err==='perm'){ edSetMsg('Error writing '+v+': Permission denied',true); return; }
+    if(r.err==='isdir'){ edSetMsg('Error writing '+v+': Is a directory',true); return; }
+    if(r.err==='nodir'){ edSetMsg('Error writing '+v+': No such file or directory',true); return; }
+    edRenderTop();
+    edSetMsg(r.warn ? 'Error writing '+v+': storage unavailable'
+      : '[ Wrote '+r.lines+' line'+(r.lines===1?'':'s')+' ]', true);
+  });
+}
+function edNanoExit(){
+  if(!ED.dirty) return edClose();
+  edAsk('Save modified buffer?  (Answering "No" will DISCARD changes.)  [Y/N] ','',function(v){
+    if(v==null){ edSetMsg('Cancelled',true); return; }
+    const a=String(v).trim().toLowerCase();
+    if(a==='n'||a==='no') return edClose();
+    if(a==='y'||a==='yes'||a===''){
+      if(!ED.name){ edAsk('File Name to Write: ','',function(nm){
+          if(nm==null||!nm){ edSetMsg('Cancelled',true); return; }
+          const r2=edWrite(nm); if(r2.err){ edSetMsg('Error writing '+nm+': '+
+            (r2.err==='perm'?'Permission denied':'cannot write'),true); return; }
+          edClose(); }); return; }
+      const r=edWrite(ED.name);
+      if(r.err){ edSetMsg('Error writing '+ED.name+': '+
+        (r.err==='perm'?'Permission denied':'cannot write'),true); return; }
+      return edClose(); }
+    edSetMsg('Cancelled',true);
+  });
+}
+function edNanoKey(e){
+  if(e.key==='Tab'&&!e.ctrlKey&&!e.altKey&&!e.metaKey){ e.preventDefault(); edInsert('\t'); return; }
+  if(!e.ctrlKey||e.altKey||e.metaKey) return;
+  const c=String(e.key).toLowerCase();
+  /* ^W / ^T 是瀏覽器保留鍵,攔不住,只走底部按鈕 */
+  if(c==='o'){ e.preventDefault(); edNanoDo('write'); return; }
+  if(c==='x'){ e.preventDefault(); edNanoDo('exit'); return; }
+  if(c==='k'){ e.preventDefault(); edNanoDo('cut'); return; }
+  if(c==='u'){ e.preventDefault(); edNanoDo('paste'); return; }
+  if(c==='g'){ e.preventDefault(); edNanoDo('help'); return; }
+  if(c==='_'||c==='/'){ e.preventDefault(); edNanoDo('goto'); return; }
+  /* 有選取時讓 Ctrl+C 走瀏覽器的複製,沒選取才是 nano 的 Location */
+  if(c==='c'&&!String(getSelection())){ e.preventDefault(); edNanoDo('loc'); return; }
+}
+
+/* ===== vim ===== */
+function edPos(){ const v=edTa.value, c=edTa.selectionStart||0, before=v.slice(0,c);
+  const nl=before.lastIndexOf('\n');
+  return {v:v,c:c,row:before.split('\n').length-1,col:c-(nl+1)}; }
+function edLineBounds(v,row){ const ls=v.split('\n'); let s=0;
+  for(let i=0;i<row&&i<ls.length;i++) s+=ls[i].length+1;
+  return {start:s,end:s+(ls[row]||'').length,lines:ls}; }
+function edGo(row,col){ const ls=edLines();
+  row=Math.max(0,Math.min(row,ls.length-1));
+  col=Math.max(0,Math.min(col,ls[row].length));
+  const b=edLineBounds(edTa.value,row);
+  try{ edTa.setSelectionRange(b.start+col,b.start+col); }catch(e){}
+  edRenderTilde(); }
+function edVimToInsert(){ if(ED.ro){ edSetMsg("W10: Warning: Changing a readonly file"); }
+  edMark(); ED.mode='insert'; edTa.classList.remove('ro'); edSetMsg('-- INSERT --'); }
+function edVimToNormal(){ ED.mode='normal'; ED.pending=''; edTa.classList.add('ro'); edSetMsg('');
+  const P=edPos(); if(P.col>0) edGo(P.row,P.col-1); }
+function edVimEx(cmd){
+  const m=String(cmd).trim();
+  if(/^\d+$/.test(m)){ edGo(parseInt(m,10)-1,0); return; }
+  const mm=m.match(/^(w|wq|x|q)(!?)(?:\s+(.+))?$/);
+  if(!mm){ edSetMsg('E492: Not an editor command: '+m); return; }
+  const verb=mm[1], bang=mm[2]==='!', target=mm[3]&&mm[3].trim();
+  if(verb==='q'){
+    if(ED.dirty&&!bang){ edSetMsg('E37: No write since last change (add ! to override)'); return; }
+    return edClose(); }
+  if(ED.ro&&!bang&&!target){ edSetMsg("E45: 'readonly' option is set (add ! to override)"); return; }
+  const r=edWrite(target);
+  if(r.err==='nofile'){ edSetMsg('E32: No file name'); return; }
+  if(r.err==='perm'){ edSetMsg("E212: Can't open file for writing"); return; }
+  if(r.err==='isdir'||r.err==='nodir'){ edSetMsg("E212: Can't open file for writing"); return; }
+  edSetMsg(r.warn ? "E212: Can't open file for writing"
+    : '"'+(target||ED.name)+'" '+r.lines+'L, '+r.bytes+'B written');
+  if(verb==='wq'||verb==='x'){ if(!r.warn) edClose(); }
+}
+function edVimNormalKey(k){
+  const P=edPos(), ls=edLines();
+  if(ED.pending==='d'){ ED.pending='';
+    if(k==='d'){ edMark(); const b=edLineBounds(P.v,P.row);
+      ED.cut=P.v.slice(b.start,b.end);
+      edTa.value=ls.length===1?'':P.v.slice(0,b.start)+P.v.slice(Math.min(P.v.length,b.end+1));
+      edTouch(); edGo(Math.min(P.row,edLines().length-1),0); }
+    return; }
+  if(ED.pending==='g'){ ED.pending=''; if(k==='g') edGo(0,0); return; }
+  if(ED.pending==='y'){ ED.pending='';
+    if(k==='y'){ const b=edLineBounds(P.v,P.row); ED.cut=P.v.slice(b.start,b.end); }
+    return; }
+  switch(k){
+    case 'i': return edVimToInsert();
+    case 'a': edGo(P.row,P.col+1); return edVimToInsert();
+    case 'I': edGo(P.row,0); return edVimToInsert();
+    case 'A': edGo(P.row,(ls[P.row]||'').length); return edVimToInsert();
+    case 'o': { edMark(); const b=edLineBounds(P.v,P.row);
+      edTa.value=P.v.slice(0,b.end)+'\n'+P.v.slice(b.end);
+      edTouch(); edGo(P.row+1,0); return edVimToInsert(); }
+    case 'O': { edMark(); const b=edLineBounds(P.v,P.row);
+      edTa.value=P.v.slice(0,b.start)+'\n'+P.v.slice(b.start);
+      edTouch(); edGo(P.row,0); return edVimToInsert(); }
+    case 'h': return edGo(P.row,P.col-1);
+    case 'l': return edGo(P.row,P.col+1);
+    case 'j': return edGo(P.row+1,P.col);
+    case 'k': return edGo(P.row-1,P.col);
+    case '0': return edGo(P.row,0);
+    case '$': return edGo(P.row,(ls[P.row]||'').length);
+    case 'G': return edGo(ls.length-1,0);
+    /* 游標停在行尾時 x 不能動作 —— 真 vim 的 x 永遠不會把換行吃掉、把兩行併起來 */
+    case 'x': { if(P.col>=(ls[P.row]||'').length) return; edMark();
+      edTa.value=P.v.slice(0,P.c)+P.v.slice(P.c+1); edTouch(); edGo(P.row,P.col); return; }
+    case 'p': { if(!ED.cut) return; edMark(); const b=edLineBounds(P.v,P.row);
+      edTa.value=P.v.slice(0,b.end)+'\n'+ED.cut+P.v.slice(b.end);
+      edTouch(); edGo(P.row+1,0); return; }
+    case 'u': { if(!ED.undo.length){ edSetMsg('Already at oldest change'); return; }
+      const s=ED.undo.pop(); edTa.value=s.v;
+      try{ edTa.setSelectionRange(s.c,s.c); }catch(e){}
+      edTouch(); edRenderTilde(); edSetMsg('1 change; before'); return; }
+    case 'd': case 'g': case 'y': ED.pending=k; return;
+    case ':': edAsk(':','',function(v){ if(v==null){ edSetMsg(''); return; } edVimEx(v); }); return;
+  }
+}
+function edVimKey(e){
+  if(ED.mode==='insert'){
+    if(e.key==='Escape'){ e.preventDefault(); edVimToNormal(); return; }
+    if(e.key==='Tab'){ e.preventDefault(); edInsert('\t'); return; }
+    return; }
+  const k=e.key;
+  if(k==='Escape'){ e.preventDefault(); ED.pending=''; edSetMsg(''); return; }
+  if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End','PageUp','PageDown'].indexOf(k)>=0) return;
+  if(k.length===1&&!e.ctrlKey&&!e.metaKey&&!e.altKey){ e.preventDefault(); edVimNormalKey(k); return; }
+  if(k==='Enter'||k==='Backspace'||k==='Delete'||k==='Tab'){ e.preventDefault(); }
+}
+edTa.addEventListener('keydown',function(e){
+  if(!ED.open) return;
+  if(e.isComposing||e.keyCode===229) return;   /* IME 組字中一律交還輸入法 */
+  if(ED.app==='nano') edNanoKey(e); else edVimKey(e);
+});
+/* 一律標記 dirty,不看模式:手機軟鍵盤在 vim 的 normal 模式仍可能塞進字元
+   (行動裝置的 keydown 給不出可靠的鍵值,攔不乾淨),漏標就會在 :q 時靜默丟失內容。
+   normal 模式下由程式改 value 不會觸發 input,所以不會重複計算。 */
+edTa.addEventListener('input',function(){
+  if(!ED.open) return;
+  edTouch(); edRenderTilde();
+});
+edTa.addEventListener('scroll',function(){ if(ED.app==='vim') edTil.scrollTop=edTa.scrollTop; });
+edPrIn.addEventListener('keydown',function(e){
+  if(e.isComposing||e.keyCode===229) return;
+  if(e.key==='Enter'){ e.preventDefault(); edAskDone(true); return; }
+  if(e.key==='Escape'||((e.ctrlKey||e.metaKey)&&String(e.key).toLowerCase()==='c')){
+    e.preventDefault(); edAskDone(false); return; }
+});
+
+/* ---------- 事件 ---------- */
+function onKey(e){
+  /* IME 組字中(注音/倉頡/日文/韓文):所有按鍵都交還給輸入法。
+     Enter 是選字確認、↑↓ 與 Tab 是候選字操作,一律不可攔截。
+     三重判斷:標準 isComposing、composition 事件旗標(舊 Safari/部分 Android IME 不可靠)、
+     以及 IME 組字期間的哨兵 keyCode 229。 */
+  if(e.isComposing || composing || e.keyCode===229) return;
+  let k=e.key;
+  if(menu.open){
+    if(k==='Tab'||k==='ArrowDown'){ e.preventDefault(); menu.idx=(menu.idx+1)%menu.items.length; applyMenuPick(); renderMenu(); return; }
+    if(k==='ArrowUp'){ e.preventDefault(); menu.idx=(menu.idx-1+menu.items.length)%menu.items.length; applyMenuPick(); renderMenu(); return; }
+    if(k==='Enter'){ e.preventDefault(); closeMenu(); return; }            // 接受目前候選
+    if(k==='Escape'){ e.preventDefault();                                   // 取消並還原開啟前的輸入
+      const o=menu.orig, c=menu.origCaret; closeMenu();
+      if(o!=null) setVal(o,c); return; }
+    closeMenu();
+  }
+  if(k==='Enter'){ e.preventDefault(); if(busy) return; run(); return; }
+  if(k==='Tab'){ if(!val()){ return; } e.preventDefault(); openOrCycle(); return; }
+  if(k==='ArrowRight'||k==='End'){ if(atEnd()&&acceptPrediction()){ e.preventDefault(); } return; }
+  if(k==='ArrowUp'){ e.preventDefault(); histNav(-1); return; }
+  if(k==='ArrowDown'){ e.preventDefault(); histNav(1); return; }
+  if((e.ctrlKey||e.metaKey)&&(k==='l'||k==='L')){ e.preventDefault(); clearOut(); scrollBottom(); return; }
+  if((e.ctrlKey||e.metaKey)&&(k==='c'||k==='C')){ if(String(getSelection())) return; e.preventDefault(); printPrompt(val()); setVal(''); return; }
+  if(k==='Escape'){ if(val()){ e.preventDefault(); setVal(''); } else { edit.blur(); } return; }
+  /* 其餘按鍵交給原生 textarea 處理(手機軟鍵盤/貼上皆走 input 事件)*/
+}
+function focusEdit(){ if(ED.open) return;   /* 編輯器開著時不可把焦點搶回命令列 */
+  try{ edit.focus({preventScroll:true}); }catch(e){ try{edit.focus();}catch(_){} } }
+edit.addEventListener('keydown',onKey);
+edit.addEventListener('compositionstart',function(){ composing=true; if(menu.open) closeMenu(); sync(); });
+edit.addEventListener('compositionend',function(){ composing=false; sync(); });
+edit.addEventListener('input',function(){ if(menu.open) closeMenu(); hIdx=null; sync(); });
+edit.addEventListener('click',sync);
+edit.addEventListener('keyup',function(e){ if(['ArrowLeft','ArrowRight','Home','End'].indexOf(e.key)>=0) sync(); });
+edit.addEventListener('focus',function(){ con.classList.add('focused'); });
+edit.addEventListener('blur',function(){ con.classList.remove('focused'); });
+document.addEventListener('selectionchange',function(){ if(document.activeElement===edit) sync(); });
+window.addEventListener('resize',function(){ charW=0; });   // 字元寬度快取作廢(轉向 / 字級改變)
+con.addEventListener('click',function(e){
+  if(!(e.target.closest && e.target.closest('.menu')) && !String(getSelection())) focusEdit(); });
+
+/* ---------- 開場 ---------- */
+function boot(){
+  try{ document.documentElement.lang='zh-Hant'; }catch(e){}
+  fsInit(); updatePrompt();
+  try{ const t=localStorage.getItem('thc1006.theme'); if(t) setTheme(t); }catch(e){}   // 記住上次的主題
+  print([
+    {parts:[['banner','PowerShell 7.6.5']]},
+    line(''),
+    {parts:[['banner','Type '],['yellow','help'],['banner',' to explore, or try '],
+            ['yellow','whoami'],['banner',' / '],['yellow','Get-Contribution -Foundation CNCF']]},
+    {parts:[['banner','Themes: '],['yellow','Set-Theme pi'],['banner',' / campbell / blue']]},
+    line('')]);
+  hist=['whoami','Get-Contribution -Foundation CNCF','Get-Publication -Full','Get-Award -Year 2023'];
+  sync(); focusEdit();
+}
+boot();
+</script>
+</body>
+</html>
