@@ -30,12 +30,12 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { globSync, readFileSync, readdirSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { join, sep } from 'node:path';
 
 import {
   ARCHIVE,
   FIXTURES,
-  INDEX,
   INVENTORY,
   REPO,
   buildCases,
@@ -49,6 +49,14 @@ import {
   slugFor,
 } from '../../tools/v1-fixtures.mts';
 
+/**
+ * The commit legacy/PROVENANCE.md records the archive as having been taken from.
+ * Asserted below to still be what that document says, so this constant cannot
+ * quietly become a different claim from the published one.
+ */
+const ARCHIVE_COMMIT = '0838080474d7e34d45cff9f242d2cdb7adde3380';
+const PROVENANCE = join(REPO, 'legacy', 'PROVENANCE.md');
+
 const manifest = readManifest();
 const archiveBytes = readFileSync(ARCHIVE);
 const archiveText = archiveBytes.toString('utf8');
@@ -59,7 +67,7 @@ const files = readdirSync(FIXTURES).sort();
 const transcripts = files.filter((f) => f.endsWith('.txt'));
 
 describe('v1 golden transcripts: the archive they were taken from', () => {
-  it('is the same content as the index.html the site serves', () => {
+  it('is the document index.html was at the commit it was archived from', () => {
     // ACCEPTANCE CRITERION 1, mechanised — and it is NOT a byte comparison.
     //
     // MEASURED: the two files are not byte-identical and cannot be. index.html
@@ -69,18 +77,48 @@ describe('v1 golden transcripts: the archive they were taken from', () => {
     // — 21794ce2 against 234cdfda — and legacy/PROVENANCE.md's claim that "both
     // currently hash to 21794ce2" was false when this test was written.
     //
-    // The property that does hold, and that the criterion is actually about, is
-    // that the archive is the same DOCUMENT: identical after newline
-    // normalisation. That is asserted here, so the archive silently drifting
-    // from the deployed page fails a test instead of a paragraph.
-    const index = lf(readFileSync(INDEX, 'utf8'));
+    // The property that does hold is that the archive is the same DOCUMENT:
+    // identical after newline normalisation.
+    //
+    // AT THE RECORDED COMMIT, not at the working copy. This compared the
+    // archive against whatever index.html says today, which made it a test that
+    // fails the first time the page is edited for any reason at all — and it
+    // did, on a routine refresh of the contribution counts.
+    //
+    // An archive exists to be FROZEN. The 128 transcripts were captured from
+    // it, so it cannot chase the living page without invalidating them, and the
+    // roadmap task says as much in its own title: "pin the commit sha it came
+    // from". A gate that breaks whenever someone updates their own portfolio is
+    // one that gets deleted the first time it does.
+    //
+    // Comparing against the pinned commit is stable for ever and still catches
+    // the thing worth catching: the archive being edited after the fact.
+    const pinned = spawnSync('git', ['show', `${ARCHIVE_COMMIT}:index.html`], {
+      encoding: 'utf8',
+      maxBuffer: 32 * 1024 * 1024,
+    });
+    assert.equal(
+      pinned.status,
+      0,
+      `could not read index.html at ${ARCHIVE_COMMIT}, the commit PROVENANCE.md pins:\n${pinned.stderr}`,
+    );
+    const index = lf(pinned.stdout);
     const archive = lf(archiveText);
     assert.equal(
       sha256(archive),
       sha256(index),
-      'legacy/terminal-v1.html is no longer the same document as index.html',
+      `legacy/terminal-v1.html is no longer the document index.html was at ${ARCHIVE_COMMIT}`,
     );
     assert.equal(archive.split('\n').length, index.split('\n').length);
+  });
+
+  it('pins the commit PROVENANCE.md records, so the two cannot drift apart', () => {
+    // The constant is the whole basis for the comparison above, so it has to be
+    // the one the document publishes rather than one this test picked.
+    assert.ok(
+      readFileSync(PROVENANCE, 'utf8').includes(ARCHIVE_COMMIT),
+      `PROVENANCE.md does not record ${ARCHIVE_COMMIT} as the archived commit`,
+    );
   });
 
   it('is the archive the fixtures were captured from', () => {

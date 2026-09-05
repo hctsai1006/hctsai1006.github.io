@@ -2,8 +2,8 @@
   "capturedFrom": "C:/Users/thc1006/Desktop/MAY/personal-homepage/open-source/index.html",
   "capturedAt": "2026-09-05",
   "metrics": {
-    "merged": 276,
-    "projects": 79,
+    "merged": 282,
+    "projects": 83,
     "foundations": 8
   },
   "cncfRepositories": [
@@ -32,6 +32,7 @@
     "kubernetes-sigs/dra-driver-cpu",
     "kubernetes-sigs/dra-driver-google-tpu",
     "kubernetes-sigs/dranet",
+    "kubernetes-sigs/external-dns",
     "kubernetes-sigs/kubespray",
     "kubernetes-sigs/kueue",
     "kubernetes/kubernetes",

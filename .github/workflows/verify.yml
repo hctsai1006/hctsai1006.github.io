@@ -65,5 +65,30 @@ jobs:
       # discrepancies, and says out loud that it did not ask upstream anything.
       # Asking upstream is upstream-sync.yml's job, on a schedule, where a rate
       # limit is information rather than a blocked pull request.
+      # Tee'd, and kept on failure. `verify` failed once on main for a reason
+      # that could not be established afterwards: the run passed on the pull
+      # request minutes earlier, passed again on re-run, and the step's output
+      # was not recoverable through the logs API -- which returns roughly 1,450
+      # of the 3,650 lines a full run prints, for successful runs too. So the
+      # absence of a summary in the failed log proved nothing, and there was
+      # nothing left to diagnose from.
+      #
+      # A flake in a required gate that cannot be explained is a gate people
+      # learn to re-run, which is the same as not having one. This keeps the
+      # whole output as an artifact so the next one is diagnosable without
+      # depending on how much of the log the API is willing to return.
+      #
+      # `pipefail` so the exit code is npm's, not tee's.
       - name: verify
-        run: npm run verify
+        run: |
+          set -o pipefail
+          npm run verify 2>&1 | tee verify.log
+
+      - name: keep the output when it failed
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: verify-log
+          path: verify.log
+          retention-days: 14
+          if-no-files-found: warn
