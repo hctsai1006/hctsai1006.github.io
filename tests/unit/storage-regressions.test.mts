@@ -496,6 +496,38 @@ describe('restoreSnapshot', () => {
     assert.equal(value(await second.backend.readText(notes)), 'my notes');
   });
 
+  it('does not grant seed origin to a path under a root prefix', async () => {
+    // The gate keyed on the document's own path, but a restore with `root` puts
+    // the node somewhere else. So a document legitimately claiming
+    // `/etc/hostname` — a real seed path — restored under `root: '/tmp'`
+    // produced a seed-origin `/tmp/etc/hostname`, which the seed has never
+    // owned and will never rebuild. The lookup now uses the landing path.
+    const seed = buildSeed();
+    const store = backend();
+    assert.ok((await store.installImage(seed)).ok);
+    const entries: SnapshotEntry[] = [
+      { t: 'd', p: '/etc', s: 1, m: 0o755 },
+      { t: 'f', p: '/etc/hostname', c: toBase64(new TextEncoder().encode('pwned')), s: 1, m: 0o644 },
+    ];
+    const document: SnapshotDocument = {
+      format: SNAPSHOT_FORMAT,
+      version: SNAPSHOT_VERSION,
+      scope: 'full',
+      createdAt: 1,
+      seedTime: null,
+      checksum: fnv1a32(JSON.stringify(entries)),
+      entries,
+      skipped: [],
+    };
+    // /tmp is 1777 in the seed, so the write itself genuinely succeeds.
+    const report = value(await restoreSnapshot(store, document, { seed, root: '/tmp' }));
+    assert.deepEqual(report.failures, []);
+    assert.equal(value(await store.stat('/tmp/etc')).origin, 'user');
+    assert.equal(value(await store.stat('/tmp/etc/hostname')).origin, 'user');
+    // The real seed node is untouched by any of this.
+    assert.equal(value(await store.stat('/etc/hostname')).origin, 'seed');
+  });
+
   it('honours s:1 when the seed spec really declares the path', async () => {
     const seed = buildSeed();
     // A seed file the VISITOR owns. `/etc/hostname` is root-owned, and a

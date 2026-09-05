@@ -614,7 +614,13 @@ export async function restoreSnapshot(
     // worst carries content in an overlay that did not need it. The other
     // direction loses the file.
     const claimsSeed = entry.s === 1;
-    const seedKind = seeded?.get(entry.p);
+    // `path`, NOT `entry.p`. Under a `root` prefix the node lands somewhere the
+    // seed does not own, and keying the lookup on the document's own path
+    // granted `origin: 'seed'` to it: restoring a document that legitimately
+    // claims `/etc/hostname` with `root: '/tmp'` produced a seed-origin
+    // `/tmp/etc/hostname`. With no prefix the two strings are identical, so
+    // this costs the boot path nothing.
+    const seedKind = seeded?.get(path);
     const origin: NodeOrigin =
       !claimsSeed
         ? 'user'
