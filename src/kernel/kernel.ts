@@ -705,6 +705,12 @@ export class Kernel {
       requireCapability: (capability) => {
         scoped.require(capability);
       },
+      // Null until a host supplies them. The kernel is in-memory and headless;
+      // storage, preferences and dialogs are the embedder's to provide, and a
+      // command that needs one must check rather than assume.
+      fs: null,
+      preferences: null,
+      dialog: null,
     };
 
     // Not the binder. Until PR-08 exists the kernel hands the raw remainder

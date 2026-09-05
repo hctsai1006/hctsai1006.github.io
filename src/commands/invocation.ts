@@ -27,6 +27,7 @@
 import type { PSValue } from '../pipeline/psobject.ts';
 import type { NativeStreams, PowerShellStreams } from '../pipeline/streams.ts';
 import type { Capability, CommandManifest } from './manifest.ts';
+import type { DialogPort, FileSystemPort, PreferencesPort } from './ports.ts';
 
 /**
  * The values a command receives, already bound.
@@ -68,6 +69,24 @@ export interface InvocationContext {
   readonly signal: AbortSignal;
   /** Throws if the command was not granted the capability it is asking for. */
   requireCapability(capability: Capability): void;
+
+  /**
+   * The filesystem, already brokered — every call requires the matching
+   * capability, so a command that declared none cannot read one byte. Null when
+   * the host runs without storage, which the pure pipeline commands do not care
+   * about and the filesystem commands must check rather than assume.
+   */
+  readonly fs: FileSystemPort | null;
+
+  /** Durable settings that are not files. Gated by `preferences.write`. */
+  readonly preferences: PreferencesPort | null;
+
+  /**
+   * Asking the host for something only a UI can do — the editors need it. Null
+   * in a headless run, which is the normal case for tests, so a command that
+   * needs it has to say so rather than crash.
+   */
+  readonly dialog: DialogPort | null;
 }
 
 /**

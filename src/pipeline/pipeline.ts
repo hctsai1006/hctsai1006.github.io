@@ -361,6 +361,12 @@ async function* runCommand(
     env: host.env,
     signal,
     requireCapability: (capability: Capability) => host.requireCapability(capability),
+    // Null until a host supplies them. The kernel is in-memory and headless;
+    // storage, preferences and dialogs are the embedder's to provide, and a
+    // command that needs one must check rather than assume.
+    fs: null,
+    preferences: null,
+    dialog: null,
   };
 
   const running = module.invoke(context, bound).then(
