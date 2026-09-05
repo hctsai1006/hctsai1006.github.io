@@ -1,0 +1,3 @@
+PS /home/thc1006> Get-Random
+757111400
+

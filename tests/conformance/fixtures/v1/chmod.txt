@@ -1,0 +1,4 @@
+PS /home/thc1006> chmod
+chmod: missing operand
+Try 'chmod --help' for more information.
+

@@ -1,0 +1,11 @@
+PS /home/thc1006> Get-Project
+Project                      Focus                                                  
+---------------------------  -------------------------------------------------------
+Nephio (LFN)                 TSC 治理 + Intent-based O-RAN 自動化                   
+DRA correctness audit        Kubernetes 動態資源配置的端到端正確性稽核              
+Upstream correctness audits  上游專案的靜默失效與重現性缺陷稽核 · CNCF / NASA / 學術
+O-RAN × NTN                  LEO 衛星地面段 · 3GPP R17 NTN 參數驗證                 
+COSCUP 2026                  體驗火箭導控 Balloon Popping Challenge workshop        
+
+  來源: /experience/
+

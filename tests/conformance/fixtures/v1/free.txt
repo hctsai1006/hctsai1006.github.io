@@ -1,0 +1,5 @@
+PS /home/thc1006> free
+               total        used        free      shared  buff/cache   available
+Mem:            15Gi       4.2Gi       6.1Gi       220Mi       5.1Gi        10Gi
+Swap:          4.0Gi          0B       4.0Gi
+

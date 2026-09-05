@@ -1,0 +1,5 @@
+PS /home/thc1006> pwd
+Path
+-------------
+/home/thc1006
+

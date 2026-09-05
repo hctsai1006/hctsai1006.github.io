@@ -1,0 +1,3 @@
+PS /home/thc1006> hostname
+thc1006-dev
+

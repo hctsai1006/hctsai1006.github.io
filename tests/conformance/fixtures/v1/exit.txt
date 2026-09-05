@@ -1,0 +1,3 @@
+PS /home/thc1006> exit
+Close the tab to exit. Thanks for stopping by :)
+

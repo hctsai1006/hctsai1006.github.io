@@ -1,0 +1,3 @@
+PS /home/thc1006> konami
+Up Up Down Down Left Right Left Right B A — 你找到了。所有主題已解鎖:Set-Theme campbell|pi|blue
+

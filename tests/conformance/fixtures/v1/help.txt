@@ -1,0 +1,51 @@
+PS /home/thc1006> help
+PowerShell 7 on Ubuntu — common commands
+PowerShell on Linux removes the ls/cat/rm/cp/mv/man/ps aliases, so those run native coreutils.
+
+Portfolio
+  whoami              identity summary
+  Get-Contribution    upstream work (-Foundation CNCF)
+  Get-Advisory        published security advisories that credit me
+  Get-Publication     publications
+  Get-Award           awards (-Year 2023)
+  Get-Project         representative projects
+  Get-Timeline        year-by-year timeline
+
+File system (coreutils)
+  ls -la              list a directory with modes and sizes
+  cd <dir>            change directory
+  cat <file>          print a file
+  rm -r <path>        remove
+  cp / mv             copy / move
+  mkdir <dir>         create a directory
+  chmod 755 <p>       change modes, really applied
+  nano / vim          edit a file
+  grep <pat>          search file contents
+  tree                directory tree
+
+PowerShell cmdlets
+  Get-ChildItem       list a directory (dir/gci)
+  Get-Content         read a file (gc)
+  Set-Content         write file contents (sc)
+  Select-String       search (sls)
+  Get-Location        current path (pwd)
+  Get-Process         process list
+
+System and network
+  uname -a            kernel information
+  ip addr             network interfaces
+  ping / traceroute   network tools
+  df / free / uptime  resource state
+  ps aux              process list
+  hostname            host name
+
+Other
+  Get-Source          links to every authoritative source
+  Get-Command         full command list (gcm)
+  Get-Help <cmd>      help for one command
+  Set-Theme           theme campbell|pi|blue
+  Clear-Host          clear the screen (cls)
+  Reset-FileSystem    restore the file system
+
+Pipelines work, for example:  Get-Command | Where-Object -Match get- | Measure-Object
+

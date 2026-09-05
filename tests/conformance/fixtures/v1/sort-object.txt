@@ -1,0 +1,3 @@
+PS /home/thc1006> Sort-Object
+Usage: <command> | Sort-Object
+

@@ -1,0 +1,13 @@
+PS /home/thc1006> whoami
+thc1006
+
+thc1006  (蔡秀吉 · Hsiu-Chi Tsai)
+CNCF Ambassador
+Nephio (Linux Foundation Networking) Technical Steering Committee Member
+Zephyr RTOS · M5Stack Platforms Maintainer
+276 merged upstream PRs  ·  79 projects  ·  8 foundations
+National Yang Ming Chiao Tung University — Computer Science
+
+  來源: people.cs.nycu.edu.tw/~hctsai1006
+        github.com/thc1006
+

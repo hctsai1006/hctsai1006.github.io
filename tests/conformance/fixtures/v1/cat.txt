@@ -1,0 +1,3 @@
+PS /home/thc1006> cat
+Usage: cat [FILE]...
+
