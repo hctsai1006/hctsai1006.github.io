@@ -100,6 +100,49 @@ export type Capability =
    */
   | 'virtual.policy.elevate';
 
+/**
+ * How much of this command exists HERE — which is a different question from
+ * `Fidelity` and from whether upstream has the command at all.
+ *
+ * Three facts kept getting collapsed into one, and each consumer needs a
+ * different one of them:
+ *
+ *   upstream availability   does real PowerShell have this command, and what
+ *                           are its real parameters?  `parameterSource` and
+ *                           `parameters` answer that, and they answer it about
+ *                           pwsh, not about us.
+ *   implementation status   this field. How much of it did WE build?
+ *   session registration    is it reachable from the prompt right now?
+ *                           `registry.ts` answers that, because it is a
+ *                           property of the running session and not of the
+ *                           declaration.
+ *
+ * Collapsing the first two is how `Sort-Object -Top` ended up in tab
+ * completion: upstream has `-Top`, so the generated manifest lists it, and the
+ * completion engine read that as "you can type this" — but the command body
+ * has never heard of it and the binder rejects it. Collapsing the second and
+ * third is how `Where-Object` was counted as an implemented command while its
+ * manifest could not express its own parameter sets.
+ */
+export type ImplementationStatus =
+  /** Declared in the manifest set; no module implements it. */
+  | 'declared'
+  /**
+   * A module exists, and it is NOT good enough to register by default. The
+   * gap is named in `notes`. Held back rather than deleted, because a partial
+   * implementation is worth testing and worth finishing — it is just not worth
+   * putting in front of a visitor who would be told a wrong answer.
+   */
+  | 'partial'
+  /** A module implements it, and its declared surface is the surface it binds. */
+  | 'implemented'
+  /**
+   * Implemented AND compared against a captured reference-implementation run.
+   * Nothing claims this yet; it exists so that `implemented` cannot quietly
+   * come to mean it.
+   */
+  | 'verified';
+
 /** How dangerous is running this? Drives confirmation and AI approval gates. */
 export type Risk =
   | 'read'
@@ -174,6 +217,11 @@ export interface CommandManifest {
   /**
    * Whether the parameter metadata was captured from a real PowerShell, or is
    * a declaration with nothing behind it yet.
+   *
+   * This describes UPSTREAM. `reference-implementation` means pwsh reported
+   * these parameters; it does NOT mean this engine binds them. Read
+   * `implementationStatus` for that, and `implementedParameters` for the
+   * subset a running command will actually accept.
    */
   parameterSource: 'reference-implementation' | 'declared' | 'none';
   /**
@@ -181,22 +229,75 @@ export interface CommandManifest {
    * is what a visitor typing it actually reaches. Names the owner.
    *
    * This exists because `sl` was described by three subsystems in two different
-   * ways at once. `manifests.json` carried an `sl` command (fidelity
+   * ways at once: `manifests.json` carried an `sl` command (fidelity
    * `simulated`, empty synopsis, "a joke response to a common typo for ls") AND
-   * `Set-Location` listing `sl` among its aliases — both faithful to v1, which
-   * records it twice. The registry bound the token to Set-Location while
-   * completion, `Get-Help` and the fidelity badge all described the joke. So
-   * the badge said `SIMULATED` for a token that runs a `native-semantic`
-   * cmdlet, which is precisely the confusion the fidelity taxonomy exists to
-   * prevent.
+   * `Set-Location` listing `sl` among its aliases. The registry bound the token
+   * to Set-Location while completion, `Get-Help` and the fidelity badge all
+   * described the joke, so the badge said `SIMULATED` for a token that runs a
+   * `native-semantic` cmdlet.
    *
-   * A consumer that resolves a typed token MUST skip a shadowed entry, so the
-   * owner's alias wins and one answer reaches the visitor. The entry itself
-   * stays: it is the record of a real v1 behaviour that is implemented, tested
-   * against the captured v1 archive, and currently unreachable — see
-   * `SHADOWED_V1_TOKENS` in `rewrite-inventory.data.mts` for why.
+   * DISTINCT FROM `implementationStatus`, and the two are not interchangeable.
+   * Shadowing is a NAMING fact — the module is complete and something else owns
+   * the word. Status is a CORRECTNESS fact — the name is free and the module
+   * would answer to it, wrongly. A consumer that resolves a typed token must
+   * honour both, for different reasons.
    */
   shadowedBy?: string;
+  /** How much of this command exists here. See `ImplementationStatus`. */
+  implementationStatus: ImplementationStatus;
+  /**
+   * The parameter names a module in THIS engine binds, when a module exists
+   * and hand-writes its own surface.
+   *
+   * Absent means "no separate answer": either nothing implements the command,
+   * or its module reads this very manifest and so cannot narrow it. Present and
+   * shorter than `parameters` is the honest common case — upstream
+   * `Sort-Object` has nine parameters and this one binds six.
+   */
+  implementedParameters?: readonly string[];
+  /**
+   * The set the binder falls back to when several fit, as pwsh's
+   * `DefaultParameterSetName` does. Only meaningful for a manifest that
+   * declares named parameter sets.
+   */
+  defaultParameterSet?: string;
+}
+
+/**
+ * The parameters a running command will actually accept.
+ *
+ * `manifest.parameters` describes UPSTREAM. Reading it as "what you can type"
+ * is the conflation `ImplementationStatus` exists to break, and help and
+ * syntax are two of the surfaces that were doing it: `Get-Help Sort-Object`
+ * listed -Top, -Bottom and -Culture, and `Get-Command Sort-Object -Syntax`
+ * printed them into the syntax line, for a binder that answers
+ * NamedParameterNotFound.
+ *
+ * Falls back to every parameter when `implementedParameters` is absent, which
+ * is the honest answer for a command whose module reads this manifest rather
+ * than declaring its own surface: nothing narrower is known.
+ */
+export function boundParameters(manifest: CommandManifest): readonly ParameterMetadata[] {
+  const implemented = manifest.implementedParameters;
+  if (implemented === undefined) return manifest.parameters;
+  const wanted = new Set(implemented.map((name) => name.toLowerCase()));
+  return manifest.parameters.filter((p) => wanted.has(p.name.toLowerCase()));
+}
+
+/**
+ * Parameters real PowerShell has and this engine does not accept.
+ *
+ * The complement of the above, and the thing worth SAYING rather than merely
+ * filtering: a user who knows `Sort-Object -Top 5` needs to be told it is
+ * missing here, not left to discover it as a parse error.
+ */
+export function upstreamOnlyParameters(manifest: CommandManifest): readonly string[] {
+  const implemented = manifest.implementedParameters;
+  if (implemented === undefined) return [];
+  const wanted = new Set(implemented.map((name) => name.toLowerCase()));
+  return manifest.parameters
+    .filter((p) => !wanted.has(p.name.toLowerCase()))
+    .map((p) => p.name);
 }
 
 /**

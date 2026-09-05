@@ -11,10 +11,14 @@
       "risk": "read",
       "capabilities": [],
       "parameters": [],
-      "outputTypeNames": [],
+      "outputTypeNames": [
+        "System.Management.Automation.PSVersionHashTable"
+      ],
       "synopsis": "PowerShell version information",
       "notes": "PSVersion and GitCommitId report the compatibility profile the session is running, not a real engine build. OS and Platform describe the simulated Ubuntu machine — the same fiction uname and hostname report — and are not your computer.",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "implementationStatus": "implemented",
+      "implementedParameters": []
     },
     {
       "name": "add-content",
@@ -285,7 +289,8 @@
       ],
       "outputTypeNames": [],
       "synopsis": "Append content to a file (ac)",
-      "parameterSource": "reference-implementation"
+      "parameterSource": "reference-implementation",
+      "implementationStatus": "implemented"
     },
     {
       "name": "bash",
@@ -299,7 +304,8 @@
       "outputTypeNames": [],
       "synopsis": "",
       "notes": "Acknowledges the request and stays in PowerShell. No second shell exists.",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "implementationStatus": "implemented"
     },
     {
       "name": "cat",
@@ -314,7 +320,8 @@
       "parameters": [],
       "outputTypeNames": [],
       "synopsis": "concatenate files and print on the standard output",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "implementationStatus": "implemented"
     },
     {
       "name": "chmod",
@@ -330,7 +337,8 @@
       "parameters": [],
       "outputTypeNames": [],
       "synopsis": "change file mode bits",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "implementationStatus": "implemented"
     },
     {
       "name": "chown",
@@ -346,7 +354,8 @@
       "parameters": [],
       "outputTypeNames": [],
       "synopsis": "change file owner and group",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "implementationStatus": "implemented"
     },
     {
       "name": "classic",
@@ -360,7 +369,8 @@
       "outputTypeNames": [],
       "synopsis": "",
       "notes": "Links to the archived v1 terminal.",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "implementationStatus": "implemented"
     },
     {
       "name": "clear-host",
@@ -378,7 +388,9 @@
       "parameters": [],
       "outputTypeNames": [],
       "synopsis": "Clear the display in the host program (cls)",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "implementationStatus": "implemented",
+      "implementedParameters": []
     },
     {
       "name": "coffee",
@@ -392,7 +404,8 @@
       "outputTypeNames": [],
       "synopsis": "",
       "notes": "A joke.",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "implementationStatus": "implemented"
     },
     {
       "name": "copy-item",
@@ -666,7 +679,8 @@
       ],
       "outputTypeNames": [],
       "synopsis": "Copy an item to another location (cp)",
-      "parameterSource": "reference-implementation"
+      "parameterSource": "reference-implementation",
+      "implementationStatus": "implemented"
     },
     {
       "name": "cp",
@@ -682,7 +696,8 @@
       "parameters": [],
       "outputTypeNames": [],
       "synopsis": "copy files and directories",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "implementationStatus": "implemented"
     },
     {
       "name": "df",
@@ -696,7 +711,8 @@
       "outputTypeNames": [],
       "synopsis": "report file system space usage",
       "notes": "Invented disk figures. Real browser storage usage is reported by Get-StorageStatus instead.",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "implementationStatus": "implemented"
     },
     {
       "name": "exit",
@@ -710,7 +726,8 @@
       "outputTypeNames": [],
       "synopsis": "Exit message",
       "notes": "A browser tab cannot close itself unless it opened itself. This prints a farewell and returns you to the prompt; no session ends.",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "implementationStatus": "implemented"
     },
     {
       "name": "format-list",
@@ -886,7 +903,18 @@
         "Microsoft.PowerShell.Commands.Internal.Format.GroupEndData"
       ],
       "synopsis": "Format the output as a list of properties, one property per line",
-      "parameterSource": "reference-implementation"
+      "parameterSource": "reference-implementation",
+      "implementationStatus": "implemented",
+      "implementedParameters": [
+        "Property",
+        "GroupBy",
+        "View",
+        "InputObject",
+        "Force",
+        "Expand",
+        "DisplayError",
+        "ShowError"
+      ]
     },
     {
       "name": "format-table",
@@ -1138,7 +1166,22 @@
         "Microsoft.PowerShell.Commands.Internal.Format.GroupEndData"
       ],
       "synopsis": "Format the output as a table",
-      "parameterSource": "reference-implementation"
+      "parameterSource": "reference-implementation",
+      "implementationStatus": "implemented",
+      "implementedParameters": [
+        "Property",
+        "GroupBy",
+        "View",
+        "InputObject",
+        "Force",
+        "Expand",
+        "DisplayError",
+        "ShowError",
+        "AutoSize",
+        "HideTableHeaders",
+        "Wrap",
+        "RepeatHeader"
+      ]
     },
     {
       "name": "format-wide",
@@ -1150,10 +1193,216 @@
       "fidelity": "native-semantic",
       "risk": "read",
       "capabilities": [],
-      "parameters": [],
-      "outputTypeNames": [],
+      "parameters": [
+        {
+          "name": "Property",
+          "aliases": [],
+          "type": "System.Object[]",
+          "isSwitch": false,
+          "sets": {
+            "__AllParameterSets": {
+              "position": 0,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": 0,
+          "valueFromPipelineInAnySet": false,
+          "validation": [],
+          "verified": false
+        },
+        {
+          "name": "GroupBy",
+          "aliases": [],
+          "type": "System.Object",
+          "isSwitch": false,
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": false,
+          "validation": [],
+          "verified": false
+        },
+        {
+          "name": "View",
+          "aliases": [],
+          "type": "System.String",
+          "isSwitch": false,
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": false,
+          "validation": [],
+          "verified": false
+        },
+        {
+          "name": "InputObject",
+          "aliases": [],
+          "type": "System.Object",
+          "isSwitch": false,
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": true
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": true,
+          "validation": [],
+          "verified": false
+        },
+        {
+          "name": "Force",
+          "aliases": [],
+          "type": "System.Management.Automation.SwitchParameter",
+          "isSwitch": true,
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": false,
+          "validation": [],
+          "verified": false
+        },
+        {
+          "name": "Expand",
+          "aliases": [],
+          "type": "System.String",
+          "isSwitch": false,
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": false,
+          "validation": [],
+          "verified": false
+        },
+        {
+          "name": "DisplayError",
+          "aliases": [],
+          "type": "System.Management.Automation.SwitchParameter",
+          "isSwitch": true,
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": false,
+          "validation": [],
+          "verified": false
+        },
+        {
+          "name": "ShowError",
+          "aliases": [],
+          "type": "System.Management.Automation.SwitchParameter",
+          "isSwitch": true,
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": false,
+          "validation": [],
+          "verified": false
+        },
+        {
+          "name": "AutoSize",
+          "aliases": [],
+          "type": "System.Management.Automation.SwitchParameter",
+          "isSwitch": true,
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": false,
+          "validation": [],
+          "verified": false
+        },
+        {
+          "name": "Column",
+          "aliases": [],
+          "type": "System.Int32",
+          "isSwitch": false,
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": false,
+          "validation": [],
+          "verified": false
+        }
+      ],
+      "outputTypeNames": [
+        "Microsoft.PowerShell.Commands.Internal.Format.FormatEntryData"
+      ],
       "synopsis": "Format objects as a wide table that displays only one property of each object",
-      "parameterSource": "none"
+      "parameterSource": "declared",
+      "implementationStatus": "implemented",
+      "implementedParameters": [
+        "Property",
+        "GroupBy",
+        "View",
+        "InputObject",
+        "Force",
+        "Expand",
+        "DisplayError",
+        "ShowError",
+        "AutoSize",
+        "Column"
+      ]
     },
     {
       "name": "fortune",
@@ -1167,7 +1416,8 @@
       "outputTypeNames": [],
       "synopsis": "",
       "notes": "A joke.",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "implementationStatus": "implemented"
     },
     {
       "name": "free",
@@ -1181,7 +1431,8 @@
       "outputTypeNames": [],
       "synopsis": "Display amount of free and used memory in the system",
       "notes": "Invented memory figures. The browser does not expose host memory.",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "implementationStatus": "implemented"
     },
     {
       "name": "get-advisory",
@@ -1196,10 +1447,56 @@
       "capabilities": [
         "portfolio.read"
       ],
-      "parameters": [],
-      "outputTypeNames": [],
+      "parameters": [
+        {
+          "name": "Severity",
+          "aliases": [],
+          "type": "System.String",
+          "isSwitch": false,
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": false,
+          "validation": [],
+          "verified": false
+        },
+        {
+          "name": "Foundation",
+          "aliases": [],
+          "type": "System.String",
+          "isSwitch": false,
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": false,
+          "validation": [],
+          "verified": false
+        }
+      ],
+      "outputTypeNames": [
+        "BrowserShell.Portfolio.Advisory"
+      ],
       "synopsis": "List published security advisories that credit me",
-      "parameterSource": "none"
+      "parameterSource": "declared",
+      "implementationStatus": "implemented",
+      "implementedParameters": [
+        "Severity",
+        "Foundation"
+      ]
     },
     {
       "name": "get-award",
@@ -1215,20 +1512,32 @@
         {
           "name": "Year",
           "aliases": [],
-          "type": "System.Object",
+          "type": "System.String",
           "isSwitch": false,
-          "sets": {},
+          "sets": {
+            "__AllParameterSets": {
+              "position": 0,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
           "mandatoryInAnySet": false,
           "mandatoryInEverySet": false,
-          "firstPosition": null,
+          "firstPosition": 0,
           "valueFromPipelineInAnySet": false,
           "validation": [],
           "verified": false
         }
       ],
-      "outputTypeNames": [],
+      "outputTypeNames": [
+        "BrowserShell.Portfolio.Award"
+      ],
       "synopsis": "List awards and honors",
-      "parameterSource": "declared"
+      "parameterSource": "declared",
+      "implementationStatus": "implemented",
+      "implementedParameters": [
+        "Year"
+      ]
     },
     {
       "name": "get-childitem",
@@ -1571,7 +1880,8 @@
         "System.IO.DirectoryInfo"
       ],
       "synopsis": "Get the items in a directory (dir/gci)",
-      "parameterSource": "reference-implementation"
+      "parameterSource": "reference-implementation",
+      "implementationStatus": "implemented"
     },
     {
       "name": "get-command",
@@ -1644,6 +1954,25 @@
           "valueFromPipelineInAnySet": false,
           "validation": [],
           "verified": true
+        },
+        {
+          "name": "Detailed",
+          "aliases": [],
+          "type": "System.Management.Automation.SwitchParameter",
+          "isSwitch": true,
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": false,
+          "validation": [],
+          "verified": false
         },
         {
           "name": "ExcludeModule",
@@ -1950,7 +2279,19 @@
         "System.Management.Automation.PSObject"
       ],
       "synopsis": "Get all commands (gcm)",
-      "parameterSource": "reference-implementation"
+      "parameterSource": "reference-implementation",
+      "implementationStatus": "implemented",
+      "implementedParameters": [
+        "Name",
+        "CommandType",
+        "Verb",
+        "Noun",
+        "ParameterName",
+        "TotalCount",
+        "Syntax",
+        "All",
+        "Detailed"
+      ]
     },
     {
       "name": "get-content",
@@ -2290,7 +2631,8 @@
         "System.String"
       ],
       "synopsis": "Get the contents of a file (cat/type)",
-      "parameterSource": "reference-implementation"
+      "parameterSource": "reference-implementation",
+      "implementationStatus": "implemented"
     },
     {
       "name": "get-contribution",
@@ -2306,20 +2648,32 @@
         {
           "name": "Foundation",
           "aliases": [],
-          "type": "System.Object",
+          "type": "System.String",
           "isSwitch": false,
-          "sets": {},
+          "sets": {
+            "__AllParameterSets": {
+              "position": 0,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
           "mandatoryInAnySet": false,
           "mandatoryInEverySet": false,
-          "firstPosition": null,
+          "firstPosition": 0,
           "valueFromPipelineInAnySet": false,
           "validation": [],
           "verified": false
         }
       ],
-      "outputTypeNames": [],
+      "outputTypeNames": [
+        "BrowserShell.Portfolio.Contribution"
+      ],
       "synopsis": "List merged upstream contributions",
-      "parameterSource": "declared"
+      "parameterSource": "declared",
+      "implementationStatus": "implemented",
+      "implementedParameters": [
+        "Foundation"
+      ]
     },
     {
       "name": "get-date",
@@ -2625,7 +2979,22 @@
         "System.DateTime"
       ],
       "synopsis": "Get the current date and time",
-      "parameterSource": "reference-implementation"
+      "parameterSource": "reference-implementation",
+      "implementationStatus": "implemented",
+      "implementedParameters": [
+        "Date",
+        "Year",
+        "Month",
+        "Day",
+        "Hour",
+        "Minute",
+        "Second",
+        "Millisecond",
+        "DisplayHint",
+        "UFormat",
+        "Format",
+        "AsUTC"
+      ]
     },
     {
       "name": "get-help",
@@ -2871,7 +3240,18 @@
       ],
       "outputTypeNames": [],
       "synopsis": "Display information about commands (man)",
-      "parameterSource": "reference-implementation"
+      "parameterSource": "reference-implementation",
+      "implementationStatus": "implemented",
+      "implementedParameters": [
+        "Name",
+        "Category",
+        "Parameter",
+        "Detailed",
+        "Examples",
+        "Full",
+        "Online",
+        "ShowWindow"
+      ]
     },
     {
       "name": "get-history",
@@ -2932,7 +3312,12 @@
         "Microsoft.PowerShell.Commands.HistoryInfo"
       ],
       "synopsis": "Get the commands entered during the current session",
-      "parameterSource": "reference-implementation"
+      "parameterSource": "reference-implementation",
+      "implementationStatus": "implemented",
+      "implementedParameters": [
+        "Id",
+        "Count"
+      ]
     },
     {
       "name": "get-location",
@@ -3028,7 +3413,14 @@
         "System.Management.Automation.PathInfoStack"
       ],
       "synopsis": "Get the current working location (pwd)",
-      "parameterSource": "reference-implementation"
+      "parameterSource": "reference-implementation",
+      "implementationStatus": "implemented",
+      "implementedParameters": [
+        "PSProvider",
+        "PSDrive",
+        "Stack",
+        "StackName"
+      ]
     },
     {
       "name": "get-member",
@@ -3164,7 +3556,15 @@
         "Microsoft.PowerShell.Commands.MemberDefinition"
       ],
       "synopsis": "Get the properties and methods of objects",
-      "parameterSource": "reference-implementation"
+      "parameterSource": "reference-implementation",
+      "implementationStatus": "implemented",
+      "implementedParameters": [
+        "Name",
+        "MemberType",
+        "Static",
+        "Force",
+        "InputObject"
+      ]
     },
     {
       "name": "get-process",
@@ -3359,7 +3759,8 @@
       ],
       "synopsis": "Get the processes running on the local computer",
       "notes": "Lists invented processes. No host or browser process is enumerated.",
-      "parameterSource": "reference-implementation"
+      "parameterSource": "reference-implementation",
+      "implementationStatus": "implemented"
     },
     {
       "name": "get-project",
@@ -3372,9 +3773,13 @@
         "portfolio.read"
       ],
       "parameters": [],
-      "outputTypeNames": [],
+      "outputTypeNames": [
+        "BrowserShell.Portfolio.Project"
+      ],
       "synopsis": "List representative projects",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "implementationStatus": "implemented",
+      "implementedParameters": []
     },
     {
       "name": "get-publication",
@@ -3390,9 +3795,53 @@
         {
           "name": "Full",
           "aliases": [],
-          "type": "System.Object",
+          "type": "System.Management.Automation.SwitchParameter",
+          "isSwitch": true,
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": false,
+          "validation": [],
+          "verified": false
+        },
+        {
+          "name": "Status",
+          "aliases": [],
+          "type": "System.String",
           "isSwitch": false,
-          "sets": {},
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": false,
+          "validation": [],
+          "verified": false
+        },
+        {
+          "name": "Year",
+          "aliases": [],
+          "type": "System.String",
+          "isSwitch": false,
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
           "mandatoryInAnySet": false,
           "mandatoryInEverySet": false,
           "firstPosition": null,
@@ -3401,9 +3850,17 @@
           "verified": false
         }
       ],
-      "outputTypeNames": [],
+      "outputTypeNames": [
+        "BrowserShell.Portfolio.Publication"
+      ],
       "synopsis": "List publications (-Full shows every entry)",
-      "parameterSource": "declared"
+      "parameterSource": "declared",
+      "implementationStatus": "implemented",
+      "implementedParameters": [
+        "Full",
+        "Status",
+        "Year"
+      ]
     },
     {
       "name": "get-random",
@@ -3549,7 +4006,16 @@
         "System.Double"
       ],
       "synopsis": "Get a random number",
-      "parameterSource": "reference-implementation"
+      "parameterSource": "reference-implementation",
+      "implementationStatus": "implemented",
+      "implementedParameters": [
+        "Maximum",
+        "Minimum",
+        "SetSeed",
+        "Count",
+        "InputObject",
+        "Shuffle"
+      ]
     },
     {
       "name": "get-source",
@@ -3566,9 +4032,13 @@
         "portfolio.read"
       ],
       "parameters": [],
-      "outputTypeNames": [],
+      "outputTypeNames": [
+        "BrowserShell.Portfolio.Source"
+      ],
       "synopsis": "List every authoritative source, with links",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "implementationStatus": "implemented",
+      "implementedParameters": []
     },
     {
       "name": "get-timeline",
@@ -3581,9 +4051,13 @@
         "portfolio.read"
       ],
       "parameters": [],
-      "outputTypeNames": [],
+      "outputTypeNames": [
+        "BrowserShell.Portfolio.TimelineEntry"
+      ],
       "synopsis": "Show the year-by-year timeline",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "implementationStatus": "implemented",
+      "implementedParameters": []
     },
     {
       "name": "git",
@@ -3599,7 +4073,8 @@
       "outputTypeNames": [],
       "synopsis": "the stupid content tracker",
       "notes": "No repository is read and no git runs. status and remote are fixed text; log renders the portfolio timeline formatted as commits.",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "implementationStatus": "implemented"
     },
     {
       "name": "grep",
@@ -3614,7 +4089,8 @@
       "parameters": [],
       "outputTypeNames": [],
       "synopsis": "print lines that match patterns",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "implementationStatus": "implemented"
     },
     {
       "name": "group-object",
@@ -3768,7 +4244,16 @@
         "Microsoft.PowerShell.Commands.GroupInfo"
       ],
       "synopsis": "Group objects that contain the same value for specified properties",
-      "parameterSource": "reference-implementation"
+      "parameterSource": "reference-implementation",
+      "implementationStatus": "implemented",
+      "implementedParameters": [
+        "Property",
+        "NoElement",
+        "CaseSensitive",
+        "AsHashTable",
+        "AsString",
+        "InputObject"
+      ]
     },
     {
       "name": "help",
@@ -3779,9 +4264,13 @@
       "risk": "read",
       "capabilities": [],
       "parameters": [],
-      "outputTypeNames": [],
+      "outputTypeNames": [
+        "BrowserShell.QuickStartEntry"
+      ],
       "synopsis": "Quick start guide",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "implementationStatus": "implemented",
+      "implementedParameters": []
     },
     {
       "name": "hostname",
@@ -3795,7 +4284,8 @@
       "outputTypeNames": [],
       "synopsis": "show the system's host name",
       "notes": "The hostname of the simulated machine.",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "implementationStatus": "implemented"
     },
     {
       "name": "ifconfig",
@@ -3809,7 +4299,8 @@
       "outputTypeNames": [],
       "synopsis": "configure a network interface",
       "notes": "Not present until the simulated net-tools package is installed, after which it reports that the call is not implemented. The browser cannot enumerate real network interfaces at all.",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "implementationStatus": "implemented"
     },
     {
       "name": "ip",
@@ -3823,7 +4314,8 @@
       "outputTypeNames": [],
       "synopsis": "show / manipulate routing, network devices, interfaces and tunnels",
       "notes": "Reports an invented interface. The browser cannot enumerate real network interfaces.",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "implementationStatus": "implemented"
     },
     {
       "name": "konami",
@@ -3837,7 +4329,8 @@
       "outputTypeNames": [],
       "synopsis": "",
       "notes": "A joke.",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "implementationStatus": "implemented"
     },
     {
       "name": "ls",
@@ -3852,7 +4345,8 @@
       "parameters": [],
       "outputTypeNames": [],
       "synopsis": "list directory contents",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "implementationStatus": "implemented"
     },
     {
       "name": "lsb_release",
@@ -3866,7 +4360,8 @@
       "outputTypeNames": [],
       "synopsis": "print distribution-specific information",
       "notes": "Describes the simulated Ubuntu environment, not the machine you are using.",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "implementationStatus": "implemented"
     },
     {
       "name": "matrix",
@@ -3880,7 +4375,8 @@
       "outputTypeNames": [],
       "synopsis": "",
       "notes": "A joke.",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "implementationStatus": "implemented"
     },
     {
       "name": "measure-object",
@@ -4130,7 +4626,21 @@
         "Microsoft.PowerShell.Commands.GenericObjectMeasureInfo"
       ],
       "synopsis": "Count objects in the pipeline",
-      "parameterSource": "reference-implementation"
+      "parameterSource": "reference-implementation",
+      "implementationStatus": "implemented",
+      "implementedParameters": [
+        "Property",
+        "Sum",
+        "Average",
+        "Maximum",
+        "Minimum",
+        "StandardDeviation",
+        "Line",
+        "Word",
+        "Character",
+        "IgnoreWhiteSpace",
+        "InputObject"
+      ]
     },
     {
       "name": "mkdir",
@@ -4146,7 +4656,8 @@
       "parameters": [],
       "outputTypeNames": [],
       "synopsis": "make directories",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "implementationStatus": "implemented"
     },
     {
       "name": "move-item",
@@ -4340,7 +4851,8 @@
       ],
       "outputTypeNames": [],
       "synopsis": "Move an item to another location (mv)",
-      "parameterSource": "reference-implementation"
+      "parameterSource": "reference-implementation",
+      "implementationStatus": "implemented"
     },
     {
       "name": "mv",
@@ -4356,7 +4868,8 @@
       "parameters": [],
       "outputTypeNames": [],
       "synopsis": "move (rename) files",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "implementationStatus": "implemented"
     },
     {
       "name": "nano",
@@ -4373,7 +4886,8 @@
       "parameters": [],
       "outputTypeNames": [],
       "synopsis": "Nano's ANOther editor, inspired by Pico",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "implementationStatus": "implemented"
     },
     {
       "name": "new-guid",
@@ -4427,7 +4941,12 @@
         "System.Guid"
       ],
       "synopsis": "Create a GUID",
-      "parameterSource": "reference-implementation"
+      "parameterSource": "reference-implementation",
+      "implementationStatus": "implemented",
+      "implementedParameters": [
+        "Empty",
+        "InputObject"
+      ]
     },
     {
       "name": "new-item",
@@ -4574,7 +5093,8 @@
         "System.IO.DirectoryInfo"
       ],
       "synopsis": "Create a new file or directory (mkdir/ni)",
-      "parameterSource": "reference-implementation"
+      "parameterSource": "reference-implementation",
+      "implementationStatus": "implemented"
     },
     {
       "name": "out-null",
@@ -4607,7 +5127,11 @@
       ],
       "outputTypeNames": [],
       "synopsis": "Discard pipeline output",
-      "parameterSource": "reference-implementation"
+      "parameterSource": "reference-implementation",
+      "implementationStatus": "implemented",
+      "implementedParameters": [
+        "InputObject"
+      ]
     },
     {
       "name": "out-string",
@@ -4617,10 +5141,98 @@
       "fidelity": "native-semantic",
       "risk": "read",
       "capabilities": [],
-      "parameters": [],
-      "outputTypeNames": [],
+      "parameters": [
+        {
+          "name": "InputObject",
+          "aliases": [],
+          "type": "System.Object",
+          "isSwitch": false,
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": true
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": true,
+          "validation": [],
+          "verified": false
+        },
+        {
+          "name": "Stream",
+          "aliases": [],
+          "type": "System.Management.Automation.SwitchParameter",
+          "isSwitch": true,
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": false,
+          "validation": [],
+          "verified": false
+        },
+        {
+          "name": "NoNewline",
+          "aliases": [],
+          "type": "System.Management.Automation.SwitchParameter",
+          "isSwitch": true,
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": false,
+          "validation": [],
+          "verified": false
+        },
+        {
+          "name": "Width",
+          "aliases": [],
+          "type": "System.Int32",
+          "isSwitch": false,
+          "sets": {
+            "__AllParameterSets": {
+              "position": null,
+              "mandatory": false,
+              "valueFromPipeline": false
+            }
+          },
+          "mandatoryInAnySet": false,
+          "mandatoryInEverySet": false,
+          "firstPosition": null,
+          "valueFromPipelineInAnySet": false,
+          "validation": [
+            "ValidateRangeAttribute"
+          ],
+          "verified": false
+        }
+      ],
+      "outputTypeNames": [
+        "System.String"
+      ],
       "synopsis": "Send objects to the host as a series of strings",
-      "parameterSource": "none"
+      "parameterSource": "declared",
+      "implementationStatus": "implemented",
+      "implementedParameters": [
+        "InputObject",
+        "Stream",
+        "NoNewline",
+        "Width"
+      ]
     },
     {
       "name": "ping",
@@ -4634,7 +5246,8 @@
       "outputTypeNames": [],
       "synopsis": "send ICMP ECHO_REQUEST to network hosts",
       "notes": "No packet is sent. ICMP is not reachable from a browser; the timings are illustrative.",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "implementationStatus": "implemented"
     },
     {
       "name": "ps",
@@ -4650,7 +5263,8 @@
       "outputTypeNames": [],
       "synopsis": "report a snapshot of the current processes",
       "notes": "Lists invented Unix processes. It does not show this page workers or browser tasks — that is what the kernel process table will report once it exists.",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "implementationStatus": "implemented"
     },
     {
       "name": "remove-item",
@@ -4849,7 +5463,8 @@
       ],
       "outputTypeNames": [],
       "synopsis": "Delete a file or directory (rm/del)",
-      "parameterSource": "reference-implementation"
+      "parameterSource": "reference-implementation",
+      "implementationStatus": "implemented"
     },
     {
       "name": "rename-item",
@@ -4986,7 +5601,8 @@
       ],
       "outputTypeNames": [],
       "synopsis": "Rename an item (ren)",
-      "parameterSource": "reference-implementation"
+      "parameterSource": "reference-implementation",
+      "implementationStatus": "implemented"
     },
     {
       "name": "reset-filesystem",
@@ -5001,7 +5617,8 @@
       "parameters": [],
       "outputTypeNames": [],
       "synopsis": "Restore the file system to its initial state",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "implementationStatus": "implemented"
     },
     {
       "name": "rm",
@@ -5017,7 +5634,8 @@
       "parameters": [],
       "outputTypeNames": [],
       "synopsis": "remove files or directories",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "implementationStatus": "implemented"
     },
     {
       "name": "rocket",
@@ -5031,7 +5649,8 @@
       "outputTypeNames": [],
       "synopsis": "",
       "notes": "A joke.",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "implementationStatus": "implemented"
     },
     {
       "name": "secret",
@@ -5045,7 +5664,8 @@
       "outputTypeNames": [],
       "synopsis": "",
       "notes": "A joke.",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "implementationStatus": "implemented"
     },
     {
       "name": "select-object",
@@ -5345,7 +5965,18 @@
       ],
       "outputTypeNames": [],
       "synopsis": "Select the first or last N objects",
-      "parameterSource": "reference-implementation"
+      "parameterSource": "reference-implementation",
+      "implementationStatus": "implemented",
+      "implementedParameters": [
+        "Property",
+        "ExpandProperty",
+        "First",
+        "Last",
+        "Skip",
+        "SkipLast",
+        "Unique",
+        "InputObject"
+      ]
     },
     {
       "name": "select-string",
@@ -5741,7 +6372,8 @@
         "System.String"
       ],
       "synopsis": "Find text in files (grep)",
-      "parameterSource": "reference-implementation"
+      "parameterSource": "reference-implementation",
+      "implementationStatus": "implemented"
     },
     {
       "name": "set-content",
@@ -6012,7 +6644,8 @@
       ],
       "outputTypeNames": [],
       "synopsis": "Write new content to a file (sc)",
-      "parameterSource": "reference-implementation"
+      "parameterSource": "reference-implementation",
+      "implementationStatus": "implemented"
     },
     {
       "name": "set-location",
@@ -6115,7 +6748,8 @@
       ],
       "synopsis": "Set the current working location (cd)",
       "notes": "Changes the working directory for this session only; the location is not persisted.",
-      "parameterSource": "reference-implementation"
+      "parameterSource": "reference-implementation",
+      "implementationStatus": "implemented"
     },
     {
       "name": "set-theme",
@@ -6146,7 +6780,8 @@
       ],
       "outputTypeNames": [],
       "synopsis": "Switch the color scheme: campbell|pi|blue",
-      "parameterSource": "declared"
+      "parameterSource": "declared",
+      "implementationStatus": "implemented"
     },
     {
       "name": "sl",
@@ -6161,7 +6796,8 @@
       "synopsis": "",
       "notes": "A joke response to a common typo for ls.",
       "parameterSource": "none",
-      "shadowedBy": "set-location"
+      "shadowedBy": "set-location",
+      "implementationStatus": "implemented"
     },
     {
       "name": "sort-object",
@@ -6352,7 +6988,16 @@
       ],
       "outputTypeNames": [],
       "synopsis": "Sort objects by property value",
-      "parameterSource": "reference-implementation"
+      "parameterSource": "reference-implementation",
+      "implementationStatus": "implemented",
+      "implementedParameters": [
+        "Property",
+        "Descending",
+        "Unique",
+        "CaseSensitive",
+        "Stable",
+        "InputObject"
+      ]
     },
     {
       "name": "sudo",
@@ -6368,7 +7013,8 @@
       "outputTypeNames": [],
       "synopsis": "",
       "notes": "Grants nothing in the browser, the origin, or your computer, and never can. In the v1 terminal it does not even elevate anything virtual — it reports command not found, and the only state it touches is whether the simulated net-tools package has been installed. The capability is declared so the broker has something to refuse once a policy engine exists.",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "implementationStatus": "implemented"
     },
     {
       "name": "test-connection",
@@ -6881,7 +7527,8 @@
       ],
       "synopsis": "Send ICMP echo requests (ping)",
       "notes": "No packet is sent. Mirrors the shape of the real cmdlet output only.",
-      "parameterSource": "reference-implementation"
+      "parameterSource": "reference-implementation",
+      "implementationStatus": "implemented"
     },
     {
       "name": "test-path",
@@ -7094,7 +7741,8 @@
         "System.Boolean"
       ],
       "synopsis": "Determine whether a path exists",
-      "parameterSource": "reference-implementation"
+      "parameterSource": "reference-implementation",
+      "implementationStatus": "implemented"
     },
     {
       "name": "thc1006",
@@ -7108,7 +7756,8 @@
       "outputTypeNames": [],
       "synopsis": "",
       "notes": "A joke.",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "implementationStatus": "implemented"
     },
     {
       "name": "touch",
@@ -7124,7 +7773,8 @@
       "parameters": [],
       "outputTypeNames": [],
       "synopsis": "change file timestamps",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "implementationStatus": "implemented"
     },
     {
       "name": "traceroute",
@@ -7140,7 +7790,8 @@
       "outputTypeNames": [],
       "synopsis": "print the route packets trace to network host",
       "notes": "No packet is sent. The hops are a fixed, plausible route, not a measurement.",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "implementationStatus": "implemented"
     },
     {
       "name": "tree",
@@ -7155,7 +7806,8 @@
       "parameters": [],
       "outputTypeNames": [],
       "synopsis": "list contents of directories in a tree-like format",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "implementationStatus": "implemented"
     },
     {
       "name": "uname",
@@ -7169,7 +7821,8 @@
       "outputTypeNames": [],
       "synopsis": "print system information",
       "notes": "Describes the simulated Ubuntu environment, not the machine you are using.",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "implementationStatus": "implemented"
     },
     {
       "name": "uptime",
@@ -7183,7 +7836,8 @@
       "outputTypeNames": [],
       "synopsis": "Tell how long the system has been running",
       "notes": "Uptime of the simulated machine, not of your computer or this tab.",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "implementationStatus": "implemented"
     },
     {
       "name": "vi",
@@ -7200,7 +7854,8 @@
       "parameters": [],
       "outputTypeNames": [],
       "synopsis": "Vi IMproved, a programmer's text editor",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "implementationStatus": "implemented"
     },
     {
       "name": "vim",
@@ -7217,7 +7872,8 @@
       "parameters": [],
       "outputTypeNames": [],
       "synopsis": "Vi IMproved, a programmer's text editor",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "implementationStatus": "implemented"
     },
     {
       "name": "where-object",
@@ -8223,7 +8879,45 @@
       ],
       "outputTypeNames": [],
       "synopsis": "Filter objects in the pipeline",
-      "parameterSource": "reference-implementation"
+      "parameterSource": "reference-implementation",
+      "implementationStatus": "partial",
+      "implementedParameters": [
+        "FilterScript",
+        "Property",
+        "Value",
+        "InputObject",
+        "EQ",
+        "CEQ",
+        "NE",
+        "CNE",
+        "GT",
+        "CGT",
+        "LT",
+        "CLT",
+        "GE",
+        "CGE",
+        "LE",
+        "CLE",
+        "Like",
+        "CLike",
+        "NotLike",
+        "CNotLike",
+        "Match",
+        "CMatch",
+        "NotMatch",
+        "CNotMatch",
+        "Contains",
+        "CContains",
+        "NotContains",
+        "CNotContains",
+        "In",
+        "CIn",
+        "NotIn",
+        "CNotIn",
+        "Is",
+        "IsNot",
+        "Not"
+      ]
     },
     {
       "name": "which",
@@ -8238,7 +8932,8 @@
       "parameters": [],
       "outputTypeNames": [],
       "synopsis": "locate a command",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "implementationStatus": "implemented"
     },
     {
       "name": "whoami",
@@ -8254,10 +8949,14 @@
         "portfolio.read"
       ],
       "parameters": [],
-      "outputTypeNames": [],
+      "outputTypeNames": [
+        "BrowserShell.Portfolio.Identity"
+      ],
       "synopsis": "print effective user name, with a profile summary",
       "notes": "Prints the profile owner, not you. A page has no effective user, so unlike the Unix command this reports a fixed identity; the profile summary beside it is real data.",
-      "parameterSource": "none"
+      "parameterSource": "none",
+      "implementationStatus": "implemented",
+      "implementedParameters": []
     },
     {
       "name": "write-output",
@@ -8311,7 +9010,12 @@
       ],
       "outputTypeNames": [],
       "synopsis": "Send objects to the pipeline (echo)",
-      "parameterSource": "reference-implementation"
+      "parameterSource": "reference-implementation",
+      "implementationStatus": "implemented",
+      "implementedParameters": [
+        "InputObject",
+        "NoEnumerate"
+      ]
     }
   ]
 }

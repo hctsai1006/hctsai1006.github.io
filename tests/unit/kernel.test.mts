@@ -66,6 +66,7 @@ function manifest(overrides: Partial<CommandManifest> = {}): CommandManifest {
     outputTypeNames: [],
     synopsis: 'A command that exists only in these tests.',
     parameterSource: 'none',
+    implementationStatus: 'implemented',
     ...overrides,
   };
 }

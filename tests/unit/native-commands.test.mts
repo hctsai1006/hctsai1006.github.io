@@ -27,6 +27,9 @@ import assert from 'node:assert/strict';
 import { psObject } from '../../src/pipeline/psobject.ts';
 import type { PSValue } from '../../src/pipeline/psobject.ts';
 import { CapabilityDeniedError } from '../../src/commands/invocation.ts';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { errorRecord } from '../../src/pipeline/streams.ts';
 import {
   EMPTY_GUID,
@@ -44,6 +47,31 @@ import {
   SIMULATED_MACHINE,
   gitCommitIdFor,
 } from '../../src/commands/native/index.ts';
+import { HELP_INFO_TYPE_NAMES, helpInfo } from '../../src/commands/native/get-help.ts';
+import type { CommandManifest } from '../../src/commands/manifest.ts';
+import type { PSObject } from '../../src/pipeline/psobject.ts';
+
+/**
+ * One manifest straight out of the generated file.
+ *
+ * Read at runtime rather than through the registry: these assertions are about
+ * what the GENERATED manifest says, which is the thing help and syntax read,
+ * and Where-Object is not in the registry at all.
+ */
+const GENERATED_MANIFESTS = (
+  JSON.parse(
+    readFileSync(
+      join(import.meta.dirname, '..', '..', 'src', 'commands', 'manifests.json'),
+      'utf8',
+    ),
+  ) as { commands: readonly CommandManifest[] }
+).commands;
+
+function MANIFEST_OF(name: string): CommandManifest {
+  const found = GENERATED_MANIFESTS.find((m) => m.name === name);
+  assert.ok(found !== undefined, `${name} is not in manifests.json`);
+  return found;
+}
 import {
   TEST_HISTORY,
   TEST_INSTANT,
@@ -461,6 +489,30 @@ describe('Get-Command', () => {
     assert.deepEqual(prop(result.values[0], 'Capabilities'), ['terminal.control']);
   });
 
+  it('-ParameterName finds commands that actually take the parameter', async () => {
+    // 'which commands take -Top?' handed back Sort-Object, which rejects it.
+    // Upstream has -Top; this engine does not bind it.
+    const top = await run(getCommand, { ParameterName: 'Top' });
+    assert.deepEqual(column(top.values, 'Name'), []);
+    const descending = await run(getCommand, { ParameterName: 'Descending' });
+    assert.ok(column(descending.values, 'Name').includes('Sort-Object'));
+  });
+
+  it('keeps ParameterSource and Implementation as separate answers', async () => {
+    // They look alike and are about different things. Where-Object's parameter
+    // metadata IS from the reference implementation -- pwsh reported all 35
+    // names -- and the command is still only partially implemented and not
+    // registered. One field said the first and nothing said the second, which
+    // is how 'reference-implementation' came to read as 'we built this'.
+    const where = await run(getCommand, { Name: 'Where-Object', Detailed: true });
+    assert.equal(prop(where.values[0], 'ParameterSource'), 'reference-implementation');
+    assert.equal(prop(where.values[0], 'Implementation'), 'partial');
+
+    const sort = await run(getCommand, { Name: 'Sort-Object', Detailed: true });
+    assert.equal(prop(sort.values[0], 'ParameterSource'), 'reference-implementation');
+    assert.equal(prop(sort.values[0], 'Implementation'), 'implemented');
+  });
+
   it('builds a syntax line from the declared parameters', () => {
     const module = need('get-location');
     const syntax = syntaxOf(module.manifest, 'Get-Location');
@@ -470,11 +522,84 @@ describe('Get-Command', () => {
         '[-StackName <string[]>] [<CommonParameters>]',
     );
   });
+
+  it('builds it from what BINDS, not from what upstream declares', () => {
+    // The generated manifest's `parameters` describe pwsh, so the syntax line
+    // for Sort-Object used to offer -Top, -Bottom and -Culture. Measured, this
+    // engine binds six of upstream's nine, and the binder answers
+    // NamedParameterNotFound for the other three -- a syntax line that offers
+    // them is an instruction to produce an error.
+    const declared = MANIFEST_OF('sort-object');
+    const syntax = syntaxOf(declared, 'Sort-Object');
+    for (const upstreamOnly of ['-Top', '-Bottom', '-Culture']) {
+      assert.ok(!syntax.includes(upstreamOnly), `${upstreamOnly} must not be offered`);
+    }
+    for (const ours of ['-Descending', '-Stable', '-Unique']) {
+      assert.ok(syntax.includes(ours), `${ours} must be offered`);
+    }
+    // And a BrowserShell extension upstream has never had is still offered,
+    // because the command really does bind it. `-Detailed` on Get-Command used
+    // to vanish here: captured metadata replaced the module's declaration.
+    assert.ok(syntaxOf(MANIFEST_OF('get-command'), 'Get-Command').includes('-Detailed'));
+  });
 });
 
 // ---------------------------------------------------------------------------
 // Get-Help
 // ---------------------------------------------------------------------------
+
+describe('Get-Help says what runs, and names what does not', () => {
+  it('documents the parameters the binder accepts', () => {
+    // Help that documents a parameter the binder rejects is worse than help
+    // that omits it: the omission is a gap, the documentation is a wrong
+    // instruction.
+    const info = helpInfo(
+      { manifest: MANIFEST_OF('sort-object'), commandType: 'Cmdlet' },
+      HELP_INFO_TYPE_NAMES,
+    );
+    const names = (info.properties['parameters'] as readonly PSObject[]).map((p) =>
+      String(p.properties['name']),
+    );
+    assert.ok(names.includes('Descending'));
+    assert.ok(names.includes('Stable'));
+    for (const upstreamOnly of ['Top', 'Bottom', 'Culture']) {
+      assert.ok(!names.includes(upstreamOnly), `-${upstreamOnly} must not be documented`);
+    }
+  });
+
+  it('names the upstream parameters it does not accept, in NOTES', () => {
+    // Filtering alone leaves a user who knows `Sort-Object -Top 5` to discover
+    // the gap as a parse error. NOTES is where pwsh puts this kind of remark.
+    const info = helpInfo(
+      { manifest: MANIFEST_OF('sort-object'), commandType: 'Cmdlet' },
+      HELP_INFO_TYPE_NAMES,
+    );
+    const alert = String(info.properties['alertSet']);
+    assert.match(alert, /NOT accepted here/u);
+    assert.match(alert, /-Top/u);
+    assert.match(alert, /-Bottom/u);
+    assert.match(alert, /-Culture/u);
+  });
+
+  it('-Parameter describes only what the binder accepts', async () => {
+    const getHelpModule = need('get-help');
+    const top = await run(getHelpModule, { Name: 'Sort-Object', Parameter: 'Top' });
+    assert.deepEqual(top.values, [], '-Top is upstream-only');
+    const stable = await run(getHelpModule, { Name: 'Sort-Object', Parameter: 'Stable' });
+    assert.equal(stable.values.length, 1);
+  });
+
+  it('reports a partial implementation as partial', () => {
+    // Where-Object is declared, built, and not registered. Help still describes
+    // it -- a visitor asking why it is unavailable has to get an answer -- and
+    // the status is part of that answer.
+    const info = helpInfo(
+      { manifest: MANIFEST_OF('where-object'), commandType: 'Cmdlet' },
+      HELP_INFO_TYPE_NAMES,
+    );
+    assert.match(String(info.properties['alertSet']), /Implementation: partial/u);
+  });
+});
 
 describe('Get-Help', () => {
   const getHelp = need('get-help');

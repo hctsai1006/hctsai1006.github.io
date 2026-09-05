@@ -26,6 +26,7 @@ import {
   CommandInventory,
   COMMON_PARAMETERS,
   MANIFEST_COMMANDS,
+  declaredInventory,
   manifestInventory,
 } from '../../src/line-editor/inventory.ts';
 import { resolveCommand } from '../../src/commands/registry.ts';
@@ -183,8 +184,68 @@ describe('command inventory', () => {
     // and the four formatting commands were implemented and invisible to
     // completion, Get-Command and the fidelity badge alike.
     assert.equal(MANIFEST_COMMANDS.length, 85);
-    // 85 canonical names plus 51 aliases, less the one collision below.
-    assert.equal(inventory.commands.length, 135);
+    // 133, not 135: Where-Object is declared `partial` and held out of the
+    // session registry, so completion must not offer it or its alias `where`.
+    // The count is the whole point of the assertion — a name completion offers
+    // and the dispatcher refuses is worse than one it never mentions.
+    assert.equal(inventory.commands.length, 133);
+  });
+
+  it('offers only what a session can run, and says why for the rest', () => {
+    // The distinction this file exists to keep: `Where-Object` is DECLARED
+    // upstream, IMPLEMENTED here only partially, and NOT REGISTERED. Three
+    // facts, and completion needs the third.
+    assert.equal(inventory.resolve('Where-Object'), null);
+    assert.equal(inventory.resolve('where'), null);
+    assert.equal(inventory.excluded.get('where-object'), 'implemented only partially, and held back');
+
+    // The wider view still knows about it, because describing the command set
+    // is a different job from completing into it.
+    const full = declaredInventory();
+    assert.equal(full.resolve('Where-Object')?.canonical, 'Where-Object');
+    assert.equal(full.commands.length, 135);
+  });
+
+  it('offers the parameters the binder accepts, not the ones upstream has', () => {
+    // Measured against pwsh 7.6.5: upstream Sort-Object has nine parameters,
+    // this engine binds six. Completion used to read the manifest's `parameters`
+    // — which describe UPSTREAM — and offer -Top, -Bottom and -Culture for a
+    // binder that answers NamedParameterNotFound.
+    const sort = inventory.parametersOf('Sort-Object').map((p) => p.name);
+    assert.ok(sort.includes('Descending'), 'implemented');
+    assert.ok(sort.includes('Stable'), 'implemented');
+    for (const upstreamOnly of ['Top', 'Bottom', 'Culture']) {
+      assert.ok(!sort.includes(upstreamOnly), `-${upstreamOnly} is upstream-only`);
+    }
+    for (const upstreamOnly of ['AllStats']) {
+      assert.ok(
+        !inventory.parametersOf('Measure-Object').some((p) => p.name === upstreamOnly),
+        `-${upstreamOnly} is upstream-only`,
+      );
+    }
+    for (const upstreamOnly of ['Index', 'SkipIndex', 'Wait', 'ExcludeProperty']) {
+      assert.ok(
+        !inventory.parametersOf('Select-Object').some((p) => p.name === upstreamOnly),
+        `-${upstreamOnly} is upstream-only`,
+      );
+    }
+    // The wider view keeps every upstream name, which is what makes the
+    // narrowing a choice rather than a loss.
+    const wide = declaredInventory().parametersOf('Sort-Object').map((p) => p.name);
+    for (const name of ['Top', 'Bottom', 'Culture']) assert.ok(wide.includes(name), name);
+  });
+
+  it('carries a hand-written switch through as a switch', () => {
+    // Get-Publication has no pwsh counterpart, so its manifest came from v1's
+    // flat list of flag names, which has no types: -Full was generated as
+    // System.Object with isSwitch false, and the line editor therefore kept the
+    // caret in VALUE position after a switch. -Status and -Year were dropped
+    // entirely, because v1 declared only -Full.
+    assert.equal(inventory.isSwitch('Get-Publication', 'Full'), true);
+    const names = inventory.parametersOf('Get-Publication').map((p) => p.name);
+    assert.ok(names.includes('Status'), '-Status is hand-written and was missing');
+    assert.ok(names.includes('Year'), '-Year is hand-written and was missing');
+    assert.equal(inventory.findParameter('Get-Publication', 'Year')?.type, 'System.String');
   });
 
   it('offers the command a token actually RUNS, not one that merely shares its name', () => {
@@ -303,7 +364,7 @@ describe('matching', () => {
     // one, so the comparator only applies it when there is a query.
     const all = displaysOf('');
     assert.deepEqual([...all].sort((a, b) => (a.toLowerCase() < b.toLowerCase() ? -1 : 1)), all);
-    assert.equal(all.length, 135);
+    assert.equal(all.length, 133);
   });
 });
 

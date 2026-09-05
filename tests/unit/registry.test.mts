@@ -10,7 +10,15 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { ALL_COMMANDS, COMMAND_INDEX, resolveCommand, UNIMPLEMENTED } from '../../src/commands/registry.ts';
+import {
+  ALL_COMMANDS,
+  COMMAND_INDEX,
+  HELD_BACK,
+  HELD_BACK_NAMES,
+  resolveCommand,
+  UNIMPLEMENTED,
+} from '../../src/commands/registry.ts';
+import { BUILT_COMMANDS } from '../../src/commands/modules.ts';
 import type { CommandManifest } from '../../src/commands/manifest.ts';
 
 const MANIFESTS = JSON.parse(
@@ -24,7 +32,10 @@ describe('every implemented command is declared', () => {
     // Get-Command, Get-Help and the badge, because manifests.json was generated
     // only from v1's inventory and none of them existed in v1.
     const declared = new Set(MANIFESTS.commands.map((c) => c.name));
-    const undeclared = ALL_COMMANDS.map((m) => m.manifest.name).filter((n) => !declared.has(n));
+    // Over BUILT_COMMANDS, not ALL_COMMANDS: a module held back from the
+    // session still has to be describable, or the reason it is unavailable
+    // cannot be shown to anyone.
+    const undeclared = BUILT_COMMANDS.map((m) => m.manifest.name).filter((n) => !declared.has(n));
     assert.deepEqual(undeclared, []);
   });
 
@@ -56,16 +67,35 @@ describe('every implemented command is declared', () => {
 describe('names resolve the way PowerShell resolves them', () => {
   it('is case-insensitive and includes aliases', () => {
     for (const [typed, expected] of [
-      ['Where-Object', 'Where-Object'],
-      ['where-object', 'Where-Object'],
-      ['WHERE-OBJECT', 'Where-Object'],
-      ['?', 'Where-Object'],
+      ['Group-Object', 'Group-Object'],
+      ['group-object', 'Group-Object'],
+      ['GROUP-OBJECT', 'Group-Object'],
       ['ft', 'Format-Table'],
       ['gm', 'Get-Member'],
       ['group', 'Group-Object'],
     ] as const) {
       assert.equal(resolveCommand(typed)?.manifest.display, expected, typed);
     }
+  });
+
+  it('does not resolve a name that is held back', () => {
+    // Where-Object USED to be the case-insensitivity example here, and its
+    // alias `?` the alias example. It is now `partial` and out of the session,
+    // so every spelling must miss — including the alias, because a command that
+    // half-resolves is the wrong answer twice.
+    for (const typed of ['Where-Object', 'where-object', 'WHERE-OBJECT', '?', 'where']) {
+      assert.equal(resolveCommand(typed), undefined, typed);
+    }
+    // `sl` is the other held-back module, and it resolves anyway — to
+    // Set-Location, whose ALIAS it is. That is the shadowing decision working,
+    // not a leak: the token is reachable, the joke command is not.
+    assert.equal(resolveCommand('sl')?.manifest.display, 'Set-Location');
+    // Held back, not gone: the module is built and the reason is on record.
+    assert.deepEqual([...HELD_BACK_NAMES], ['sl', 'where-object']);
+    assert.equal(
+      HELD_BACK.find((e) => e.module.manifest.name === 'where-object')?.reason,
+      'partial-implementation',
+    );
   });
 
   it('trims what a user typed', () => {
@@ -116,9 +146,9 @@ describe('the load-time guards actually reject', () => {
 
 describe('what remains is reported, not hidden', () => {
   it('every unimplemented command is one the filesystem or preferences blocks', () => {
-    // 29 commands are declared and not implemented. If that set ever contains
-    // something with no capability behind it, the reason is no longer "waiting
-    // on storage" and this test should stop passing.
+    // This list was 29 while the filesystem commands were outstanding and is
+    // empty now. If it grows again with something that has no capability behind
+    // it, the reason is no longer "waiting on storage" and this should fail.
     const byName = new Map(MANIFESTS.commands.map((c) => [c.name, c]));
     const unexplained = UNIMPLEMENTED.filter((name) => {
       const manifest = byName.get(name);
@@ -130,8 +160,38 @@ describe('what remains is reported, not hidden', () => {
     assert.deepEqual(unexplained, []);
   });
 
-  it('counts add up against the manifest', () => {
-    const implemented = MANIFESTS.commands.filter((c) => COMMAND_INDEX.has(c.name)).length;
-    assert.equal(implemented + UNIMPLEMENTED.length, MANIFESTS.commands.length);
+  it('counts add up against the manifest, in THREE parts and not two', () => {
+    // The arithmetic that used to be `implemented + unimplemented = declared`
+    // had nowhere to put a command that is built and deliberately unreachable,
+    // so `Where-Object` would have had to be counted as either runnable or
+    // unwritten. Both are false.
+    // By CANONICAL name, not by index membership: COMMAND_INDEX also keys
+    // aliases, and `sl` is in it as Set-Location's alias while the module
+    // called `sl` is held back. Counting index hits made that one manifest
+    // entry runnable AND held back, and 85 came out as 86.
+    const runnable = new Set(ALL_COMMANDS.map((m) => m.manifest.name));
+    assert.equal(
+      MANIFESTS.commands.filter((c) => runnable.has(c.name)).length +
+        HELD_BACK_NAMES.length +
+        UNIMPLEMENTED.length,
+      MANIFESTS.commands.length,
+    );
+    // And the three sets are disjoint.
+    const held = new Set(HELD_BACK_NAMES);
+    assert.deepEqual(UNIMPLEMENTED.filter((n) => held.has(n)), []);
+    assert.deepEqual(HELD_BACK_NAMES.filter((n) => runnable.has(n)), []);
+  });
+
+  it('reports implementation status for every declared command', () => {
+    // The field is what separates "upstream has it" from "we built it", so a
+    // manifest without one puts the two back together.
+    const missing = MANIFESTS.commands
+      .filter((c) => (c as { implementationStatus?: string }).implementationStatus === undefined)
+      .map((c) => c.name);
+    assert.deepEqual(missing, []);
+    const partial = MANIFESTS.commands
+      .filter((c) => c.implementationStatus === 'partial')
+      .map((c) => c.name);
+    assert.deepEqual(partial, ['where-object']);
   });
 });

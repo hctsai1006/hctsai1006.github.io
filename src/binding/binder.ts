@@ -453,6 +453,28 @@ function bind(
   for (const entry of bound.values()) narrow(entry.parameter);
 
   // ---- phase 3: positional arguments -------------------------------------
+  //
+  // No surviving set means the NAMED parameters already contradict each other,
+  // and that has to be said before the positional ones are blamed for it.
+  // Measured on pwsh 7.6.5:
+  //
+  //   Where-Object -FilterScript $sb -Property Name -EQ x
+  //   Where-Object Name -EQ x -GT y
+  //     both -> AmbiguousParameterSet,...WhereObjectCommand
+  //
+  // Phase 4 already reports exactly that, but only when nothing positional is
+  // left over: with `x` still queued, `nextPositional` found no candidate set
+  // to place it in and raised PositionalParameterNotFound instead, naming the
+  // argument rather than the contradiction. Only reachable for a manifest with
+  // named sets, which is why nothing else moved when this was added.
+  if (hasNamedSets && candidates.length === 0) {
+    throw new ParameterBindingError({
+      kind: 'AmbiguousParameterSet',
+      command,
+      message: ambiguousParameterSetMessage(),
+    });
+  }
+
   const leftover: string[] = [];
   let queue = positional;
   while (queue.length > 0) {

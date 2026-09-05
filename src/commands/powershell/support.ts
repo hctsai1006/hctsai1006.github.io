@@ -26,11 +26,15 @@ import {
   typeNameOf,
 } from '../../pipeline/psobject.ts';
 import type { PSObject, PSValue } from '../../pipeline/psobject.ts';
+import { errorRecord } from '../../pipeline/streams.ts';
+import type { ErrorRecord } from '../../pipeline/streams.ts';
 import type { BoundParameters } from '../invocation.ts';
 import type {
   Capability,
   CommandManifest,
+  ImplementationStatus,
   ParameterMetadata,
+  ParameterSetBinding,
   Risk,
 } from '../manifest.ts';
 
@@ -305,6 +309,81 @@ export function renderValue(value: PSValue): string {
 }
 
 // ---------------------------------------------------------------------------
+// -InputObject
+// ---------------------------------------------------------------------------
+
+/**
+ * What the command should iterate: the pipeline, or the direct argument.
+ *
+ * Every object cmdlet DECLARED `-InputObject` and every one of them read
+ * `context.input` and nothing else, so `Measure-Object -InputObject @(1,2,3)
+ * -Sum` bound the parameter, ignored it, saw an empty pipeline and reported
+ * Count 0 as a success. Measured against pwsh 7.6.5:
+ *
+ *   Measure-Object -InputObject @(1,2,3) -Sum
+ *     ->  Count 1, Sum empty, NonNumericInputObject 'System.Object[]'
+ *   @(Sort-Object -InputObject 3,1,2).Count            ->  1
+ *   @(Group-Object -InputObject 3,1,2).Count           ->  1, Name '3 1 2'
+ *   (Get-Member -InputObject 3,1,2).TypeName           ->  System.Object[]
+ *   @(Select-Object -InputObject 3,1,2 -First 1)       ->  the whole array
+ *
+ * So `-InputObject` supplies exactly ONE object and it is NOT enumerated. An
+ * array argument is one array, which is why the Measure-Object line reports a
+ * non-numeric System.Object[] rather than summing to 6.
+ *
+ * And when BOTH are supplied the pipeline items are rejected individually:
+ *
+ *   $e = $null
+ *   1..2 | Measure-Object -InputObject 9 -ErrorVariable e -ErrorAction SilentlyContinue
+ *     ->  Count 0, and TWO errors
+ *   $e[0].FullyQualifiedErrorId
+ *     ->  InputObjectNotBound,Microsoft.PowerShell.Commands.MeasureObjectCommand
+ *   $e[0].TargetObject -> 1
+ *
+ * Count 0, not 1: the direct argument does not get measured either. That is
+ * reproduced rather than tidied — a caller who wrote both meant one of them,
+ * and quietly picking is how this whole family of defects started.
+ */
+export async function* commandInput(
+  context: {
+    readonly input: AsyncIterable<PSValue>;
+    readonly streams: { readonly error: { write(record: ErrorRecord): Promise<void> } };
+  },
+  bound: BoundParameters,
+  commandTypeName: string,
+): AsyncGenerator<PSValue> {
+  if (!isBound(bound, 'InputObject')) {
+    yield* context.input;
+    return;
+  }
+
+  // Drain rather than abandon: an unread input would leave the upstream stage
+  // waiting on a consumer that has walked away.
+  let rejected = 0;
+  for await (const item of context.input) {
+    rejected += 1;
+    await context.streams.error.write(
+      errorRecord(
+        'The input object cannot be bound to any parameters for the command either because ' +
+          'the command does not take pipeline input or the input and its properties do not ' +
+          'match any of the parameters that take pipeline input.',
+        'InputObjectNotBound',
+        commandTypeName,
+        'InvalidArgument',
+        {
+          targetObject: item,
+          exceptionType: 'System.Management.Automation.ParameterBindingException',
+        },
+      ),
+    );
+  }
+  if (rejected > 0) return;
+
+  const value = rawValue(bound, 'InputObject');
+  if (value !== undefined) yield value;
+}
+
+// ---------------------------------------------------------------------------
 // emitting
 // ---------------------------------------------------------------------------
 
@@ -387,6 +466,20 @@ export interface ParameterOptions {
   mandatory?: boolean;
   valueFromPipeline?: boolean;
   validation?: readonly string[];
+  /**
+   * Named parameter sets, when one flat set genuinely cannot describe the
+   * parameter. Overrides `position`/`mandatory`/`valueFromPipeline`, which then
+   * describe nothing and are ignored.
+   *
+   * The escape hatch exists because collapsing sets is not a simplification, it
+   * is a wrong answer: `Where-Object` declares `FilterScript` and `Property`
+   * both mandatory at position 0, and in one flat set the binder has to pick
+   * one of them by declaration order. It picked `FilterScript`, so
+   * `Where-Object N -eq 2` bound the property name as the filter script and the
+   * value as the property. Measured against pwsh 7.6.5, which binds
+   * Property=N, Value=2.
+   */
+  sets?: Readonly<Record<string, ParameterSetBinding>>;
 }
 
 /**
@@ -405,18 +498,26 @@ export function parameter(
   const mandatory = extra.mandatory ?? false;
   const valueFromPipeline = extra.valueFromPipeline ?? false;
 
+  const sets = extra.sets ?? {
+    [DEFAULT_PARAMETER_SET]: { position, mandatory, valueFromPipeline },
+  };
+  const bindings = Object.values(sets);
+  const positions = bindings
+    .map((binding) => binding.position)
+    .filter((value): value is number => typeof value === 'number');
+
   return {
     name,
     aliases: extra.aliases ?? [],
     type,
     isSwitch: extra.isSwitch ?? type === 'System.Management.Automation.SwitchParameter',
-    sets: { [DEFAULT_PARAMETER_SET]: { position, mandatory, valueFromPipeline } },
-    // Derived from the single set above, and named so they are not mistaken for
+    sets,
+    // Derived from the sets above, and named so they are not mistaken for
     // something pwsh said. With one set, "in any" and "in every" coincide.
-    mandatoryInAnySet: mandatory,
-    mandatoryInEverySet: mandatory,
-    firstPosition: position,
-    valueFromPipelineInAnySet: valueFromPipeline,
+    mandatoryInAnySet: bindings.some((binding) => binding.mandatory),
+    mandatoryInEverySet: bindings.length > 0 && bindings.every((binding) => binding.mandatory),
+    firstPosition: positions.length > 0 ? Math.min(...positions) : null,
+    valueFromPipelineInAnySet: bindings.some((binding) => binding.valueFromPipeline),
     validation: extra.validation ?? [],
     // False, not true: these names were read off `(Get-Command X).Parameters`
     // in pwsh 7.6.5, but the full attribute metadata was not captured through
@@ -441,6 +542,13 @@ export function manifest(spec: {
   outputTypeNames: readonly string[];
   risk?: Risk;
   capabilities?: readonly Capability[];
+  /**
+   * Defaults to `implemented`. A module that declares `partial` is BUILT and
+   * TESTED but kept out of the default registry — see registry.ts. It is not a
+   * soft warning: nothing resolves the name at the prompt.
+   */
+  implementationStatus?: ImplementationStatus;
+  defaultParameterSet?: string;
 }): CommandManifest {
   return {
     name: spec.display.toLowerCase(),
@@ -455,5 +563,14 @@ export function manifest(spec: {
     synopsis: spec.synopsis,
     notes: spec.notes,
     parameterSource: 'declared',
+    implementationStatus: spec.implementationStatus ?? 'implemented',
+    // The names this module binds. Identical to `parameters` here because a
+    // hand-written manifest describes what the body reads — the two only come
+    // apart in the GENERATED manifest, where `parameters` is upstream's answer
+    // and this is ours.
+    implementedParameters: spec.parameters.map((p) => p.name),
+    ...(spec.defaultParameterSet !== undefined
+      ? { defaultParameterSet: spec.defaultParameterSet }
+      : {}),
   };
 }

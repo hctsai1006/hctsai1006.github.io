@@ -5,6 +5,27 @@
  *   how real each is     ←  src/commands/classification.data.mts (judged)
  *   what its parameters  ←  compat/upstream/v<ver>/command-metadata.json
  *   actually are            (captured from a real PowerShell)
+ *   what WE implement    ←  src/commands/modules.ts          (the modules)
+ *
+ * The fourth source was missing, and its absence was a specific, measurable
+ * lie rather than an omission. `parameters` is UPSTREAM's answer, so
+ * `manifests.json` listed `Sort-Object -Top`, `Measure-Object -AllStats` and
+ * `Select-Object -Index`; tab completion reads that file and offered all three;
+ * the binder rejects every one of them. In the other direction the v1
+ * fallback defaulted a hand-written switch to `System.Object` with
+ * `isSwitch: false` — `Get-Publication -Full` — so the line editor kept the
+ * caret in value position for a switch, and `-Status` and `-Year` were dropped
+ * entirely because v1 never declared them.
+ *
+ * So the merge now writes THREE separable facts, and `manifest.ts` explains why
+ * they are three:
+ *
+ *   parameters + parameterSource   what pwsh has          (upstream availability)
+ *   implementedParameters          what a module binds    (implementation)
+ *   implementationStatus           how much was built     (implementation)
+ *
+ * Whether a command is REACHABLE is a fourth fact and deliberately not here: it
+ * belongs to a running session, and `registry.ts` owns it.
  *
  * The point of merging rather than hand-writing is that only the middle one is
  * a judgement. v1 declares 36 parameters across 67 commands; the reference
@@ -39,9 +60,14 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { CLASSIFICATION } from '../src/commands/classification.data.mts';
+import { BUILT_BY_NAME } from '../src/commands/modules.ts';
 import { REWRITE_COMMANDS, SHADOWED_V1_TOKENS } from '../src/commands/rewrite-inventory.data.mts';
 import type { Classification } from '../src/commands/classification.data.mts';
-import type { CommandManifest, ParameterMetadata } from '../src/commands/manifest.ts';
+import type {
+  CommandManifest,
+  ImplementationStatus,
+  ParameterMetadata,
+} from '../src/commands/manifest.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..');
@@ -135,6 +161,37 @@ function parametersFrom(command: CapturedCommand): ParameterMetadata[] {
     .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 }
 
+/**
+ * Captured metadata, plus anything the module declares that pwsh does not have.
+ *
+ * `Get-Command -Detailed` is the case that forced this. It is a deliberate
+ * BrowserShell extension -- pwsh 7.6.5 has no such parameter, the module's own
+ * header says so, and the command really does bind it. Captured metadata
+ * REPLACES the declaration, so `-Detailed` vanished from the manifest while
+ * staying in `implementedParameters`, and the result was a manifest whose
+ * "what we implement" list was not a subset of its "what exists" list. Help
+ * stopped listing a working parameter and completion stopped offering it.
+ *
+ * The extras keep `verified: false`, which is exactly what that flag is for:
+ * these names did not come from the reference implementation, and nothing
+ * should read them as if they had.
+ */
+function withModuleExtras(
+  captured: readonly ParameterMetadata[],
+  declared: readonly ParameterMetadata[] | undefined,
+): ParameterMetadata[] {
+  if (declared === undefined) return [...captured];
+  const known = new Set<string>();
+  for (const p of captured) {
+    known.add(p.name.toLowerCase());
+    for (const alias of p.aliases) known.add(alias.toLowerCase());
+  }
+  const extras = declared
+    .filter((p) => !known.has(p.name.toLowerCase()))
+    .map((p) => ({ ...p, verified: false }) satisfies ParameterMetadata);
+  return [...captured, ...extras].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+}
+
 /** v1's `params` is a flat list of flag names with no type behind it. */
 function declaredParameters(params: readonly string[]): ParameterMetadata[] {
   return params.map((raw) => ({
@@ -205,7 +262,63 @@ function build(): { manifests: CommandManifest[]; problems: string[]; stats: Rec
     }
 
     const hit = captured === null ? undefined : findCaptured(captured, entry.name);
-    const parameters = hit !== undefined ? parametersFrom(hit) : declaredParameters(entry.params);
+
+    /**
+     * The module that implements this command, if one exists.
+     *
+     * `implementationStatus` comes from it and nowhere else, because the module
+     * is the only thing that knows. A command with no module is `declared` —
+     * the manifest describes something nobody built.
+     */
+    const module = BUILT_BY_NAME.get(entry.name);
+    const implementationStatus: ImplementationStatus =
+      module?.manifest.implementationStatus ?? 'declared';
+
+    /**
+     * What THIS engine binds, when the module hand-writes its own surface.
+     *
+     * `implementedParameters` is set by the `manifest()` helper in
+     * powershell/support.ts and by nothing else. The filesystem and simulated
+     * commands read their manifests back OUT of this very file, so they cannot
+     * narrow it and correctly leave it undefined — which also keeps this
+     * generator a fixed point rather than a feedback loop.
+     */
+    const authored = module?.manifest.implementedParameters;
+
+    // Precedence: captured pwsh metadata, then the module's own declaration,
+    // then v1's flat list of flag names. The middle one is new and is what
+    // stops `Get-Publication -Full` being reported as a value-taking
+    // System.Object; the last one has no types behind it at all.
+    const capturedParameters = hit !== undefined ? parametersFrom(hit) : null;
+    const parameters =
+      capturedParameters !== null
+        ? withModuleExtras(capturedParameters, module?.manifest.parameters)
+        : module !== undefined && authored !== undefined && module.manifest.parameters.length > 0
+          ? [...module.manifest.parameters]
+          : declaredParameters(entry.params);
+
+    if (hit === undefined && authored !== undefined && module !== undefined) {
+      // Invariant 6, the mirror of invariant 4. The module's parameters replace
+      // v1's declaration here, so a flag v1 accepts that the module has no name
+      // for would vanish without a word — the same silent loss, in the other
+      // direction.
+      const known = new Set<string>();
+      for (const p of module.manifest.parameters) {
+        known.add(p.name.toLowerCase());
+        for (const alias of p.aliases) known.add(alias.toLowerCase());
+      }
+      const dropped = entry.params
+        .map((raw) => raw.replace(/^-+/, ''))
+        .filter((name) => !known.has(name.toLowerCase()));
+      if (dropped.length > 0) {
+        problems.push(
+          `"${entry.name}" declares ${dropped.map((d) => `-${d}`).join(', ')} in v1, which the ` +
+            'implementing module has no parameter or alias for. The module replaces the ' +
+            'declaration, so these would be dropped silently.',
+        );
+      }
+    }
+
     if (hit !== undefined) {
       verifiedCount++;
       // Invariant 4. Captured metadata REPLACES what v1 declared, it does not
@@ -246,22 +359,25 @@ function build(): { manifests: CommandManifest[]; problems: string[]; stats: Rec
       risk: cls.risk,
       capabilities: cls.capabilities,
       parameters,
-      outputTypeNames: hit?.outputType ?? [],
+      outputTypeNames: hit?.outputType ?? module?.manifest.outputTypeNames ?? [],
       synopsis: entry.help,
       ...(cls.notes !== undefined ? { notes: cls.notes } : {}),
       parameterSource:
         hit !== undefined
           ? 'reference-implementation'
-          : entry.params.length > 0
+          : parameters.length > 0
             ? 'declared'
             : 'none',
-      // Stamped so every consumer of manifests.json sees the same answer for a
-      // token whose name belongs to another command. Before this, the registry
-      // ran Set-Location for `sl` while completion, Get-Help and the fidelity
-      // badge all described the easter egg.
+      // Two independent facts, stamped so every consumer of manifests.json sees
+      // the same answer. `shadowedBy` says another command owns the token --
+      // before it, the registry ran Set-Location for `sl` while completion,
+      // Get-Help and the fidelity badge all described the easter egg.
+      // `implementationStatus` says how much of the command exists here.
       ...(SHADOWED_V1_TOKENS.has(entry.name)
         ? { shadowedBy: SHADOWED_V1_TOKENS.get(entry.name)?.owner ?? '' }
         : {}),
+      implementationStatus,
+      ...(authored !== undefined ? { implementedParameters: authored } : {}),
     });
   }
 

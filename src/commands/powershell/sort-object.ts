@@ -51,6 +51,7 @@ import {
   OBJECT,
   STRING_ARRAY,
   SWITCH,
+  commandInput,
   emitAll,
   hasResolvableProperty,
   manifest,
@@ -59,6 +60,8 @@ import {
   stringArray,
   switchValue,
 } from './support.ts';
+
+const COMMAND = 'Microsoft.PowerShell.Commands.SortObjectCommand';
 
 interface Keyed {
   readonly value: PSValue;
@@ -104,10 +107,15 @@ const SORT_OBJECT_MANIFEST = manifest({
   aliases: ['sort'],
   synopsis: 'Sorts objects by property values.',
   notes:
-    'Always stable. pwsh 7.6.5 is stable only below .NET’s insertion-sort threshold and ' +
-    'offers -Stable for the guarantee; this implementation gives the -Stable ordering ' +
-    'unconditionally, because reproducing a specific introsort’s tie order is neither ' +
-    'possible nor useful in a browser. -Top, -Bottom and -Culture are not implemented.',
+    'KNOWN DIFFERENCE, and it is a difference in the DEFAULT rather than a missing ' +
+    'parameter: this sort is always stable. -Stable therefore does exactly what it says, ' +
+    'and Sort-Object WITHOUT -Stable also gives the stable order, where pwsh 7.6.5 gives ' +
+    'an arbitrary tie order above .NET’s insertion-sort threshold. Reproducing a specific ' +
+    'introsort’s tie order — pivot choices and all — is neither possible in a browser nor ' +
+    'meaningful, since every order pwsh produces for ties is AN arbitrary order; this is ' +
+    'one of them. Do not read this as verified agreement with pwsh on tie order: it is a ' +
+    'recorded divergence. -Top, -Bottom and -Culture are upstream-only and are not ' +
+    'accepted — the binder answers NamedParameterNotFound rather than ignoring them.',
   parameters: [
     parameter('Property', STRING_ARRAY, { position: 0 }),
     parameter('Descending', SWITCH),
@@ -128,12 +136,33 @@ export const sortObject: CommandModule = {
     const descending = switchValue(parameters, 'Descending');
     const unique = switchValue(parameters, 'Unique');
     const caseSensitive = switchValue(parameters, 'CaseSensitive');
+    /**
+     * Read, and deliberately not branched on.
+     *
+     * `-Stable` was in the manifest and nothing looked at it, which is the
+     * pattern this whole pass is about — except that here the parameter really
+     * IS satisfied: the sort below is unconditionally stable, so asking for
+     * `-Stable` gets exactly what `-Stable` promises. What diverges is the
+     * DEFAULT, and that is a difference in pwsh's favour of unpredictability
+     * rather than a gap in ours. Measured:
+     *
+     *   $in = 1..20 | ForEach-Object { [pscustomobject]@{ K = $_ % 3; I = $_ } }
+     *   $in | Sort-Object K          ->  ties in an arbitrary order
+     *   $in | Sort-Object K -Stable  ->  ties in input order
+     *
+     * Binding it and never reading it would leave a reviewer unable to tell
+     * this case from the ones that were wrong, so it is read here and the
+     * value asserted in the tests. It must NOT be spelled as `if (stable)`,
+     * which would imply the unstable branch exists.
+     */
+    const stableRequested = switchValue(parameters, 'Stable');
+    void stableRequested;
 
     // Sorting is a BLOCKING stage: nothing can be emitted before the last input
     // arrives, so `Sort-Object` genuinely has to hold the set. That is a real
     // memory cost and it is PowerShell's cost too, not an implementation choice.
     const buffered: Keyed[] = [];
-    for await (const item of context.input) {
+    for await (const item of commandInput(context, parameters, COMMAND)) {
       throwIfCancelled(context.signal, 'Sort-Object');
       if (item === null) continue;
       buffered.push({ value: item, index: buffered.length });

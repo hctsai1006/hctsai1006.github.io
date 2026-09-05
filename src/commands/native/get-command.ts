@@ -44,7 +44,7 @@ import type { PSObject, PSValue } from '../../pipeline/psobject.ts';
 import { throwIfCancelled } from '../../pipeline/pipeline.ts';
 import { errorRecord } from '../../pipeline/streams.ts';
 import type { BindingResult, CommandModule, InvocationContext } from '../invocation.ts';
-import { FIDELITY_BADGE, FIDELITY_MEANING } from '../manifest.ts';
+import { FIDELITY_BADGE, FIDELITY_MEANING, boundParameters } from '../manifest.ts';
 import type { CommandManifest, Fidelity } from '../manifest.ts';
 import {
   INT,
@@ -155,7 +155,10 @@ export function commandTypeNames(commandType: CommandTypeName): readonly string[
 
 /** The one-line syntax `-Syntax` prints, built from the declared parameters. */
 export function syntaxOf(manifestOf: CommandManifest, name: string): string {
-  const parts = manifestOf.parameters.map((p) => {
+  // What this engine BINDS, not what upstream declares. The syntax line is a
+  // prompt to type something, and a syntax line offering `-Top <int>` for a
+  // binder that rejects it is an instruction to get an error.
+  const parts = boundParameters(manifestOf).map((p) => {
     const position = p.firstPosition;
     const head = position === null ? `-${p.name}` : `[-${p.name}]`;
     const body = p.isSwitch ? head : `${head} <${friendlyTypeName(p.type)}>`;
@@ -226,7 +229,15 @@ export function fidelityInfo(resolved: Resolved): PSObject {
       Runtime: m.runtime,
       Risk: m.risk,
       Capabilities: [...m.capabilities],
+      // Two different facts, side by side on purpose. ParameterSource says
+      // where the PARAMETER METADATA came from -- it is about upstream, and
+      // 'reference-implementation' means pwsh reported these names, never that
+      // this engine binds them. Implementation says how much was built here.
+      // Reading the first as the second is what let Where-Object be counted as
+      // an implemented command while its manifest could not express its own
+      // parameter sets.
       ParameterSource: m.parameterSource,
+      Implementation: m.implementationStatus,
       Synopsis: m.synopsis,
       Notes: m.notes ?? '',
     },
@@ -283,7 +294,10 @@ export function createGetCommand(services: NativeServices): CommandModule {
           if (!nouns.some((n) => wildcardPattern(n).test(noun))) return false;
         }
         if (parameterNames !== undefined) {
-          const declared = r.entry.manifest.parameters;
+          // What BINDS. `-ParameterName Top` asking "which commands take
+          // -Top?" and being handed Sort-Object, which rejects it, is the
+          // same conflation as offering it in completion.
+          const declared = boundParameters(r.entry.manifest);
           const ok = parameterNames.every((want) =>
             declared.some(
               (p) =>

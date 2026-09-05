@@ -61,6 +61,7 @@ function testManifest(display: string): CommandManifest {
     outputTypeNames: [],
     synopsis: 'test double',
     parameterSource: 'none',
+    implementationStatus: 'implemented',
   };
 }
 

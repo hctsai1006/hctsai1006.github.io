@@ -127,6 +127,7 @@ const TEST_DIFF: CommandManifest = {
   outputTypeNames: [],
   synopsis: 'differential fixture',
   parameterSource: 'declared',
+  implementationStatus: 'implemented',
 };
 
 /** The same rendering the pwsh probe used, so the two are comparable. */

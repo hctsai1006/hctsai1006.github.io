@@ -505,6 +505,7 @@ const WRITER: CommandManifest = {
   outputTypeNames: [],
   synopsis: 'Writes new content in a file.',
   parameterSource: 'declared',
+  implementationStatus: 'implemented',
 };
 
 function sudoModule(): CommandModule {

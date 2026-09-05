@@ -32,7 +32,7 @@ import type { CommandModule } from '../../src/commands/invocation.ts';
 import type { Capability, CommandManifest } from '../../src/commands/manifest.ts';
 import { NATIVE_COMMANDS, defaultCatalogue } from '../../src/commands/native/index.ts';
 import { PORTFOLIO_COMMANDS } from '../../src/commands/portfolio/index.ts';
-import { ALL_COMMANDS, COMMAND_INDEX } from '../../src/commands/registry.ts';
+import { ALL_COMMANDS, COMMAND_INDEX, HELD_BACK } from '../../src/commands/registry.ts';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -56,10 +56,22 @@ const NEEDS_FILESYSTEM = (m: CommandManifest): boolean =>
  */
 const IMPLEMENTED: ReadonlyMap<string, CommandModule> = COMMAND_INDEX;
 
+/**
+ * Commands deliberately kept out of the session, by name.
+ *
+ * Read from the registry rather than listed here, so that "we chose not to
+ * register this" cannot be spelled as "we forgot". The coverage check below
+ * subtracts exactly this set and nothing else, which is what stops it from
+ * becoming an escape hatch — a command drops out of the check only by
+ * declaring a non-`implemented` status in its own manifest, where a reviewer
+ * reads it next to the reason.
+ */
+const HELD_BACK_NAMES = new Set(HELD_BACK.map((entry) => entry.module.manifest.name));
+
 describe('the native-semantic set cannot drift', () => {
   it('implements every native-semantic command that needs no filesystem', () => {
     const missing = NATIVE_SEMANTIC.filter(
-      (m) => !NEEDS_FILESYSTEM(m) && !IMPLEMENTED.has(m.name),
+      (m) => !NEEDS_FILESYSTEM(m) && !IMPLEMENTED.has(m.name) && !HELD_BACK_NAMES.has(m.name),
     ).map((m) => m.display);
     assert.deepEqual(
       missing,
@@ -67,6 +79,27 @@ describe('the native-semantic set cannot drift', () => {
       'manifests.json declares these native-semantic with no filesystem capability, ' +
         'but nothing implements them: ' + missing.join(', '),
     );
+  });
+
+  it('holds back exactly what it says it holds back, and no more', () => {
+    // The exemption above is only safe if this list is short, named, and
+    // explained. Both entries are measured decisions, not omissions.
+    assert.deepEqual(
+      HELD_BACK.map((e) => [e.module.manifest.name, e.reason]).sort(),
+      [
+        ['sl', 'shadowed-token'],
+        ['where-object', 'partial-implementation'],
+      ],
+    );
+    for (const entry of HELD_BACK) {
+      assert.ok(entry.explanation.length > 0, `${entry.module.manifest.name} has no explanation`);
+      // Held back, but still describable: a visitor asking about it must get
+      // an answer, and `notes` is where the limit is written down.
+      assert.ok(
+        (entry.module.manifest.notes ?? '').length > 0,
+        `${entry.module.manifest.display} is held back with no notes`,
+      );
+    }
   });
 
   it('names the whole filesystem-free native-semantic set, so it cannot grow quietly', () => {

@@ -40,8 +40,10 @@ import type {
   BindingResult,
   BoundParameters,
   CommandModule,
+  CompatibilityView,
   InvocationContext,
 } from '../../src/commands/invocation.ts';
+import { tryBindParameters } from '../../src/binding/binder.ts';
 import type { CommandManifest } from '../../src/commands/manifest.ts';
 import {
   OBJECT_CMDLET_INDEX,
@@ -131,6 +133,648 @@ function typeNamesOf(value: PSValue | undefined): readonly string[] {
 // ---------------------------------------------------------------------------
 // Where-Object
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// parameters that were accepted and ignored
+// ---------------------------------------------------------------------------
+
+/**
+ * Every case below covers a parameter that the manifest declared, the binder
+ * accepted, and the command body never read -- so the caller got exit code 0
+ * and a result that answered a different question. Each expectation was read
+ * off pwsh 7.6.5 first.
+ */
+describe('Measure-Object -StandardDeviation is a computation, not a null', () => {
+  it('reports the SAMPLE standard deviation', async () => {
+    // pwsh: 1..5 | Measure-Object -StandardDeviation -> 1.58113883008419
+    //       [Math]::Sqrt(2.5)                        -> 1.58113883008419
+    // The population figure would be sqrt(2) = 1.414, so this pins n-1.
+    const result = await run(measureObject, { StandardDeviation: true }, [1, 2, 3, 4, 5]);
+    const sd = prop(result.values[0], 'StandardDeviation');
+    assert.equal(typeof sd, 'number');
+    assert.ok(Math.abs((sd as number) - Math.sqrt(2.5)) < 1e-12, `got ${String(sd)}`);
+    // Independent of the others: Sum stays null when it was not asked for.
+    assert.equal(prop(result.values[0], 'Sum'), null);
+    assert.equal(prop(result.values[0], 'Count'), 5);
+  });
+
+  it('fills in Sum and StandardDeviation together', async () => {
+    // pwsh: 1..5 | Measure-Object -Sum -StandardDeviation -> Sum 15, SD 1.5811
+    const result = await run(measureObject, { Sum: true, StandardDeviation: true }, [1, 2, 3, 4, 5]);
+    assert.equal(prop(result.values[0], 'Sum'), 15);
+    assert.ok(Math.abs((prop(result.values[0], 'StandardDeviation') as number) - Math.sqrt(2.5)) < 1e-12);
+  });
+
+  it('reports ZERO, not null, below two values', async () => {
+    // Measured, and the opposite of the reasonable guess: the sample formula
+    // divides by n-1 and is undefined at n=1, but pwsh reports 0.
+    //   @(7) | Measure-Object -StandardDeviation  ->  0
+    //   @()  | Measure-Object -StandardDeviation  ->  0
+    //   @()  | Measure-Object                     ->  <null>
+    assert.equal(
+      prop((await run(measureObject, { StandardDeviation: true }, [7])).values[0], 'StandardDeviation'),
+      0,
+    );
+    assert.equal(
+      prop((await run(measureObject, { StandardDeviation: true }, [])).values[0], 'StandardDeviation'),
+      0,
+    );
+    assert.equal(
+      prop((await run(measureObject, {}, [])).values[0], 'StandardDeviation'),
+      null,
+    );
+  });
+
+  it('forces the numeric path, so a non-numeric value is an error', async () => {
+    // Measured: @(1,'a') | Measure-Object -StandardDeviation
+    //   ->  Count 2, StandardDeviation empty, NonNumericInputObject for 'a'
+    // -Maximum alone reports no error at all and switches result type instead;
+    // there is no object-typed standard deviation to switch to.
+    const result = await run(measureObject, { StandardDeviation: true }, [1, 'a']);
+    assert.equal(prop(result.values[0], 'Count'), 2);
+    assert.equal(prop(result.values[0], 'StandardDeviation'), null);
+    assert.equal(
+      result.errors[0]?.fullyQualifiedErrorId,
+      'NonNumericInputObject,Microsoft.PowerShell.Commands.MeasureObjectCommand',
+    );
+  });
+
+  it('matches the two-value and float cases', async () => {
+    // pwsh: @(1,3) -> 1.4142135623731 = sqrt(2)
+    //       @(1.5,2.5,3.5) -> 1
+    const two = await run(measureObject, { StandardDeviation: true }, [1, 3]);
+    assert.ok(Math.abs((prop(two.values[0], 'StandardDeviation') as number) - Math.SQRT2) < 1e-12);
+    const floats = await run(measureObject, { StandardDeviation: true }, [1.5, 2.5, 3.5]);
+    assert.ok(Math.abs((prop(floats.values[0], 'StandardDeviation') as number) - 1) < 1e-12);
+  });
+});
+
+describe('Measure-Object -IgnoreWhiteSpace narrows the character count only', () => {
+  it('drops whitespace from Characters and nothing else', async () => {
+    // pwsh: 'a b  c' | Measure-Object -Character                  -> 6
+    //       'a b  c' | Measure-Object -Character -IgnoreWhiteSpace -> 3
+    const plain = await run(measureObject, { Character: true }, ['a b  c']);
+    assert.equal(prop(plain.values[0], 'Characters'), 6);
+    const ignoring = await run(
+      measureObject,
+      { Character: true, IgnoreWhiteSpace: true },
+      ['a b  c'],
+    );
+    assert.equal(prop(ignoring.values[0], 'Characters'), 3);
+  });
+
+  it('leaves Words and Lines exactly where they were', async () => {
+    // pwsh: -Word -IgnoreWhiteSpace on 'a b  c' -> 3, same as without.
+    const words = await run(measureObject, { Word: true, IgnoreWhiteSpace: true }, ['a b  c']);
+    assert.equal(prop(words.values[0], 'Words'), 3);
+    const lines = await run(measureObject, { Line: true, IgnoreWhiteSpace: true }, [' a \n b ']);
+    assert.equal(prop(lines.values[0], 'Lines'), 2);
+  });
+
+  it('conflicts with the numeric switches, because it is in the text set', async () => {
+    // pwsh: 1..3 | Measure-Object -Sum -IgnoreWhiteSpace
+    //   ->  AmbiguousParameterSet,...MeasureObjectCommand
+    const result = await run(measureObject, { Sum: true, IgnoreWhiteSpace: true }, [1, 2, 3]);
+    assert.equal(result.exitCode, 1);
+    assert.equal(
+      result.errors[0]?.fullyQualifiedErrorId,
+      'AmbiguousParameterSet,Microsoft.PowerShell.Commands.MeasureObjectCommand',
+    );
+  });
+});
+
+describe('Measure-Object folds instead of buffering', () => {
+  it('survives more values than a spread can carry', async () => {
+    // MEASURED on node 24.13.0 by bisection: `Math.max(...a)` succeeds at
+    // 124,766 elements and throws `RangeError: Maximum call stack size
+    // exceeded` at 124,767. 130,000 is the smallest round number past it --
+    // chosen rather than a bigger one because every element costs an await in
+    // the async pipeline and the suite pays for it.
+    // pwsh answers `1..200000 | Measure-Object -Maximum` without noticing.
+    const SPREAD_LIMIT = 124_766;
+    const many = Array.from({ length: 130_000 }, (_, i) => i + 1);
+    assert.ok(many.length > SPREAD_LIMIT, 'the input must exceed the measured spread limit');
+    const result = await run(measureObject, { Maximum: true, Minimum: true, Sum: true }, many);
+    assert.deepEqual(result.errors, []);
+    assert.equal(prop(result.values[0], 'Maximum'), 130_000);
+    assert.equal(prop(result.values[0], 'Minimum'), 1);
+    assert.equal(prop(result.values[0], 'Count'), 130_000);
+  });
+
+  it('still picks the extremes by the total order for non-numeric data', async () => {
+    // pwsh: @('a','b') | Measure-Object -Maximum -> GenericObjectMeasureInfo
+    const result = await run(measureObject, { Maximum: true, Minimum: true }, ['b', 'a', 'c']);
+    assert.equal(prop(result.values[0], 'Maximum'), 'c');
+    assert.equal(prop(result.values[0], 'Minimum'), 'a');
+    assert.ok(
+      typeNamesOf(result.values[0]).includes(
+        'Microsoft.PowerShell.Commands.GenericObjectMeasureInfo',
+      ),
+    );
+  });
+});
+
+describe('Group-Object refuses -AsHashTable rather than pretending', () => {
+  const rows = [obj({ K: 'a' }), obj({ K: 'b' }), obj({ K: 'a' })];
+
+  it('names the parameter instead of emitting ordinary groups', async () => {
+    // pwsh returns ONE System.Collections.Hashtable. This engine has no
+    // hashtable, and the old code emitted the normal GroupInfo stream with a
+    // successful exit -- a different shape under the same request.
+    const result = await run(groupObject, { Property: 'K', AsHashTable: true }, rows);
+    assert.equal(result.exitCode, 1);
+    assert.deepEqual(result.values, []);
+    assert.equal(
+      result.errors[0]?.fullyQualifiedErrorId,
+      'ParameterNotSupported,Microsoft.PowerShell.Commands.GroupObjectCommand',
+    );
+  });
+
+  it("reproduces pwsh's own error for -AsString without -AsHashTable", async () => {
+    // pwsh: 'The command cannot be run because the AsString parameter requires
+    //        that you specify the AsHashtable parameter.'
+    const result = await run(groupObject, { Property: 'K', AsString: true }, rows);
+    assert.equal(result.exitCode, 1);
+    assert.equal(
+      result.errors[0]?.fullyQualifiedErrorId,
+      'ArgumentException,Microsoft.PowerShell.Commands.GroupObjectCommand',
+    );
+    assert.match(result.errors[0]?.message ?? '', /requires that you specify the AsHashtable/u);
+  });
+
+  it('still groups normally when neither is asked for', async () => {
+    const result = await run(groupObject, { Property: 'K' }, rows);
+    assert.equal(result.exitCode, 0);
+    assert.deepEqual(column(result.values, 'Name'), ['a', 'b']);
+  });
+});
+
+describe('Get-Member refuses -Force and an unknown -MemberType', () => {
+  const rows = [obj({ A: 1 })];
+
+  it('says no to -Force instead of returning the unforced list', async () => {
+    // pwsh: ([pscustomobject]@{A=1} | Get-Member).Count       ->  5
+    //       ([pscustomobject]@{A=1} | Get-Member -Force).Count -> 10
+    // The extra five are pstypenames, psadapted, psbase, psextended, psobject.
+    const result = await run(getMember, { Force: true }, rows);
+    assert.equal(result.exitCode, 1);
+    assert.deepEqual(result.values, []);
+    assert.equal(
+      result.errors[0]?.fullyQualifiedErrorId,
+      'ParameterNotSupported,Microsoft.PowerShell.Commands.GetMemberCommand',
+    );
+  });
+
+  it('rejects an unrecognised -MemberType, listing the valid ones', async () => {
+    // pwsh: CannotConvertArgumentNoMessage,...GetMemberCommand
+    // Before: the filter matched nothing and Get-Member emitted nothing, which
+    // reads as 'this object has no members of that kind'.
+    const result = await run(getMember, { MemberType: 'Bogus' }, rows);
+    assert.equal(result.exitCode, 1);
+    assert.deepEqual(result.values, []);
+    assert.equal(
+      result.errors[0]?.fullyQualifiedErrorId,
+      'CannotConvertArgumentNoMessage,Microsoft.PowerShell.Commands.GetMemberCommand',
+    );
+    assert.match(result.errors[0]?.message ?? '', /NoteProperty/u);
+  });
+
+  it('accepts a recognised -MemberType, case-insensitively', async () => {
+    const result = await run(getMember, { MemberType: 'noteproperty' }, rows);
+    assert.equal(result.exitCode, 0);
+    assert.deepEqual(column(result.values, 'Name'), ['A']);
+  });
+});
+
+describe('Select-Object enforces the parameter sets it declares', () => {
+  it('refuses -SkipLast with -First or -Last', async () => {
+    // pwsh: 1..5 | Select-Object -Last 2 -SkipLast 1 -> AmbiguousParameterSet.
+    // SkipLastParameter declares neither -First nor -Last.
+    for (const window of [{ Last: 2, SkipLast: 1 }, { First: 2, SkipLast: 1 }]) {
+      const result = await run(selectObject, window, [1, 2, 3, 4, 5]);
+      assert.equal(result.exitCode, 1, JSON.stringify(window));
+      assert.deepEqual(result.values, []);
+      assert.equal(
+        result.errors[0]?.fullyQualifiedErrorId,
+        'AmbiguousParameterSet,Microsoft.PowerShell.Commands.SelectObjectCommand',
+      );
+    }
+  });
+
+  it('still allows the combinations pwsh allows', async () => {
+    // pwsh: -First 2 -Last 2 over 1..5 -> 1,2,4,5; over 1..3 -> 1,2,3
+    //       -Skip 1 -SkipLast 1 over 1..5 -> 2,3,4
+    assert.deepEqual(
+      (await run(selectObject, { First: 2, Last: 2 }, [1, 2, 3, 4, 5])).values,
+      [1, 2, 4, 5],
+    );
+    assert.deepEqual((await run(selectObject, { First: 2, Last: 2 }, [1, 2, 3])).values, [1, 2, 3]);
+    assert.deepEqual(
+      (await run(selectObject, { Skip: 1, SkipLast: 1 }, [1, 2, 3, 4, 5])).values,
+      [2, 3, 4],
+    );
+  });
+});
+
+describe('Select-Object -ExpandProperty keeps the expanded value on a collision', () => {
+  it('does not let -Property overwrite it, and says so', async () => {
+    // pwsh:
+    //   $src = @([pscustomobject]@{K=1; V=[pscustomobject]@{K=9; Z=8}})
+    //   $src | Select-Object -Property K -ExpandProperty V
+    //     ->  ONE object with K=9 and Z=8
+    //     ->  AlreadyExistingUserSpecifiedPropertyExpand,...SelectObjectCommand
+    // Before: the spread ran the other way and K came out as 1, silently, with
+    // exit code 0.
+    const source = [obj({ K: 1, V: obj({ K: 9, Z: 8 }) })];
+    const result = await run(selectObject, { Property: 'K', ExpandProperty: 'V' }, source);
+    assert.equal(result.values.length, 1);
+    assert.equal(prop(result.values[0], 'K'), 9, 'the EXPANDED value wins');
+    assert.equal(prop(result.values[0], 'Z'), 8);
+    assert.equal(
+      result.errors[0]?.fullyQualifiedErrorId,
+      'AlreadyExistingUserSpecifiedPropertyExpand,Microsoft.PowerShell.Commands.SelectObjectCommand',
+    );
+  });
+
+  it('keeps the two error ids apart', async () => {
+    // pwsh uses a DIFFERENT id for the duplicate -Property case, same sentence.
+    const result = await run(selectObject, { Property: ['A', 'A'] }, [obj({ A: 1 })]);
+    assert.equal(
+      result.errors[0]?.fullyQualifiedErrorId,
+      'AlreadyExistingUserSpecifiedPropertyNoExpand,Microsoft.PowerShell.Commands.SelectObjectCommand',
+    );
+  });
+
+  it('adds a non-colliding property after the expanded object own ones', async () => {
+    // pwsh: -Property K -ExpandProperty V over V=@{Z=8} -> Z then K
+    const source = [obj({ K: 1, V: obj({ Z: 8 }) })];
+    const result = await run(selectObject, { Property: 'K', ExpandProperty: 'V' }, source);
+    assert.deepEqual(result.errors, []);
+    assert.deepEqual(Object.keys((result.values[0] as PSObject).properties), ['Z', 'K']);
+  });
+});
+
+describe('Sort-Object -Stable is satisfied, and the DEFAULT is the divergence', () => {
+  const rows = Array.from({ length: 20 }, (_, i) =>
+    obj({ K: (i + 1) % 3, I: i + 1 }),
+  );
+
+  it('gives the same order with and without the switch', async () => {
+    // Measured: pwsh's default scrambles ties above .NET's insertion-sort
+    // threshold and -Stable does not. This engine gives the -Stable order both
+    // times, which is a recorded divergence and must not read as agreement.
+    const withSwitch = await run(sortObject, { Property: 'K', Stable: true }, rows);
+    const without = await run(sortObject, { Property: 'K' }, rows);
+    assert.deepEqual(column(withSwitch.values, 'I'), column(without.values, 'I'));
+    // And it really is the stable order: ties in input order.
+    const zeros = column(withSwitch.values, 'I').slice(0, 6);
+    assert.deepEqual(zeros, [3, 6, 9, 12, 15, 18]);
+  });
+
+  it('declares -Stable and refuses the upstream-only windowing parameters', () => {
+    const declared = sortObject.manifest.parameters.map((p) => p.name);
+    assert.ok(declared.includes('Stable'));
+    for (const upstreamOnly of ['Top', 'Bottom', 'Culture']) {
+      assert.ok(!declared.includes(upstreamOnly), `-${upstreamOnly} must not be accepted`);
+    }
+    assert.match(sortObject.manifest.notes ?? '', /KNOWN DIFFERENCE/u);
+  });
+});
+
+describe('-InputObject is a direct argument, not decoration', () => {
+  it('measures the one object it was handed, unenumerated', async () => {
+    // pwsh: Measure-Object -InputObject @(1,2,3) -Sum
+    //   ->  Count 1, Sum empty, NonNumericInputObject 'System.Object[]'
+    // Before: the parameter bound, nothing read it, the empty pipeline gave
+    // Count 0 and exit 0.
+    const result = await run(measureObject, { InputObject: [1, 2, 3], Sum: true }, []);
+    assert.equal(prop(result.values[0], 'Count'), 1);
+    assert.equal(prop(result.values[0], 'Sum'), null);
+    assert.equal(
+      result.errors[0]?.fullyQualifiedErrorId,
+      'NonNumericInputObject,Microsoft.PowerShell.Commands.MeasureObjectCommand',
+    );
+  });
+
+  it('sends exactly one object through Sort-Object and Group-Object', async () => {
+    // pwsh: @(Sort-Object -InputObject 3,1,2).Count  -> 1
+    //       (Group-Object -InputObject 3,1,2).Name   -> '3 1 2'
+    const sorted = await run(sortObject, { InputObject: [3, 1, 2] }, []);
+    assert.equal(sorted.values.length, 1);
+    const grouped = await run(groupObject, { InputObject: [3, 1, 2] }, []);
+    assert.equal(grouped.values.length, 1);
+    assert.equal(prop(grouped.values[0], 'Name'), '3 1 2');
+  });
+
+  it('inspects the array itself in Get-Member', async () => {
+    // pwsh: (Get-Member -InputObject 3,1,2).TypeName -> System.Object[]
+    const result = await run(getMember, { InputObject: [3, 1, 2] }, []);
+    assert.equal(prop(result.values[0], 'TypeName'), 'System.Object[]');
+  });
+
+  it('filters the one object in Where-Object', async () => {
+    // pwsh: Where-Object -InputObject 3,1,2 -Property Length -EQ 3 -> 1 object
+    const result = await run(
+      whereObject,
+      { InputObject: [3, 1, 2], Property: 'Length', EQ: true, Value: 3 },
+      [],
+    );
+    assert.equal(result.values.length, 1);
+  });
+
+  it('rejects each pipeline object when both were supplied', async () => {
+    // pwsh:
+    //   1..2 | Measure-Object -InputObject 9 -ErrorVariable e -EA SilentlyContinue
+    //     ->  Count 0, and TWO errors
+    //   $e[0].FullyQualifiedErrorId
+    //     ->  InputObjectNotBound,...MeasureObjectCommand
+    // Count 0, not 1: the direct argument is not measured either.
+    const result = await run(measureObject, { InputObject: 9, Sum: true }, [1, 2]);
+    assert.equal(result.errors.length, 2);
+    assert.equal(
+      result.errors[0]?.fullyQualifiedErrorId,
+      'InputObjectNotBound,Microsoft.PowerShell.Commands.MeasureObjectCommand',
+    );
+    assert.equal(prop(result.values[0], 'Count'), 0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Where-Object parameter sets, bound the way pwsh binds them
+// ---------------------------------------------------------------------------
+
+/**
+ * Every case here was RUN against pwsh 7.6.5 and its answer recorded before the
+ * expectation was written. They go through the real binder, not a hand-built
+ * BoundParameters, because the defect was in the manifest's parameter sets and
+ * a hand-built binding cannot see it.
+ *
+ * Before this change the manifest collapsed 32 sets into one, with FilterScript
+ * and Property BOTH mandatory at position 0. The `ours (before)` notes are what
+ * that produced, measured the same way.
+ */
+describe('Where-Object binds its parameter sets the way pwsh does', () => {
+  const profile: CompatibilityView = {
+    displayVersion: '7.6.5',
+    behavior: <T extends boolean | number | string>(_key: string, fallback: T): T => fallback,
+    // Scoped keys arrived with the compatibility truth model. An undeclared
+    // pair takes the fallback under both profiles, which is what this stub is
+    // for: these cases are about parameter-set binding, not about 7.7 deltas.
+    scopedBehavior: <T extends boolean | number | string>(_key: string, whenUndeclared: T): T =>
+      whenUndeclared,
+  };
+
+  const bindArgs = (args: readonly string[]) =>
+    tryBindParameters(args, whereObject.manifest, profile);
+
+  it('binds -Property first and -Value second, not the other way round', () => {
+    // pwsh: @(o{N=2},o{N=5}) | Where-Object N -eq 2   ->  the N=2 object
+    // ours (before): FilterScript='N', Property='2', no Value at all
+    const outcome = bindArgs(['N', '-eq', '2']);
+    assert.ok(outcome.ok, 'must bind');
+    assert.equal(outcome.result.parameters['Property'], 'N');
+    // A string, because -Value is System.Object and the argument arrived as
+    // text. pwsh binds it the same way from a command line.
+    assert.equal(outcome.result.parameters['Value'], '2');
+    assert.equal(outcome.result.parameters['FilterScript'], undefined);
+    assert.equal(outcome.result.parameterSet, 'EqualSet');
+  });
+
+  it('accepts the fully named comparison form', () => {
+    // pwsh: Where-Object -Property N -eq -Value 2  ->  works
+    // ours (before): MissingMandatoryParameter: FilterScript. A valid pwsh
+    // command line was REJECTED, which is the same defect facing the other way.
+    const outcome = bindArgs(['-Property', 'N', '-eq', '-Value', '2']);
+    assert.ok(outcome.ok, 'must bind');
+    assert.equal(outcome.result.parameters['Property'], 'N');
+    assert.equal(outcome.result.parameters['Value'], '2');
+  });
+
+  it('accepts -Property with no operator, which is the truthiness test', () => {
+    // pwsh: @(o{Name='x'},o{Name='y'}) | Where-Object -Property Name  ->  both
+    // -EQ is OPTIONAL in EqualSet, which is why this binds at all.
+    const outcome = bindArgs(['-Property', 'Name']);
+    assert.ok(outcome.ok, 'must bind');
+    assert.equal(outcome.result.parameterSet, 'EqualSet');
+  });
+
+  it('refuses a script block and a property together', () => {
+    // pwsh: AmbiguousParameterSet,...WhereObjectCommand
+    // ours (before): accepted BOTH and quietly filtered on the script block.
+    const outcome = bindArgs(['-FilterScript', '{}', '-Property', 'Name', '-EQ', 'x']);
+    assert.equal(outcome.ok, false);
+    assert.ok(!outcome.ok && outcome.error.kind === 'AmbiguousParameterSet', 'kind');
+  });
+
+  it('refuses two comparison operators', () => {
+    // pwsh: AmbiguousParameterSet -- -EQ and -GT are different sets.
+    // ours (before): FilterScript='Name', Property='x', Value='y'. Three
+    // parameters bound wrongly and a successful exit.
+    const outcome = bindArgs(['Name', '-EQ', 'x', '-GT', 'y']);
+    assert.equal(outcome.ok, false);
+    assert.ok(!outcome.ok && outcome.error.kind === 'AmbiguousParameterSet', 'kind');
+  });
+
+  it('gives -Not its own set, which has no -Value', () => {
+    // pwsh: `Where-Object N -Not` binds; the Not set declares no -Value.
+    const outcome = bindArgs(['N', '-Not']);
+    assert.ok(outcome.ok, 'must bind');
+    assert.equal(outcome.result.parameterSet, 'Not');
+    assert.equal(outcome.result.parameters['Property'], 'N');
+  });
+
+  it('binds -Is against a type name at position 1', () => {
+    // pwsh: `Where-Object Name -Is System.String` -> both objects, so Property
+    // is 'Name' and Value is the type name.
+    const outcome = bindArgs(['Name', '-Is', 'System.String']);
+    assert.ok(outcome.ok, 'must bind');
+    assert.equal(outcome.result.parameters['Property'], 'Name');
+    assert.equal(outcome.result.parameters['Value'], 'System.String');
+  });
+
+  it('declares all 32 sets pwsh declares, with EqualSet the default', () => {
+    // (Get-Command Where-Object).ParameterSets.Count -> 32
+    // (Get-Command Where-Object).DefaultParameterSet -> EqualSet
+    const sets = new Set<string>();
+    for (const p of whereObject.manifest.parameters) {
+      for (const name of Object.keys(p.sets)) sets.add(name);
+    }
+    assert.equal(sets.size, 32);
+    assert.equal(whereObject.manifest.defaultParameterSet, 'EqualSet');
+    assert.ok(sets.has('ScriptBlockSet'));
+    assert.ok(sets.has('CaseSensitiveNotContainsSet'));
+    assert.ok(sets.has('Not'), 'the -Not set is called Not, not NotSet');
+  });
+
+  it('binds every case-sensitive operator to its own set', () => {
+    // The fourteen C-prefixed switches are matched by TEMPLATE -- isBound(bound,
+    // `C${kind}`) -- so a search for their names as string literals finds
+    // nothing and they look unread. They are not: each is its own parameter set
+    // in pwsh and each binds here. Spot-checked end to end rather than by
+    // reading the table that generated them.
+    for (const [written, set] of [
+      ['-ceq', 'CaseSensitiveEqualSet'],
+      ['-clike', 'CaseSensitiveLikeSet'],
+      ['-cnotcontains', 'CaseSensitiveNotContainsSet'],
+    ] as const) {
+      const outcome = bindArgs(['Name', written, 'B']);
+      assert.ok(outcome.ok, written);
+      assert.equal(outcome.result.parameterSet, set, written);
+      assert.equal(outcome.result.parameters['Property'], 'Name');
+      assert.equal(outcome.result.parameters['Value'], 'B');
+    }
+    // And all 28 are declared, one set each.
+    const switches = whereObject.manifest.parameters.filter((p) => /^C[A-Z]/u.test(p.name));
+    assert.equal(switches.length, 14);
+    for (const p of switches) assert.equal(Object.keys(p.sets).length, 1, p.name);
+  });
+
+  it('is held out of the session registry, and says so', () => {
+    assert.equal(whereObject.manifest.implementationStatus, 'partial');
+    assert.match(whereObject.manifest.notes ?? '', /PARTIAL/u);
+    // The two limits that earn it, named in the notes rather than implied.
+    assert.match(whereObject.manifest.notes ?? '', /RegExp/u);
+    assert.match(whereObject.manifest.notes ?? '', /-is/u);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Where-Object refuses rather than choosing
+// ---------------------------------------------------------------------------
+
+describe('Where-Object fails by name instead of guessing', () => {
+  const rows = [obj({ Name: 'x', N: 2 })];
+
+  it('reports ValueNotSpecifiedForWhereObject for an operator with no -Value', async () => {
+    // pwsh: Where-Object Name -EQ
+    //   ValueNotSpecifiedForWhereObject,Microsoft.PowerShell.Commands.WhereObjectCommand
+    //   'The specified operator requires both the -Property and -Value parameters.'
+    // ours (before): the operator ran against $null and filtered SILENTLY.
+    const result = await run(whereObject, { Property: 'Name', EQ: true }, rows);
+    assert.deepEqual(result.values, []);
+    assert.equal(result.exitCode, 1);
+    assert.equal(result.errors[0]?.fullyQualifiedErrorId,
+      'ValueNotSpecifiedForWhereObject,Microsoft.PowerShell.Commands.WhereObjectCommand');
+  });
+
+  it('exempts -Not, whose parameter set has no -Value', async () => {
+    // pwsh: `Where-Object N -Not` runs and filters on truthiness. N=2 is truthy,
+    // so -Not keeps nothing.
+    const result = await run(whereObject, { Property: 'N', Not: true }, rows);
+    assert.equal(result.exitCode, 0);
+    assert.deepEqual(result.values, []);
+  });
+
+  it('refuses two operators rather than taking the first', async () => {
+    // The binder rejects this spelling, but a hand-built binding reaches the
+    // body -- and the body used to walk a fixed array and return the FIRST
+    // match, so -GT was discarded without a word.
+    const result = await run(whereObject, { Property: 'N', EQ: true, GT: true, Value: 2 }, rows);
+    assert.equal(result.exitCode, 1);
+    assert.deepEqual(result.values, []);
+    assert.equal(result.errors[0]?.fullyQualifiedErrorId,
+      'UnsupportedParameterCombination,Microsoft.PowerShell.Commands.WhereObjectCommand');
+  });
+
+  it('refuses a script block combined with a property', async () => {
+    const filter = scriptBlock(() => true);
+    const result = await run(whereObject, { FilterScript: filter, Property: 'N' }, rows);
+    assert.equal(result.exitCode, 1);
+    assert.equal(result.errors[0]?.fullyQualifiedErrorId,
+      'UnsupportedParameterCombination,Microsoft.PowerShell.Commands.WhereObjectCommand');
+  });
+
+  it('refuses to pass everything through when nothing was supplied', async () => {
+    // The old body's else-branch was `keep = true`, on the reasoning that the
+    // binder rejects this first. It does -- and a filter that silently becomes
+    // the identity function is the exact shape of failure this file is about.
+    const result = await run(whereObject, {}, rows);
+    assert.equal(result.exitCode, 1);
+    assert.deepEqual(result.values, []);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Where-Object: the measured differences from PowerShell
+// ---------------------------------------------------------------------------
+
+describe('Where-Object -match is JavaScript RegExp, and says so', () => {
+  const one = (value: string): readonly PSValue[] => [obj({ V: value })];
+
+  it('reports the four .NET constructs JavaScript rejects, as an ErrorRecord', async () => {
+    // Each pattern is TRUE in pwsh 7.6.5 and a SyntaxError in JavaScript.
+    // Before this change the SyntaxError escaped applyOperator as a raw JS
+    // exception, so a PowerShell user was shown 'Invalid group'.
+    for (const [pattern, subject] of [
+      ['(?i)abc', 'ABC'],
+      ['(?>a+)b', 'aaab'],
+      ['^[a-z-[aeiou]]$', 'b'],
+      ['a(?#note)b', 'ab'],
+    ] as const) {
+      const result = await run(
+        whereObject,
+        { Property: 'V', Match: true, Value: pattern },
+        one(subject),
+      );
+      assert.equal(result.exitCode, 1, pattern);
+      assert.equal(result.errors[0]?.fullyQualifiedErrorId,
+        'InvalidRegularExpression,Microsoft.PowerShell.Commands.WhereObjectCommand', pattern);
+    }
+  });
+
+  it('gives the JavaScript answer for the patterns that differ silently', async () => {
+    // pwsh says True for every one of these; JavaScript says false. Asserted as
+    // the JS answer ON PURPOSE -- this is a recorded divergence, and a test that
+    // asserted pwsh's answer would fail rather than document it.
+    for (const [pattern, subject] of [
+      ['^\\d+$', '１２３'],
+      ['^\\w+$', 'é'],
+      ['^ab$', 'ab\n'],
+    ] as const) {
+      const result = await run(
+        whereObject,
+        { Property: 'V', Match: true, Value: pattern },
+        one(subject),
+      );
+      assert.equal(result.exitCode, 0, pattern);
+      assert.deepEqual(result.values, [], `${pattern} matches in .NET and not here`);
+    }
+  });
+
+  it('agrees with .NET where it was measured to agree', async () => {
+    // Measured in both: `a.b` does NOT match "a\nb", and named groups work.
+    const dot = await run(whereObject, { Property: 'V', Match: true, Value: 'a.b' }, one('a\nb'));
+    assert.deepEqual(dot.values, []);
+    const named = await run(
+      whereObject,
+      { Property: 'V', Match: true, Value: '(?<x>a)b' },
+      one('ab'),
+    );
+    assert.equal(named.values.length, 1);
+  });
+});
+
+describe('Where-Object orders NaN the way pwsh does', () => {
+  // Measured on pwsh 7.6.5, every one False and no error raised:
+  //   $n = [double]::NaN;  $n -lt 1  $n -le 1  $n -gt 1  $n -ge 1  ->  all False
+  //   @(o{V=NaN}, o{V=1}) | Where-Object V -le 1  ->  ONE object, the V=1 one
+  //   @(o{V=NaN}, o{V=1}) | Where-Object V -lt 1  ->  none
+  const rows = [obj({ Tag: 'nan', V: Number.NaN }), obj({ Tag: 'one', V: 1 })];
+
+  for (const [op, expected] of [
+    ['LT', []],
+    ['LE', ['one']],
+    ['GT', []],
+    ['GE', ['one']],
+  ] as const) {
+    it(`-${op} never matches a NaN and never raises`, async () => {
+      const result = await run(whereObject, { Property: 'V', [op]: true, Value: 1 }, rows);
+      assert.equal(result.exitCode, 0, 'must not raise');
+      assert.deepEqual(result.errors, []);
+      assert.deepEqual(column(result.values, 'Tag'), [...expected]);
+    });
+  }
+});
 
 describe('Where-Object', () => {
   const machines = [
@@ -281,6 +925,7 @@ describe('Select-Object', () => {
         outputTypeNames: [],
         synopsis: 'test double',
         parameterSource: 'none',
+        implementationStatus: 'implemented',
       } satisfies CommandManifest,
       async invoke(context: InvocationContext): Promise<number> {
         for await (const item of context.input) {
