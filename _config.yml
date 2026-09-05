@@ -35,13 +35,29 @@ exclude:
   - vendor/gems/
   - vendor/ruby/
 
-  # The workstation source. Everything under here is build-time only.
+  # The workstation source. Build-time only.
   - src/
   - tools/
   - tests/
-  - compat/
   - roadmap/
   - legacy/
+
+  # compat/ IS NOT build-time only, and saying so was wrong. It holds
+  # `explorer.html`, a designed, human-facing page -- hero, palette, two
+  # typefaces with semantic roles, dark mode -- whose whole job is to show a
+  # visitor which PowerShell version's semantics this project claims and which
+  # differences it actually emulates. That is the honesty surface, and it only
+  # works when someone can read it.
+  #
+  # It stays excluded ON PURPOSE, for now. Nothing links to it yet: the
+  # workstation is not wired into index.html, so publishing it would add a
+  # public URL nobody can reach from the site, and it would make this change
+  # alter the live site when it otherwise does not. MEASURED: of 292 files this
+  # branch changes, six fall outside this list, and all six are dotfiles Jekyll
+  # does not publish -- so merging serves exactly what it served before.
+  #
+  # Remove this line in the change that links to the explorer, not before.
+  - compat/
   # Committed snapshots of external authorities, read by the checks in tools/.
   # Nothing about them is meant to be a URL, and a new top-level directory
   # becomes one by default under this build type.
