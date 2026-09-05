@@ -44,7 +44,7 @@ import {
   formatNumber,
   formatPercent,
 } from './numeric.ts';
-import { DatePatternError, formatDateFull, formatDateGeneral, formatDatePattern } from './datetime.ts';
+import { DatePatternError, formatDate } from './datetime.ts';
 import { toPSString } from './to-string.ts';
 import { isPSObject, typeNameOf, type PSValue } from '../pipeline/psobject.ts';
 
@@ -170,40 +170,6 @@ function parse(format: string): (string | FormatItem)[] {
 }
 
 // ---------------------------------------------------------------------------
-// dates
-// ---------------------------------------------------------------------------
-
-/**
- * The standard date/time specifiers, restricted to those measured.
- *
- *   G  3/4/2020 3:06:07 PM         the culture's general pattern; also what
- *                                  `'{0}' -f $date` produces
- *   D  Wednesday, March 4, 2020    the date half of the full pattern
- *   s  2020-03-04T15:06:07         sortable, culture-independent
- *   O  2020-03-04T15:06:07.0890000
- *   u  2020-03-04 15:06:07Z
- *
- * `d`, `t`, `T`, `f`, `F`, `g`, `M`, `R`, `U` and `Y` are NOT implemented: each
- * needs a culture pattern that was not captured, and inventing one would make
- * this file's other claims worth less. A single letter that is not a specifier
- * at all is an error in pwsh too — `'{0:h}' -f $date` throws, because .NET reads
- * a one-character format string as a standard specifier rather than a custom one.
- */
-function formatDateStandard(value: Date, letter: string, culture: CultureData): string {
-  const pad3 = (n: number): string => String(n).padStart(3, '0');
-  if (letter === 'G') return formatDateGeneral(value, culture);
-  if (letter === 'D') return formatDateFull(value, culture).replace(/ \d?\d:\d\d:\d\d.*$/, '');
-  if (letter === 's') return formatDatePattern(value, "yyyy-MM-dd'T'HH:mm:ss", culture);
-  if (letter === 'O' || letter === 'o') {
-    return `${formatDatePattern(value, "yyyy-MM-dd'T'HH:mm:ss", culture)}.${pad3(value.getMilliseconds())}0000`;
-  }
-  if (letter === 'u') return `${formatDatePattern(value, 'yyyy-MM-dd HH:mm:ss', culture)}Z`;
-  throw new FormatOperatorError(
-    `the standard date/time format specifier '${letter}' is recognised but not implemented`,
-  );
-}
-
-// ---------------------------------------------------------------------------
 // one argument
 // ---------------------------------------------------------------------------
 
@@ -280,11 +246,11 @@ export function formatValue(value: PSValue, spec: string, culture: CultureData):
   if (typeof value === 'number' || typeof value === 'bigint') {
     return formatNumericSpec(value, spec, culture);
   }
-  if (value instanceof Date) {
-    if (spec === '') return formatDateGeneral(value, culture);
-    if (spec.length === 1) return formatDateStandard(value, spec, culture);
-    return formatDatePattern(value, spec, culture);
-  }
+  // One call, because there is one engine: `formatDate` makes the empty /
+  // one-character / custom decision itself, exactly as .NET does. Splitting it
+  // here is what let a `formatDateStandard` grow that implemented five of the
+  // nineteen standard specifiers and invented an error message for the rest.
+  if (value instanceof Date) return formatDate(value, spec, culture);
   // String.Format falls back to ToString(), which for an array is its TYPE
   // name. `"$(@(1,2))"` is `1 2`; `'{0}' -f (,@(1,2))` is `System.Object[]`.
   if (Array.isArray(value) || value instanceof Uint8Array) return typeNameOf(value);

@@ -31,6 +31,7 @@ import {
   outString,
 } from '../../src/commands/format/index.ts';
 import { FORMAT_ENTRY_TYPE, isFormatRecord } from '../../src/formatting/records.ts';
+import { UnknownCultureError } from '../../src/formatting/culture.ts';
 
 // ---------------------------------------------------------------------------
 // harness
@@ -272,16 +273,35 @@ describe('the culture comes from the compatibility profile', () => {
   it('formats a table cell with the profile’s culture, not the host’s', async () => {
     // The same object under two cultures. Reading the host's regional settings
     // instead would make this test depend on the machine running it.
+    //
+    // pwsh 7.6.5, LINUX, with CurrentCulture pinned:
+    //   [pscustomobject]@{V=1.5} | Format-Table | Out-String -Width 120
+    //     en-US  '', '    V', '    -', '1.500', ''
+    //     zh-TW  '', '    V', '    -', '1.500', ''
+    //     de-DE  '', '    V', '    -', '1,500', ''
+    // zh-TW used to be asserted as `1.50` in a four-wide column. It is three
+    // decimals, like the other two — only the separator differs, and zh-TW
+    // shares en-US's.
     const value = [o({ V: 1.5 })];
     const enUS = await runChain(value, [[outString, { Stream: true }]], 'en-US');
     const zhTW = await runChain(value, [[outString, { Stream: true }]], 'zh-TW');
+    const deDE = await runChain(value, [[outString, { Stream: true }]], 'de-DE');
     assert.deepEqual(enUS.values, ['', '    V', '    -', '1.500', '']);
-    assert.deepEqual(zhTW.values, ['', '   V', '   -', '1.50', '']);
+    assert.deepEqual(zhTW.values, ['', '    V', '    -', '1.500', '']);
+    assert.deepEqual(deDE.values, ['', '    V', '    -', '1,500', '']);
   });
 
-  it('falls back to en-US for a culture with no measured data', async () => {
-    const { values } = await runChain([o({ V: 1.5 })], [[outString, { Stream: true }]], 'fr-FR');
-    assert.deepEqual(values, ['', '    V', '    -', '1.500', '']);
+  it('refuses a culture with no measured data instead of quietly using en-US', async () => {
+    // The fallback this used to assert printed US separators and a US date
+    // order for a profile that declared itself French, which is the exact
+    // substitution culture.ts's own header says the project refuses. Nothing
+    // downstream could detect it, so the error has to come from here.
+    await assert.rejects(
+      () => runChain([o({ V: 1.5 })], [[outString, { Stream: true }]], 'fr-FR'),
+      (error: unknown) =>
+        error instanceof UnknownCultureError &&
+        /no measured culture data for 'fr-FR'/.test(error.message),
+    );
   });
 });
 

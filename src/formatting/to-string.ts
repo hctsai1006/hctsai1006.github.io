@@ -16,6 +16,14 @@
  *
  * The same review found `src/formatting/width.ts` had drifted the same way
  * against `src/line-editor/metrics.ts`. One implementation, or they diverge.
+ *
+ * `formatDouble` used to be re-exported from here, and it was a FOURTH
+ * rendering — a private G15 that switched to exponential at `exponent < -5`
+ * where .NET switches at `< -4`, so `"$(0.00001)"` came out as `0.00001` where
+ * pwsh says `1E-05`, and negative zero came out as `0` where pwsh says `-0`.
+ * It is gone: `toPSString` now calls `formatGeneral(value, 15, INVARIANT, true)`
+ * from `./numeric.ts`, which is the same function the `-f` operator's `G15`
+ * goes through. Anything that wanted `formatDouble` wants that call.
  */
 
-export { toPSString, formatDouble, DEFAULT_OFS } from '../pipeline/psobject.ts';
+export { toPSString, DEFAULT_OFS } from '../pipeline/psobject.ts';
