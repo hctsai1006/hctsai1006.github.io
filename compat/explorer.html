@@ -272,7 +272,7 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
     <h1 class="sr-only">Version truth</h1>
     <p class="hero-source">Microsoft Learn,
       <a href="https://raw.githubusercontent.com/MicrosoftDocs/PowerShell-Docs/main/reference/docs-conceptual/whats-new/What-s-New-in-PowerShell-74.md">What&rsquo;s New in PowerShell</a>,
-      recorded 2026-09-04</p>
+      recorded 2026-09-05</p>
 
     <blockquote class="hero-sentence">PowerShell <span class="mark mark-ok">7.7.0-preview.4</span> is built on the .NET <span class="mark mark-bad">11.0.100-preview.6</span> <span class="mark mark-bad">runtime</span>.</blockquote>
 
@@ -457,6 +457,7 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
               <th scope="col">behavior</th>
               <th scope="col">value in this profile</th>
               <th scope="col">breaking</th>
+              <th scope="col">engine</th>
               <th scope="col">what changes in 7.7.0-preview.4</th>
               <th scope="col">upstream</th>
             </tr>
@@ -466,6 +467,7 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
           <td class="mono key">ansi.resetMidStringHandled</td>
           <td class="mono val" data-lts="false" data-preview="true">false</td>
           <td class="mark-cell"></td>
+          <td class="mark-cell"><span class="emulated">documented</span></td>
           <td class="doc">VT Reset sequences appearing mid-string are handled correctly</td>
           <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26424">#26424</a></td>
         </tr>
@@ -473,6 +475,7 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
           <td class="mono key">application.outputEncodingVariable</td>
           <td class="mono val" data-lts="false" data-preview="true">false</td>
           <td class="mark-cell"></td>
+          <td class="mark-cell"><span class="emulated">documented</span></td>
           <td class="doc">Automatic variable controlling how native command output is decoded</td>
           <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/21219">#21219</a></td>
         </tr>
@@ -480,6 +483,7 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
           <td class="mono key">csv.noTypeInformationObsolete</td>
           <td class="mono val" data-lts="false" data-preview="true">false</td>
           <td class="mark-cell"></td>
+          <td class="mark-cell"><span class="emulated">documented</span></td>
           <td class="doc"><span class=“mono”>-NoTypeInformation</span> is an obsolete no-op; <span class=“mono”>-IncludeTypeInformation</span> is evaluated by value</td>
           <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26719">#26719</a></td>
         </tr>
@@ -487,6 +491,7 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
           <td class="mono key">exportCsv.appendNoHeaderExclusive</td>
           <td class="mono val" data-lts="false" data-preview="true">false</td>
           <td class="mark-cell"></td>
+          <td class="mark-cell"><span class="emulated">documented</span></td>
           <td class="doc"><span class=“mono”>-Append</span> and <span class=“mono”>-NoHeader</span> are now mutually exclusive</td>
           <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26472">#26472</a></td>
         </tr>
@@ -494,6 +499,7 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
           <td class="mono key">format.excludeProperty</td>
           <td class="mono val" data-lts="false" data-preview="true">false</td>
           <td class="mark-cell"></td>
+          <td class="mark-cell"><span class="emulated">documented</span></td>
           <td class="doc"><span class=“mono”>-ExcludeProperty</span> parameter added to Format-* cmdlets</td>
           <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26514">#26514</a></td>
         </tr>
@@ -501,6 +507,7 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
           <td class="mono key">format.property.rejectNullOrEmpty</td>
           <td class="mono val" data-lts="false" data-preview="true">false</td>
           <td class="mark-cell"><span class="breaking-mark">breaking</span></td>
+          <td class="mark-cell"><span class="emulated is-emulated">emulated</span></td>
           <td class="doc"><span class=“mono”>ValidateNotNullOrEmpty</span> added to <span class=“mono”>-Property</span></td>
           <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26552">#26552</a></td>
         </tr>
@@ -508,6 +515,7 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
           <td class="mono key">joinPath.extension</td>
           <td class="mono val" data-lts="false" data-preview="true">false</td>
           <td class="mark-cell"></td>
+          <td class="mark-cell"><span class="emulated">documented</span></td>
           <td class="doc"><span class=“mono”>-Extension</span> parameter added</td>
           <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26482">#26482</a></td>
         </tr>
@@ -515,6 +523,7 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
           <td class="mono key">newGuid.defaultVersion</td>
           <td class="mono val" data-lts="4" data-preview="7">4</td>
           <td class="mark-cell"><span class="breaking-mark">breaking</span></td>
+          <td class="mark-cell"><span class="emulated is-emulated">emulated</span></td>
           <td class="doc"><span class=“mono”>New-Guid</span> emits a time-sortable UUID v7 by default instead of a random UUID v4</td>
           <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/27033">#27033</a></td>
         </tr>
@@ -522,6 +531,7 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
           <td class="mono key">progress.doubleWidthAware</td>
           <td class="mono val" data-lts="false" data-preview="true">false</td>
           <td class="mark-cell"></td>
+          <td class="mark-cell"><span class="emulated">documented</span></td>
           <td class="doc">Progress bar renders correctly with double-width Unicode characters</td>
           <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26185">#26185</a></td>
         </tr>
@@ -529,6 +539,7 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
           <td class="mono key">switchParameters.honourExplicitFalse</td>
           <td class="mono val" data-lts="false" data-preview="true">false</td>
           <td class="mark-cell"><span class="breaking-mark">breaking</span></td>
+          <td class="mark-cell"><span class="emulated is-emulated">emulated</span></td>
           <td class="doc">Explicit -&lt;Operator&gt;:$false is now honoured rather than treated as present</td>
           <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26485">#26485</a></td>
         </tr>
@@ -536,6 +547,7 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
           <td class="mono key">temporaryDirectory.cmdlet</td>
           <td class="mono val" data-lts="false" data-preview="true">false</td>
           <td class="mark-cell"></td>
+          <td class="mark-cell"><span class="emulated">documented</span></td>
           <td class="doc"><span class=“mono”>New-TemporaryDirectory</span> cmdlet added</td>
           <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/27549">#27549</a></td>
         </tr>
@@ -543,6 +555,7 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
           <td class="mono key">unix.lastWriteTime.dynamicWidth</td>
           <td class="mono val" data-lts="false" data-preview="true">false</td>
           <td class="mark-cell"></td>
+          <td class="mark-cell"><span class="emulated">documented</span></td>
           <td class="doc">LastWriteTime column width is computed dynamically on Unix</td>
           <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/24624">#24624</a></td>
         </tr>
@@ -550,6 +563,7 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
           <td class="mono key">validation.throwsArgumentException</td>
           <td class="mono val" data-lts="false" data-preview="true">false</td>
           <td class="mark-cell"><span class="breaking-mark">breaking</span></td>
+          <td class="mark-cell"><span class="emulated is-emulated">emulated</span></td>
           <td class="doc">Not-null-not-empty validation now throws ArgumentException instead of PSArgumentNullException</td>
           <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26668">#26668</a></td>
         </tr></tbody>
@@ -557,7 +571,11 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
       </div>
       <p class="table-note">13 flags for 15 recorded changes:
         1 change carries
-        no flag, and some share one.</p>
+        no flag, and some share one.
+        <b>engine</b> says whether anything in the source reads the flag &mdash;
+        4 of 13 do.
+        <b>documented</b> means the difference is recorded and cited but nothing branches on it yet;
+        it is computed by searching the source when the profile is generated, not asserted here.</p>
 
       <div class="honesty" id="emulated">
         <p class="honesty-n mono">0 / 15</p>
@@ -724,7 +742,7 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
     <p>Every value on this page is read from
       <span class="mono">compat/upstream/releases.lock.json</span>, the two compatibility profiles,
       and the generated delta. The page is regenerated from them; if it drifts, the build fails.</p>
-    <p>Lockfile generated 2026-09-04T15:40:30.917Z from 19 sources across
+    <p>Lockfile generated 2026-09-05T01:59:41.743Z from 33 sources across
       5 precedence ranks.
       Upstream declares <span class="mono">v7.7.0-preview.5</span> as the next
       release, which does not exist yet.</p>

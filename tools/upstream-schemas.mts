@@ -76,6 +76,24 @@ export interface PowerShellMetadata {
   NextReleaseTag?: string;
 }
 
+/**
+ * GitHub pull request — the object behind an `upstreamPr:` citation.
+ *
+ * `merged_at` is null for an open or closed-unmerged PR, so it is the field
+ * that distinguishes "this number names a real, merged change" from "this
+ * number names something". `merge_commit_sha` can also be null on an open PR,
+ * and GitHub sets it to the test-merge commit rather than the merge commit
+ * while a PR is open — which is exactly why the caller reads merged_at first.
+ */
+export interface GhPullRequest {
+  number: number;
+  title: string;
+  state: string;
+  merged_at: string | null;
+  merge_commit_sha: string | null;
+  html_url: string;
+}
+
 export interface DotnetIndexEntry {
   'channel-version': string;
   'latest-release': string;
@@ -151,6 +169,20 @@ const powerShellMetadataSchema = {
       ],
     },
     NextReleaseTag: { type: 'string' },
+  },
+} as const;
+
+const ghPullRequestSchema = {
+  $schema: 'https://json-schema.org/draft/2020-12/schema',
+  type: 'object',
+  required: ['number', 'title', 'state', 'merged_at', 'merge_commit_sha', 'html_url'],
+  properties: {
+    number: { type: 'integer', minimum: 1 },
+    title: { type: 'string', minLength: 1 },
+    state: { type: 'string', minLength: 1 },
+    merged_at: { type: ['string', 'null'] },
+    merge_commit_sha: { type: ['string', 'null'] },
+    html_url: { type: 'string', minLength: 1 },
   },
 } as const;
 
@@ -231,6 +263,7 @@ const dotnetChannelFileSchema = {
 
 export const VALIDATORS = {
   'github-releases': ajv.compile<GhRelease[]>(ghReleaseListSchema),
+  'github-pull-request': ajv.compile<GhPullRequest>(ghPullRequestSchema),
   'powershell-metadata': ajv.compile<PowerShellMetadata>(powerShellMetadataSchema),
   'dotnet-index': ajv.compile<DotnetIndex>(dotnetIndexSchema),
   'dotnet-channel': ajv.compile<DotnetChannelFile>(dotnetChannelFileSchema),

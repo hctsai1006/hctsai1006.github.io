@@ -114,7 +114,10 @@ interface Profile {
   displayVersion: string;
   channel: string;
   behaviors: Record<string, boolean | number | string | null>;
-  behaviorDocs: Record<string, { summary: string; upstreamPr: number | null; breaking: boolean }>;
+  behaviorDocs: Record<
+    string,
+    { summary: string; upstreamPr: number | null; breaking: boolean; emulated?: boolean }
+  >;
   supported: { isSupportedUpstream: boolean; endOfSupport: string | null };
 }
 
@@ -561,11 +564,18 @@ function renderDelta(lts: Profile, preview: Profile, delta: Delta): string {
       const ltsDoc = lts.behaviorDocs[key];
       const preDoc = preview.behaviorDocs[key];
       const pr = preDoc?.upstreamPr ?? ltsDoc?.upstreamPr ?? null;
+      // Whether the engine MODELS this flag or merely documents it. Computed by
+      // generate-compatibility-profile.mts from a search of src/, not written by
+      // hand. Rendering all thirteen keys identically -- as this table did --
+      // let a visitor read a documented difference as an emulated one, which is
+      // exactly the claim this project refuses to make anywhere else.
+      const modelled = preDoc?.emulated === true;
       return `
         <tr${preDoc?.breaking === true ? ' class="breaking"' : ''}>
           <td class="mono key">${esc(key)}</td>
           <td class="mono val" data-lts="${esc(ltsValue)}" data-preview="${esc(previewValue)}">${esc(ltsValue)}</td>
           <td class="mark-cell">${preDoc?.breaking === true ? '<span class="breaking-mark">breaking</span>' : ''}</td>
+          <td class="mark-cell"><span class="emulated${modelled ? ' is-emulated' : ''}">${modelled ? 'emulated' : 'documented'}</span></td>
           <td class="doc">${prose(preDoc?.summary ?? '')}</td>
           <td class="pr">${pr === null ? '' : prLink(pr)}</td>
         </tr>`;
@@ -619,6 +629,7 @@ function renderDelta(lts: Profile, preview: Profile, delta: Delta): string {
               <th scope="col">behavior</th>
               <th scope="col">value in this profile</th>
               <th scope="col">breaking</th>
+              <th scope="col">engine</th>
               <th scope="col">what changes in ${esc(preview.displayVersion)}</th>
               <th scope="col">upstream</th>
             </tr>
@@ -628,7 +639,11 @@ function renderDelta(lts: Profile, preview: Profile, delta: Delta): string {
       </div>
       <p class="table-note">${esc(keys.length)} flags for ${esc(delta.changes.length)} recorded changes:
         ${esc(delta.changes.length - withKey)} ${pluralise(delta.changes.length - withKey, 'change carries', 'changes carry')}
-        no flag, and some share one.</p>
+        no flag, and some share one.
+        <b>engine</b> says whether anything in the source reads the flag &mdash;
+        ${esc(keys.filter((k) => preview.behaviorDocs[k]?.emulated === true).length)} of ${esc(keys.length)} do.
+        <b>documented</b> means the difference is recorded and cited but nothing branches on it yet;
+        it is computed by searching the source when the profile is generated, not asserted here.</p>
 
       <div class="honesty" id="emulated">
         <p class="honesty-n mono">${esc(implemented)} / ${esc(delta.changes.length)}</p>
@@ -1031,6 +1046,19 @@ function main(): void {
   if (unknown.length > 0) {
     process.stderr.write(
       `\n  unknown option(s): ${unknown.join(', ')}\n  known: ${[...KNOWN_FLAGS].join(', ')}\n\n`,
+    );
+    process.exitCode = 2;
+    return;
+  }
+
+  // `--check --artifact <path>` used to write the artifact and RETURN, skipping
+  // the check and exiting 0: a gate that reports success for a run in which it
+  // did nothing. Every other tool in tools/ rejects a nonsensical flag
+  // combination, and verify-release-truth.mts rejects this exact shape
+  // (`--check` with `--write`) for the same reason.
+  if (artifactAt !== -1 && argv.includes('--check')) {
+    process.stderr.write(
+      '\n  --check and --artifact are mutually exclusive: --artifact writes a file, which is not a check.\n\n',
     );
     process.exitCode = 2;
     return;

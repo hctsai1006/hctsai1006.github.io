@@ -75,7 +75,11 @@
           "summary": { "type": "string" },
           "upstreamPr": { "type": ["integer", "null"] },
           "breaking": { "type": "boolean" },
-          "since": { "type": "string" }
+          "since": { "type": "string" },
+          "emulated": {
+            "description": "Whether anything under src/ names this behavior key. Computed at generation time by searching the source, never hand-written. False means the difference is DOCUMENTED, not modelled -- the explorer must say so, because presenting the two identically is the claim of fidelity this project exists to avoid making.",
+            "type": "boolean"
+          }
         },
         "additionalProperties": false
       }

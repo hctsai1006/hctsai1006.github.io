@@ -151,8 +151,26 @@ else {
     : bad(`① noscript ${t.join('/')} != D.stats ${merged}/${projects}/${foundations}`);
 }
 
-/* ② 四個渲染點必須是「算出來的」，不可再出現寫死的舊數字 */
-const hard = [...s.matchAll(/'(\d{2,4}) merged (?:upstream PRs|pull requests)/g)].map((m) => m[1]);
+/* ② 四個渲染點必須是「算出來的」，不可再出現寫死的舊數字。
+
+   舊版是 /'(\d{2,4}) merged (?:upstream PRs|pull requests)/g，一次敵對審查列出五種繞法，
+   每一種都能把寫死的數字放回去而這項照樣印 OK：雙引號、反引號、1 位數、5 位數，
+   以及換句話說（把 "upstream PRs" 改成 "PRs" 或 "contributions" 就不匹配了）。
+
+   現在改成兩段：先把 HTML 裡的字串字面量抽出來，再在字面量內容裡找「數字貼著 merged /
+   已合併」。抽字面量這一步是關鍵 —— ① 檢查的那句 <noscript> 文字本來就含有真數字，
+   它不在引號裡，所以不會被 ② 當成寫死的計數。 */
+const STRING_LITERAL = /(['"`])((?:\\.|(?!\1)[^\\\n])*)\1/g;
+/* 數字在前（`276 merged`、`276 個已合併`）或數字在後（`merged: 276`、`已合併 276`）。
+   數字在後那半限制在 12 個非數字字元內，否則 `' merged upstream PRs · '+D.cncf[2]`
+   這種「字面量結束後才出現的數字」會被誤判。 */
+const COUNT_NEAR_MERGED =
+  /\b(\d[\d,]*)\s*個?\s*(?:merged|已合併)|(?:merged|已合併)[^\d\n]{0,12}(\d[\d,]*)/i;
+const hard: string[] = [];
+for (const m of s.matchAll(STRING_LITERAL)) {
+  const hit = COUNT_NEAR_MERGED.exec(m[2] ?? '');
+  if (hit !== null) hard.push(hit[1] ?? hit[2] ?? '?');
+}
 hard.length === 0
   ? ok('② 四個渲染點都由 D.stats 計算，沒有寫死的計數字串')
   : bad(`② 仍有寫死的計數字串：${hard.join(', ')}（應改成讀 D.stats）`);

@@ -3,21 +3,22 @@
     "psVersion": "7.6.5",
     "psEdition": "Core",
     "gitCommitId": "7.6.5",
-    "os": "Microsoft Windows 10.0.26340",
-    "platform": "Win32NT",
+    "os": "Ubuntu 24.04.4 LTS",
+    "platform": "Unix",
     "framework": ".NET 10.0.11"
   },
   "capture": {
     "renderWidth": 120,
     "pinnedCulture": "en-US",
     "stressCulture": "de-DE",
-    "hostCulture": "zh-TW",
-    "hostUICulture": "zh-TW",
+    "hostCulture": "",
+    "hostUICulture": "",
     "outputRendering": "PlainText",
-    "strictMode": "Latest"
+    "strictMode": "Latest",
+    "updatableHelp": "not-installed"
   },
-  "fixtureCapturedAt": "2026-09-04T18:53:37.8214123Z",
-  "platformCaveat": "Captured on Win32NT while the published compatibility profiles target PowerShell on Linux. The corpus is deliberately platform-neutral (no filesystem or path semantics), and the capture fails on any case where a drive letter survives normalisation, but path and provider behaviour remains untested.",
+  "fixtureCapturedAt": "2026-09-05T01:30:19.6549806Z",
+  "platformCaveat": null,
   "totals": {
     "cases": 115,
     "compared": 107,
@@ -27,11 +28,11 @@
     "unimplemented": 8
   },
   "coverage": {
-    "nativeSemanticCommands": 24,
-    "commandsWithBehaviouralEvidence": 12,
-    "behaviouralCoveragePercent": 50,
+    "nativeSemanticCommands": 31,
+    "commandsWithBehaviouralEvidence": 11,
+    "behaviouralCoveragePercent": 35.5,
     "commandsWithMetadataEvidence": 12,
-    "metadataCoveragePercent": 50
+    "metadataCoveragePercent": 38.7
   },
   "perCommand": [
     {
@@ -43,6 +44,27 @@
     },
     {
       "command": "clear-host",
+      "behavioural": 0,
+      "metadata": 0,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "format-list",
+      "behavioural": 0,
+      "metadata": 0,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "format-table",
+      "behavioural": 0,
+      "metadata": 0,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
+      "command": "format-wide",
       "behavioural": 0,
       "metadata": 0,
       "unimplemented": 0,
@@ -105,6 +127,13 @@
       "differences": 0
     },
     {
+      "command": "get-member",
+      "behavioural": 0,
+      "metadata": 0,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
       "command": "get-project",
       "behavioural": 0,
       "metadata": 0,
@@ -140,6 +169,13 @@
       "differences": 0
     },
     {
+      "command": "group-object",
+      "behavioural": 0,
+      "metadata": 0,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
       "command": "help",
       "behavioural": 0,
       "metadata": 0,
@@ -154,6 +190,13 @@
       "differences": 0
     },
     {
+      "command": "new-guid",
+      "behavioural": 0,
+      "metadata": 0,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
       "command": "out-null",
       "behavioural": 0,
       "metadata": 1,
@@ -161,8 +204,15 @@
       "differences": 0
     },
     {
+      "command": "out-string",
+      "behavioural": 0,
+      "metadata": 0,
+      "unimplemented": 0,
+      "differences": 0
+    },
+    {
       "command": "select-object",
-      "behavioural": 1,
+      "behavioural": 0,
       "metadata": 2,
       "unimplemented": 1,
       "differences": 0
@@ -176,14 +226,14 @@
     },
     {
       "command": "sort-object",
-      "behavioural": 5,
+      "behavioural": 2,
       "metadata": 2,
       "unimplemented": 0,
       "differences": 0
     },
     {
       "command": "where-object",
-      "behavioural": 16,
+      "behavioural": 15,
       "metadata": 2,
       "unimplemented": 0,
       "differences": 0
@@ -207,8 +257,14 @@
     "culture.format-operator-follows-culture",
     "culture.tostring-follows-culture",
     "date.format-day-and-month-names",
-    "date.format-meridiem-and-twelve-hour",
     "date.format-single-char-is-standard"
+  ],
+  "uncreditedLabels": [
+    "collation.b-lt-a (labelled 'sort-object'): the source does not name 'sort-object', and the module implementing it does not reference 'compareValues'",
+    "collation.a-lt-b-upper (labelled 'sort-object'): the source does not name 'sort-object', and the module implementing it does not reference 'compareValues'",
+    "comparison.null-sorts-first (labelled 'sort-object'): the source does not name 'sort-object', and the module implementing it does not reference 'compareValues'",
+    "comparison.array-eq-filters (labelled 'where-object'): the source does not name 'where-object', and the module implementing it does not reference 'comparisonOperator'",
+    "property.declaration-order-is-kept (labelled 'select-object'): the source does not name 'select-object', and the module implementing it does not reference 'propertyNames'"
   ],
   "knownDifferences": [
     {
@@ -248,6 +304,8 @@
     {
       "id": "pipeline.measure-nested-array",
       "command": "measure-object",
+      "credits": "measure-object",
+      "creditBasis": "direct",
       "area": "pipeline",
       "outcome": "match",
       "expected": [
@@ -261,6 +319,8 @@
     {
       "id": "pipeline.nested-array-arrives-intact",
       "command": "write-output",
+      "credits": "write-output",
+      "creditBasis": "shared-code",
       "area": "pipeline",
       "outcome": "match",
       "expected": [
@@ -278,6 +338,8 @@
     {
       "id": "pipeline.deep-nesting-still-one-level",
       "command": "measure-object",
+      "credits": "measure-object",
+      "creditBasis": "direct",
       "area": "pipeline",
       "outcome": "match",
       "expected": [
@@ -291,6 +353,8 @@
     {
       "id": "pipeline.foreach-runs-for-null",
       "command": "write-output",
+      "credits": "write-output",
+      "creditBasis": "shared-code",
       "area": "pipeline",
       "outcome": "match",
       "expected": [
@@ -304,6 +368,8 @@
     {
       "id": "pipeline.measure-object-skips-null",
       "command": "measure-object",
+      "credits": "measure-object",
+      "creditBasis": "direct",
       "area": "pipeline",
       "outcome": "unimplemented",
       "expected": [
@@ -317,6 +383,8 @@
     {
       "id": "pipeline.empty-array-emits-nothing",
       "command": "write-output",
+      "credits": "write-output",
+      "creditBasis": "direct",
       "area": "pipeline",
       "outcome": "match",
       "expected": [
@@ -330,6 +398,8 @@
     {
       "id": "pipeline.string-is-not-enumerated",
       "command": "write-output",
+      "credits": "write-output",
+      "creditBasis": "direct",
       "area": "pipeline",
       "outcome": "match",
       "expected": [
@@ -343,6 +413,8 @@
     {
       "id": "pipeline.hashtable-is-not-enumerated",
       "command": "write-output",
+      "credits": "write-output",
+      "creditBasis": "direct",
       "area": "pipeline",
       "outcome": "match",
       "expected": [
@@ -356,6 +428,8 @@
     {
       "id": "pipeline.scalar-is-one-object",
       "command": "write-output",
+      "credits": "write-output",
+      "creditBasis": "direct",
       "area": "pipeline",
       "outcome": "match",
       "expected": [
@@ -369,6 +443,8 @@
     {
       "id": "collation.b-lt-a",
       "command": "sort-object",
+      "credits": null,
+      "creditBasis": "not-established",
       "area": "comparison",
       "outcome": "match",
       "expected": [
@@ -382,6 +458,8 @@
     {
       "id": "collation.a-lt-b-upper",
       "command": "sort-object",
+      "credits": null,
+      "creditBasis": "not-established",
       "area": "comparison",
       "outcome": "match",
       "expected": [
@@ -395,6 +473,8 @@
     {
       "id": "collation.sort-mixed-case",
       "command": "sort-object",
+      "credits": "sort-object",
+      "creditBasis": "direct",
       "area": "comparison",
       "outcome": "match",
       "expected": [
@@ -416,6 +496,8 @@
     {
       "id": "collation.sort-numeric-not-lexicographic",
       "command": "sort-object",
+      "credits": "sort-object",
+      "creditBasis": "direct",
       "area": "comparison",
       "outcome": "match",
       "expected": [
@@ -435,6 +517,8 @@
     {
       "id": "comparison.eq-is-case-insensitive",
       "command": "where-object",
+      "credits": "where-object",
+      "creditBasis": "shared-code",
       "area": "comparison",
       "outcome": "match",
       "expected": [
@@ -448,6 +532,8 @@
     {
       "id": "comparison.ceq-is-case-sensitive",
       "command": "where-object",
+      "credits": "where-object",
+      "creditBasis": "shared-code",
       "area": "comparison",
       "outcome": "match",
       "expected": [
@@ -461,6 +547,8 @@
     {
       "id": "comparison.strings-compare-as-strings",
       "command": "where-object",
+      "credits": "where-object",
+      "creditBasis": "shared-code",
       "area": "comparison",
       "outcome": "match",
       "expected": [
@@ -474,6 +562,8 @@
     {
       "id": "comparison.left-operand-decides-type",
       "command": "where-object",
+      "credits": "where-object",
+      "creditBasis": "shared-code",
       "area": "comparison",
       "outcome": "match",
       "expected": [
@@ -487,6 +577,8 @@
     {
       "id": "comparison.null-sorts-first",
       "command": "sort-object",
+      "credits": null,
+      "creditBasis": "not-established",
       "area": "comparison",
       "outcome": "match",
       "expected": [
@@ -500,6 +592,8 @@
     {
       "id": "comparison.array-eq-filters",
       "command": "where-object",
+      "credits": null,
+      "creditBasis": "not-established",
       "area": "comparison",
       "outcome": "match",
       "expected": [
@@ -513,6 +607,8 @@
     {
       "id": "truthy.empty-array",
       "command": "where-object",
+      "credits": "where-object",
+      "creditBasis": "shared-code",
       "area": "truthiness",
       "outcome": "match",
       "expected": [
@@ -526,6 +622,8 @@
     {
       "id": "truthy.single-element-takes-element",
       "command": "where-object",
+      "credits": "where-object",
+      "creditBasis": "shared-code",
       "area": "truthiness",
       "outcome": "match",
       "expected": [
@@ -539,6 +637,8 @@
     {
       "id": "truthy.single-element-true",
       "command": "where-object",
+      "credits": "where-object",
+      "creditBasis": "shared-code",
       "area": "truthiness",
       "outcome": "match",
       "expected": [
@@ -552,6 +652,8 @@
     {
       "id": "truthy.multi-element-array-is-true",
       "command": "where-object",
+      "credits": "where-object",
+      "creditBasis": "shared-code",
       "area": "truthiness",
       "outcome": "match",
       "expected": [
@@ -565,6 +667,8 @@
     {
       "id": "truthy.string-zero",
       "command": "where-object",
+      "credits": "where-object",
+      "creditBasis": "shared-code",
       "area": "truthiness",
       "outcome": "match",
       "expected": [
@@ -578,6 +682,8 @@
     {
       "id": "truthy.number-zero",
       "command": "where-object",
+      "credits": "where-object",
+      "creditBasis": "shared-code",
       "area": "truthiness",
       "outcome": "match",
       "expected": [
@@ -591,6 +697,8 @@
     {
       "id": "truthy.empty-string",
       "command": "where-object",
+      "credits": "where-object",
+      "creditBasis": "shared-code",
       "area": "truthiness",
       "outcome": "match",
       "expected": [
@@ -604,6 +712,8 @@
     {
       "id": "truthy.whitespace-string",
       "command": "where-object",
+      "credits": "where-object",
+      "creditBasis": "shared-code",
       "area": "truthiness",
       "outcome": "match",
       "expected": [
@@ -617,6 +727,8 @@
     {
       "id": "truthy.null",
       "command": "where-object",
+      "credits": "where-object",
+      "creditBasis": "shared-code",
       "area": "truthiness",
       "outcome": "match",
       "expected": [
@@ -630,6 +742,8 @@
     {
       "id": "truthy.negative-number",
       "command": "where-object",
+      "credits": "where-object",
+      "creditBasis": "shared-code",
       "area": "truthiness",
       "outcome": "match",
       "expected": [
@@ -643,6 +757,8 @@
     {
       "id": "truthy.empty-hashtable",
       "command": "where-object",
+      "credits": "where-object",
+      "creditBasis": "shared-code",
       "area": "truthiness",
       "outcome": "match",
       "expected": [
@@ -656,6 +772,8 @@
     {
       "id": "type.int-literal",
       "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
       "area": "types",
       "outcome": "match",
       "expected": [
@@ -669,6 +787,8 @@
     {
       "id": "type.double-literal",
       "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
       "area": "types",
       "outcome": "match",
       "expected": [
@@ -682,6 +802,8 @@
     {
       "id": "type.exact-division-stays-int",
       "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
       "area": "types",
       "outcome": "match",
       "expected": [
@@ -695,6 +817,8 @@
     {
       "id": "type.inexact-division-promotes",
       "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
       "area": "types",
       "outcome": "match",
       "expected": [
@@ -708,6 +832,8 @@
     {
       "id": "type.int64-boundary",
       "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
       "area": "types",
       "outcome": "match",
       "expected": [
@@ -721,6 +847,8 @@
     {
       "id": "type.string",
       "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
       "area": "types",
       "outcome": "match",
       "expected": [
@@ -734,6 +862,8 @@
     {
       "id": "type.boolean",
       "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
       "area": "types",
       "outcome": "match",
       "expected": [
@@ -747,6 +877,8 @@
     {
       "id": "type.array",
       "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
       "area": "types",
       "outcome": "match",
       "expected": [
@@ -760,6 +892,8 @@
     {
       "id": "type.byte-array",
       "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
       "area": "types",
       "outcome": "match",
       "expected": [
@@ -773,6 +907,8 @@
     {
       "id": "type.datetime",
       "command": "get-date",
+      "credits": "get-date",
+      "creditBasis": "direct",
       "area": "types",
       "outcome": "match",
       "expected": [
@@ -786,6 +922,8 @@
     {
       "id": "type.pscustomobject-typename",
       "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
       "area": "types",
       "outcome": "match",
       "expected": [
@@ -799,6 +937,8 @@
     {
       "id": "type.datetime-hierarchy",
       "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
       "area": "types",
       "outcome": "match",
       "expected": [
@@ -812,6 +952,8 @@
     {
       "id": "type.is-matches-short-name",
       "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
       "area": "types",
       "outcome": "match",
       "expected": [
@@ -825,6 +967,8 @@
     {
       "id": "type.null-has-no-type",
       "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
       "area": "types",
       "outcome": "unimplemented",
       "expected": [
@@ -838,6 +982,8 @@
     {
       "id": "property.access-is-case-insensitive",
       "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
       "area": "properties",
       "outcome": "match",
       "expected": [
@@ -851,6 +997,8 @@
     {
       "id": "property.missing-property-is-absent",
       "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
       "area": "properties",
       "outcome": "match",
       "expected": [
@@ -864,6 +1012,8 @@
     {
       "id": "property.declaration-order-is-kept",
       "command": "select-object",
+      "credits": null,
+      "creditBasis": "not-established",
       "area": "properties",
       "outcome": "match",
       "expected": [
@@ -883,6 +1033,8 @@
     {
       "id": "property.has-property-case-insensitive",
       "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
       "area": "properties",
       "outcome": "match",
       "expected": [
@@ -896,6 +1048,8 @@
     {
       "id": "strings.regex-replace-is-case-insensitive",
       "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
       "area": "strings",
       "outcome": "match",
       "expected": [
@@ -909,6 +1063,8 @@
     {
       "id": "strings.like-is-case-insensitive",
       "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
       "area": "strings",
       "outcome": "match",
       "expected": [
@@ -922,6 +1078,8 @@
     {
       "id": "strings.split-returns-array",
       "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
       "area": "strings",
       "outcome": "match",
       "expected": [
@@ -935,6 +1093,8 @@
     {
       "id": "culture.interpolation-is-invariant",
       "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
       "area": "culture",
       "outcome": "match",
       "expected": [
@@ -948,6 +1108,8 @@
     {
       "id": "culture.tostring-follows-culture",
       "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
       "area": "culture",
       "outcome": "match",
       "expected": [
@@ -961,6 +1123,8 @@
     {
       "id": "culture.format-operator-follows-culture",
       "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
       "area": "culture",
       "outcome": "match",
       "expected": [
@@ -974,6 +1138,8 @@
     {
       "id": "status.dollar-hook-true-on-success",
       "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
       "area": "status",
       "outcome": "unimplemented",
       "expected": true,
@@ -985,6 +1151,8 @@
     {
       "id": "status.dollar-hook-false-after-error",
       "command": "get-command",
+      "credits": "get-command",
+      "creditBasis": "direct",
       "area": "status",
       "outcome": "unimplemented",
       "expected": false,
@@ -996,6 +1164,8 @@
     {
       "id": "status.lastexitcode-from-native-command",
       "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
       "area": "status",
       "outcome": "unimplemented",
       "expected": [
@@ -1009,6 +1179,8 @@
     {
       "id": "error.command-not-found-id",
       "command": "get-command",
+      "credits": "get-command",
+      "creditBasis": "direct",
       "area": "errors",
       "outcome": "match",
       "expected": "CommandNotFoundException,Microsoft.PowerShell.Commands.GetCommandCommand",
@@ -1020,6 +1192,8 @@
     {
       "id": "error.command-not-found-category",
       "command": "get-command",
+      "credits": "get-command",
+      "creditBasis": "direct",
       "area": "errors",
       "outcome": "match",
       "expected": "ObjectNotFound",
@@ -1031,6 +1205,8 @@
     {
       "id": "error.select-object-first-negative",
       "command": "select-object",
+      "credits": "select-object",
+      "creditBasis": "direct",
       "area": "errors",
       "outcome": "unimplemented",
       "expected": "ParameterArgumentValidationError,Microsoft.PowerShell.Commands.SelectObjectCommand",
@@ -1042,6 +1218,8 @@
     {
       "id": "error.method-on-null",
       "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
       "area": "errors",
       "outcome": "match",
       "expected": "InvokeMethodOnNull",
@@ -1053,6 +1231,8 @@
     {
       "id": "error.divide-by-zero",
       "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
       "area": "errors",
       "outcome": "match",
       "expected": "RuntimeException",
@@ -1064,6 +1244,8 @@
     {
       "id": "error.no-error-on-success",
       "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
       "area": "errors",
       "outcome": "unimplemented",
       "expected": 0,
@@ -1075,6 +1257,8 @@
     {
       "id": "meta.measure-object-sum-type",
       "command": "measure-object",
+      "credits": "measure-object",
+      "creditBasis": "probe-argument",
       "area": "metadata",
       "outcome": "match",
       "expected": [
@@ -1088,6 +1272,8 @@
     {
       "id": "meta.measure-object-inputobject-pipeline",
       "command": "measure-object",
+      "credits": "measure-object",
+      "creditBasis": "probe-argument",
       "area": "metadata",
       "outcome": "match",
       "expected": [
@@ -1101,6 +1287,8 @@
     {
       "id": "meta.sort-object-property-position",
       "command": "sort-object",
+      "credits": "sort-object",
+      "creditBasis": "probe-argument",
       "area": "metadata",
       "outcome": "match",
       "expected": [
@@ -1114,6 +1302,8 @@
     {
       "id": "meta.sort-object-property-type",
       "command": "sort-object",
+      "credits": "sort-object",
+      "creditBasis": "probe-argument",
       "area": "metadata",
       "outcome": "match",
       "expected": [
@@ -1127,6 +1317,8 @@
     {
       "id": "meta.select-object-first-type",
       "command": "select-object",
+      "credits": "select-object",
+      "creditBasis": "probe-argument",
       "area": "metadata",
       "outcome": "match",
       "expected": [
@@ -1140,6 +1332,8 @@
     {
       "id": "meta.select-object-parameter-sets",
       "command": "select-object",
+      "credits": "select-object",
+      "creditBasis": "probe-argument",
       "area": "metadata",
       "outcome": "match",
       "expected": [
@@ -1153,6 +1347,8 @@
     {
       "id": "meta.where-object-filterscript-position",
       "command": "where-object",
+      "credits": "where-object",
+      "creditBasis": "probe-argument",
       "area": "metadata",
       "outcome": "match",
       "expected": [
@@ -1166,6 +1362,8 @@
     {
       "id": "meta.where-object-eq-aliases",
       "command": "where-object",
+      "credits": "where-object",
+      "creditBasis": "probe-argument",
       "area": "metadata",
       "outcome": "match",
       "expected": [
@@ -1179,6 +1377,8 @@
     {
       "id": "meta.write-output-noenumerate-switch",
       "command": "write-output",
+      "credits": "write-output",
+      "creditBasis": "probe-argument",
       "area": "metadata",
       "outcome": "match",
       "expected": [
@@ -1192,6 +1392,8 @@
     {
       "id": "meta.write-output-inputobject-position",
       "command": "write-output",
+      "credits": "write-output",
+      "creditBasis": "probe-argument",
       "area": "metadata",
       "outcome": "match",
       "expected": [
@@ -1205,6 +1407,8 @@
     {
       "id": "meta.out-null-inputobject-pipeline",
       "command": "out-null",
+      "credits": "out-null",
+      "creditBasis": "probe-argument",
       "area": "metadata",
       "outcome": "match",
       "expected": [
@@ -1218,6 +1422,8 @@
     {
       "id": "meta.get-random-count-type",
       "command": "get-random",
+      "credits": "get-random",
+      "creditBasis": "probe-argument",
       "area": "metadata",
       "outcome": "match",
       "expected": [
@@ -1231,6 +1437,8 @@
     {
       "id": "meta.get-random-maximum-type",
       "command": "get-random",
+      "credits": "get-random",
+      "creditBasis": "probe-argument",
       "area": "metadata",
       "outcome": "match",
       "expected": [
@@ -1244,6 +1452,8 @@
     {
       "id": "meta.get-date-format-type",
       "command": "get-date",
+      "credits": "get-date",
+      "creditBasis": "probe-argument",
       "area": "metadata",
       "outcome": "match",
       "expected": [
@@ -1257,6 +1467,8 @@
     {
       "id": "meta.get-date-asutc-switch",
       "command": "get-date",
+      "credits": "get-date",
+      "creditBasis": "probe-argument",
       "area": "metadata",
       "outcome": "match",
       "expected": [
@@ -1270,6 +1482,8 @@
     {
       "id": "meta.get-command-name-position",
       "command": "get-command",
+      "credits": "get-command",
+      "creditBasis": "probe-argument",
       "area": "metadata",
       "outcome": "match",
       "expected": [
@@ -1283,6 +1497,8 @@
     {
       "id": "meta.get-command-syntax-switch",
       "command": "get-command",
+      "credits": "get-command",
+      "creditBasis": "probe-argument",
       "area": "metadata",
       "outcome": "match",
       "expected": [
@@ -1296,6 +1512,8 @@
     {
       "id": "meta.get-help-name-position",
       "command": "get-help",
+      "credits": "get-help",
+      "creditBasis": "probe-argument",
       "area": "metadata",
       "outcome": "match",
       "expected": [
@@ -1309,6 +1527,8 @@
     {
       "id": "meta.get-help-full-switch",
       "command": "get-help",
+      "credits": "get-help",
+      "creditBasis": "probe-argument",
       "area": "metadata",
       "outcome": "match",
       "expected": [
@@ -1322,6 +1542,8 @@
     {
       "id": "meta.get-history-count-type",
       "command": "get-history",
+      "credits": "get-history",
+      "creditBasis": "probe-argument",
       "area": "metadata",
       "outcome": "match",
       "expected": [
@@ -1335,6 +1557,8 @@
     {
       "id": "meta.get-history-id-type",
       "command": "get-history",
+      "credits": "get-history",
+      "creditBasis": "probe-argument",
       "area": "metadata",
       "outcome": "match",
       "expected": [
@@ -1348,6 +1572,8 @@
     {
       "id": "meta.get-location-stack-switch",
       "command": "get-location",
+      "credits": "get-location",
+      "creditBasis": "probe-argument",
       "area": "metadata",
       "outcome": "match",
       "expected": [
@@ -1361,6 +1587,8 @@
     {
       "id": "meta.get-location-psdrive-type",
       "command": "get-location",
+      "credits": "get-location",
+      "creditBasis": "probe-argument",
       "area": "metadata",
       "outcome": "match",
       "expected": [
@@ -1374,6 +1602,8 @@
     {
       "id": "normalisation.guid-is-canonicalised",
       "command": null,
+      "credits": null,
+      "creditBasis": "no-command",
       "area": "normalisation",
       "outcome": "match",
       "expected": [
@@ -1387,6 +1617,8 @@
     {
       "id": "normalisation.cwd-is-canonicalised",
       "command": "get-location",
+      "credits": "get-location",
+      "creditBasis": "direct",
       "area": "normalisation",
       "outcome": "match",
       "expected": [
@@ -1400,6 +1632,8 @@
     {
       "id": "normalisation.declared-volatile-clock",
       "command": "get-date",
+      "credits": "get-date",
+      "creditBasis": "direct",
       "area": "normalisation",
       "outcome": "unimplemented",
       "expected": [
@@ -1413,6 +1647,8 @@
     {
       "id": "date.format-single-char-is-standard",
       "command": "get-date",
+      "credits": "get-date",
+      "creditBasis": "direct",
       "area": "date",
       "outcome": "match",
       "expected": [
@@ -1426,6 +1662,8 @@
     {
       "id": "date.format-two-chars-is-custom",
       "command": "get-date",
+      "credits": "get-date",
+      "creditBasis": "direct",
       "area": "date",
       "outcome": "match",
       "expected": [
@@ -1439,6 +1677,8 @@
     {
       "id": "date.format-single-char-hour-throws",
       "command": "get-date",
+      "credits": "get-date",
+      "creditBasis": "direct",
       "area": "date",
       "outcome": "match",
       "expected": [
@@ -1452,6 +1692,8 @@
     {
       "id": "date.format-day-and-month-names",
       "command": "get-date",
+      "credits": "get-date",
+      "creditBasis": "direct",
       "area": "date",
       "outcome": "match",
       "expected": [
@@ -1465,6 +1707,8 @@
     {
       "id": "date.format-meridiem-and-twelve-hour",
       "command": "get-date",
+      "credits": "get-date",
+      "creditBasis": "direct",
       "area": "date",
       "outcome": "match",
       "expected": [
@@ -1478,6 +1722,8 @@
     {
       "id": "date.format-fractional-second-widths",
       "command": "get-date",
+      "credits": "get-date",
+      "creditBasis": "direct",
       "area": "date",
       "outcome": "match",
       "expected": [
@@ -1491,6 +1737,8 @@
     {
       "id": "date.ticks-are-int64",
       "command": "get-date",
+      "credits": "get-date",
+      "creditBasis": "direct",
       "area": "date",
       "outcome": "match",
       "expected": [
@@ -1504,6 +1752,8 @@
     {
       "id": "date.property-order",
       "command": "get-date",
+      "credits": "get-date",
+      "creditBasis": "direct",
       "area": "date",
       "outcome": "match",
       "expected": [
@@ -1517,6 +1767,8 @@
     {
       "id": "date.uformat-day-numbering-wednesday",
       "command": "get-date",
+      "credits": "get-date",
+      "creditBasis": "direct",
       "area": "date",
       "outcome": "match",
       "expected": [
@@ -1530,6 +1782,8 @@
     {
       "id": "date.uformat-day-numbering-sunday",
       "command": "get-date",
+      "credits": "get-date",
+      "creditBasis": "direct",
       "area": "date",
       "outcome": "match",
       "expected": [
@@ -1543,6 +1797,8 @@
     {
       "id": "date.uformat-week-numbers",
       "command": "get-date",
+      "credits": "get-date",
+      "creditBasis": "direct",
       "area": "date",
       "outcome": "match",
       "expected": [
@@ -1556,6 +1812,8 @@
     {
       "id": "date.uformat-padding-variants",
       "command": "get-date",
+      "credits": "get-date",
+      "creditBasis": "direct",
       "area": "date",
       "outcome": "match",
       "expected": [
@@ -1569,6 +1827,8 @@
     {
       "id": "date.uformat-unknown-specifier-keeps-the-letter",
       "command": "get-date",
+      "credits": "get-date",
+      "creditBasis": "direct",
       "area": "date",
       "outcome": "match",
       "expected": [
@@ -1582,6 +1842,8 @@
     {
       "id": "date.uformat-percent-escape",
       "command": "get-date",
+      "credits": "get-date",
+      "creditBasis": "direct",
       "area": "date",
       "outcome": "match",
       "expected": [
@@ -1595,6 +1857,8 @@
     {
       "id": "random.maximum-is-exclusive-single-value",
       "command": "get-random",
+      "credits": "get-random",
+      "creditBasis": "direct",
       "area": "random",
       "outcome": "match",
       "expected": [
@@ -1608,6 +1872,8 @@
     {
       "id": "random.maximum-is-exclusive-pair",
       "command": "get-random",
+      "credits": "get-random",
+      "creditBasis": "direct",
       "area": "random",
       "outcome": "match",
       "expected": [
@@ -1621,6 +1887,8 @@
     {
       "id": "random.empty-range-is-an-error",
       "command": "get-random",
+      "credits": "get-random",
+      "creditBasis": "direct",
       "area": "random",
       "outcome": "match",
       "expected": [
@@ -1634,6 +1902,8 @@
     {
       "id": "random.empty-range-error-message",
       "command": "get-random",
+      "credits": "get-random",
+      "creditBasis": "direct",
       "area": "random",
       "outcome": "match",
       "expected": [
@@ -1647,6 +1917,8 @@
     {
       "id": "random.count-larger-than-the-list",
       "command": "get-random",
+      "credits": "get-random",
+      "creditBasis": "direct",
       "area": "random",
       "outcome": "match",
       "expected": [
@@ -1660,6 +1932,8 @@
     {
       "id": "history.info-property-order",
       "command": "get-history",
+      "credits": "get-history",
+      "creditBasis": "direct",
       "area": "history",
       "outcome": "match",
       "expected": [
@@ -1673,6 +1947,8 @@
     {
       "id": "help.auto-generated-view-typenames",
       "command": "get-help",
+      "credits": "get-help",
+      "creditBasis": "direct",
       "area": "help",
       "outcome": "match",
       "expected": [
@@ -1686,6 +1962,8 @@
     {
       "id": "help.full-view-adds-a-twin-per-name",
       "command": "get-help",
+      "credits": "get-help",
+      "creditBasis": "direct",
       "area": "help",
       "outcome": "match",
       "expected": [
@@ -1699,6 +1977,8 @@
     {
       "id": "help.parameter-descriptor-members",
       "command": "get-help",
+      "credits": "get-help",
+      "creditBasis": "direct",
       "area": "help",
       "outcome": "match",
       "expected": [
@@ -1712,6 +1992,8 @@
     {
       "id": "commands.cmdlet-info-hierarchy",
       "command": "get-command",
+      "credits": "get-command",
+      "creditBasis": "direct",
       "area": "commands",
       "outcome": "match",
       "expected": [
@@ -1725,6 +2007,8 @@
     {
       "id": "commands.alias-info-hierarchy",
       "command": "get-command",
+      "credits": "get-command",
+      "creditBasis": "direct",
       "area": "commands",
       "outcome": "match",
       "expected": [
@@ -1738,6 +2022,8 @@
     {
       "id": "version.table-key-order",
       "command": "$psversiontable",
+      "credits": "$psversiontable",
+      "creditBasis": "direct",
       "area": "version",
       "outcome": "match",
       "expected": [

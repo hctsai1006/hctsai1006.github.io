@@ -29,6 +29,34 @@
  * cases that "pass", because a case with no implementation behind it passes
  * nothing.
  *
+ * WHAT MAKES THESE NUMBERS HARD TO FORGE
+ *
+ * A review moved the headline figure to any value it liked and made a tampered
+ * recording look like a defect in the project. Three things answer that, and
+ * each is independent of the others:
+ *
+ *   1. The FIXTURE IS SEALED. Every case record carries a digest over itself,
+ *      and the document carries one over everything else -- capturedAt, the
+ *      engine block, the capture block, the $comment. Editing a recorded answer
+ *      is reported as tampering, with its own exit code (3), instead of as an
+ *      "UNEXPLAINED DIFFERENCE ... Fix it" that advises changing the code to
+ *      match the forgery. See verifyFixtureIntegrity.
+ *
+ *   2. The CORPUS LABELS ARE NOTARISED. `command`, `area`, `observe` and the
+ *      probe are recorded at capture time and compared here field by field, so
+ *      editing one in corpus.json disagrees with the recording rather than
+ *      moving a number. Relabelling twenty-four passing cases used to take
+ *      behavioural coverage from 38.7% to 100% with problems: 0.
+ *
+ *   3. A LABEL IS NOT A CREDIT. Coverage counts a case for a command only when
+ *      the connection can be established mechanically -- the pwsh source names
+ *      the command, or the module implementing it references the function the
+ *      probe drives. See creditFor, which also states what it cannot catch.
+ *
+ * tests/conformance/report.json is regenerated and compared by `--check`, wired
+ * into `npm run verify`. It was previously a committed artifact with no gate and
+ * no reader, and it had gone stale.
+ *
  * WHY THERE IS A TINY YAML READER IN HERE
  *
  * No YAML parser is installed. known-differences.yml is forty lines of a narrow
@@ -41,7 +69,7 @@
  */
 
 import { createHash } from 'node:crypto';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -149,6 +177,84 @@ const readJson = (path: string): unknown => {
 };
 
 // ---------------------------------------------------------------------------
+// canonical JSON -- the twin of the writer in generate-conformance-fixtures.ps1
+// ---------------------------------------------------------------------------
+
+/**
+ * The fixture was edited by hand. A DIFFERENT failure from "the project
+ * disagrees with the reference implementation", and it must never be reported
+ * as one: the old harness answered a tampered recording with "UNEXPLAINED
+ * DIFFERENCE ... Fix it", i.e. it advised changing the code to match the
+ * forgery.
+ */
+class FixtureTamperError extends Error {}
+
+/**
+ * Serialise a parsed-JSON value to the one form both this file and
+ * tools/generate-conformance-fixtures.ps1 produce byte for byte.
+ *
+ * JSON.stringify is not used, and neither is ConvertTo-Json on the other side.
+ * Both are underspecified where it matters here: key order is insertion order
+ * in one and unspecified in the other, and PowerShell escapes `<`, `>`, `&` and
+ * `'` as \uXXXX for reasons of its own that nobody promises to keep. Matching
+ * either from the opposite language would be guesswork, and the failure mode of
+ * a guess is a FALSE accusation of tampering.
+ *
+ * So: keys sorted by UTF-16 ordinal (Object.keys().sort() and
+ * StringComparer.Ordinal agree), only the quote, the backslash and control
+ * characters escaped, everything else emitted literally and hashed as UTF-8.
+ * Anything the two languages format differently is REFUSED rather than
+ * rendered -- see canonicalNumber.
+ */
+function canonicalString(text: string): string {
+  return (
+    '"' +
+    text.replace(/["\\\u0000-\u001f]/g, (ch) => {
+      if (ch === '"') return '\\"';
+      if (ch === '\\') return '\\\\';
+      return `\\u${ch.charCodeAt(0).toString(16).padStart(4, '0')}`;
+    }) +
+    '"'
+  );
+}
+
+function canonicalNumber(value: number): string {
+  if (!Number.isFinite(value)) fail(`canonical JSON: cannot represent ${String(value)}`);
+  // -0 prints as "0" here and as "-0" in .NET. Normalised on both sides.
+  if (value === 0) return '0';
+  const text = String(value);
+  // .NET writes 1E+21 where JavaScript writes 1e+21. No value in the corpus or
+  // the fixture needs the form, so it is refused rather than guessed at.
+  if (/[eE]/.test(text)) {
+    fail(`canonical JSON: '${text}' needs exponent notation, which .NET and JavaScript format differently`);
+  }
+  return text;
+}
+
+function canonicalJson(value: unknown): string {
+  if (value === null) return 'null';
+  if (typeof value === 'boolean') return value ? 'true' : 'false';
+  if (typeof value === 'string') return canonicalString(value);
+  if (typeof value === 'number') return canonicalNumber(value);
+  if (Array.isArray(value)) return `[${(value as readonly unknown[]).map(canonicalJson).join(',')}]`;
+  if (isRecord(value)) {
+    const keys = Object.keys(value).sort();
+    return `{${keys.map((k) => `${canonicalString(k)}:${canonicalJson(value[k])}`).join(',')}}`;
+  }
+  return fail(`canonical JSON: no rule for a value of type ${typeof value}`);
+}
+
+const digestOf = (value: unknown): string =>
+  `sha256:${createHash('sha256').update(canonicalJson(value), 'utf8').digest('hex')}`;
+
+/** A shallow copy without one key, for digesting a record that carries its own digest. */
+function without(source: Record<string, unknown>, key: string): Record<string, unknown> {
+  const copy = { ...source };
+  delete copy[key];
+  return copy;
+}
+
+// ---------------------------------------------------------------------------
 // the tiny YAML reader
 // ---------------------------------------------------------------------------
 
@@ -252,6 +358,16 @@ function parseNarrowYaml(text: string, file: string): {
     if (indent !== 0) fail(`${at(i)}: expected a top-level key, found an indented line`);
 
     const { key, rest } = splitKey(line.trim(), i);
+    // Last-wins at the top level is how three suppressions became one. A second,
+    // well-formed `differences:` block appended to the file silently DISCARDED
+    // the first: `sequences[key] = items` overwrote it, problems stayed at 0,
+    // and the guard written to prevent exactly this --
+    // `assert.ok(report.knownDifferences.length > 0)` -- was satisfied by the
+    // survivor. The reader already rejects a duplicate key WITHIN an item; the
+    // same rule belongs here, with the line number it already knows.
+    if (key in scalars || key in sequences) {
+      fail(`${at(i)}: duplicate top-level key '${key}'; the later block would silently replace the earlier one`);
+    }
     if (rest !== '') {
       const value = parseInlineValue(rest, i);
       if (Array.isArray(value)) fail(`${at(i)}: top-level sequences must be block sequences`);
@@ -393,7 +509,15 @@ interface FixtureOutcome {
 
 interface FixtureCase {
   readonly id: string;
+  /** The identity the capture recorded, copied from the corpus case it ran.
+   *  Compared field by field against the corpus below: the fixture is the
+   *  notarised copy, so a relabel in corpus.json shows up as a disagreement
+   *  with the recording rather than as a free move. */
+  readonly area: string;
+  readonly command: string | null;
+  readonly observe: string;
   readonly sourceHash: string;
+  readonly probeHash: string;
   readonly determinism: string;
   readonly outcome: FixtureOutcome;
   readonly cultureFindings: readonly Record<string, unknown>[];
@@ -462,18 +586,88 @@ function optionalNumber(source: Record<string, unknown>, key: string, where: str
   return v;
 }
 
+/**
+ * Refuse to compare against a fixture whose recorded answers cannot be shown to
+ * be the ones pwsh produced.
+ *
+ * Two digests, because they diagnose two different things:
+ *
+ *   integrity.digest   the whole document with `integrity` removed -- so
+ *                      capturedAt, $comment, partial, the engine block and the
+ *                      capture block are covered too. All of those were
+ *                      rewritable with every gate green.
+ *   case[].digest      one case's whole record with `digest` removed. Names the
+ *                      case, which is what a reader needs.
+ *
+ * Neither stops someone who re-runs the capture. That is the same bar
+ * verify-release-truth.mts sets for its lockfile, and it is the right one: a
+ * re-capture runs a real PowerShell over the whole corpus and rewrites the
+ * file, which is a deliberate and visible act. What these close is the quiet
+ * edit of one recorded number.
+ */
+function verifyFixtureIntegrity(doc: Record<string, unknown>, where0: string): void {
+  const integrity = doc['integrity'];
+  if (!isRecord(integrity)) {
+    throw new FixtureTamperError(
+      `${where0}: no 'integrity' block. A fixture without one cannot be shown to be the capture it claims to be. ` +
+        'Re-capture it: pwsh -NoProfile -File tools/generate-conformance-fixtures.ps1',
+    );
+  }
+  const algorithm = integrity['algorithm'];
+  if (algorithm !== 'sha256/canonical-json/1') {
+    throw new FixtureTamperError(
+      `${where0}: integrity.algorithm is ${JSON.stringify(algorithm)}, and this runner only knows 'sha256/canonical-json/1'.`,
+    );
+  }
+  const claimed = integrity['digest'];
+  const actual = digestOf(without(doc, 'integrity'));
+  if (claimed !== actual) {
+    throw new FixtureTamperError(
+      `${where0} was edited by hand: the document no longer matches its recorded integrity digest.\n` +
+        `    recorded   ${String(claimed)}\n` +
+        `    recomputed ${actual}\n` +
+        '  This is not a difference in the project, and changing the project to agree with it would be\n' +
+        '  changing the code to match a forgery. Re-capture from a real PowerShell:\n' +
+        '    pwsh -NoProfile -File tools/generate-conformance-fixtures.ps1',
+    );
+  }
+  for (const entry of requireRecordArray(doc, 'cases', where0)) {
+    const id = String(entry['id']);
+    const recorded = entry['digest'];
+    if (typeof recorded !== 'string') {
+      throw new FixtureTamperError(`${where0}: case '${id}' has no digest; re-capture the fixture.`);
+    }
+    const recomputed = digestOf(without(entry, 'digest'));
+    if (recorded !== recomputed) {
+      throw new FixtureTamperError(
+        `${where0}: the recorded outcome of case '${id}' was edited by hand.\n` +
+          `    recorded   ${recorded}\n` +
+          `    recomputed ${recomputed}\n` +
+          '  The reference implementation did not produce what this file now says it produced.',
+      );
+    }
+  }
+}
+
 function loadFixture(path: string): Fixture {
   const where0 = relative(REPO, path);
   const doc = readJson(path);
   if (!isRecord(doc)) return fail(`${where0}: fixture must be an object`);
+  verifyFixtureIntegrity(doc, where0);
   const cases = new Map<string, FixtureCase>();
   for (const entry of requireRecordArray(doc, 'cases', where0)) {
     const id = requireString(entry, 'id', `${where0}: case`);
     const where = `${where0}: case '${id}'`;
     if (cases.has(id)) fail(`${where}: duplicate case id in the fixture`);
     const outcome = requireRecord(entry, 'outcome', where);
+    const command = entry['command'];
+    if (command !== null && typeof command !== 'string') fail(`${where}: 'command' must be a string or null`);
     cases.set(id, {
       id,
+      area: requireString(entry, 'area', where),
+      command: command as string | null,
+      observe: requireString(entry, 'observe', where),
+      probeHash: requireString(entry, 'probeHash', where),
       sourceHash: requireString(entry, 'sourceHash', where),
       determinism: requireString(entry, 'determinism', where),
       cultureFindings: requireRecordArray(entry, 'cultureFindings', where),
@@ -628,6 +822,9 @@ interface ManifestParameter {
 }
 interface ManifestCommand {
   readonly name: string;
+  /** The cmdlet name as written in the implementing module's `manifest({ display: ... })`.
+   *  It is how a command is traced back to the file that implements it. */
+  readonly display: string;
   readonly fidelity: string;
   readonly parameterSource: string;
   readonly parameters: readonly ManifestParameter[];
@@ -970,6 +1167,253 @@ const PROBES: Record<string, Probe> = {
 };
 
 // ---------------------------------------------------------------------------
+// credit -- which command a case is allowed to be EVIDENCE FOR
+// ---------------------------------------------------------------------------
+
+/**
+ * WHY THIS EXISTS
+ *
+ * `command` in corpus.json is a label, and coverage is computed from labels.
+ * Nothing checked that a case had anything to do with the command it credited,
+ * so relabelling twenty-eight already-passing cases moved
+ * behaviouralCoveragePercent from 50 to 100 with `problems: 0`, 1315 green
+ * tests and every generator --check at rc=0. The repository could claim "100%
+ * of native-semantic commands have behavioural evidence against pwsh 7.6.5" by
+ * editing labels.
+ *
+ * Two independent things now stop that. The first is the fixture: `command`,
+ * `area`, `observe` and the probe are recorded at capture time and compared
+ * below, so a relabel is a disagreement with the recording rather than a free
+ * move. The second is this: a case is only CREDITED to a command when the
+ * credit can be established mechanically, by one of exactly two rules.
+ *
+ *   direct        the pwsh source names the command. The reference
+ *                 implementation really ran it, so the recording really is
+ *                 about it.
+ *   shared-code   the module that implements the command references the
+ *                 function this probe drives. The project's answer really did
+ *                 come from code that command uses.
+ *
+ * Either is enough; neither is free text. A case that satisfies neither is
+ * still run, still compared and still reported -- its label is simply
+ * documentation, and it credits nothing.
+ *
+ * WHAT THIS CANNOT CATCH, stated plainly:
+ *
+ *   - A NEW case whose source is decorated with the command name it wants to
+ *     credit -- `Format-Table; 1+1` with a `compare` probe -- satisfies the
+ *     direct rule. What it costs the forger is a real capture: sourceHash and
+ *     the case digest mean pwsh has to have actually run that text.
+ *   - The shared-code rule is a text scan for an imported or locally declared
+ *     identifier, not a call graph. A command that imports a function without
+ *     using it, or that reaches one transitively, is judged wrongly in the
+ *     safe direction and the lenient direction respectively.
+ *   - Neither rule can tell whether the probe asks the same QUESTION the
+ *     source asked. That is what the corpus author's `why` is for, and it is
+ *     prose a machine cannot check.
+ */
+
+/**
+ * The function each probe kind drives, by name.
+ *
+ * Not a description: it is asserted below to appear in the probe's own source
+ * text, so this table cannot claim a symbol the probe never mentions.
+ */
+const PROBE_EXERCISES: Record<string, string | null> = {
+  'enumerate-count': 'enumerate',
+  'enumerate-typenames': 'enumerate',
+  truthy: 'isTruthy',
+  'type-name': 'typeNameOf',
+  compare: 'compareValues',
+  sort: 'compareValues',
+  'property-get': 'getProperty',
+  'property-missing': 'getProperty',
+  'has-property': 'hasProperty',
+  'property-names': 'propertyNames',
+  'is-of-type': 'isOfType',
+  'guid-canonical': 'guidText',
+  'location-path': 'pathInfo',
+  'datetime-hierarchy': 'psDateTime',
+  'date-format': 'formatDotNet',
+  'date-format-throws': 'formatDotNet',
+  'date-uformat': 'formatUnix',
+  'date-property': 'referenceDate',
+  'date-property-names': 'referenceDate',
+  'random-range-unique': 'drawInRange',
+  'random-sample': 'sampleWithoutReplacement',
+  'random-range-error': 'minGreaterThanOrEqualMaxError',
+  'history-property-names': 'historyInfo',
+  'help-view-typenames': 'helpViewTypeNames',
+  'help-parameter-names': 'helpParameter',
+  'command-typenames': 'commandTypeNames',
+  'version-table-keys': 'psVersionTable',
+  'error-id': 'errorRecord',
+  // null = "no single function a command module could reference". This probe
+  // returns a constant; the real comparison happens in runConformance against
+  // the ErrorCategory union declared in src/pipeline/streams.ts, which belongs
+  // to no command. Only the direct rule can credit it.
+  'error-category-known': null,
+  'to-ps-string': 'toPSString',
+  'culture-tostring': 'toCultureString',
+  'format-operator': 'formatOperator',
+  'string-replace': 'replaceOperator',
+  'string-like': 'likeOperator',
+  'string-split-count': 'splitOperator',
+  'comparison-filter-render': 'comparisonOperator',
+  'arithmetic-error-id': 'arithmetic',
+  'method-on-null-error-id': 'invokeMethod',
+  // Handled before the table is consulted: the credited command comes from the
+  // probe's own arguments and must equal the label. This is the one probe kind
+  // where the two can be compared exactly, so it is checked exactly.
+  'manifest-parameter': null,
+};
+
+/** A probe kind with no probe behind it is 'unimplemented', which is a claim
+ *  about the project and never evidence, so it credits by the direct rule only. */
+const NO_PROBE = 'none';
+
+for (const kind of Object.keys(PROBES)) {
+  if (!(kind in PROBE_EXERCISES)) {
+    fail(`PROBE_EXERCISES is missing '${kind}'. A probe with no declared function credits nothing and would silently stop counting.`);
+  }
+}
+for (const [kind, symbol] of Object.entries(PROBE_EXERCISES)) {
+  if (!(kind in PROBES)) fail(`PROBE_EXERCISES names '${kind}', which is not a probe`);
+  if (symbol === null) continue;
+  // The table says what the probe calls. Check it against the probe.
+  if (!String(PROBES[kind]).includes(symbol)) {
+    fail(`PROBE_EXERCISES claims probe '${kind}' drives '${symbol}', but that name does not appear in the probe's source`);
+  }
+}
+
+/** Every .ts under src/commands, read once. */
+const COMMAND_SOURCES = ((): ReadonlyMap<string, string> => {
+  const found = new Map<string, string>();
+  const walk = (dir: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.name.endsWith('.ts')) found.set(full, readFileSync(full, 'utf8'));
+    }
+  };
+  walk(join(REPO, 'src/commands'));
+  return found;
+})();
+
+/**
+ * The module that implements a command, found by its `display:` declaration --
+ * the same string manifests.json carries, so the two cannot drift apart without
+ * this returning null and the credit falling back to the direct rule.
+ */
+const moduleTextCache = new Map<string, string | null>();
+function commandModuleText(command: string): string | null {
+  const cached = moduleTextCache.get(command);
+  if (cached !== undefined) return cached;
+  const display = MANIFESTS.find((m) => m.name === command)?.display;
+  let answer: string | null = null;
+  if (typeof display === 'string') {
+    const needle = `display: '${display}'`;
+    // `.data.mts` files are inventories that quote every display name; they
+    // implement nothing.
+    const hits = [...COMMAND_SOURCES].filter(([, text]) => text.includes(needle));
+    if (hits.length === 1) answer = hits[0]?.[1] ?? null;
+  }
+  moduleTextCache.set(command, answer);
+  return answer;
+}
+
+/**
+ * The names a module imports or declares. Comments are excluded on purpose:
+ * sort-object.ts mentions `compareValues` in a comment while importing
+ * `compareForSorting`, and a scan that counted the comment would credit it for
+ * a function it does not call.
+ */
+const bindingCache = new Map<string, ReadonlySet<string>>();
+function bindingsOf(text: string): ReadonlySet<string> {
+  const cached = bindingCache.get(text);
+  if (cached !== undefined) return cached;
+  const names = new Set<string>();
+  for (const m of text.matchAll(/import\s+(?:type\s+)?\{([^}]*)\}\s*from/g)) {
+    for (const part of (m[1] ?? '').split(',')) {
+      const name = part.trim().split(/\s+as\s+/).pop()?.trim();
+      if (name !== undefined && name !== '') names.add(name);
+    }
+  }
+  for (const m of text.matchAll(/(?:export\s+)?(?:async\s+)?function\s*\*?\s*([A-Za-z_$][\w$]*)/g)) {
+    if (m[1] !== undefined) names.add(m[1]);
+  }
+  for (const m of text.matchAll(/(?:export\s+)?(?:const|let|class)\s+([A-Za-z_$][\w$]*)/g)) {
+    if (m[1] !== undefined) names.add(m[1]);
+  }
+  bindingCache.set(text, names);
+  return names;
+}
+
+/** Does the pwsh source name this command? Hyphens are part of a cmdlet name,
+ *  so the boundary has to exclude them: `Get-Random` must not match inside
+ *  `Get-RandomThing`, and `Random` must not match `Get-Random`. */
+function sourceNamesCommand(source: string, command: string): boolean {
+  const escaped = command.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?:^|[^A-Za-z0-9-])${escaped}(?![A-Za-z0-9-])`, 'i').test(source);
+}
+
+interface Credit {
+  readonly command: string | null;
+  /** Why it was credited, or why it was not. Reported, never inferred. */
+  readonly basis: 'direct' | 'shared-code' | 'probe-argument' | 'no-command' | 'not-established';
+  readonly detail: string | null;
+  /**
+   * True when the mismatch is an outright authoring error rather than a label
+   * the rules simply cannot establish. Only manifest-parameter can produce it,
+   * because it is the one probe kind that NAMES the command it asks about: a
+   * probe reading Get-Date's parameter table cannot be evidence about
+   * Sort-Object under any reading, so that is a failure rather than a
+   * documentary label.
+   */
+  readonly contradiction: boolean;
+}
+
+function creditFor(c: CorpusCase): Credit {
+  if (c.command === null) return { command: null, basis: 'no-command', detail: null, contradiction: false };
+
+  if (c.probeKind === 'manifest-parameter') {
+    const named = c.probeArgs['command'];
+    if (named === c.command) {
+      return { command: c.command, basis: 'probe-argument', detail: null, contradiction: false };
+    }
+    return {
+      command: null,
+      basis: 'not-established',
+      detail: `the probe reads the parameter table of ${JSON.stringify(named)} but the case is labelled '${c.command}'`,
+      contradiction: true,
+    };
+  }
+
+  if (sourceNamesCommand(c.source, c.command)) {
+    return { command: c.command, basis: 'direct', detail: null, contradiction: false };
+  }
+
+  const symbol = c.probeKind === NO_PROBE ? null : PROBE_EXERCISES[c.probeKind] ?? null;
+  if (symbol !== null) {
+    const text = commandModuleText(c.command);
+    if (text !== null && bindingsOf(text).has(symbol)) {
+      return { command: c.command, basis: 'shared-code', detail: null, contradiction: false };
+    }
+  }
+
+  return {
+    command: null,
+    basis: 'not-established',
+    detail:
+      `the source does not name '${c.command}'` +
+      (symbol === null
+        ? ' and the case has no probe to trace'
+        : `, and the module implementing it does not reference '${symbol}'`),
+    contradiction: false,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // comparison
 // ---------------------------------------------------------------------------
 
@@ -1032,7 +1476,13 @@ type Outcome = 'match' | 'difference' | 'unimplemented' | 'error';
 
 interface CaseResult {
   readonly id: string;
+  /** The corpus label. Documentation. */
   readonly command: string | null;
+  /** The command this case is allowed to be evidence for, which is what the
+   *  coverage numbers are computed from. Null when the label could not be
+   *  established -- see creditFor. */
+  readonly credits: string | null;
+  readonly creditBasis: Credit['basis'];
   readonly area: string;
   readonly outcome: Outcome;
   readonly expected: unknown;
@@ -1078,6 +1528,14 @@ export interface ConformanceReport {
     readonly differences: number;
   }[];
   readonly cultureSensitiveCases: readonly string[];
+  /**
+   * Cases whose `command` label could not be established as a credit by either
+   * rule in creditFor. They are compared like any other case and counted in
+   * totals; they simply do not appear in coverage. Listed so the difference
+   * between "this command has evidence" and "somebody wrote its name next to a
+   * case" is visible rather than implied.
+   */
+  readonly uncreditedLabels: readonly string[];
   readonly knownDifferences: readonly { readonly id: string; readonly kind: string; readonly expect: string; readonly cases: readonly string[] }[];
   readonly problems: readonly string[];
   readonly cases: readonly CaseResult[];
@@ -1129,6 +1587,10 @@ export function runConformance(): ConformanceReport {
   }
 
   const results: CaseResult[] = [];
+  /** Labels that could not be established as credits. Reported, not fatal: the
+   *  label is still useful documentation, and what matters is that it moves no
+   *  number. */
+  const uncredited: string[] = [];
   for (const c of cases) {
     const fixtureCase = fixture.cases.get(c.id);
     if (fixtureCase === undefined) {
@@ -1140,6 +1602,29 @@ export function runConformance(): ConformanceReport {
     const hash = `sha256:${createHash('sha256').update(c.source, 'utf8').digest('hex')}`;
     if (hash !== fixtureCase.sourceHash) {
       problems.push(`case '${c.id}': the corpus source changed since capture; re-run tools/generate-conformance-fixtures.ps1`);
+      continue;
+    }
+    // ...and so would a corpus LABEL edited without re-capturing. The capture
+    // records the identity it ran under, so every field the runner reads from
+    // corpus.json is checked against the recording rather than trusted:
+    // `command` decides which command gets the credit, `area` decides whether
+    // that credit is behavioural or metadata, `observe` decides which recorded
+    // number is compared, and the probe decides what the project is asked.
+    // Relabelling twenty-eight passing cases used to move coverage from 50% to
+    // 100% with every gate green.
+    const identity: readonly [string, unknown, unknown][] = [
+      ['command', c.command, fixtureCase.command],
+      ['area', c.area, fixtureCase.area],
+      ['observe', c.observe, fixtureCase.observe],
+      ['probe', digestOf({ kind: c.probeKind, args: c.probeArgs }), fixtureCase.probeHash],
+    ];
+    const drifted = identity.filter(([, corpusValue, recorded]) => corpusValue !== recorded);
+    if (drifted.length > 0) {
+      problems.push(
+        `case '${c.id}': ${drifted
+          .map(([field, corpusValue, recorded]) => `'${field}' is ${JSON.stringify(corpusValue)} in the corpus but was captured as ${JSON.stringify(recorded)}`)
+          .join('; ')}. The recording is of a different question; re-run tools/generate-conformance-fixtures.ps1`,
+      );
       continue;
     }
     if (fixtureCase.determinism === 'UNSTABLE') {
@@ -1170,9 +1655,18 @@ export function runConformance(): ConformanceReport {
     }
 
     const explanation = explanationByCase.get(c.id) ?? null;
+    const credit = creditFor(c);
+    if (credit.basis === 'not-established') {
+      if (credit.contradiction) {
+        problems.push(`case '${c.id}': ${String(credit.detail)}. A probe cannot be evidence about a command it never asks about.`);
+      } else {
+        uncredited.push(`${c.id} (labelled '${String(c.command)}'): ${String(credit.detail)}`);
+      }
+    }
     if (c.probeKind === 'none') {
       results.push({
-        id: c.id, command: c.command, area: c.area, outcome: 'unimplemented',
+        id: c.id, command: c.command, credits: credit.command, creditBasis: credit.basis,
+        area: c.area, outcome: 'unimplemented',
         expected: observe(fixtureCase.outcome, c.observe, c.id), actual: null,
         explainedBy: explanation?.id ?? null, explanationKind: explanation?.kind ?? null,
         detail: c.pending,
@@ -1210,7 +1704,8 @@ export function runConformance(): ConformanceReport {
     }
 
     results.push({
-      id: c.id, command: c.command, area: c.area, outcome, expected, actual,
+      id: c.id, command: c.command, credits: credit.command, creditBasis: credit.basis,
+      area: c.area, outcome, expected, actual,
       explainedBy: explanation?.id ?? null, explanationKind: explanation?.kind ?? null, detail,
     });
   }
@@ -1252,9 +1747,12 @@ export function runConformance(): ConformanceReport {
 
   // Coverage. A command counts only when a real probe agreed with the reference
   // implementation, and a known-gap explanation never counts.
+  // Keyed on the CREDIT, never on the label: a relabel must not be able to move
+  // a match, a difference or an unimplemented from one command's row to
+  // another's.
   const nativeSemantic = MANIFESTS.filter((m) => m.fidelity === 'native-semantic').map((m) => m.name);
   const perCommand = nativeSemantic.map((command) => {
-    const own = results.filter((r) => r.command === command);
+    const own = results.filter((r) => r.credits === command);
     const counts = { command, behavioural: 0, metadata: 0, unimplemented: 0, differences: 0 };
     for (const r of own) {
       if (r.outcome === 'unimplemented') counts.unimplemented++;
@@ -1303,6 +1801,7 @@ export function runConformance(): ConformanceReport {
     },
     perCommand,
     cultureSensitiveCases: cultureSensitive.sort(),
+    uncreditedLabels: uncredited,
     knownDifferences: knownDifferences.map((k) => ({ id: k.id, kind: k.kind, expect: k.expect, cases: k.cases })),
     problems,
     cases: results,
@@ -1321,7 +1820,8 @@ function render(report: ConformanceReport): string {
   lines.push(`  fixture captured ${report.fixtureCapturedAt}`);
   lines.push(
     `  width=${String(report.capture['renderWidth'])} culture=${String(report.capture['pinnedCulture'])} ` +
-      `host=${String(report.capture['hostCulture'])} rendering=${String(report.capture['outputRendering'])}`,
+      `host=${String(report.capture['hostCulture'])} rendering=${String(report.capture['outputRendering'])} ` +
+      `updatable-help=${String(report.capture['updatableHelp'])}`,
   );
   lines.push('');
   const t = report.totals;
@@ -1339,6 +1839,11 @@ function render(report: ConformanceReport): string {
   if (report.cultureSensitiveCases.length > 0) {
     lines.push('');
     lines.push(`  culture-sensitive in the reference implementation: ${report.cultureSensitiveCases.join(', ')}`);
+  }
+  if (report.uncreditedLabels.length > 0) {
+    lines.push('');
+    lines.push(`  labels that credit nothing (${report.uncreditedLabels.length}) -- documentation, not evidence`);
+    for (const u of report.uncreditedLabels) lines.push(`    ${u}`);
   }
   if (report.platformCaveat !== null) {
     lines.push('');
@@ -1359,18 +1864,83 @@ function render(report: ConformanceReport): string {
   return lines.join('\n');
 }
 
+/**
+ * A closed set, for the reason every other generator in tools/ has one: the
+ * default action here WRITES tests/conformance/report.json, so a mistyped
+ * `--chekc` would regenerate the artifact it was asked to verify and exit 0.
+ */
+const KNOWN_FLAGS = new Set(['--check']);
+
+/**
+ * report.json used to be a committed generated file with no gate and no reader.
+ * `grep -rn "report.json"` returned exactly one hit repo-wide -- the line that
+ * writes it -- and runConformance() runs under `npm test` only through the test
+ * file, where isMain is false, so the committed copy was never compared against
+ * anything. It could be rewritten to claim 100% coverage and 115/115 matched
+ * with every gate green, and it had in fact gone stale: it said 24
+ * native-semantic commands and 50% coverage while the truth was 31 and 38.7%.
+ */
+function main(): number {
+  const argv = process.argv.slice(2);
+  const unknown = argv.filter((a) => !KNOWN_FLAGS.has(a));
+  if (unknown.length > 0) {
+    process.stderr.write(
+      `\n  unknown option(s): ${unknown.join(', ')}\n  known: ${[...KNOWN_FLAGS].join(', ')}\n\n`,
+    );
+    return 2;
+  }
+  const check = argv.includes('--check');
+
+  const report = runConformance();
+  const reportPath = join(REPO, 'tests/conformance/report.json');
+  // No timestamp anywhere in the report -- see the note on ConformanceReport --
+  // which is what makes "regenerate and compare" a real check rather than a
+  // diff of clocks.
+  const content = `${JSON.stringify(report, null, 2)}\n`;
+
+  if (check) {
+    let committed: string | null = null;
+    try {
+      committed = readFileSync(reportPath, 'utf8').replace(/\r\n/g, '\n');
+    } catch {
+      committed = null;
+    }
+    if (committed !== content) {
+      process.stdout.write(render(report));
+      process.stderr.write(
+        committed === null
+          ? `\n  ${relative(REPO, reportPath)} is missing.\n  run: npm run conformance\n\n`
+          : `\n  ${relative(REPO, reportPath)} is out of date.\n  run: npm run conformance\n\n`,
+      );
+      return 1;
+    }
+    process.stdout.write(render(report));
+    process.stdout.write(`  ${relative(REPO, reportPath)} is in sync.\n\n`);
+    return report.problems.length > 0 ? 1 : 0;
+  }
+
+  // Written so the site can display the number without re-running pwsh, and
+  // so a reviewer can diff what changed between runs.
+  writeFileSync(reportPath, content, 'utf8');
+  process.stdout.write(render(report));
+  process.stdout.write(`  wrote ${relative(REPO, reportPath)}\n\n`);
+  return report.problems.length > 0 ? 1 : 0;
+}
+
 const isMain = process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
   try {
-    const report = runConformance();
-    const reportPath = join(REPO, 'tests/conformance/report.json');
-    // Written so the site can display the number without re-running pwsh, and
-    // so a reviewer can diff what changed between runs.
-    writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
-    process.stdout.write(render(report));
-    process.stdout.write(`  wrote ${relative(REPO, reportPath)}\n\n`);
-    process.exit(report.problems.length > 0 ? 1 : 0);
+    process.exit(main());
   } catch (error) {
+    // Three exit codes, because they are three different situations and telling
+    // them apart is the whole point of the exercise:
+    //   1  the project disagrees with the reference implementation
+    //   2  the harness could not run (malformed corpus, unreadable fixture)
+    //   3  the fixture itself was tampered with -- nothing about the project
+    if (error instanceof FixtureTamperError) {
+      process.stderr.write(`\n  FIXTURE TAMPERED WITH\n\n  ${(error as Error).message}\n\n`);
+      process.exit(3);
+    }
     process.stderr.write(`\n  conformance harness could not run: ${(error as Error).message}\n\n`);
     process.exit(2);
   }

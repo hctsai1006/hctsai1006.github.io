@@ -4,7 +4,7 @@
   "title": "Upstream release truth lockfile",
   "description": "Machine-verified record of what PowerShell releases actually exist, what each tag pins, what runtime that resolves to, and where the documentation disagrees. Generated only by tools/verify-release-truth.mts. Never hand-edited: every field must be re-derivable from a primary source.",
   "type": "object",
-  "required": ["schemaVersion", "generatedAt", "generator", "sources", "channels", "releases", "dotnet", "discrepancies"],
+  "required": ["schemaVersion", "generatedAt", "generator", "sources", "citations", "channels", "releases", "dotnet", "discrepancies"],
   "additionalProperties": false,
   "properties": {
     "schemaVersion": { "const": 1 },
@@ -17,6 +17,29 @@
         "version": { "type": "string" }
       },
       "additionalProperties": false
+    },
+    "citations": {
+      "description": "Every upstream pull request cited by compat/deltas/powershell-77-changes.source.mts, resolved against the GitHub pull-request API and confirmed MERGED. Only merged PRs are listed: a citation that 404s or was never merged raises an error-severity discrepancy and is absent, so generate-compatibility-profile.mts fails rather than shipping a fabricated number to the published explorer.",
+      "type": "object",
+      "required": ["source", "pullRequests"],
+      "additionalProperties": false,
+      "properties": {
+        "source": { "type": "string", "minLength": 1 },
+        "pullRequests": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["number", "title", "mergeCommitSha", "mergedAt"],
+            "additionalProperties": false,
+            "properties": {
+              "number": { "type": "integer", "minimum": 1 },
+              "title": { "type": "string", "minLength": 1 },
+              "mergeCommitSha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+              "mergedAt": { "type": "string", "format": "date-time" }
+            }
+          }
+        }
+      }
     },
     "sources": {
       "description": "Every URL consulted, in precedence order. Precedence is normative: 1 = highest authority. A lower-precedence source may never override a higher one; it may only raise a discrepancy. Deduplicated by URL and sorted by (precedence, url) so a re-run cannot produce spurious drift.",
@@ -32,6 +55,7 @@
               "github-metadata",
               "github-tag-object",
               "github-tag-file",
+            "github-pull-request",
               "dotnet-release-index",
               "dotnet-channel-releases",
               "microsoft-learn-docs",

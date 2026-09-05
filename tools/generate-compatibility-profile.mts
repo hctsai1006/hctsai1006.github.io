@@ -29,7 +29,7 @@
  *   node tools/generate-compatibility-profile.mts --check   verify, exit 1 on drift
  */
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { readFileSync, readdirSync, rmSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -75,10 +75,18 @@ interface LockRelease {
   snapshotDigest: string;
 }
 
+interface CitedPullRequest {
+  number: number;
+  title: string;
+  mergeCommitSha: string;
+  mergedAt: string;
+}
+
 interface Lockfile {
   generatedAt: string;
   channels: { lts: string; preview: string };
   releases: LockRelease[];
+  citations?: { source: string; pullRequests: CitedPullRequest[] };
 }
 
 interface CapturedMetadata {
@@ -89,7 +97,7 @@ interface CapturedMetadata {
 
 function readLockfile(): Lockfile {
   if (!existsSync(LOCKFILE)) {
-    throw new Error(
+    throw new CannotCheck(
       `no release lockfile at ${LOCKFILE}. Profiles are derived from verified upstream facts, ` +
         'so there is nothing to derive from. Run: npm run truth:write',
     );
@@ -127,8 +135,49 @@ function baselineValueFor(change: Change): BehaviorValue {
 interface BehaviorTables {
   baseline: Record<string, BehaviorValue>;
   target: Record<string, BehaviorValue>;
-  docs: Record<string, { summary: string; upstreamPr: number | null; breaking: boolean; since: string }>;
+  docs: Record<
+    string,
+    { summary: string; upstreamPr: number | null; breaking: boolean; since: string; emulated: boolean }
+  >;
 }
+
+/**
+ * Does anything in src/ actually read this flag?
+ *
+ * Thirteen behaviour keys ship; four are wired to code. The explorer presented
+ * all thirteen identically, so a visitor could not tell a difference the engine
+ * MODELS from one the repository merely DOCUMENTS — which is the precise claim
+ * this project is organised against making. Computed here by searching the
+ * source at generation time rather than hand-maintained, because a hand-kept
+ * flag is the thing that goes stale the first time somebody wires a key up.
+ *
+ * The search is for the key as a literal string. That is what a consumer must
+ * write to read the flag out of a profile (`behaviors['newGuid.defaultVersion']`),
+ * so a hit is meaningful; what it cannot prove is that the code does anything
+ * useful with it. `emulated: true` therefore means "at least one place in src/
+ * names this flag", never "the difference is faithfully reproduced" — that is
+ * what the conformance corpus is for.
+ */
+const SRC_DIR = join(REPO, 'src');
+
+function collectSourceText(dir: string, into: string[]): void {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) collectSourceText(full, into);
+    else if (entry.name.endsWith('.ts') || entry.name.endsWith('.mts')) {
+      into.push(readFileSync(full, 'utf8'));
+    }
+  }
+}
+
+const SOURCE_TEXTS: readonly string[] = ((): readonly string[] => {
+  const out: string[] = [];
+  collectSourceText(SRC_DIR, out);
+  return out;
+})();
+
+const isEmulated = (behaviorKey: string): boolean =>
+  SOURCE_TEXTS.some((text) => text.includes(behaviorKey));
 
 function buildBehaviorTables(changes: readonly Change[], targetVersion: string): BehaviorTables {
   const baseline: Record<string, BehaviorValue> = {};
@@ -157,6 +206,7 @@ function buildBehaviorTables(changes: readonly Change[], targetVersion: string):
       upstreamPr: c.upstreamPr,
       breaking: c.kind === 'breaking',
       since: targetVersion,
+      emulated: isEmulated(c.behaviorKey),
     };
   }
 
@@ -306,7 +356,10 @@ function validate(schemaPath: string, doc: unknown, what: string): void {
 }
 
 /** Every behavior key must be documented, and every doc must cite a PR. */
-function assertBehaviorsDocumented(profile: Record<string, unknown>): void {
+function assertBehaviorsDocumented(
+  profile: Record<string, unknown>,
+  verified: ReadonlyMap<number, CitedPullRequest>,
+): void {
   const behaviors = profile['behaviors'] as Record<string, unknown>;
   const docs = profile['behaviorDocs'] as Record<string, { upstreamPr?: number | null }>;
   const problems: string[] = [];
@@ -318,11 +371,69 @@ function assertBehaviorsDocumented(profile: Record<string, unknown>): void {
     }
     if (doc.upstreamPr === undefined || doc.upstreamPr === null) {
       problems.push(`behavior "${key}" has no upstream PR citation`);
+      continue;
+    }
+    // "non-null" was the whole check, and non-null is not the same as REAL.
+    // Setting a citation to 99999999 regenerated the profiles and the published
+    // explorer with every gate green, and pull/99999999 appeared in the shipped
+    // HTML. verify-release-truth.mts now resolves each cited number against the
+    // GitHub pull-request API and records the merged ones in the lockfile; this
+    // is where the profile refuses to ship one that is not there.
+    if (!verified.has(doc.upstreamPr)) {
+      problems.push(
+        `behavior "${key}" cites upstream PR #${doc.upstreamPr}, which is not among the citations ` +
+          'verified in compat/upstream/releases.lock.json. Either the number is wrong, or the ' +
+          'lockfile predates it: npm run truth:write',
+      );
     }
   }
   if (problems.length > 0) {
     throw new Error(`${String(profile['profile'])}:\n${problems.map((p) => `    ${p}`).join('\n')}`);
   }
+}
+
+/**
+ * Every citation in the curated change list, not only the ones that reached a
+ * behaviour flag: a change with no behaviorKey still renders as a card in the
+ * published explorer, carrying its PR number as a link.
+ */
+function assertCitationsVerified(
+  changes: readonly Change[],
+  verified: ReadonlyMap<number, CitedPullRequest>,
+): void {
+  const missing = [...new Set(changes.map((c) => c.upstreamPr))]
+    .filter((n) => !verified.has(n))
+    .sort((a, b) => a - b);
+  if (missing.length > 0) {
+    throw new Error(
+      `compat/deltas/powershell-77-changes.source.mts cites ${missing.length} pull request(s) that ` +
+        `compat/upstream/releases.lock.json does not list as existing and merged: ${missing.map((n) => `#${n}`).join(', ')}.\n` +
+        '    A citation is the evidence for a behaviour claim. If the number is right, refresh the\n' +
+        '    lockfile (npm run truth:write); if the lockfile already refused it, the number is wrong.',
+    );
+  }
+}
+
+/**
+ * The inputs to a check are missing, so the check did not run.
+ *
+ * Distinct from "the check ran and the data is wrong", and given a distinct
+ * exit code for the same reason verify-release-truth.mts separates 1 from 2: a
+ * lockfile that predates citation verification cannot say a citation is bad,
+ * and reporting that as a bad citation would send the next reader to fix the
+ * wrong file.
+ */
+class CannotCheck extends Error {}
+
+function verifiedCitations(lock: Lockfile): ReadonlyMap<number, CitedPullRequest> {
+  const citations = lock.citations;
+  if (citations === undefined) {
+    throw new CannotCheck(
+      'compat/upstream/releases.lock.json has no `citations` section, so no upstream PR citation in ' +
+        'the curated change list has been checked against anything. Regenerate it: npm run truth:write',
+    );
+  }
+  return new Map(citations.pullRequests.map((p) => [p.number, p]));
 }
 
 // ---------------------------------------------------------------------------
@@ -391,9 +502,11 @@ function collect(): Artifact[] {
     lockGeneratedAt: lock.generatedAt,
   });
 
+  const verified = verifiedCitations(lock);
+  assertCitationsVerified(POWERSHELL_77_CHANGES as readonly Change[], verified);
   for (const p of [ltsProfile, previewProfile]) {
     validate(PROFILE_SCHEMA, p, String(p['profile']));
-    assertBehaviorsDocumented(p);
+    assertBehaviorsDocumented(p, verified);
   }
 
   // Two changes citing one PR with different behaviour keys means the curation
@@ -470,13 +583,49 @@ function main(): void {
   const check = argv.includes('--check');
   const artifacts = collect();
 
+  const expected = new Set(artifacts.map((a) => a.path));
+
+  /**
+   * A generated file with no data behind it is drift too.
+   *
+   * generate-roadmap.mts already guards this; this tool never got it. Copying
+   * compat/profiles/powershell-7.6.5-linux.json to powershell-7.5.0-linux.json
+   * left a profile for a release the lockfile has never heard of sitting in the
+   * served directory, with --check at rc=0 — a version claim with nothing
+   * behind it, which is the one thing this pipeline exists to make impossible.
+   *
+   * Only the generated shapes are considered, so the hand-authored
+   * powershell-77-changes.source.mts living in compat/deltas is not an orphan.
+   */
+  const orphansIn = (dir: string, generated: (name: string) => boolean): string[] => {
+    if (!existsSync(dir)) return [];
+    const out: string[] = [];
+    for (const entry of readdirSync(dir, { withFileTypes: true, recursive: true })) {
+      const full = join(entry.parentPath, entry.name);
+      if (entry.isDirectory()) {
+        out.push(`unexpected directory: ${full}`);
+        continue;
+      }
+      if (!generated(entry.name)) continue;
+      if (!expected.has(full)) out.push(`orphan: ${full}`);
+    }
+    return out;
+  };
+  const isProfileFile = (name: string): boolean => /^powershell-.*\.json$/i.test(name);
+  const isDeltaFile = (name: string): boolean => /^.+__.+\.json$/i.test(name);
+  const orphans = [
+    ...orphansIn(PROFILE_DIR, isProfileFile),
+    ...orphansIn(DELTA_DIR, isDeltaFile),
+  ];
+
   if (check) {
-    const drift = artifacts.filter(
-      (a) => !existsSync(a.path) || readFileSync(a.path, 'utf8').replace(/\r\n/g, '\n') !== a.content,
-    );
-    if (drift.length > 0) {
+    const drift = artifacts
+      .filter((a) => !existsSync(a.path) || readFileSync(a.path, 'utf8').replace(/\r\n/g, '\n') !== a.content)
+      .map((a) => a.path);
+    const problems = [...drift, ...orphans];
+    if (problems.length > 0) {
       process.stderr.write('\n  generated compatibility profiles are out of date:\n');
-      for (const d of drift) process.stderr.write(`    - ${d.path}\n`);
+      for (const d of problems) process.stderr.write(`    - ${d}\n`);
       process.stderr.write('\n  run: npm run profiles\n\n');
       process.exitCode = 1;
       return;
@@ -485,6 +634,12 @@ function main(): void {
     return;
   }
 
+  // Writing removes what the data no longer produces, so `npm run profiles`
+  // actually resolves what --check reports rather than leaving it forever red.
+  for (const orphan of orphans) {
+    if (!orphan.startsWith('orphan: ')) continue;
+    rmSync(orphan.slice('orphan: '.length));
+  }
   for (const a of artifacts) {
     mkdirSync(dirname(a.path), { recursive: true });
     writeFileSync(a.path, a.content, 'utf8');
@@ -499,4 +654,15 @@ function main(): void {
   );
 }
 
-main();
+try {
+  main();
+} catch (error) {
+  // A stack trace is not an error message. The two exit codes say which file the
+  // reader should open: 1 means the curated data is wrong, 2 means the inputs the
+  // check needs are not there yet.
+  process.stderr.write(`
+  ${(error as Error).message}
+
+`);
+  process.exitCode = error instanceof CannotCheck ? 2 : 1;
+}
