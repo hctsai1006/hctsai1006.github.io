@@ -365,11 +365,16 @@ async function* runCommand(
   if (host.signal.aborted) onCancel();
   else host.signal.addEventListener('abort', onCancel, { once: true });
 
+  // Hoisted rather than inlined: it is also what gets DRAINED below, and the
+  // command's own iterator has to be the same object for that to be a no-op
+  // when the command already consumed its input.
+  const guarded = guardedInput(input, signal);
+
   const context: InvocationContext = {
     profile: host.profile,
     streams: { ...host.streams, success: channel },
     native: host.native,
-    input: guardedInput(input, signal),
+    input: guarded,
     cwd: host.cwd,
     env: host.env,
     signal,
@@ -380,9 +385,46 @@ async function* runCommand(
   };
 
   const running = module.invoke(context, bound).then(
-    (code) => {
+    async (code) => {
       setExitCode(code);
-      channel.close();
+      // POWERSHELL'S PIPELINE IS PUSH-BASED, and this is what reproduces that
+      // in a pull-based engine. Measured in pwsh 7.6.5:
+      //
+      //   function Prod { 1..3 | ForEach-Object { $script:produced += $_; $_ } }
+      //   function IgnoreInput { 'ignored' }      # no process block, no $input
+      //   Prod | IgnoreInput
+      //   $produced  ->  1,2,3
+      //
+      // The upstream runs to completion even though the downstream never reads
+      // a single object. A pull-based chain would never have started it: an
+      // async generator's body does not run until somebody asks. So the ask is
+      // made here, once the command is done, and the objects are discarded —
+      // which is what pwsh does with them too (the pipeline's output was just
+      // 'ignored').
+      //
+      // It is a no-op in both of the normal cases. A command that consumed its
+      // input leaves the generator completed; a command that stopped early has
+      // already had `.return()` called on it by its own `break`, which tore the
+      // upstream down — and that is what keeps the other measured behaviour:
+      //
+      //   1..10 | ForEach-Object { $seen += $_; $_ } | Select-Object -First 3
+      //   $seen  ->  1,2,3      (not 1..10, and not 1,2,3,4)
+      //
+      // KNOWN DEVIATION, stated rather than hidden: pwsh interleaves the
+      // upstream with the downstream, so an upstream warning arrives BEFORE a
+      // downstream one (measured: `from-upstream | from-downstream | 1`). Here
+      // an ignored upstream runs after its consumer has finished, so those two
+      // events arrive in the other order. It costs nothing to say so, and only
+      // a stage that reads none of its input is affected.
+      try {
+        for await (const _ignored of guarded) {
+          // Discarded on purpose. See above.
+        }
+        channel.close();
+      } catch (reason: unknown) {
+        // A cancellation reaching us through the upstream, most likely.
+        channel.fail(reason);
+      }
     },
     (reason: unknown) => {
       // PowerShell reports a command that threw with a non-zero code; the
@@ -482,26 +524,61 @@ export async function* noInput(): AsyncGenerator<PSValue> {
 }
 
 /**
- * Compose the stages and run them.
+ * Where a stage's host comes from.
+ *
+ * A function rather than one shared host, because a stage is a PROCESS as soon
+ * as there is a kernel: it has its own pid, its own six streams, its own stdin
+ * and its own AbortSignal, and an error written by the third stage has to be
+ * attributable to the third stage. One shared host cannot express that, which
+ * is why the kernel grew a second engine instead of using this one.
+ *
+ * Called once per stage, at composition time.
+ */
+export type StageHost = (stage: PipelineStage, index: number) => PipelineHost;
+
+/**
+ * Compose the stages and run them, giving each its own host.
  *
  * The returned generator is lazy: nothing executes until it is iterated, and
  * abandoning it tears the whole chain down through each stage's `finally`.
  */
-export async function* runPipeline(
+export async function* runPipelineStages(
   source: AsyncIterable<PSValue>,
   stages: readonly PipelineStage[],
-  host: PipelineHost,
+  hostFor: StageHost,
 ): AsyncGenerator<PSValue> {
   let current: AsyncIterable<PSValue> = source;
-  for (const stage of stages) current = stage.run(current, host);
+  let last: PipelineHost | null = null;
+  for (const [index, stage] of stages.entries()) {
+    const host = hostFor(stage, index);
+    last = host;
+    current = stage.run(current, host);
+  }
 
   const lastName = stages.at(-1)?.name ?? 'the pipeline';
   for await (const value of current) {
     // Checked per value as well as inside each command, so a pipeline of
-    // stages that all happen to be cooperative still stops promptly.
-    throwIfCancelled(host.signal, lastName);
+    // stages that all happen to be cooperative still stops promptly. The LAST
+    // stage's signal is the one to check: it is the stage this loop is reading
+    // from, and an earlier stage that was stopped has already ended its output.
+    if (last !== null) throwIfCancelled(last.signal, lastName);
     yield value;
   }
+}
+
+/**
+ * Every stage sharing one host. The shape a test and a headless run want.
+ *
+ * With NO stages this is `source` forwarded verbatim and no cancellation check
+ * happens, because there is no stage to cancel: the source belongs to the
+ * caller and so does guarding it.
+ */
+export function runPipeline(
+  source: AsyncIterable<PSValue>,
+  stages: readonly PipelineStage[],
+  host: PipelineHost,
+): AsyncGenerator<PSValue> {
+  return runPipelineStages(source, stages, () => host);
 }
 
 /** Drain a pipeline into an array. The shape a test and `$(...)` both want. */

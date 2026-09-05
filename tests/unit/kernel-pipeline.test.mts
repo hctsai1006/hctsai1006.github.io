@@ -1,0 +1,543 @@
+/**
+ * The kernel runs the pipeline the pipeline tests test.
+ *
+ * It used to run a second engine. `kernel.ts` joined its stages with a private
+ * `ObjectQueue` whose own comment admitted "buffering here is unbounded, which
+ * is the honest limit of this milestone", so every backpressure, early-stop and
+ * cancellation test in pipeline.test.mts covered a path the kernel never took —
+ * and a fast producer feeding a slow consumer grew without limit on the path it
+ * did take. It also never called the binder: `invocation.ts` says the binder,
+ * the commands and the kernel are defined together so that they are guaranteed
+ * to join up, and the kernel handed every command `{ parameters: {} }` with the
+ * raw tokens in `remaining`.
+ *
+ * These are the properties the two engines disagreed about, asserted THROUGH
+ * THE KERNEL. Each one fails against the ObjectQueue.
+ *
+ * The pipeline semantics asserted here were measured in pwsh 7.6.5 and the
+ * probes are quoted at the assertions that depend on them.
+ */
+
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+
+import type { CommandModule, InvocationContext, BindingResult } from '../../src/commands/invocation.ts';
+import type { CommandManifest, ParameterMetadata } from '../../src/commands/manifest.ts';
+import type { PSValue } from '../../src/pipeline/psobject.ts';
+import { Kernel } from '../../src/kernel/kernel.ts';
+import type { KernelEvent } from '../../src/kernel/protocol.ts';
+import { SIGNAL_EXIT_CODE } from '../../src/kernel/signals.ts';
+
+// ---------------------------------------------------------------------------
+// fixtures
+// ---------------------------------------------------------------------------
+
+function parameterMetadata(
+  name: string,
+  extra: { position?: number | null; isSwitch?: boolean } = {},
+): ParameterMetadata {
+  const position = extra.position ?? null;
+  return {
+    name,
+    aliases: [],
+    type: extra.isSwitch === true ? 'System.Management.Automation.SwitchParameter' : 'System.String',
+    isSwitch: extra.isSwitch ?? false,
+    sets: { __AllParameterSets: { position, mandatory: false, valueFromPipeline: false } },
+    mandatoryInAnySet: false,
+    mandatoryInEverySet: false,
+    firstPosition: position,
+    valueFromPipelineInAnySet: false,
+    validation: [],
+    verified: false,
+  };
+}
+
+function manifest(name: string, parameters: readonly ParameterMetadata[] = []): CommandManifest {
+  return {
+    name,
+    display: name,
+    aliases: [],
+    runtime: 'semantic',
+    fidelity: 'native-semantic',
+    risk: 'read',
+    capabilities: [],
+    parameters,
+    outputTypeNames: [],
+    synopsis: 'A command that exists only in these tests.',
+    parameterSource: 'none',
+  };
+}
+
+function command(
+  name: string,
+  invoke: (context: InvocationContext, bound: BindingResult) => Promise<number>,
+  parameters: readonly ParameterMetadata[] = [],
+): CommandModule {
+  return { manifest: manifest(name, parameters), invoke };
+}
+
+function newKernel(options: ConstructorParameters<typeof Kernel>[0] = {}): {
+  kernel: Kernel;
+  events: KernelEvent[];
+} {
+  const kernel = new Kernel({ clock: () => 1_700_000_000_000, ...options });
+  const events: KernelEvent[] = [];
+  kernel.on((event) => events.push(event));
+  return { kernel, events };
+}
+
+function objects(events: readonly KernelEvent[]): readonly PSValue[] {
+  return events.flatMap((event) => (event.kind === 'objects' ? [...event.values] : []));
+}
+
+function errors(events: readonly KernelEvent[]): readonly string[] {
+  return events.flatMap((event) =>
+    event.kind === 'stream' && event.which === 'error' ? [event.payload.fullyQualifiedErrorId] : [],
+  );
+}
+
+/** Yield to the microtask queue enough times for a burst of writes to land. */
+async function settle(times = 20): Promise<void> {
+  for (let index = 0; index < times; index += 1) await Promise.resolve();
+}
+
+// ---------------------------------------------------------------------------
+// backpressure
+// ---------------------------------------------------------------------------
+
+describe('backpressure through the kernel', () => {
+  it('a fast producer cannot outrun a slow consumer', async () => {
+    // With the ObjectQueue this producer ran to completion before the consumer
+    // read its first object, because `push` never blocks. `1..10000000 |
+    // Where-Object {...} | Format-Table` buffering the middle of that pipeline
+    // is a dead tab, and there is no OS here to page us out.
+    const produced: number[] = [];
+    const consumed: number[] = [];
+    let maxLead = 0;
+
+    const { kernel, events } = newKernel();
+    kernel.register(
+      command('flood', async (context) => {
+        for (let index = 0; index < 50; index += 1) {
+          if (context.streams.success.closed) break;
+          produced.push(index);
+          maxLead = Math.max(maxLead, produced.length - consumed.length);
+          await context.streams.success.write(index);
+        }
+        return 0;
+      }),
+    );
+    kernel.register(
+      command('trickle', async (context) => {
+        for await (const value of context.input) {
+          consumed.push(value as number);
+          // A yield per object, so a producer that could run ahead would.
+          await settle(5);
+          await context.streams.success.write(value);
+        }
+        return 0;
+      }),
+    );
+
+    kernel.send({
+      kind: 'exec',
+      requestId: 'r1',
+      terminalId: 't1',
+      source: 'flood | trickle',
+      background: false,
+    });
+    await kernel.drain();
+
+    assert.equal(consumed.length, 50);
+    assert.deepEqual(objects(events).length, 50);
+    // Two: the value in flight plus the one the consumer is working on. The
+    // ObjectQueue's answer was 50.
+    assert.ok(maxLead <= 2, `the producer ran ${maxLead} objects ahead of the consumer`);
+  });
+
+  it('the producer PARKS after the consumer stops asking, and wakes when it resumes', async () => {
+    let written = 0;
+    let released = (): void => {};
+    const gate = new Promise<void>((resolve) => {
+      released = resolve;
+    });
+
+    const { kernel } = newKernel();
+    kernel.register(
+      command('emit', async (context) => {
+        for (let index = 0; index < 10; index += 1) {
+          written += 1;
+          await context.streams.success.write(index);
+        }
+        return 0;
+      }),
+    );
+    kernel.register(
+      command('pause-after-two', async (context) => {
+        let taken = 0;
+        for await (const value of context.input) {
+          taken += 1;
+          if (taken === 2) await gate;
+          await context.streams.success.write(value);
+        }
+        return 0;
+      }),
+    );
+
+    kernel.send({
+      kind: 'exec',
+      requestId: 'r1',
+      terminalId: 't1',
+      source: 'emit | pause-after-two',
+      background: false,
+    });
+    try {
+      await settle(200);
+      // Exactly two: object 0 was taken, and object 1 was handed over and is
+      // waiting to be acknowledged by an ask that never comes. Nothing beyond
+      // that has been COMPUTED, which is what backpressure means. The
+      // ObjectQueue's answer here was all ten, because `push` never blocks.
+      assert.equal(written, 2, `${written} objects were produced while the consumer was away`);
+    } finally {
+      released();
+    }
+
+    await kernel.drain();
+    assert.equal(written, 10);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// early termination
+// ---------------------------------------------------------------------------
+
+describe('early termination through the kernel', () => {
+  it('a consumer that stops after three lets the producer run exactly three times', async () => {
+    // Measured in pwsh 7.6.5:
+    //   1..10 | ForEach-Object { $seen += $_; $_ } | Select-Object -First 3
+    //   $seen  ->  1,2,3      (not 1..10, and not 1,2,3,4)
+    const seen: number[] = [];
+    const { kernel, events } = newKernel();
+    kernel.register(
+      command('range', async (context) => {
+        for (let index = 1; index <= 10; index += 1) {
+          if (context.streams.success.closed) break;
+          seen.push(index);
+          await context.streams.success.write(index);
+        }
+        return 0;
+      }),
+    );
+    kernel.register(
+      command('first3', async (context) => {
+        let taken = 0;
+        for await (const value of context.input) {
+          await context.streams.success.write(value);
+          taken += 1;
+          if (taken === 3) break;
+        }
+        return 0;
+      }),
+    );
+
+    kernel.send({
+      kind: 'exec',
+      requestId: 'r1',
+      terminalId: 't1',
+      source: 'range | first3',
+      background: false,
+    });
+    await kernel.drain();
+
+    assert.deepEqual(objects(events), [1, 2, 3]);
+    assert.deepEqual(seen, [1, 2, 3], 'the upstream really is torn down, not just ignored');
+  });
+
+  it('an upstream still runs to completion when the downstream ignores its input', async () => {
+    // The other half of the same measurement, and the half a pull-based engine
+    // gets wrong on its own. pwsh 7.6.5:
+    //   function Prod { 1..3 | ForEach-Object { $script:produced += $_; $_ } }
+    //   function IgnoreInput { 'ignored' }     # no process block, no $input
+    //   Prod | IgnoreInput   ->  'ignored'
+    //   $produced            ->  1,2,3
+    const produced: number[] = [];
+    const { kernel, events } = newKernel();
+    kernel.register(
+      command('prod', async (context) => {
+        for (let index = 1; index <= 3; index += 1) {
+          produced.push(index);
+          await context.streams.success.write(index);
+        }
+        return 0;
+      }),
+    );
+    kernel.register(
+      command('ignores', async (context) => {
+        await context.streams.success.write('ignored');
+        return 0;
+      }),
+    );
+
+    kernel.send({
+      kind: 'exec',
+      requestId: 'r1',
+      terminalId: 't1',
+      source: 'prod | ignores',
+      background: false,
+    });
+    await kernel.drain();
+
+    assert.deepEqual(objects(events), ['ignored']);
+    assert.deepEqual(produced, [1, 2, 3]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// cancellation
+// ---------------------------------------------------------------------------
+
+describe('cancellation through the kernel reaches a parked producer', () => {
+  it('Ctrl+C wakes a producer waiting on a consumer that never asks again', async () => {
+    // The failure this prevents: with backpressure but no cancellation path, a
+    // parked `write` never wakes to check the signal and the pipeline hangs
+    // instead of stopping. Blocking is correct; deadlocking is not.
+    let unwound = false;
+    let attempts = 0;
+    const { kernel, events } = newKernel();
+    kernel.register(
+      command('endless', async (context) => {
+        try {
+          for (let index = 0; ; index += 1) {
+            // The check `Sink.closed` exists for: once the channel is failed by
+            // the cancellation, a parked `write` returns immediately and a loop
+            // without this would spin forever rather than unwind.
+            if (context.streams.success.closed || context.signal.aborted) break;
+            attempts += 1;
+            await context.streams.success.write(index);
+          }
+        } finally {
+          unwound = true;
+        }
+        return 0;
+      }),
+    );
+    kernel.register(
+      command('never', async (context) => {
+        // Reads one object and then waits forever on the signal.
+        const iterator = context.input[Symbol.asyncIterator]();
+        await iterator.next();
+        await new Promise<void>((resolve) => {
+          context.signal.addEventListener('abort', () => resolve(), { once: true });
+        });
+        return 0;
+      }),
+    );
+
+    kernel.send({
+      kind: 'exec',
+      requestId: 'r1',
+      terminalId: 't1',
+      source: 'endless | never',
+      background: false,
+    });
+    await settle(50);
+    assert.deepEqual(kernel.interrupt('t1'), [1, 2]);
+    await kernel.drain();
+
+    assert.equal(unwound, true, 'the parked producer woke up and unwound');
+    // Blocked, not spinning: the consumer asked once, so exactly one more
+    // object was computed before the producer parked. Unbounded buffering would
+    // have let it run until the interrupt arrived.
+    assert.ok(attempts <= 3, `the producer computed ${attempts} objects before it parked`);
+    const exits = new Map(events.filter((e) => e.kind === 'exit').map((e) => [e.processId, e]));
+    assert.equal(exits.get(1)?.signalled, 'SIGINT');
+    assert.equal(exits.get(2)?.signalled, 'SIGINT');
+    assert.equal(exits.get(2)?.exitCode, SIGNAL_EXIT_CODE.SIGINT);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// the binder
+// ---------------------------------------------------------------------------
+
+describe('the kernel binds parameters instead of inventing an empty BindingResult', () => {
+  it('a declared parameter arrives bound, by name and by position', async () => {
+    const seen: BindingResult[] = [];
+    const { kernel } = newKernel();
+    kernel.register(
+      command(
+        'probe',
+        async (_context, bound) => {
+          seen.push(bound);
+          return 0;
+        },
+        [parameterMetadata('Path', { position: 0 }), parameterMetadata('Force', { isSwitch: true })],
+      ),
+    );
+
+    kernel.send({
+      kind: 'exec',
+      requestId: 'r1',
+      terminalId: 't1',
+      source: 'probe -Path /tmp -Force',
+      background: false,
+    });
+    await kernel.drain();
+    kernel.send({
+      kind: 'exec',
+      requestId: 'r2',
+      terminalId: 't1',
+      source: 'probe /var',
+      background: false,
+    });
+    await kernel.drain();
+
+    assert.deepEqual(seen[0]?.parameters, { Path: '/tmp', Force: true });
+    assert.deepEqual(seen[0]?.remaining, [], 'nothing is left over when everything bound');
+    assert.deepEqual(seen[1]?.parameters, { Path: '/var' });
+  });
+
+  it('a manifest with no parameters still gets its raw tokens, which unix commands need', async () => {
+    // `ls -la` and `git status` declare none by design. The binder's own rule,
+    // relied on here rather than re-implemented in the kernel.
+    const seen: BindingResult[] = [];
+    const { kernel } = newKernel();
+    kernel.register(
+      command('ls', async (_context, bound) => {
+        seen.push(bound);
+        return 0;
+      }),
+    );
+
+    kernel.send({
+      kind: 'exec',
+      requestId: 'r1',
+      terminalId: 't1',
+      source: 'ls -la /home',
+      background: false,
+    });
+    await kernel.drain();
+
+    assert.deepEqual(seen[0]?.remaining, ['-la', '/home']);
+  });
+
+  it('reports a binding failure with the binder\'s own message and never runs the command', async () => {
+    let ran = false;
+    const { kernel, events } = newKernel();
+    kernel.register(
+      command(
+        'probe',
+        async () => {
+          ran = true;
+          return 0;
+        },
+        [parameterMetadata('Path', { position: 0 })],
+      ),
+    );
+
+    kernel.send({
+      kind: 'exec',
+      requestId: 'r1',
+      terminalId: 't1',
+      source: 'probe -Nope x',
+      background: false,
+    });
+    await kernel.drain();
+
+    assert.equal(ran, false);
+    assert.deepEqual(errors(events), ['NamedParameterNotFound,probe']);
+    const error = events.find((e) => e.kind === 'stream' && e.which === 'error');
+    assert.ok(error?.kind === 'stream' && error.which === 'error');
+    assert.equal(
+      error.payload.message,
+      "A parameter cannot be found that matches parameter name 'Nope'.",
+    );
+    // Every exec still produces exactly one exit.
+    assert.equal(events.filter((e) => e.kind === 'exit').length, 1);
+    assert.equal(events.find((e) => e.kind === 'exit')?.exitCode, 1);
+  });
+
+  it('a binding failure in a later stage stops the earlier stages running at all', async () => {
+    // Measured in pwsh 7.6.5:
+    //   function Prod4 { 1..2 | ForEach-Object { $script:bindProbe += $_; $_ } }
+    //   Prod4 | Get-Item -NoSuchParameter x
+    //   $bindProbe  ->  <empty>
+    const produced: number[] = [];
+    const { kernel, events } = newKernel();
+    kernel.register(
+      command('prod', async (context) => {
+        for (const value of [1, 2]) {
+          produced.push(value);
+          await context.streams.success.write(value);
+        }
+        return 0;
+      }),
+    );
+    kernel.register(
+      command('probe', async () => 0, [parameterMetadata('Path', { position: 0 })]),
+    );
+
+    kernel.send({
+      kind: 'exec',
+      requestId: 'r1',
+      terminalId: 't1',
+      source: 'prod | probe -Nope x',
+      background: false,
+    });
+    await kernel.drain();
+
+    assert.deepEqual(produced, [], 'the first stage must not run for a line that cannot work');
+    assert.deepEqual(errors(events), ['NamedParameterNotFound,probe']);
+    // One pid, for the stage that could not bind — the same invariant the
+    // unknown-command path keeps.
+    assert.equal(kernel.processes.list().length, 1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// the object model across a stage boundary
+// ---------------------------------------------------------------------------
+
+describe('what a stage hands the next stage', () => {
+  it('keeps baseObject BETWEEN stages and strips it only on the way out', async () => {
+    // The old kernel sanitised at every stage boundary, so a command downstream
+    // of a producer could never reach the host value that `PSObject.baseObject`
+    // exists to carry. Sanitising is a boundary concern, and the boundary is
+    // the kernel's edge, not a join inside it.
+    let sawBase: unknown = 'not-seen';
+    const { kernel, events } = newKernel();
+    kernel.register(
+      command('wrap', async (context) => {
+        await context.streams.success.write({
+          typeNames: ['System.IO.FileInfo', 'System.Object'],
+          properties: { Name: 'file.txt' },
+          baseObject: { handle: 7 },
+        });
+        return 0;
+      }),
+    );
+    kernel.register(
+      command('peek', async (context) => {
+        for await (const value of context.input) {
+          sawBase = (value as { baseObject?: unknown }).baseObject;
+          await context.streams.success.write(value);
+        }
+        return 0;
+      }),
+    );
+
+    kernel.send({
+      kind: 'exec',
+      requestId: 'r1',
+      terminalId: 't1',
+      source: 'wrap | peek',
+      background: false,
+    });
+    await kernel.drain();
+
+    assert.deepEqual(sawBase, { handle: 7 }, 'the host value survived the join');
+    const emitted = objects(events)[0] as { properties: Record<string, unknown> };
+    assert.equal(Object.hasOwn(emitted, 'baseObject'), false, 'and not the boundary');
+    assert.deepEqual(emitted.properties, { Name: 'file.txt' });
+  });
+});
