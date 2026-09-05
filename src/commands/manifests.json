@@ -8879,6 +8879,7 @@
       ],
       "outputTypeNames": [],
       "synopsis": "Filter objects in the pipeline",
+      "notes": "Held back from the session registry: -Match uses JavaScript regular expressions where PowerShell uses .NET, and four measured patterns give the opposite answer while four more raise a SyntaxError, so a filter that looks like it worked can have matched nothing. -Is compares against a type model covering only a handful of types. Parameter-set binding now matches pwsh on every measured case; these two do not.",
       "parameterSource": "reference-implementation",
       "implementationStatus": "partial",
       "implementedParameters": [

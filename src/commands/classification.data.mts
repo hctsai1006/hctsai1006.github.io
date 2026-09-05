@@ -162,7 +162,19 @@ export const CLASSIFICATION: Record<string, Classification> = {
   },
 
   // ------------------------------------------------------------- pipeline
-  'where-object': pipeline,
+  // The one command carrying `implementationStatus: 'partial'`, and therefore
+  // the one that must say what is missing. Its status is not a gap in features
+  // -- both limits produce WRONG ANSWERS, which is why it is held back rather
+  // than shipped with a caveat.
+  'where-object': {
+    ...pipeline,
+    notes:
+      'Held back from the session registry: -Match uses JavaScript regular expressions where ' +
+      'PowerShell uses .NET, and four measured patterns give the opposite answer while four more ' +
+      'raise a SyntaxError, so a filter that looks like it worked can have matched nothing. ' +
+      '-Is compares against a type model covering only a handful of types. Parameter-set binding ' +
+      'now matches pwsh on every measured case; these two do not.',
+  },
   'select-object': pipeline,
   'sort-object': pipeline,
   'measure-object': pipeline,

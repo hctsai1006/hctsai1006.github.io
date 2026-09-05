@@ -28,11 +28,14 @@
     "unimplemented": 8
   },
   "coverage": {
-    "nativeSemanticCommands": 31,
-    "commandsWithBehaviouralEvidence": 11,
-    "behaviouralCoveragePercent": 35.5,
-    "commandsWithMetadataEvidence": 12,
-    "metadataCoveragePercent": 38.7
+    "nativeSemanticCommands": 30,
+    "commandsWithBehaviouralEvidence": 10,
+    "behaviouralCoveragePercent": 33.3,
+    "commandsWithMetadataEvidence": 11,
+    "metadataCoveragePercent": 36.7,
+    "withheldCommands": [
+      "where-object"
+    ]
   },
   "perCommand": [
     {
@@ -227,13 +230,6 @@
     {
       "command": "sort-object",
       "behavioural": 2,
-      "metadata": 2,
-      "unimplemented": 0,
-      "differences": 0
-    },
-    {
-      "command": "where-object",
-      "behavioural": 15,
       "metadata": 2,
       "unimplemented": 0,
       "differences": 0

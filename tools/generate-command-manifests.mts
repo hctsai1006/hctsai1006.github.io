@@ -274,6 +274,21 @@ function build(): { manifests: CommandManifest[]; problems: string[]; stats: Rec
     const implementationStatus: ImplementationStatus =
       module?.manifest.implementationStatus ?? 'declared';
 
+    // The same rule for the same reason, one axis over. `simulated` needs a note
+    // because a fiction with no note is undocumented; `partial` needs one
+    // because "partially implemented" with no note tells a visitor a command is
+    // incomplete without telling them HOW, which is the less useful half of the
+    // truth. Where-Object shipped in exactly that state -- status `partial`,
+    // notes empty -- until this check existed.
+    if (
+      (implementationStatus === 'partial' || implementationStatus === 'declared') &&
+      (cls.notes === undefined || cls.notes.trim() === '')
+    ) {
+      problems.push(
+        `"${entry.name}" is ${implementationStatus} but has no note saying what is missing`,
+      );
+    }
+
     /**
      * What THIS engine binds, when the module hand-writes its own surface.
      *

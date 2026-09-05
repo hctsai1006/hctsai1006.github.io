@@ -1519,6 +1519,8 @@ export interface ConformanceReport {
     readonly behaviouralCoveragePercent: number;
     readonly commandsWithMetadataEvidence: number;
     readonly metadataCoveragePercent: number;
+    /** Declared native-semantic but not reachable from a prompt, so not counted. */
+    readonly withheldCommands: readonly string[];
   };
   readonly perCommand: readonly {
     readonly command: string;
@@ -1750,7 +1752,32 @@ export function runConformance(): ConformanceReport {
   // Keyed on the CREDIT, never on the label: a relabel must not be able to move
   // a match, a difference or an unimplemented from one command's row to
   // another's.
-  const nativeSemantic = MANIFESTS.filter((m) => m.fidelity === 'native-semantic').map((m) => m.name);
+  //
+  // NOT RUNNABLE MEANS NOT COUNTED, in either half of the fraction. A command
+  // held back from the session registry cannot be invoked by a visitor, so
+  // "behavioural evidence" for it is evidence about code nothing can reach --
+  // and leaving it in the denominator would be just as wrong in the other
+  // direction, penalising the project for a command it deliberately withheld.
+  //
+  // `where-object` is the live case and it was worth 15 behavioural cases:
+  // counting them made the headline number describe a command a visitor cannot
+  // type. Excluded rather than silently dropped -- `withheld` is rendered under
+  // the table, because a coverage number that quietly shrinks its own
+  // denominator is the forgery this file exists to prevent.
+  const runnable = (m: (typeof MANIFESTS)[number]): boolean => {
+    const extra = m as { implementationStatus?: string; shadowedBy?: string };
+    return (
+      extra.implementationStatus !== 'partial' &&
+      extra.implementationStatus !== 'declared' &&
+      extra.shadowedBy === undefined
+    );
+  };
+  const withheld = MANIFESTS.filter((m) => m.fidelity === 'native-semantic' && !runnable(m)).map(
+    (m) => m.name,
+  );
+  const nativeSemantic = MANIFESTS.filter((m) => m.fidelity === 'native-semantic')
+    .filter(runnable)
+    .map((m) => m.name);
   const perCommand = nativeSemantic.map((command) => {
     const own = results.filter((r) => r.credits === command);
     const counts = { command, behavioural: 0, metadata: 0, unimplemented: 0, differences: 0 };
@@ -1798,6 +1825,8 @@ export function runConformance(): ConformanceReport {
       behaviouralCoveragePercent: round1((withBehaviour / nativeSemantic.length) * 100),
       commandsWithMetadataEvidence: withMetadata,
       metadataCoveragePercent: round1((withMetadata / nativeSemantic.length) * 100),
+      /** Declared native-semantic but not reachable from a prompt, so not counted. */
+      withheldCommands: withheld,
     },
     perCommand,
     cultureSensitiveCases: cultureSensitive.sort(),
@@ -1829,6 +1858,14 @@ function render(report: ConformanceReport): string {
   const c = report.coverage;
   lines.push('');
   lines.push(`  BEHAVIOURAL COVERAGE  ${c.commandsWithBehaviouralEvidence} / ${c.nativeSemanticCommands} native-semantic commands = ${c.behaviouralCoveragePercent}%`);
+  if (c.withheldCommands.length > 0) {
+    // Said out loud. A denominator that shrinks without explanation is exactly
+    // the kind of movement this report is supposed to make impossible.
+    lines.push(
+      `  not counted: ${c.withheldCommands.length} declared native-semantic but held back from the ` +
+        `session registry, so nothing can invoke them -- ${c.withheldCommands.join(', ')}`,
+    );
+  }
   lines.push(`  metadata coverage     ${c.commandsWithMetadataEvidence} / ${c.nativeSemanticCommands} = ${c.metadataCoveragePercent}%`);
   lines.push('');
   lines.push('  per command (behavioural / metadata / unimplemented / differences)');
