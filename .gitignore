@@ -8,3 +8,25 @@ dist/
 .playwright-mcp/
 # machine-readable test counts, written by `node tools/run-tests.mts --summary`
 test-summary.json
+
+# Per-developer Claude Code settings. This is the OPT-IN half of a pair:
+# `.claude/settings.json` is committed and therefore becomes every contributor's
+# environment, while this file is local and becomes nobody else's.
+#
+# `.claude/settings.json` used to carry
+#
+#     "enabledPlugins": {
+#       "modern-code-guidelines@modern-code-guidelines": true,
+#       "frontend-design@claude-plugins-official": true
+#     }
+#
+# which enabled code from two marketplaces that the file itself never declared,
+# at no pinned version, for everyone who cloned this repository. That is a
+# dependency with none of the properties this repo demands of a dependency: it
+# is not named to a source, not pinned to a revision, and not visible in any
+# diff when it changes. It has been removed rather than pinned, because the
+# plugins are optional authoring guidance and nothing here builds on them.
+#
+# Want them? Enable them for yourself:
+#     /plugin  (in Claude Code)  — writes to .claude/settings.local.json
+.claude/settings.local.json
