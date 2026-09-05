@@ -239,6 +239,19 @@ export interface SnapshotOptions {
    * which is v1's `fsSer` rule (`if(n.mode!==DEFMODE[n.t]) o.m=n.mode`) and the
    * reason a freshly booted, untouched filesystem serialises to almost nothing.
    * Without it, every seed node is recorded, which is correct but larger.
+   *
+   * IT IS ALSO THE AUTHORITY ON WHICH NODES MAY CLAIM SEED ORIGIN, AND THAT
+   * CHECK IS OFF WITHOUT IT. `WriteOptions.origin` is public, so any caller can
+   * mark its own file as a seed node; believed, the overlay records that file
+   * with no content and the next boot DROPS IT. Passing the seed is what makes
+   * `record` refuse the claim — and omitting it degrades silently, because a
+   * document exported without a seed looks entirely normal.
+   *
+   * PASS IT. `bootStorage` is the worked example on the import side: it hands
+   * the seed to `importSnapshot` for exactly this reason, and it had to be
+   * taught to. There is no production caller of `createSnapshot` yet, so
+   * whoever writes `Export-FileSystem` is the first person this matters to.
+   * `RestoreOptions.seed` carries the same warning for the other direction.
    */
   readonly seed?: SeedSpec;
   /** Where to start. Defaults to the mount root. */
@@ -258,6 +271,38 @@ function seedExpectations(spec: SeedSpec | undefined): Map<string, SeedExpectati
     map.set(entry.path, { mode: entry.mode, mtime: spec.time });
   }
   return map;
+}
+
+/**
+ * A metadata field, but ONLY when `isEntry` would accept it back.
+ *
+ * The exporter must never write what the importer refuses, and it could:
+ * `isSaneTime` wants `> 0` while `utimes` happily stores mtime 0 — the epoch,
+ * an ordinary date — and `isSaneMode` caps at 0o7777 while `chmod` stores any
+ * number. MEASURED, both reachable through the public API and both fatal to
+ * the WHOLE document, not just the offending entry:
+ *
+ *     utimes('/odd', { mtime: 0 })  -> export ok, decode refused 'bad-entry'
+ *     chmod('/f', 0o10644)          -> export ok, decode refused 'bad-entry'
+ *
+ * A user who ran `touch -d @0` once had a backup that always wrote and never
+ * restored, and nothing said so until the day they needed it.
+ *
+ * Dropping the field rather than the entry is the least-loss answer available
+ * here: the node keeps its content and everything else, and only the value the
+ * format cannot represent goes missing. The alternative — widening the
+ * validator — would contradict a decision this repo has already made and
+ * tested (`['negative mtime', { t: 'f', p: '/x', mt: -1 }]` must be refused).
+ * The door-level question, whether `chmod` should bound a mode to 0o7777 and
+ * `utimes` a time to > 0, is left alone deliberately: that is a filesystem-API
+ * change, and this guard holds whatever the answer turns out to be.
+ */
+function carriable(field: 'm', value: number): { m?: number };
+function carriable(field: 'mt', value: number): { mt?: number };
+function carriable(field: 'm' | 'mt', value: number): { m?: number; mt?: number } {
+  const usable = field === 'm' ? isSaneMode(value) : isSaneTime(value);
+  if (!usable) return {};
+  return field === 'm' ? { m: value } : { mt: value };
 }
 
 /**
@@ -304,11 +349,29 @@ export async function createSnapshot(
   const entries: SnapshotEntry[] = [];
   const skipped: string[] = [];
   const expectations = seedExpectations(options.seed);
-  const seedTime = options.seed?.time ?? null;
+  const seedPaths = seedKinds(options.seed);
+  // Normalised ONCE, here, and used for both the deviation test below and the
+  // document's own field. Reading the raw value in one place and the sane one
+  // in the other is the same "two functions that agree on the values someone
+  // thought to try" shape that made the signer and the verifier disagree; a
+  // seed spec with `time: 0` recorded `seedTime: null` while still comparing
+  // every node's mtime against 0. For any real seed time this is the identity.
+  const seedTime = saneTime(options.seed?.time);
   const full = options.scope === 'full';
 
   const record = async (stat: FileStat): Promise<Result<void>> => {
-    const isSeed = stat.origin === 'seed';
+    // A node claiming seed origin that THIS BUILD'S SEED does not declare is
+    // not a seed node, and must not be exported as one — the exporter's half of
+    // the check `restoreSnapshot` already does on the way back in.
+    //
+    // Origin is not only set by `installImage`: `WriteOptions.origin` is public,
+    // so `writeText(path, data, { origin: 'seed' })` marks the caller's OWN file
+    // as seed. Believed here, the overlay then records it with no content and
+    // the next boot drops it — MEASURED, the file was ENOENT after one reload.
+    // Without a seed spec there is no authority and the claim stands, which is
+    // the same position the importer takes for the same reason.
+    const seedPath = seedPaths?.get(stat.path);
+    const isSeed = stat.origin === 'seed' && (seedPaths === null || seedPath === stat.kind);
 
     if (isSeed && !full) {
       // A seed node carries no content. It is recorded only when the user
@@ -321,8 +384,8 @@ export async function createSnapshot(
         t: stat.kind === 'directory' ? 'd' : 'f',
         p: stat.path,
         s: 1,
-        ...(modeChanged ? { m: stat.mode } : {}),
-        ...(timeChanged ? { mt: stat.mtime } : {}),
+        ...(modeChanged ? carriable('m', stat.mode) : {}),
+        ...(timeChanged ? carriable('mt', stat.mtime) : {}),
       });
       return ok(undefined);
     }
@@ -331,8 +394,8 @@ export async function createSnapshot(
       entries.push({
         t: 'd',
         p: stat.path,
-        m: stat.mode,
-        mt: stat.mtime,
+        ...carriable('m', stat.mode),
+        ...carriable('mt', stat.mtime),
         ...(isSeed ? { s: 1 as const } : {}),
       });
       return ok(undefined);
@@ -347,8 +410,8 @@ export async function createSnapshot(
       t: 'f',
       p: stat.path,
       c: toBase64(bytes.value),
-      m: stat.mode,
-      mt: stat.mtime,
+      ...carriable('m', stat.mode),
+      ...carriable('mt', stat.mtime),
       ...(isSeed ? { s: 1 as const } : {}),
     });
     return ok(undefined);
@@ -381,7 +444,7 @@ export async function createSnapshot(
     format: SNAPSHOT_FORMAT,
     version: SNAPSHOT_VERSION,
     scope: options.scope,
-    createdAt: options.now,
+    createdAt: saneTime(options.now) ?? 0,
     seedTime,
     entries,
     skipped,
@@ -467,6 +530,22 @@ function isSaneTime(value: unknown): boolean {
 }
 
 /**
+ * The one place a timestamp is made presentable, applied by the SIGNER and the
+ * VERIFIER so the two are literally the same function.
+ *
+ * They were not. `decodeSnapshot` normalised before hashing and
+ * `createSnapshot` signed the raw value, and `SnapshotOptions.now` and
+ * `SeedSpec.time` are unconstrained `number`s — so a NaN clock, a negative
+ * one, or a seed time of 0 produced a document THIS BUILD's own decoder then
+ * refused as corrupt. MEASURED: `now=-1`, `now=NaN`, `now=Infinity` and
+ * `seed.time=0` each exported happily and came back "the snapshot is corrupt",
+ * sending anyone debugging a broken clock to look for bit rot instead.
+ */
+function saneTime(value: unknown): number | null {
+  return isSaneTime(value) ? (value as number) : null;
+}
+
+/**
  * Parse and validate. Nothing is written before all three refusals have passed.
  */
 export function decodeSnapshot(bytes: Uint8Array): Result<SnapshotDocument> {
@@ -527,17 +606,16 @@ export function decodeSnapshot(bytes: Uint8Array): Result<SnapshotDocument> {
   const checksum = doc['checksum'];
   if (typeof checksum !== 'string') return refuse('no-checksum', 'the snapshot has no checksum');
 
-  // Verified over the NORMALISED document, which is also what `createSnapshot`
-  // signs, so the two cannot drift: both go through `snapshotPayload`. A
-  // document whose timestamps are garbage now fails here instead of being
-  // silently rewritten to 0, and a legitimate one round-trips because the
-  // normalisation is the identity on every value `createSnapshot` writes.
+  // Verified over the NORMALISED document, and `createSnapshot` signs the
+  // normalised document too — both call `saneTime` and then `snapshotPayload`,
+  // so signer and verifier are the same function rather than two functions
+  // that happen to agree on the values anyone thought to try.
   const unsigned = {
     format: SNAPSHOT_FORMAT,
     version: SNAPSHOT_VERSION,
     scope,
-    createdAt: isSaneTime(doc['createdAt']) ? (doc['createdAt'] as number) : 0,
-    seedTime: isSaneTime(doc['seedTime']) ? (doc['seedTime'] as number) : null,
+    createdAt: saneTime(doc['createdAt']) ?? 0,
+    seedTime: saneTime(doc['seedTime']),
     entries,
     skipped,
   } as const;
@@ -674,7 +752,24 @@ export async function restoreSnapshot(
             : 'seed';
     // Only an OVERLAY leaves seed content to the next boot. A full snapshot may
     // be all that is left after a site-data clear, so it materialises everything.
-    const metadataOnly = document.scope === 'overlay' && claimsSeed;
+    // A FILE entry with no `c` is NEVER materialised, whatever the scope says.
+    //
+    // `createSnapshot` writes `c` for every file it exports — an empty file
+    // gets `c: ""`, not an absent field — so a contentless file entry is
+    // either corrupt or an overlay entry being read under the wrong scope.
+    // Materialising it meant `new Uint8Array(0)`, which turns "the seed owns
+    // this content" into "truncate it": flipping one word in a stored overlay
+    // took a 63-byte seed file to 0 bytes with `failures: []`.
+    //
+    // Widening the checksum in this same commit-series raised the cost of that
+    // edit to one line — `snapshotPayload` is exported and FNV-1a is not a MAC,
+    // so re-signing is trivial, and MEASURED, the re-signed document truncated
+    // the file again. This guard is what actually closes it, and it does not
+    // depend on the integrity of the document at all. Treat such an entry the
+    // way an overlay treats a seed node: metadata only, and `dropped` if the
+    // path is not there.
+    const contentless = entry.t === 'f' && entry.c === undefined;
+    const metadataOnly = (document.scope === 'overlay' && claimsSeed) || contentless;
 
     if (metadataOnly) {
       // Only its metadata is ours to restore, and only if this version's seed

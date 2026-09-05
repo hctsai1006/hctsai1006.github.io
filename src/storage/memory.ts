@@ -875,6 +875,7 @@ export class MemoryStorage implements StorageBackend {
         // file's contents, and `ls -lt` must not reorder on a move. No byte
         // accounting either — a move relocates bytes, it does not add them.
         moving.ctime = now;
+        if (step.origin !== undefined) moving.origin = step.origin;
         continue;
       }
 
@@ -1338,7 +1339,17 @@ export class MemoryStorage implements StorageBackend {
     // mutation so the OPFS attachment point stays a single call.
     const steps: MutationStep[] = [];
     if (existing !== undefined) steps.push({ op: 'remove', path: to });
-    steps.push({ op: 'move', path: to, from });
+    // `origin: 'user'`, for the third time and the same reason as `#write` and
+    // the copy planner. `#apply`'s move branch relocates the node object, so a
+    // renamed SEED file stayed marked seed — and was then recorded in the
+    // overlay as `s: 1` with no content, and dropped on the next boot.
+    // MEASURED: `mv ~/README.md ~/README.bak` and one reload left README.bak
+    // ENOENT and `~/projects` back where it started, so the move did not even
+    // stick. A renamed seed DIRECTORY was worse in a quieter way: it survived
+    // only as a side effect of its children being restored with
+    // `createParents: true`, losing its own mode and mtime, and vanished
+    // outright when it was empty. A move is a user action whatever it moves.
+    steps.push({ op: 'move', path: to, from, origin: 'user' });
     return this.#commit({ id: this.#nextPlanId(), syscall: 'rename', steps, byteDelta: 0 }, to, undefined);
   }
 
@@ -1429,7 +1440,23 @@ export class MemoryStorage implements StorageBackend {
           // whose occupancy does not move.
           byteDelta -= target.data.byteLength;
         }
-        steps.push({ op: 'create-file', path: targetPath, data: node.data.slice(), mode: node.mode });
+        // `origin: 'user'` EXPLICITLY, not left to `#apply`'s default.
+        //
+        // `#apply` only overrides an existing node's origin when the step
+        // carries one, so a copy onto a SEED file left it marked seed — and
+        // then the seed/overlay contract threw the user's data away exactly as
+        // it did for `writeText` before that was fixed. MEASURED: after
+        // `cp ~/mine.md ~/README.md` and one reload, the file was back to the
+        // seed's text, `failures: []`. A copy is a user action whatever it
+        // lands on; a NEW target already became 'user' through the default, so
+        // this only changes the overwrite case and makes the two agree.
+        steps.push({
+          op: 'create-file',
+          path: targetPath,
+          data: node.data.slice(),
+          mode: node.mode,
+          origin: 'user',
+        });
         byteDelta += node.data.byteLength;
         return null;
       }
