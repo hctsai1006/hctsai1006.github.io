@@ -495,6 +495,117 @@ describe('the kernel binds parameters instead of inventing an empty BindingResul
 });
 
 // ---------------------------------------------------------------------------
+// what an adversarial pass over the fixes above turned up
+// ---------------------------------------------------------------------------
+
+describe('trying to defeat the fixes', () => {
+  it('an ignored INFINITE upstream still terminates when the consumer stops early', async () => {
+    // The drain that reproduces pwsh's push semantics is also the obvious place
+    // to introduce a hang: a stage that ignores its input drains the upstream
+    // after it returns, and if that drain outlived the teardown, `infinite |
+    // ignores | first1` would never finish. It does not, because `runCommand`
+    // aborts the stage BEFORE awaiting the drain and `guardedInput` checks the
+    // signal before every pull.
+    let produced = 0;
+    const { kernel, events } = newKernel();
+    kernel.register(
+      command('infinite', async (context) => {
+        for (;;) {
+          if (context.streams.success.closed || context.signal.aborted) break;
+          produced += 1;
+          await context.streams.success.write(produced);
+        }
+        return 0;
+      }),
+    );
+    kernel.register(
+      command('ignores', async (context) => {
+        await context.streams.success.write('ignored');
+        return 0;
+      }),
+    );
+    kernel.register(
+      command('first1', async (context) => {
+        for await (const value of context.input) {
+          await context.streams.success.write(value);
+          break;
+        }
+        return 0;
+      }),
+    );
+
+    kernel.send({
+      kind: 'exec',
+      requestId: 'r1',
+      terminalId: 't1',
+      source: 'infinite | ignores | first1',
+      background: false,
+    });
+    await kernel.drain();
+
+    assert.deepEqual(objects(events), ['ignored']);
+    assert.ok(produced < 10, `the ignored upstream produced ${produced} before being torn down`);
+    assert.equal(events.filter((event) => event.kind === 'exit').length, 3);
+  });
+
+  it('events reach a listener in sequence order even when a listener sends a request', async () => {
+    // A UI that answers an event by sending a request is an ordinary thing to
+    // write, and it used to break the ordering the sequence number exists for:
+    // the nested request emitted seq 4 and delivered it in full before seq 3
+    // reached the listener registered after it. Measured before the outbox:
+    //   delivery order of seq: 1,2,4,3,5,6
+    const { kernel } = newKernel();
+    kernel.register(
+      command('greet', async (context) => {
+        await context.streams.success.write('hi');
+        return 0;
+      }),
+    );
+
+    let answered = false;
+    kernel.on((event) => {
+      if (event.kind === 'objects' && !answered) {
+        answered = true;
+        // Malformed on purpose, so it emits a `rejected` from inside delivery.
+        kernel.send({ kind: 'resize', terminalId: 't1', columns: 0, rows: 0 });
+      }
+    });
+    const delivered: KernelEvent[] = [];
+    kernel.on((event) => delivered.push(event));
+
+    kernel.send({ kind: 'exec', requestId: 'r1', terminalId: 't1', source: 'greet', background: false });
+    await kernel.drain();
+
+    assert.equal(answered, true, 'the re-entrant send has to have happened');
+    const numbers = delivered.map((event) => event.seq);
+    assert.deepEqual(
+      numbers,
+      [...numbers].sort((a, b) => a - b),
+      `delivered out of order: ${numbers.join(',')}`,
+    );
+  });
+
+  it('an event emitted during delivery still reaches every listener exactly once', async () => {
+    const { kernel } = newKernel();
+    kernel.register(command('quiet', async () => 0));
+    let sent = false;
+    kernel.on((event) => {
+      if (event.kind === 'exit' && !sent) {
+        sent = true;
+        kernel.send({ kind: 'cancel', requestId: '' });
+      }
+    });
+    const seen: number[] = [];
+    kernel.on((event) => seen.push(event.seq));
+
+    kernel.send({ kind: 'exec', requestId: 'r1', terminalId: 't1', source: 'quiet', background: false });
+    await kernel.drain();
+
+    assert.equal(new Set(seen).size, seen.length, `an event was delivered twice: ${seen.join(',')}`);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // $? and $LASTEXITCODE are two different questions
 // ---------------------------------------------------------------------------
 

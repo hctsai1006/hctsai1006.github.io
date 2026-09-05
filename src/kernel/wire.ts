@@ -356,6 +356,13 @@ function copyArray(
   depth: number,
   state: CopyState,
 ): readonly WireValue[] {
+  // Checked as well as set. `copy` checks before dispatching here, but
+  // `copyPSObjectOrBag` calls this directly for `typeNames`, and a graph where
+  // one array is reachable both ways would otherwise be copied twice and the
+  // second copy would clobber the memo.
+  const seen = state.memo.get(source);
+  if (seen !== undefined) return seen as readonly WireValue[];
+
   charge(state, path, OVERHEAD_PER_NODE);
   const out: WireValue[] = [];
   state.memo.set(source, out);
@@ -443,6 +450,12 @@ function copyBag(
   depth: number,
   state: CopyState,
 ): Record<string, WireValue> {
+  // Same reason as `copyArray`: `copyPSObjectOrBag` calls this directly for the
+  // property bag, so a PSObject whose `properties` is the PSObject ITSELF would
+  // be copied twice and lose the identity the memo exists to keep.
+  const seen = state.memo.get(source);
+  if (seen !== undefined) return seen as unknown as Record<string, WireValue>;
+
   if (Object.getOwnPropertySymbols(source).length > 0) {
     throw new WireValueError(
       path,

@@ -70,7 +70,7 @@ import type { BindOptions } from '../binding/binder.ts';
 import { tryBindParameters } from '../binding/binder.ts';
 import { ParameterBindingError } from '../binding/errors.ts';
 import type { ProcessGroupId, ProcessId, RequestId, TerminalId } from './ids.ts';
-import type { KernelEvent, KernelEventBody, KernelRequest } from './protocol.ts';
+import type { KernelEvent, KernelEventBody } from './protocol.ts';
 import {
   assertCloneSafe,
   decodeKernelRequest,
@@ -407,6 +407,9 @@ export class Kernel {
    * seq N knows it has missed nothing if it has already seen 1..N-1.
    */
   #sequence = 0;
+  /** Stamped events waiting to be delivered. See `#emit`. */
+  readonly #outbox: KernelEvent[] = [];
+  #delivering = false;
 
   constructor(options: KernelOptions = {}) {
     this.#clock = options.clock ?? Date.now;
@@ -573,10 +576,31 @@ export class Kernel {
     this.#sequence += 1;
     const event = { ...body, seq: this.#sequence } as KernelEvent;
     if (this.#validateEvents) assertCloneSafe(event, `KernelEvent(${event.kind})`);
-    // Copy first: a listener that unsubscribes on `exit` — the obvious thing
-    // for a "wait for this command" helper to do — would otherwise mutate the
-    // set while it is being iterated.
-    for (const listener of [...this.#listeners]) listener(event);
+
+    // DELIVERED IN SEQUENCE ORDER, which needs a queue rather than a direct
+    // call. A listener is allowed to answer an event by sending a request — a
+    // UI that auto-responds does exactly that — and a request handled inside
+    // the delivery of event N emits event N+1 and delivers it in full before N
+    // reaches the listeners that come after. Measured before this queue existed:
+    //
+    //   delivery order of seq: 1,2,4,3,5,6
+    //
+    // A number whose whole purpose is to say what happened first must not
+    // arrive out of order, or a consumer that simply appends is already wrong.
+    this.#outbox.push(event);
+    if (this.#delivering) return;
+
+    this.#delivering = true;
+    try {
+      for (let next = this.#outbox.shift(); next !== undefined; next = this.#outbox.shift()) {
+        // Copy the listener set first: a listener that unsubscribes on `exit` —
+        // the obvious thing for a "wait for this command" helper to do — would
+        // otherwise mutate it while it is being iterated.
+        for (const listener of [...this.#listeners]) listener(next);
+      }
+    } finally {
+      this.#delivering = false;
+    }
   }
 
   // -- the protocol entry point -------------------------------------------
@@ -588,8 +612,14 @@ export class Kernel {
    * message handler has, and a UI that could `await` a request would grow code
    * that cannot survive the move into a Worker. Callers that need to join —
    * tests, a script runner, an MCP tool — use `drain`.
+   *
+   * `unknown` rather than `KernelRequest`, deliberately. This is the door a
+   * `postMessage` will arrive at, and a message from a page has no compile-time
+   * type — pretending otherwise is what made the old kernel type-ASSERT its
+   * input and act on whatever came through. A caller that wants checking builds
+   * its message as a `KernelRequest` first; the door itself checks at runtime.
    */
-  send(message: KernelRequest | unknown): void {
+  send(message: unknown): void {
     // DECODED, not asserted. The static type is a claim about the sender, and
     // the sender is about to become a `postMessage` from a page. Everything
     // below can then rely on the fields being what they say they are, which is

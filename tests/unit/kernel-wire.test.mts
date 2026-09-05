@@ -107,6 +107,28 @@ describe('shared subgraphs', () => {
     assert.equal(isCloneSafe(safe), true);
   });
 
+  it('keeps identity when the property BAG is the PSObject itself', () => {
+    // Found by attacking the fix rather than by writing it: `copy` checks the
+    // memo before dispatching, but the two helpers it dispatches to are also
+    // called directly — for `typeNames` and for `properties` — so a graph that
+    // reaches one object both ways was copied twice and the second copy
+    // clobbered the memo. Measured before the fix: `out.properties === out` was
+    // false for exactly this shape.
+    const self: Record<string, unknown> = { typeNames: ['T'] };
+    self['properties'] = self;
+
+    const out = sanitizePSValue(self as unknown as PSValue) as unknown as Record<string, unknown>;
+    assert.equal(out['properties'], out);
+    assert.doesNotThrow(() => structuredClone(out));
+  });
+
+  it('keeps one array shared between typeNames and a property', () => {
+    const names = ['T', 'System.Object'];
+    const source = { typeNames: names, properties: { alias: names } };
+    const out = sanitizePSValue(source as unknown as PSValue) as PSObject;
+    assert.equal(out.typeNames, out.properties['alias']);
+  });
+
   it('shares a Date the same way', () => {
     const when = new Date(1_700_000_000_000);
     const safe = sanitizePSValue(psObject({ a: when, b: when })) as PSObject;
