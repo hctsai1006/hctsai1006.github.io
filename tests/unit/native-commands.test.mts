@@ -489,6 +489,15 @@ describe('Get-Command', () => {
     assert.deepEqual(prop(result.values[0], 'Capabilities'), ['terminal.control']);
   });
 
+  it('-ParameterName finds commands that actually take the parameter', async () => {
+    // 'which commands take -Top?' handed back Sort-Object, which rejects it.
+    // Upstream has -Top; this engine does not bind it.
+    const top = await run(getCommand, { ParameterName: 'Top' });
+    assert.deepEqual(column(top.values, 'Name'), []);
+    const descending = await run(getCommand, { ParameterName: 'Descending' });
+    assert.ok(column(descending.values, 'Name').includes('Sort-Object'));
+  });
+
   it('keeps ParameterSource and Implementation as separate answers', async () => {
     // They look alike and are about different things. Where-Object's parameter
     // metadata IS from the reference implementation -- pwsh reported all 35
@@ -570,6 +579,14 @@ describe('Get-Help says what runs, and names what does not', () => {
     assert.match(alert, /-Top/u);
     assert.match(alert, /-Bottom/u);
     assert.match(alert, /-Culture/u);
+  });
+
+  it('-Parameter describes only what the binder accepts', async () => {
+    const getHelpModule = need('get-help');
+    const top = await run(getHelpModule, { Name: 'Sort-Object', Parameter: 'Top' });
+    assert.deepEqual(top.values, [], '-Top is upstream-only');
+    const stable = await run(getHelpModule, { Name: 'Sort-Object', Parameter: 'Stable' });
+    assert.equal(stable.values.length, 1);
   });
 
   it('reports a partial implementation as partial', () => {

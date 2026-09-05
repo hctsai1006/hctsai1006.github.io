@@ -294,7 +294,10 @@ export function createGetCommand(services: NativeServices): CommandModule {
           if (!nouns.some((n) => wildcardPattern(n).test(noun))) return false;
         }
         if (parameterNames !== undefined) {
-          const declared = r.entry.manifest.parameters;
+          // What BINDS. `-ParameterName Top` asking "which commands take
+          // -Top?" and being handed Sort-Object, which rejects it, is the
+          // same conflation as offering it in completion.
+          const declared = boundParameters(r.entry.manifest);
           const ok = parameterNames.every((want) =>
             declared.some(
               (p) =>

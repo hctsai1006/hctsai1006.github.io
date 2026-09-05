@@ -312,7 +312,10 @@ export function createGetHelp(services: NativeServices): CommandModule {
         if (context.streams.success.closed) break;
         if (wantParameter !== undefined) {
           const pattern = wildcardPattern(wantParameter);
-          for (const p of entry.manifest.parameters) {
+          // Same rule as the full help object above: describe what the binder
+          // accepts. `Get-Help Sort-Object -Parameter Top` documenting -Top
+          // would be a wrong instruction rather than a gap.
+          for (const p of boundParameters(entry.manifest)) {
             if (pattern.test(p.name)) await context.streams.success.write(helpParameter(p));
           }
           continue;
