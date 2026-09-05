@@ -178,6 +178,31 @@ export {
 } from './capabilities.ts';
 
 export type { FileSystemSession, KernelEventListener, KernelOptions } from './kernel.ts';
+
+// The transport and the two halves that sit on it. `browser-worker.ts` is
+// deliberately NOT here: it imports the whole command registry, and a barrel
+// that dragged 85 commands into anything wanting a `KernelClient` would put the
+// execution engine back on the UI thread — which is the thing the boundary
+// exists to prevent.
+export type {
+  KernelTransport,
+  MessageEmitterLike,
+  MessageEventLike,
+  MessageEventTargetLike,
+  TransportMessageListener,
+} from './transport.ts';
+export { eventEmitterTransport, eventTargetTransport } from './transport.ts';
+
+export type { ServeOptions } from './serve.ts';
+export { serveKernel } from './serve.ts';
+
+export type {
+  ExecOptions,
+  ExecOutcome,
+  KernelClientOptions,
+  ProtocolViolation,
+} from './client.ts';
+export { KernelClient, KernelClientError } from './client.ts';
 export {
   EXIT_COMMAND_NOT_FOUND,
   EXIT_FAILURE,
