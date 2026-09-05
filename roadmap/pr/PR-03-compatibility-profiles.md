@@ -41,7 +41,7 @@ Adding a PowerShell version must never mean forking a command. Version differenc
   - MISSING: the list. `nativePowerShellEngine: false` is genuinely recorded in both profiles, and that is the half that protects a visitor from believing a real pwsh is running. `unimplementedAstNodes` is a literal [] in the generator with nothing populating it, and an empty list reads as "every AST node is implemented" — the exact opposite of the truth, since item 8 has not written a parser at all. It cannot be filled honestly until there is an AST to enumerate.
   - *evidence:* `compat/profiles/powershell-7.6.5-linux.json` — `engineLimits.nativePowerShellEngine`
   - *evidence:* `compat/profiles/powershell-7.6.5-linux.json` — `engineLimits.notes`
-  - *evidence:* nothing under `src/**/*.ts` matches `/AstNodeKind/`
+  - *evidence:* nothing under `src/**/*.{ts,mts}` matches `/AstNodeKind/`
 - [x] **3.7** Record bundled module versions
   - All six modules verified from src/Modules/PSGalleryModules.csproj at each tag. PSResourceGet is the only one that differs (1.2.0 vs 1.3.0-preview1); the rest are pinned identically, so a behaviour difference cannot be blamed on a module version unless it is that one.
   - *evidence:* `compat/profiles/powershell-7.6.5-linux.json` — `bundledModules`

@@ -27,10 +27,10 @@ run() is a god function: parse, history, prompt echo, pipeline policy, execution
   - *evidence:* `src/kernel/kernel.ts` exports `Kernel`
   - *evidence:* `src/kernel/kernel.ts` exports `splitPipeline`
   - *evidence:* `tests/unit/kernel.test.mts` — test "creates a process, emits its objects, and exits 0"
-  - *evidence:* nothing under `src/**/*.ts` matches `/document.querySelector/`
+  - *evidence:* nothing under `src/**/*.{ts,mts}` matches `/document.querySelector/`
 - [x] **6.3** Model async commands as event streams instead of the asyncOut/busy globals
   - ping/traceroute returned null and printed themselves in v1, forcing a pipeline pre-flight hack. They are ordinary commands now, writing values that the kernel turns into events and that honour cancellation between writes.
-  - *evidence:* nothing under `src/**/*.ts` matches `/asyncOut/`
+  - *evidence:* nothing under `src/**/*.{ts,mts}` matches `/asyncOut/`
   - *evidence:* `src/commands/simulated/network.ts` exports `networkCommands`
   - *evidence:* `tests/unit/simulated.test.mts` — test "draws exactly four values, as v1 does"
   - *evidence:* `tests/unit/kernel.test.mts` — test "Ctrl+C stops the foreground pipeline and leaves the background job alone"
@@ -38,7 +38,7 @@ run() is a god function: parse, history, prompt echo, pipeline policy, execution
   - MISSING: the return channel. No command touches prompt chrome or the DOM any more — that half is real. But nothing carries a location change back either: Set-Location mutates the filesystem object's own location while the kernel's per-terminal cwd is set once at startup and never refreshed, and the protocol has no event for it. Get-Location and $env:PWD therefore read a value that a cd does not update.
   - *evidence:* `src/commands/ports.ts` exports `FileSystemPort`
   - *evidence:* `src/commands/fs-read/set-location.ts` exports `setLocation`
-  - *evidence:* nothing under `src/kernel/**/*.ts` matches `/location-changed/`
+  - *evidence:* nothing under `src/kernel/**/*.{ts,mts}` matches `/location-changed/`
 
 ## Acceptance
 

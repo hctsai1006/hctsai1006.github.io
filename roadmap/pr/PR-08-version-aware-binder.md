@@ -26,7 +26,7 @@ There are currently FOUR independent tokenizers — splitPipe, the execOne regex
   - Error-tolerant parsing must never feed the evaluator. Only the tolerant half exists; there is no strict execution parser to separate it from.
 - [ ] **8.3** Refuse to execute recognised-but-unimplemented syntax with an explicit error naming the AST node
   - There is no AST, so there is no node to name. Both the kernel and the PowerShell command support module say so in as many words.
-  - *evidence:* nothing under `src/**/*.ts` matches `/AstNodeKind/`
+  - *evidence:* nothing under `src/**/*.{ts,mts}` matches `/AstNodeKind/`
 - [x] **8.4** Implement ParameterBinder with validation, parameter sets and positional binding
   - STALE todo, corrected 2026-09-06. Named and positional binding, parameter-set narrowing, mandatory checks, coercion and validation attributes are all implemented and are among the most heavily tested code in the repository.
   - *evidence:* `src/binding/binder.ts` exports `bindParameters`

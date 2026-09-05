@@ -23,7 +23,7 @@ These are what turn a prompt into a workstation, and they are cheap once provide
   - *evidence:* `src/commands/fs-manage/editors.ts` exports `vim`
   - *evidence:* `tests/unit/fs-manage-editors.test.mts` — test "reads the file, hands it over, and writes the result"
   - *evidence:* `tests/unit/fs-manage-editors.test.mts` — test "reports a ui.dialog denial without opening anything"
-  - *evidence:* nothing under `src/**/*.ts` matches `/wantCol/`
+  - *evidence:* nothing under `src/**/*.{ts,mts}` matches `/wantCol/`
 - [ ] **18.2** File manager over the provider model
   - Blocked on item 10: there is no provider model to build over.
   - *evidence:* `src/apps/**/*` matches no file, though `src/**/*` does

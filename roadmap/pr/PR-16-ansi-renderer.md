@@ -17,8 +17,8 @@ The semantic DOM terminal is what makes this accessible to screen readers and is
 ## Tasks
 
 - [ ] **16.1** Define TerminalPort with both a semantic DOM and an xterm adapter
-  - *evidence:* nothing under `src/**/*.ts` matches `/TerminalPort/`
-  - *evidence:* nothing under `src/**/*.ts` matches `/xterm/`
+  - *evidence:* nothing under `src/**/*.{ts,mts}` matches `/TerminalPort/`
+  - *evidence:* nothing under `src/**/*.{ts,mts}` matches `/xterm/`
 - [ ] **16.2** Separate the ANSI parser from plain-text formatting
   - 7.7 fixes VT Reset sequences appearing mid-string; that only makes sense with a real ANSI parser. No ANSI parser exists — the only occurrences of the word are the Windows-1252 charset name on -Encoding.
   - *evidence:* `src/renderer/**/*` matches no file, though `src/**/*` does
@@ -30,7 +30,7 @@ The semantic DOM terminal is what makes this accessible to screen readers and is
   - *evidence:* `tests/unit/cell-width.test.mts` — test "renderer and line editor answer identically, on every sample"
 - [ ] **16.4** Keep the semantic renderer the default and keep aria-live output intact
   - There is no renderer in src/ at all yet, so there is nothing to keep as the default. aria-live exists only in the frozen v1 file.
-  - *evidence:* nothing under `src/**/*.ts` matches `/aria-live/`
+  - *evidence:* nothing under `src/**/*.{ts,mts}` matches `/aria-live/`
 
 ## Acceptance
 

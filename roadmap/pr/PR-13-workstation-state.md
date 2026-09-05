@@ -21,10 +21,10 @@ A machine you cannot export, diff and restore is a pile of implicit localStorage
   - *evidence:* `src/dsc/**/*` matches no file, though `src/**/*` does
 - [ ] **13.2** Implement Get/Test/Set with WhatIf planning
   - Model the DSC 3.2 feature set — version pinning, --what-if, map/filter expressions, adapters — and pin the exact DSC version modelled (3.2.3 stable; 3.3.0-rc.2 exists). Nothing in the command set records SupportsShouldProcess, so -WhatIf does not exist anywhere yet.
-  - *evidence:* nothing under `src/**/*.ts` matches `/WhatIf/`
+  - *evidence:* nothing under `src/**/*.{ts,mts}` matches `/WhatIf/`
 - [ ] **13.3** Implement Export/Import of the whole workstation
   - The filesystem can be exported and restored (9.3); the machine as a configuration cannot.
-  - *evidence:* nothing under `src/**/*.ts` matches `/Set-WorkstationState/`
+  - *evidence:* nothing under `src/**/*.{ts,mts}` matches `/Set-WorkstationState/`
 - [ ] **13.4** Report configuration drift
   - The word drift is used throughout this repository for a different thing — two hand-maintained counts disagreeing — and none of it is DSC-style resource drift.
   - *evidence:* `src/dsc/**/*` matches no file, though `src/**/*` does

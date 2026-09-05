@@ -52,7 +52,7 @@ Today every command returns pre-formatted rows, so `gci | Sort-Object` sorts ren
   - *evidence:* `tests/unit/psobject.test.mts` — test "reproduces the reference implementation Sort-Object result"
 - [ ] **7.6** Keep an EncodingBroker so native byte streams are not corrupted by UTF-16 round-trips
   - The byte channel type exists (NativeStreams, and the kernel forwards raw chunks as bytes events), but no command reads or writes it and there is no broker guarding the boundary.
-  - *evidence:* nothing under `src/**/*.ts` matches `/EncodingBroker/`
+  - *evidence:* nothing under `src/**/*.{ts,mts}` matches `/EncodingBroker/`
 
 ## Acceptance
 

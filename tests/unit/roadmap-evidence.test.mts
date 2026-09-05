@@ -161,10 +161,25 @@ describe('a status is a claim, and a claim needs a citation', () => {
   });
 
   it('refuses a partial task that does not say what is missing', () => {
-    const r = run([
-      task('1.1', 'partial', [{ kind: 'script', name: 'verify' }]),
-    ]);
+    const r = run([task('1.1', 'partial', [{ kind: 'script', name: 'verify' }])]);
     assert.match(messages(r), /says what is missing/);
+  });
+
+  it('refuses a partial whose note is too short to say anything', () => {
+    // "wip" satisfies a presence check and tells a reader nothing.
+    const r = run([task('1.1', 'partial', [{ kind: 'script', name: 'verify' }], 'wip')]);
+    assert.match(messages(r), /characters of detail/);
+  });
+
+  it('refuses an empty plan, which is the emptiest possible pass', () => {
+    // Every counter is zero when WORK is, and zero findings out of zero tasks
+    // is exactly what a gate reports once it has stopped being given anything.
+    const r = checkEvidence({
+      repo: fakeRepo({ 'package.json': '{}', 'tests/unit/a.test.mts': 'it("x", () => assert.ok(1));' }),
+      runner: fakeRunner([]),
+      items: [],
+    });
+    assert.match(r.fatal.join('\n'), /An empty plan is not a clean one/);
   });
 
   it('refuses a done task carried only by supporting evidence', () => {
@@ -179,9 +194,14 @@ describe('a status is a claim, and a claim needs a citation', () => {
     assert.deepEqual(r.fatal, []);
   });
 
-  it('does not require evidence from a task that claims nothing', () => {
-    const r = run([task('1.1', 'todo')]);
+  it('asks a task that claims nothing for a ratchet, not for proof of work', () => {
+    // An open task owes no evidence that something exists. What it owes is a
+    // way to notice when it stops being open.
+    const r = run([
+      task('1.1', 'todo', [{ kind: 'absent', glob: 'src/**/*.ts', pattern: 'Widget' }]),
+    ], { files: { 'src/a.ts': 'export const a = 1;\n' } });
     assert.deepEqual(r.findings, []);
+    assert.equal(r.tasksRequiringEvidence, 0);
   });
 });
 
@@ -343,6 +363,19 @@ describe('test evidence has to name a test that runs, asserts and passes', () =>
     assert.match(r.fatal.join('\n'), /could not run the cited tests/);
   });
 
+  it('does not let a passing namesake cover for a failing one in the same file', () => {
+    // A file may declare the same name in two describes; TAP then reports two
+    // results under it, and looking only at `passed` hides the failure.
+    const r = run([task('1.1', 'done', cite)], {
+      ...body(
+        "describe('a', () => { it('does the thing', () => { assert.ok(1); }); });\n" +
+          "describe('b', () => { it('does the thing', () => { assert.ok(1); }); });\n",
+      ),
+      runner: fakeRunner(['does the thing'], ['does the thing']),
+    });
+    assert.match(messages(r), /did not pass/);
+  });
+
   it('refuses to guess when one name is cited from two files', () => {
     const r = checkEvidence({
       repo: fakeRepo({
@@ -400,9 +433,18 @@ describe('absence evidence, which is what catches under-claiming', () => {
   });
 
   it('counts open tasks that carry no ratchet, rather than leaving the gap implicit', () => {
-    const r = run([task('1.1', 'todo'), task('1.2', 'blocked')]);
+    const excuse = 'There is no name to search for until the parser exists at all.';
+    const r = run([task('1.1', 'todo', [], excuse), task('1.2', 'blocked', [], excuse)]);
+    assert.deepEqual(r.findings, []);
     assert.equal(r.ratcheted, 0);
     assert.deepEqual([...r.unratcheted], ['1.1', '1.2']);
+  });
+
+  it('refuses an open task with neither a ratchet nor a reason there is none', () => {
+    // Printing the count was not enough by itself: deleting a ratchet left the
+    // gate passing with a longer list nobody reads.
+    const r = run([task('1.1', 'todo')]);
+    assert.match(messages(r), /no absence check and no explanation/);
   });
 });
 
@@ -545,6 +587,16 @@ describe('the readers behind the evidence kinds', () => {
     assert.equal(byName.get('asserts')?.asserts, true);
     assert.equal(byName.get('asserts')?.inert, false);
     assert.equal(byName.get('does not')?.inert, true);
+  });
+
+  it('reads a directory as absent rather than throwing on it', () => {
+    // `src/**/*` returns directories too, and an absence check walks whatever
+    // the glob returned. An unguarded readFileSync throws EISDIR there and
+    // takes the whole gate down on a perfectly reasonable pattern.
+    const repo = fsRepo(REPO_ROOT);
+    assert.equal(repo.read('src'), null);
+    assert.equal(repo.exists('src'), true);
+    assert.ok((repo.read('package.json') ?? '').length > 0);
   });
 
   it('reads TAP results at any nesting depth, and never counts a SKIP as a pass', () => {

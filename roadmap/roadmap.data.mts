@@ -635,7 +635,7 @@ export const WORK = [
         evidence: [
           { kind: 'json', file: 'compat/profiles/powershell-7.6.5-linux.json', path: 'engineLimits.nativePowerShellEngine' },
           { kind: 'json', file: 'compat/profiles/powershell-7.6.5-linux.json', path: 'engineLimits.notes' },
-          { kind: 'absent', glob: 'src/**/*.ts', pattern: 'AstNodeKind' },
+          { kind: 'absent', glob: 'src/**/*.{ts,mts}', pattern: 'AstNodeKind' },
         ],
       },
       {
@@ -754,7 +754,7 @@ export const WORK = [
         status: 'done',
         evidence: [
           { kind: 'export', file: 'src/storage/seed.ts', symbol: 'SeedOptions' },
-          { kind: 'absent', glob: 'src/storage/**/*.ts', pattern: 'commands/registry' },
+          { kind: 'absent', glob: 'src/storage/**/*.{ts,mts}', pattern: 'commands/registry' },
           { kind: 'export', file: 'src/storage/seed.ts', symbol: 'buildSeed' },
         ],
       },
@@ -775,7 +775,7 @@ export const WORK = [
         detail: 'Two of the four are gone from the rewrite (ED.path, ED.wantCol have no occurrence in src/). GROUPNAME was not deleted but repurposed as a live exported constant in src/storage/seed.ts, and `hidden` is still declared in tools/extract-command-inventory.mts because the v1 extractor models v1 faithfully.',
         status: 'todo',
         evidence: [
-          { kind: 'absent', glob: 'src/**/*.ts', pattern: 'wantCol' },
+          { kind: 'absent', glob: 'src/**/*.{ts,mts}', pattern: 'wantCol' },
           { kind: 'code', file: 'tools/extract-command-inventory.mts', pattern: 'hidden' },
         ],
       },
@@ -811,7 +811,7 @@ export const WORK = [
         detail:
           'It earns its place for IME, soft keyboards and selection; it must stop owning state. The core defines the seam (EditorKeyEvent, insertText, setComposing) but no adapter has been written, and the live textarea is still the untouched v1 one in index.html.',
         status: 'todo',
-        evidence: [{ kind: 'absent', glob: 'src/**/*.ts', pattern: 'InputAdapter' }],
+        evidence: [{ kind: 'absent', glob: 'src/**/*.{ts,mts}', pattern: 'InputAdapter' }],
       },
       {
         id: '5.3',
@@ -846,7 +846,7 @@ export const WORK = [
         evidence: [
           { kind: 'test', file: 'tests/unit/line-editor-keys.test.mts', name: 'hands every key back while a composition is in progress' },
           { kind: 'test', file: 'tests/unit/line-editor-keys.test.mts', name: 'honours a per-event isComposing flag as well as the sticky one' },
-          { kind: 'absent', glob: 'src/**/*.ts', pattern: 'keyCode' },
+          { kind: 'absent', glob: 'src/**/*.{ts,mts}', pattern: 'keyCode' },
         ],
       },
     ],
@@ -884,7 +884,7 @@ export const WORK = [
           { kind: 'export', file: 'src/kernel/kernel.ts', symbol: 'Kernel' },
           { kind: 'export', file: 'src/kernel/kernel.ts', symbol: 'splitPipeline' },
           { kind: 'test', file: 'tests/unit/kernel.test.mts', name: 'creates a process, emits its objects, and exits 0' },
-          { kind: 'absent', glob: 'src/**/*.ts', pattern: 'document.querySelector' },
+          { kind: 'absent', glob: 'src/**/*.{ts,mts}', pattern: 'document.querySelector' },
         ],
       },
       {
@@ -893,7 +893,7 @@ export const WORK = [
         detail: 'ping/traceroute returned null and printed themselves in v1, forcing a pipeline pre-flight hack. They are ordinary commands now, writing values that the kernel turns into events and that honour cancellation between writes.',
         status: 'done',
         evidence: [
-          { kind: 'absent', glob: 'src/**/*.ts', pattern: 'asyncOut' },
+          { kind: 'absent', glob: 'src/**/*.{ts,mts}', pattern: 'asyncOut' },
           { kind: 'export', file: 'src/commands/simulated/network.ts', symbol: 'networkCommands' },
           { kind: 'test', file: 'tests/unit/simulated.test.mts', name: 'draws exactly four values, as v1 does' },
           { kind: 'test', file: 'tests/unit/kernel.test.mts', name: 'Ctrl+C stops the foreground pipeline and leaves the background job alone' },
@@ -908,7 +908,7 @@ export const WORK = [
         evidence: [
           { kind: 'export', file: 'src/commands/ports.ts', symbol: 'FileSystemPort' },
           { kind: 'export', file: 'src/commands/fs-read/set-location.ts', symbol: 'setLocation' },
-          { kind: 'absent', glob: 'src/kernel/**/*.ts', pattern: 'location-changed' },
+          { kind: 'absent', glob: 'src/kernel/**/*.{ts,mts}', pattern: 'location-changed' },
         ],
       },
     ],
@@ -993,7 +993,7 @@ export const WORK = [
         title: 'Keep an EncodingBroker so native byte streams are not corrupted by UTF-16 round-trips',
         detail: 'The byte channel type exists (NativeStreams, and the kernel forwards raw chunks as bytes events), but no command reads or writes it and there is no broker guarding the boundary.',
         status: 'todo',
-        evidence: [{ kind: 'absent', glob: 'src/**/*.ts', pattern: 'EncodingBroker' }],
+        evidence: [{ kind: 'absent', glob: 'src/**/*.{ts,mts}', pattern: 'EncodingBroker' }],
       },
     ],
     acceptance: [
@@ -1035,7 +1035,7 @@ export const WORK = [
         title: 'Refuse to execute recognised-but-unimplemented syntax with an explicit error naming the AST node',
         detail: 'There is no AST, so there is no node to name. Both the kernel and the PowerShell command support module say so in as many words.',
         status: 'todo',
-        evidence: [{ kind: 'absent', glob: 'src/**/*.ts', pattern: 'AstNodeKind' }],
+        evidence: [{ kind: 'absent', glob: 'src/**/*.{ts,mts}', pattern: 'AstNodeKind' }],
       },
       {
         id: '8.4',
@@ -1103,7 +1103,7 @@ export const WORK = [
         title: 'Implement OPFS backend with sync access handles inside a dedicated StorageWorker',
         detail: 'HARD CONSTRAINT: the WHATWG spec marks createSyncAccessHandle [Exposed=DedicatedWorker], which excludes Window AND SharedWorker. The coordinator can never hold the handle. Nothing is built: the only backend is in-memory.',
         status: 'todo',
-        evidence: [{ kind: 'absent', glob: 'src/**/*.ts', pattern: 'createSyncAccessHandle' }],
+        evidence: [{ kind: 'absent', glob: 'src/**/*.{ts,mts}', pattern: 'createSyncAccessHandle' }],
       },
       {
         id: '9.2',
@@ -1135,7 +1135,7 @@ export const WORK = [
         id: '9.4',
         title: 'Add versioned migrations with rollback',
         status: 'todo',
-        evidence: [{ kind: 'absent', glob: 'src/storage/**/*.ts', pattern: 'migrat' }],
+        evidence: [{ kind: 'absent', glob: 'src/storage/**/*.{ts,mts}', pattern: 'migrat' }],
       },
       {
         id: '9.5',
@@ -1143,8 +1143,8 @@ export const WORK = [
         detail: 'Web Locks is widely available since March 2022 and MDN documents leader election explicitly. SharedWorker is only Baseline "newly available" (May 2026) and absent on Samsung Internet and Opera Mobile, so the fallback stays. Nothing is built; it only matters once 9.1 gives it something to coordinate.',
         status: 'todo',
         evidence: [
-          { kind: 'absent', glob: 'src/**/*.ts', pattern: 'navigator.locks' },
-          { kind: 'absent', glob: 'src/**/*.ts', pattern: 'SharedWorker' },
+          { kind: 'absent', glob: 'src/**/*.{ts,mts}', pattern: 'navigator.locks' },
+          { kind: 'absent', glob: 'src/**/*.{ts,mts}', pattern: 'SharedWorker' },
         ],
       },
       {
@@ -1156,7 +1156,7 @@ export const WORK = [
         evidence: [
           { kind: 'export', file: 'src/storage/types.ts', symbol: 'QuotaUsage' },
           { kind: 'test', file: 'tests/unit/storage-memory.test.mts', name: 'reports the directory size as 4096, as ext4 and v1 both do' },
-          { kind: 'absent', glob: 'src/storage/**/*.ts', pattern: 'storage.estimate' },
+          { kind: 'absent', glob: 'src/storage/**/*.{ts,mts}', pattern: 'storage.estimate' },
         ],
       },
       {
@@ -1310,7 +1310,7 @@ export const WORK = [
         title: 'Add a command that diffs a script across two profiles',
         detail: 'Nothing runs a script under two profiles. The profile resolver is not even reachable from the command layer yet.',
         status: 'todo',
-        evidence: [{ kind: 'absent', glob: 'src/**/*.ts', pattern: 'compareProfiles' }],
+        evidence: [{ kind: 'absent', glob: 'src/**/*.{ts,mts}', pattern: 'compareProfiles' }],
       },
       {
         id: '12.2',
@@ -1328,7 +1328,7 @@ export const WORK = [
         title: 'Let the session switch profiles without losing the filesystem',
         detail: 'There is no concept of an active profile in a session at all, so there is nothing to switch.',
         status: 'todo',
-        evidence: [{ kind: 'absent', glob: 'src/**/*.ts', pattern: 'activeProfile' }],
+        evidence: [{ kind: 'absent', glob: 'src/**/*.{ts,mts}', pattern: 'activeProfile' }],
       },
     ],
     acceptance: ['New-Guid shows v4 vs v7 across profiles', 'Unemulated differences are labelled as such'],
@@ -1356,14 +1356,14 @@ export const WORK = [
         title: 'Implement Get/Test/Set with WhatIf planning',
         detail: 'Model the DSC 3.2 feature set — version pinning, --what-if, map/filter expressions, adapters — and pin the exact DSC version modelled (3.2.3 stable; 3.3.0-rc.2 exists). Nothing in the command set records SupportsShouldProcess, so -WhatIf does not exist anywhere yet.',
         status: 'todo',
-        evidence: [{ kind: 'absent', glob: 'src/**/*.ts', pattern: 'WhatIf' }],
+        evidence: [{ kind: 'absent', glob: 'src/**/*.{ts,mts}', pattern: 'WhatIf' }],
       },
       {
         id: '13.3',
         title: 'Implement Export/Import of the whole workstation',
         detail: 'The filesystem can be exported and restored (9.3); the machine as a configuration cannot.',
         status: 'todo',
-        evidence: [{ kind: 'absent', glob: 'src/**/*.ts', pattern: 'Set-WorkstationState' }],
+        evidence: [{ kind: 'absent', glob: 'src/**/*.{ts,mts}', pattern: 'Set-WorkstationState' }],
       },
       {
         id: '13.4',
@@ -1392,7 +1392,7 @@ export const WORK = [
         title: 'Define the package manifest with publisher, capabilities and integrity digest',
         detail: 'The only digest verification in the repository guards conformance fixtures against tampering, which is a different trust boundary.',
         status: 'todo',
-        evidence: [{ kind: 'absent', glob: 'src/**/*.ts', pattern: 'PackageManifest' }],
+        evidence: [{ kind: 'absent', glob: 'src/**/*.{ts,mts}', pattern: 'PackageManifest' }],
       },
       {
         id: '14.2',
@@ -1411,7 +1411,7 @@ export const WORK = [
           { kind: 'export', file: 'src/kernel/capabilities.ts', symbol: 'AuditLog' },
           { kind: 'test', file: 'tests/unit/kernel-capabilities.test.mts', name: 'denies a capability that is declared but not granted' },
           { kind: 'test', file: 'tests/unit/kernel-capabilities.test.mts', name: 'records a denial, which is the line a reviewer actually looks for' },
-          { kind: 'absent', glob: 'src/**/*.ts', pattern: 'new Worker' },
+          { kind: 'absent', glob: 'src/**/*.{ts,mts}', pattern: 'new Worker' },
         ],
       },
       {
@@ -1441,7 +1441,7 @@ export const WORK = [
         title: 'Generate MCP tool schemas from command manifests',
         detail: 'No upstream schema to conform to: the team-maintained PowerShell MCP server is a stated 2026 intention with no public code. Define ours from our metadata. Nothing is built; MCP appears only in two comments naming it as a future consumer.',
         status: 'todo',
-        evidence: [{ kind: 'absent', glob: 'src/**/*.ts', pattern: 'mcp' }],
+        evidence: [{ kind: 'absent', glob: 'src/**/*.{ts,mts}', pattern: 'mcp' }],
       },
       {
         id: '15.2',
@@ -1461,7 +1461,7 @@ export const WORK = [
         title: 'Route AI plans through schema validation, AST validation, capability analysis and WhatIf preview before approval',
         detail: 'Blocked twice over: there is no AST to validate against (8.3) and no -WhatIf to preview with (13.2).',
         status: 'todo',
-        evidence: [{ kind: 'absent', glob: 'src/**/*.ts', pattern: 'approval' }],
+        evidence: [{ kind: 'absent', glob: 'src/**/*.{ts,mts}', pattern: 'approval' }],
       },
       {
         id: '15.4',
@@ -1475,7 +1475,7 @@ export const WORK = [
         title: 'Audit-log every AI-originated action with its plan and approval',
         detail: 'The audit log is real and append-only, but its records carry no plan and no approval field, and nothing writes to it from an AI origin.',
         status: 'todo',
-        evidence: [{ kind: 'absent', glob: 'src/**/*.ts', pattern: 'approval' }],
+        evidence: [{ kind: 'absent', glob: 'src/**/*.{ts,mts}', pattern: 'approval' }],
       },
     ],
     acceptance: ['A destructive AI plan cannot execute without explicit approval', 'Every AI action is reconstructable from the audit log'],
@@ -1497,8 +1497,8 @@ export const WORK = [
         title: 'Define TerminalPort with both a semantic DOM and an xterm adapter',
         status: 'todo',
         evidence: [
-          { kind: 'absent', glob: 'src/**/*.ts', pattern: 'TerminalPort' },
-          { kind: 'absent', glob: 'src/**/*.ts', pattern: 'xterm' },
+          { kind: 'absent', glob: 'src/**/*.{ts,mts}', pattern: 'TerminalPort' },
+          { kind: 'absent', glob: 'src/**/*.{ts,mts}', pattern: 'xterm' },
         ],
       },
       {
@@ -1526,7 +1526,7 @@ export const WORK = [
         title: 'Keep the semantic renderer the default and keep aria-live output intact',
         detail: 'There is no renderer in src/ at all yet, so there is nothing to keep as the default. aria-live exists only in the frozen v1 file.',
         status: 'todo',
-        evidence: [{ kind: 'absent', glob: 'src/**/*.ts', pattern: 'aria-live' }],
+        evidence: [{ kind: 'absent', glob: 'src/**/*.{ts,mts}', pattern: 'aria-live' }],
       },
     ],
     acceptance: ['CJK and emoji align in both renderers', 'Screen-reader output is unchanged in the default renderer'],
@@ -1547,14 +1547,14 @@ export const WORK = [
         id: '17.1',
         title: 'Define RuntimeAdapter so UI, VFS, AI and terminal never depend on which engine runs',
         status: 'todo',
-        evidence: [{ kind: 'absent', glob: 'src/**/*.ts', pattern: 'RuntimeAdapter' }],
+        evidence: [{ kind: 'absent', glob: 'src/**/*.{ts,mts}', pattern: 'RuntimeAdapter' }],
       },
       {
         id: '17.2',
         title: 'Generate golden ASTs from real pwsh in CI and validate our parser against them',
         detail: 'This is the near-term win and needs no WASM at all — but it still needs a parser of ours to validate, and item 8 has not written one.',
         status: 'todo',
-        evidence: [{ kind: 'absent', glob: 'src/**/*.ts', pattern: 'AstNodeKind' }],
+        evidence: [{ kind: 'absent', glob: 'src/**/*.{ts,mts}', pattern: 'AstNodeKind' }],
       },
       { id: '17.3', title: 'Spike loading a real PowerShell parser under .NET WASM', detail: 'BLOCKED on substrate: Mono is still the Blazor WASM runtime through .NET 11; CoreCLR-on-WASM is opt-in early preview targeting .NET 12. PowerShell itself has ZERO WASM support in-tree (RIDs linux-x64;osx-x64). This is a spike, not a milestone.', status: 'blocked' },
     ],
@@ -1582,7 +1582,7 @@ export const WORK = [
           { kind: 'export', file: 'src/commands/fs-manage/editors.ts', symbol: 'vim' },
           { kind: 'test', file: 'tests/unit/fs-manage-editors.test.mts', name: 'reads the file, hands it over, and writes the result' },
           { kind: 'test', file: 'tests/unit/fs-manage-editors.test.mts', name: 'reports a ui.dialog denial without opening anything' },
-          { kind: 'absent', glob: 'src/**/*.ts', pattern: 'wantCol' },
+          { kind: 'absent', glob: 'src/**/*.{ts,mts}', pattern: 'wantCol' },
         ],
       },
       {

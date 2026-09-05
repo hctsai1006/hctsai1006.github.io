@@ -48,7 +48,7 @@ D (portfolio data) and CMDLETS (67 command entries) are trapped in a 2113-line s
 - [x] **4.4** Break the command-table/filesystem cycle
   - STALE todo, corrected 2026-09-06. src/storage/seed.ts takes an explicit `binaries` list and imports nothing from the command layer it exists to unblock, which is exactly the binNames list this task asks for.
   - *evidence:* `src/storage/seed.ts` exports `SeedOptions`
-  - *evidence:* nothing under `src/storage/**/*.ts` matches `/commands/registry/`
+  - *evidence:* nothing under `src/storage/**/*.{ts,mts}` matches `/commands/registry/`
   - *evidence:* `src/storage/seed.ts` exports `buildSeed`
 - [x] **4.5** Unify command resolution so aliases and easter eggs share one lookup order
   - STALE todo, corrected 2026-09-06. One index covers every command name and alias; the former easter eggs are ordinary simulated-fidelity entries in it, and v1's sl collision is an explicit documented shadow rather than a second lookup path.
@@ -57,7 +57,7 @@ D (portfolio data) and CMDLETS (67 command entries) are trapped in a 2113-line s
   - *evidence:* `tests/unit/registry.test.mts` — test "is case-insensitive and includes aliases"
 - [ ] **4.6** Delete the dead `hidden` flag that no entry ever sets, and the unused GROUPNAME/ED.path/ED.wantCol
   - Two of the four are gone from the rewrite (ED.path, ED.wantCol have no occurrence in src/). GROUPNAME was not deleted but repurposed as a live exported constant in src/storage/seed.ts, and `hidden` is still declared in tools/extract-command-inventory.mts because the v1 extractor models v1 faithfully.
-  - *evidence:* nothing under `src/**/*.ts` matches `/wantCol/`
+  - *evidence:* nothing under `src/**/*.{ts,mts}` matches `/wantCol/`
   - *evidence:* `tools/extract-command-inventory.mts` matches `/hidden/`
 
 ## Acceptance

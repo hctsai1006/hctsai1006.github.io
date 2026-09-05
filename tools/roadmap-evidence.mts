@@ -61,19 +61,26 @@
  *   - Whether a cited test asserts the thing the task DESCRIBES. It proves the
  *     test exists, runs, passes and contains assertions. A tautological test
  *     would satisfy it. Nothing mechanical closes that; it is what review is for.
- *   - Whether an exported symbol does what its name suggests. A symbol exported
- *     as null would satisfy an `export` item. Pair it with a test.
+ *   - Whether an exported symbol, or a value behind a json path, does what its
+ *     name suggests. A symbol exported as null satisfies an `export` item and a
+ *     field holding "tbd" satisfies a `json` one. Pair them with a test.
+ *   - Whether an `absent` glob is the one that matters. Narrowing it to a
+ *     directory the work would never land in leaves a check that passes forever
+ *     while watching nothing in particular.
  *   - Whether a task is DECOMPOSED honestly. Splitting one hard task into five
  *     easy ones moves the percentage without moving the code.
  *   - A `todo` with no `absent`/`no-files` evidence is not ratcheted at all. The
  *     count of those is printed on every run rather than left implicit, because
  *     an unmeasured gap becomes an assumed zero.
- *   - A ratchet only watches the name it was given. Work landing under a name
- *     nobody predicted goes unnoticed, exactly as it did this time.
+ *   - A ratchet only watches the name it was given, in the glob it was given.
+ *     Work landing under a name nobody predicted goes unnoticed, exactly as it
+ *     did this time; and a `no-files` glob with a typo in it matches nothing
+ *     forever, which is indistinguishable from work that has not started. The
+ *     `within` area catches a renamed PARENT and nothing finer.
  */
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, globSync, readFileSync } from 'node:fs';
+import { existsSync, globSync, readFileSync, statSync } from 'node:fs';
 import { dirname, isAbsolute, join } from 'node:path';
 
 import ts from 'typescript';
@@ -113,7 +120,17 @@ export function fsRepo(root: string): Repo {
   const full = (rel: string): string => (isAbsolute(rel) ? rel : join(root, rel));
   return {
     exists: (rel) => existsSync(full(rel)),
-    read: (rel) => (existsSync(full(rel)) ? readFileSync(full(rel), 'utf8') : null),
+    // A glob like `src/**/*` returns directories as well as files, and
+    // readFileSync throws EISDIR on one. Absence checks walk whatever the glob
+    // returned, so an unguarded read here crashes the gate on a pattern that is
+    // otherwise perfectly reasonable.
+    read: (rel) => {
+      try {
+        return statSync(full(rel)).isFile() ? readFileSync(full(rel), 'utf8') : null;
+      } catch {
+        return null;
+      }
+    },
     glob: (pattern) => globSync(pattern, { cwd: root }).map(toPosix).sort(),
   };
 }
@@ -149,6 +166,9 @@ const STRONG: ReadonlySet<Evidence['kind']> = new Set(['export', 'test', 'json',
  * run, and citing one is the "evidence nothing executes" trap.
  */
 const TEST_GLOB = 'tests/**/*.test.mts';
+
+/** Characters of `detail` a `partial` has to spend saying what is missing. */
+const MIN_PARTIAL_DETAIL = 40;
 
 // ---------------------------------------------------------------------------
 // TypeScript-backed source reading
@@ -712,10 +732,17 @@ export function checkEvidence({ repo, runner, items }: CheckOptions): CheckRepor
       const needs = requiresEvidence(task);
       if (needs) tasksRequiringEvidence += 1;
 
-      if (task.status === 'partial' && (task.detail === undefined || task.detail.trim() === '')) {
+      // A `partial` earns its third state by saying what is MISSING. A detail of
+      // "wip" satisfies a presence check and tells a reader nothing, so there is
+      // a floor -- the same trick tools/conformance.mts uses on the reason field
+      // of a known difference.
+      if (task.status === 'partial' && (task.detail ?? '').trim().length < MIN_PARTIAL_DETAIL) {
         findings.push({
           where: task.id,
-          message: 'is "partial" with no detail. Partial is only honest when it says what is missing.',
+          message:
+            `is "partial" with ${String((task.detail ?? '').trim().length)} characters of detail. ` +
+            `Partial is only honest when it says what is missing; ${String(MIN_PARTIAL_DETAIL)} ` +
+            'characters is the floor.',
         });
       }
 
@@ -737,8 +764,25 @@ export function checkEvidence({ repo, runner, items }: CheckOptions): CheckRepor
       }
 
       if (task.status === 'todo' || task.status === 'blocked') {
-        if (evidence.some((e) => e.kind === 'absent' || e.kind === 'no-files')) ratcheted += 1;
-        else unratcheted.push(task.id);
+        if (evidence.some((e) => e.kind === 'absent' || e.kind === 'no-files')) {
+          ratcheted += 1;
+        } else {
+          unratcheted.push(task.id);
+          // Printing the count was not enough on its own: nothing stopped
+          // somebody deleting a ratchet, and the gate would have gone on
+          // passing with a longer list nobody reads. Not every absence can be
+          // expressed as a search -- "separate the two parsers" has no name to
+          // grep for -- so the requirement is a search OR a sentence saying why
+          // there cannot be one.
+          if ((task.detail ?? '').trim().length < MIN_PARTIAL_DETAIL) {
+            findings.push({
+              where: task.id,
+              message:
+                'is open with no absence check and no explanation. Either name a search that ' +
+                'goes red when the work lands, or say in `detail` why this one cannot be watched.',
+            });
+          }
+        }
       }
 
       // Evidence is verified for EVERY status, not only the ones that require
@@ -761,7 +805,10 @@ export function checkEvidence({ repo, runner, items }: CheckOptions): CheckRepor
       ctx.fatal.push(`could not run the cited tests: ${result.error}`);
     } else {
       for (const [name, cited] of ctx.citedTests) {
-        if (result.passed.has(name)) continue;
+        // Both, not either. A file can declare the same name twice -- in two
+        // describes, say -- and TAP then reports two results under it. Taking
+        // `passed` alone would let the failing one hide behind the passing one.
+        if (result.passed.has(name) && !result.notPassed.has(name)) continue;
         findings.push({
           where: cited.file,
           message: result.notPassed.has(name)
@@ -782,6 +829,16 @@ export function checkEvidence({ repo, runner, items }: CheckOptions): CheckRepor
   }
   if (tasksRequiringEvidence > 0 && evidenceChecked === 0) {
     ctx.fatal.push('no evidence was evaluated at all, yet tasks claim to be done.');
+  }
+  // The emptiest possible pass. Every counter above is zero when WORK is, and
+  // zero findings out of zero tasks is exactly what a gate reports when it has
+  // stopped being given anything to check.
+  const taskCount = items.reduce((n, i) => n + i.tasks.length, 0);
+  if (items.length === 0 || taskCount === 0) {
+    ctx.fatal.push(
+      `given ${String(items.length)} work item(s) and ${String(taskCount)} task(s). ` +
+        'An empty plan is not a clean one.',
+    );
   }
 
   return {

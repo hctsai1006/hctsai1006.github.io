@@ -18,7 +18,7 @@ State currently lives in one localStorage key with no transactions, no snapshots
 
 - [ ] **9.1** Implement OPFS backend with sync access handles inside a dedicated StorageWorker
   - HARD CONSTRAINT: the WHATWG spec marks createSyncAccessHandle [Exposed=DedicatedWorker], which excludes Window AND SharedWorker. The coordinator can never hold the handle. Nothing is built: the only backend is in-memory.
-  - *evidence:* nothing under `src/**/*.ts` matches `/createSyncAccessHandle/`
+  - *evidence:* nothing under `src/**/*.{ts,mts}` matches `/createSyncAccessHandle/`
 - [x] **9.2** Keep the seed/overlay split that already works: rebuild seed each boot, graft user changes
   - STALE todo, corrected 2026-09-06. bootStorage rebuilds the seed image and grafts the overlay over it, with v1's graft rules — seed wins on a kind conflict, seed content is always re-rendered, user content survives, mode and mtime are preserved — each separately tested.
   - *evidence:* `src/storage/index.ts` exports `bootStorage`
@@ -33,16 +33,16 @@ State currently lives in one localStorage key with no transactions, no snapshots
   - *evidence:* `tests/unit/storage-snapshot.test.mts` — test "survives losing the store entirely"
   - *evidence:* `tests/unit/storage-memory.test.mts` — test "journals the whole plan before applying it, and commits after"
 - [ ] **9.4** Add versioned migrations with rollback
-  - *evidence:* nothing under `src/storage/**/*.ts` matches `/migrat/`
+  - *evidence:* nothing under `src/storage/**/*.{ts,mts}` matches `/migrat/`
 - [ ] **9.5** Elect a storage leader with Web Locks; use SharedWorker for coordination where available
   - Web Locks is widely available since March 2022 and MDN documents leader election explicitly. SharedWorker is only Baseline "newly available" (May 2026) and absent on Samsung Internet and Opera Mobile, so the fallback stays. Nothing is built; it only matters once 9.1 gives it something to coordinate.
-  - *evidence:* nothing under `src/**/*.ts` matches `/navigator.locks/`
-  - *evidence:* nothing under `src/**/*.ts` matches `/SharedWorker/`
+  - *evidence:* nothing under `src/**/*.{ts,mts}` matches `/navigator.locks/`
+  - *evidence:* nothing under `src/**/*.{ts,mts}` matches `/SharedWorker/`
 - [/] **9.6** Surface quota via navigator.storage.estimate() and warn before the ceiling
   - MISSING: the measurement and the warning. OPFS shares the origin quota and is deleted when the user clears site data, so export must exist before people can lose work — and it does (9.3). The QuotaUsage shape is defined and plumbed end to end through the backend and the filesystem, and it is tested. But navigator.storage.estimate() is never called, nothing warns near the ceiling, and Get-StorageStatus — the command df's own note points at — does not exist.
   - *evidence:* `src/storage/types.ts` exports `QuotaUsage`
   - *evidence:* `tests/unit/storage-memory.test.mts` — test "reports the directory size as 4096, as ext4 and v1 both do"
-  - *evidence:* nothing under `src/storage/**/*.ts` matches `/storage.estimate/`
+  - *evidence:* nothing under `src/storage/**/*.{ts,mts}` matches `/storage.estimate/`
 - [x] **9.7** Return Result<void, StorageError> instead of a rendered error row
   - STALE todo, corrected 2026-09-06. Every backend and filesystem method returns Result<T, StorageError>, and the command layer maps the POSIX-shaped error into a PowerShell ErrorRecord with its own FullyQualifiedErrorId — which is exactly the rendered-view-object pattern this task asks to remove.
   - *evidence:* `src/storage/types.ts` exports `Result`
