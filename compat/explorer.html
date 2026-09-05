@@ -207,6 +207,16 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
 .behaviors .mark-cell{width:6.5em;white-space:nowrap}
 .behaviors .doc{color:var(--ink-2);font-size:.86rem;white-space:normal;min-width:22em}
 .behaviors .pr{text-align:right;white-space:nowrap}
+.behaviors .scope{color:var(--ink-2);font-size:.76rem;font-weight:400}
+.behaviors tr.not-emulated .key,.behaviors tr.not-emulated .val{opacity:.72}
+.emu-mark{display:inline-block;font-size:.7rem;letter-spacing:.02em;padding:.1em .5em;
+  border:1px solid currentColor;border-radius:2px;color:var(--ink-2);white-space:nowrap}
+.emu-mark.is-emulated{color:var(--ok, #1f6f3f);font-weight:600}
+.evidence{color:var(--ink-2);font-size:.78rem}
+.evidence code{font-size:.95em}
+.sources{margin:.4em 0 0;padding-left:1.1em;font-size:.82rem;color:var(--ink-2)}
+.sources .src-role{display:inline-block;min-width:5.5em;font-size:.72rem;letter-spacing:.04em;
+  text-transform:uppercase;color:var(--ink-2)}
 .breaking-mark{font-size:.66rem;letter-spacing:.03em;padding:.1em .45em;
   border:1px solid var(--flag);color:var(--flag)}
 
@@ -283,7 +293,7 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
         </li>
         <li class="gloss gloss-bad">
           <p class="gloss-frag mono">11.0.100-preview.6</p>
-          <p class="gloss-text"><b>Not a runtime.</b> This is the SDK version. The runtime that SDK ships is <span class=“mono”>11.0.0-preview.6.26359.118</span> — the two differ in the third component, the SDK feature-band level, which a runtime version does not have.</p>
+          <p class="gloss-text"><b>Not a runtime.</b> This is the SDK version. The runtime that SDK ships is <span class="mono">11.0.0-preview.6.26359.118</span> — the two differ in the third component, the SDK feature-band level, which a runtime version does not have.</p>
         </li>
         <li class="gloss gloss-bad">
           <p class="gloss-frag">&ldquo;runtime&rdquo;</p>
@@ -403,7 +413,7 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
       <ul class="findings">
         <li class="finding sev-warning">
           <p class="finding-head"><span class="sev-word">warning</span><span class="mono finding-code">docs-axis-confusion</span></p>
-          <p class="finding-msg">Docs call .NET 11.0.100-preview.6 the &quot;runtime&quot; of 7.7.0-preview.4, but that is the SDK version. The runtime is 11.0.0-preview.6.26359.118. SDK and runtime are different version spaces.</p>
+          <p class="finding-msg">Docs call .NET 11.0.100-preview.6 the “runtime” of 7.7.0-preview.4, but that is the SDK version. The runtime is 11.0.0-preview.6.26359.118. SDK and runtime are different version spaces.</p>
           <div class="sides">
                <div><span class="side-label">the runtime, per .NET metadata</span><span class="mono proof">11.0.0-preview.6.26359.118</span></div>
                <div><span class="side-label">what the documentation calls it</span><span class="mono flagged">11.0.100-preview.6</span></div>
@@ -457,128 +467,400 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
               <th scope="col">behavior</th>
               <th scope="col">value in this profile</th>
               <th scope="col">breaking</th>
-              <th scope="col">engine</th>
               <th scope="col">what changes in 7.7.0-preview.4</th>
               <th scope="col">upstream</th>
             </tr>
           </thead>
           <tbody>
-        <tr>
-          <td class="mono key">ansi.resetMidStringHandled</td>
-          <td class="mono val" data-lts="false" data-preview="true">false</td>
-          <td class="mark-cell"></td>
-          <td class="mark-cell"><span class="emulated">documented</span></td>
-          <td class="doc">VT Reset sequences appearing mid-string are handled correctly</td>
-          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26424">#26424</a></td>
-        </tr>
-        <tr>
-          <td class="mono key">application.outputEncodingVariable</td>
-          <td class="mono val" data-lts="false" data-preview="true">false</td>
-          <td class="mark-cell"></td>
-          <td class="mark-cell"><span class="emulated">documented</span></td>
-          <td class="doc">Automatic variable controlling how native command output is decoded</td>
-          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/21219">#21219</a></td>
-        </tr>
-        <tr>
-          <td class="mono key">csv.noTypeInformationObsolete</td>
-          <td class="mono val" data-lts="false" data-preview="true">false</td>
-          <td class="mark-cell"></td>
-          <td class="mark-cell"><span class="emulated">documented</span></td>
-          <td class="doc"><span class=“mono”>-NoTypeInformation</span> is an obsolete no-op; <span class=“mono”>-IncludeTypeInformation</span> is evaluated by value</td>
-          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26719">#26719</a></td>
-        </tr>
-        <tr>
-          <td class="mono key">exportCsv.appendNoHeaderExclusive</td>
-          <td class="mono val" data-lts="false" data-preview="true">false</td>
-          <td class="mark-cell"></td>
-          <td class="mark-cell"><span class="emulated">documented</span></td>
-          <td class="doc"><span class=“mono”>-Append</span> and <span class=“mono”>-NoHeader</span> are now mutually exclusive</td>
-          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26472">#26472</a></td>
-        </tr>
-        <tr>
-          <td class="mono key">format.excludeProperty</td>
-          <td class="mono val" data-lts="false" data-preview="true">false</td>
-          <td class="mark-cell"></td>
-          <td class="mark-cell"><span class="emulated">documented</span></td>
-          <td class="doc"><span class=“mono”>-ExcludeProperty</span> parameter added to Format-* cmdlets</td>
-          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26514">#26514</a></td>
-        </tr>
         <tr class="breaking">
-          <td class="mono key">format.property.rejectNullOrEmpty</td>
+          <td class="mono key">format.property.rejectNullOrEmpty<br><span class="scope mono">Format-Table, Format-List, Format-Custom -Property</span></td>
           <td class="mono val" data-lts="false" data-preview="true">false</td>
-          <td class="mark-cell"><span class="breaking-mark">breaking</span></td>
-          <td class="mark-cell"><span class="emulated is-emulated">emulated</span></td>
-          <td class="doc"><span class=“mono”>ValidateNotNullOrEmpty</span> added to <span class=“mono”>-Property</span></td>
+          <td class="mark-cell"><span class="breaking-mark">breaking</span><span class="emu-mark is-emulated">implemented</span></td>
+          <td class="doc"><span class="mono">ValidateNotNullOrEmpty</span> added to <span class="mono">-Property</span></td>
           <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26552">#26552</a></td>
         </tr>
-        <tr>
-          <td class="mono key">joinPath.extension</td>
-          <td class="mono val" data-lts="false" data-preview="true">false</td>
-          <td class="mark-cell"></td>
-          <td class="mark-cell"><span class="emulated">documented</span></td>
-          <td class="doc"><span class=“mono”>-Extension</span> parameter added</td>
-          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26482">#26482</a></td>
-        </tr>
         <tr class="breaking">
-          <td class="mono key">newGuid.defaultVersion</td>
+          <td class="mono key">newGuid.defaultVersion<br><span class="scope mono">New-Guid</span></td>
           <td class="mono val" data-lts="4" data-preview="7">4</td>
-          <td class="mark-cell"><span class="breaking-mark">breaking</span></td>
-          <td class="mark-cell"><span class="emulated is-emulated">emulated</span></td>
-          <td class="doc"><span class=“mono”>New-Guid</span> emits a time-sortable UUID v7 by default instead of a random UUID v4</td>
+          <td class="mark-cell"><span class="breaking-mark">breaking</span><span class="emu-mark is-emulated">implemented</span></td>
+          <td class="doc"><span class="mono">New-Guid</span> emits a time-sortable UUID v7 by default instead of a random UUID v4</td>
           <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/27033">#27033</a></td>
         </tr>
         <tr>
-          <td class="mono key">progress.doubleWidthAware</td>
+          <td class="mono key">switchParameter.Get-Random.Shuffle.honourExplicitFalse<br><span class="scope mono">Get-Random -Shuffle</span></td>
           <td class="mono val" data-lts="false" data-preview="true">false</td>
-          <td class="mark-cell"></td>
-          <td class="mark-cell"><span class="emulated">documented</span></td>
+          <td class="mark-cell"><span class="emu-mark is-emulated">verified</span></td>
+          <td class="doc">Explicit <span class="mono">-Shuffle:$false</span> is honoured rather than treated as present</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26457">#26457</a></td>
+        </tr>
+        <tr>
+          <td class="mono key">switchParameter.New-Guid.Empty.honourExplicitFalse<br><span class="scope mono">New-Guid -Empty</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="emu-mark is-emulated">verified</span></td>
+          <td class="doc">Explicit <span class="mono">-Empty:$false</span> is honoured rather than treated as present</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26140">#26140</a></td>
+        </tr>
+        <tr class="breaking">
+          <td class="mono key">validation.throwsArgumentException<br><span class="scope mono">engine-wide</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="breaking-mark">breaking</span><span class="emu-mark is-emulated">implemented</span></td>
+          <td class="doc">Not-null-not-empty validation now throws ArgumentException instead of PSArgumentNullException</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26668">#26668</a></td>
+        </tr>
+        <tr class="not-emulated">
+          <td class="mono key">ansi.resetMidStringHandled<br><span class="scope mono">engine-wide</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc">VT Reset sequences appearing mid-string are handled correctly</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26424">#26424</a></td>
+        </tr>
+        <tr class="not-emulated">
+          <td class="mono key">application.outputEncodingVariable<br><span class="scope mono">engine-wide</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc">Automatic variable controlling how native command output is decoded</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/21219">#21219</a></td>
+        </tr>
+        <tr class="not-emulated">
+          <td class="mono key">csv.noTypeInformationObsolete<br><span class="scope mono">ConvertTo-Csv, Export-Csv -NoTypeInformation -IncludeTypeInformation</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc"><span class="mono">-NoTypeInformation</span> is an obsolete no-op; <span class="mono">-IncludeTypeInformation</span> is evaluated by value</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26719">#26719</a></td>
+        </tr>
+        <tr class="not-emulated">
+          <td class="mono key">exportCsv.appendNoHeaderExclusive<br><span class="scope mono">Export-Csv -Append -NoHeader</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc"><span class="mono">-Append</span> and <span class="mono">-NoHeader</span> are now mutually exclusive</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26472">#26472</a></td>
+        </tr>
+        <tr class="not-emulated">
+          <td class="mono key">format.excludeProperty<br><span class="scope mono">Format-Table, Format-List, Format-Custom -ExcludeProperty</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc"><span class="mono">-ExcludeProperty</span> parameter added to Format-* cmdlets</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26514">#26514</a></td>
+        </tr>
+        <tr class="not-emulated">
+          <td class="mono key">joinPath.extension<br><span class="scope mono">Join-Path -Extension</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc"><span class="mono">-Extension</span> parameter added</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26482">#26482</a></td>
+        </tr>
+        <tr class="not-emulated">
+          <td class="mono key">progress.doubleWidthAware<br><span class="scope mono">engine-wide</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="emu-mark">documented, not emulated</span></td>
           <td class="doc">Progress bar renders correctly with double-width Unicode characters</td>
           <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26185">#26185</a></td>
         </tr>
-        <tr class="breaking">
-          <td class="mono key">switchParameters.honourExplicitFalse</td>
+        <tr class="not-emulated">
+          <td class="mono key">switchParameter.Get-SecureRandom.Shuffle.honourExplicitFalse<br><span class="scope mono">Get-SecureRandom -Shuffle</span></td>
           <td class="mono val" data-lts="false" data-preview="true">false</td>
-          <td class="mark-cell"><span class="breaking-mark">breaking</span></td>
-          <td class="mark-cell"><span class="emulated is-emulated">emulated</span></td>
-          <td class="doc">Explicit -&lt;Operator&gt;:$false is now honoured rather than treated as present</td>
+          <td class="mark-cell"><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc">Explicit <span class="mono">-Shuffle:$false</span> is honoured rather than treated as present</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26460">#26460</a></td>
+        </tr>
+        <tr class="not-emulated">
+          <td class="mono key">switchParameter.Get-TimeZone.ListAvailable.honourExplicitFalse<br><span class="scope mono">Get-TimeZone -ListAvailable</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc">Explicit <span class="mono">-ListAvailable:$false</span> is honoured rather than treated as present</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26463">#26463</a></td>
+        </tr>
+        <tr class="not-emulated">
+          <td class="mono key">switchParameter.Get-Uptime.Since.honourExplicitFalse<br><span class="scope mono">Get-Uptime -Since</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc">Explicit <span class="mono">-Since:$false</span> is honoured rather than treated as present</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26141">#26141</a></td>
+        </tr>
+        <tr class="not-emulated">
+          <td class="mono key">switchParameter.New-PSSession.AllowRedirection.honourExplicitFalse<br><span class="scope mono">New-PSSession -AllowRedirection -EnableNetworkAccess -RunAsAdministrator -SSHTransport -UseSSL -UseWindowsPowerShell</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc">Explicit <span class="mono">-&lt;Switch&gt;:$false</span> is honoured rather than treated as present</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26469">#26469</a></td>
+        </tr>
+        <tr class="not-emulated">
+          <td class="mono key">switchParameter.New-PSSession.EnableNetworkAccess.honourExplicitFalse<br><span class="scope mono">New-PSSession -AllowRedirection -EnableNetworkAccess -RunAsAdministrator -SSHTransport -UseSSL -UseWindowsPowerShell</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc">Explicit <span class="mono">-&lt;Switch&gt;:$false</span> is honoured rather than treated as present</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26469">#26469</a></td>
+        </tr>
+        <tr class="not-emulated">
+          <td class="mono key">switchParameter.New-PSSession.RunAsAdministrator.honourExplicitFalse<br><span class="scope mono">New-PSSession -AllowRedirection -EnableNetworkAccess -RunAsAdministrator -SSHTransport -UseSSL -UseWindowsPowerShell</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc">Explicit <span class="mono">-&lt;Switch&gt;:$false</span> is honoured rather than treated as present</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26469">#26469</a></td>
+        </tr>
+        <tr class="not-emulated">
+          <td class="mono key">switchParameter.New-PSSession.SSHTransport.honourExplicitFalse<br><span class="scope mono">New-PSSession -AllowRedirection -EnableNetworkAccess -RunAsAdministrator -SSHTransport -UseSSL -UseWindowsPowerShell</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc">Explicit <span class="mono">-&lt;Switch&gt;:$false</span> is honoured rather than treated as present</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26469">#26469</a></td>
+        </tr>
+        <tr class="not-emulated">
+          <td class="mono key">switchParameter.New-PSSession.UseSSL.honourExplicitFalse<br><span class="scope mono">New-PSSession -AllowRedirection -EnableNetworkAccess -RunAsAdministrator -SSHTransport -UseSSL -UseWindowsPowerShell</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc">Explicit <span class="mono">-&lt;Switch&gt;:$false</span> is honoured rather than treated as present</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26469">#26469</a></td>
+        </tr>
+        <tr class="not-emulated">
+          <td class="mono key">switchParameter.New-PSSession.UseWindowsPowerShell.honourExplicitFalse<br><span class="scope mono">New-PSSession -AllowRedirection -EnableNetworkAccess -RunAsAdministrator -SSHTransport -UseSSL -UseWindowsPowerShell</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc">Explicit <span class="mono">-&lt;Switch&gt;:$false</span> is honoured rather than treated as present</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26469">#26469</a></td>
+        </tr>
+        <tr class="not-emulated">
+          <td class="mono key">switchParameter.Split-Path.IsAbsolute.honourExplicitFalse<br><span class="scope mono">Split-Path -Qualifier -NoQualifier -Leaf -IsAbsolute</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc">Explicit <span class="mono">-Qualifier</span>/<span class="mono">-NoQualifier</span>/<span class="mono">-Leaf</span>/<span class="mono">-IsAbsolute:$false</span> is honoured</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26474">#26474</a></td>
+        </tr>
+        <tr class="not-emulated">
+          <td class="mono key">switchParameter.Split-Path.Leaf.honourExplicitFalse<br><span class="scope mono">Split-Path -Qualifier -NoQualifier -Leaf -IsAbsolute</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc">Explicit <span class="mono">-Qualifier</span>/<span class="mono">-NoQualifier</span>/<span class="mono">-Leaf</span>/<span class="mono">-IsAbsolute:$false</span> is honoured</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26474">#26474</a></td>
+        </tr>
+        <tr class="not-emulated">
+          <td class="mono key">switchParameter.Split-Path.NoQualifier.honourExplicitFalse<br><span class="scope mono">Split-Path -Qualifier -NoQualifier -Leaf -IsAbsolute</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc">Explicit <span class="mono">-Qualifier</span>/<span class="mono">-NoQualifier</span>/<span class="mono">-Leaf</span>/<span class="mono">-IsAbsolute:$false</span> is honoured</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26474">#26474</a></td>
+        </tr>
+        <tr class="not-emulated">
+          <td class="mono key">switchParameter.Split-Path.Qualifier.honourExplicitFalse<br><span class="scope mono">Split-Path -Qualifier -NoQualifier -Leaf -IsAbsolute</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc">Explicit <span class="mono">-Qualifier</span>/<span class="mono">-NoQualifier</span>/<span class="mono">-Leaf</span>/<span class="mono">-IsAbsolute:$false</span> is honoured</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26474">#26474</a></td>
+        </tr>
+        <tr class="not-emulated">
+          <td class="mono key">switchParameter.Test-Connection.Detailed.honourExplicitFalse<br><span class="scope mono">Test-Connection -Detailed -DontFragment -IPv4 -IPv6 -MtuSize -Ping -Quiet -Repeat -ResolveDestination -Traceroute</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc">Explicit <span class="mono">-&lt;Switch&gt;:$false</span> is honoured rather than treated as present</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26479">#26479</a></td>
+        </tr>
+        <tr class="not-emulated">
+          <td class="mono key">switchParameter.Test-Connection.DontFragment.honourExplicitFalse<br><span class="scope mono">Test-Connection -Detailed -DontFragment -IPv4 -IPv6 -MtuSize -Ping -Quiet -Repeat -ResolveDestination -Traceroute</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc">Explicit <span class="mono">-&lt;Switch&gt;:$false</span> is honoured rather than treated as present</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26479">#26479</a></td>
+        </tr>
+        <tr class="not-emulated">
+          <td class="mono key">switchParameter.Test-Connection.IPv4.honourExplicitFalse<br><span class="scope mono">Test-Connection -Detailed -DontFragment -IPv4 -IPv6 -MtuSize -Ping -Quiet -Repeat -ResolveDestination -Traceroute</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc">Explicit <span class="mono">-&lt;Switch&gt;:$false</span> is honoured rather than treated as present</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26479">#26479</a></td>
+        </tr>
+        <tr class="not-emulated">
+          <td class="mono key">switchParameter.Test-Connection.IPv6.honourExplicitFalse<br><span class="scope mono">Test-Connection -Detailed -DontFragment -IPv4 -IPv6 -MtuSize -Ping -Quiet -Repeat -ResolveDestination -Traceroute</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc">Explicit <span class="mono">-&lt;Switch&gt;:$false</span> is honoured rather than treated as present</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26479">#26479</a></td>
+        </tr>
+        <tr class="not-emulated">
+          <td class="mono key">switchParameter.Test-Connection.MtuSize.honourExplicitFalse<br><span class="scope mono">Test-Connection -Detailed -DontFragment -IPv4 -IPv6 -MtuSize -Ping -Quiet -Repeat -ResolveDestination -Traceroute</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc">Explicit <span class="mono">-&lt;Switch&gt;:$false</span> is honoured rather than treated as present</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26479">#26479</a></td>
+        </tr>
+        <tr class="not-emulated">
+          <td class="mono key">switchParameter.Test-Connection.Ping.honourExplicitFalse<br><span class="scope mono">Test-Connection -Detailed -DontFragment -IPv4 -IPv6 -MtuSize -Ping -Quiet -Repeat -ResolveDestination -Traceroute</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc">Explicit <span class="mono">-&lt;Switch&gt;:$false</span> is honoured rather than treated as present</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26479">#26479</a></td>
+        </tr>
+        <tr class="not-emulated">
+          <td class="mono key">switchParameter.Test-Connection.Quiet.honourExplicitFalse<br><span class="scope mono">Test-Connection -Detailed -DontFragment -IPv4 -IPv6 -MtuSize -Ping -Quiet -Repeat -ResolveDestination -Traceroute</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc">Explicit <span class="mono">-&lt;Switch&gt;:$false</span> is honoured rather than treated as present</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26479">#26479</a></td>
+        </tr>
+        <tr class="not-emulated">
+          <td class="mono key">switchParameter.Test-Connection.Repeat.honourExplicitFalse<br><span class="scope mono">Test-Connection -Detailed -DontFragment -IPv4 -IPv6 -MtuSize -Ping -Quiet -Repeat -ResolveDestination -Traceroute</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc">Explicit <span class="mono">-&lt;Switch&gt;:$false</span> is honoured rather than treated as present</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26479">#26479</a></td>
+        </tr>
+        <tr class="not-emulated">
+          <td class="mono key">switchParameter.Test-Connection.ResolveDestination.honourExplicitFalse<br><span class="scope mono">Test-Connection -Detailed -DontFragment -IPv4 -IPv6 -MtuSize -Ping -Quiet -Repeat -ResolveDestination -Traceroute</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc">Explicit <span class="mono">-&lt;Switch&gt;:$false</span> is honoured rather than treated as present</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26479">#26479</a></td>
+        </tr>
+        <tr class="not-emulated">
+          <td class="mono key">switchParameter.Test-Connection.Traceroute.honourExplicitFalse<br><span class="scope mono">Test-Connection -Detailed -DontFragment -IPv4 -IPv6 -MtuSize -Ping -Quiet -Repeat -ResolveDestination -Traceroute</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc">Explicit <span class="mono">-&lt;Switch&gt;:$false</span> is honoured rather than treated as present</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26479">#26479</a></td>
+        </tr>
+        <tr class="breaking" class="not-emulated">
+          <td class="mono key">switchParameter.Where-Object.Contains.honourExplicitFalse<br><span class="scope mono">Where-Object -EQ -NE -GT -LT -GE -LE -Like -NotLike -Match -NotMatch -Contains -NotContains -In -NotIn -Is -IsNot -Not</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="breaking-mark">breaking</span><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc">Explicit <span class="mono">-&lt;Operator&gt;:$false</span> is honoured rather than treated as present</td>
           <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26485">#26485</a></td>
         </tr>
-        <tr>
-          <td class="mono key">temporaryDirectory.cmdlet</td>
+        <tr class="breaking" class="not-emulated">
+          <td class="mono key">switchParameter.Where-Object.EQ.honourExplicitFalse<br><span class="scope mono">Where-Object -EQ -NE -GT -LT -GE -LE -Like -NotLike -Match -NotMatch -Contains -NotContains -In -NotIn -Is -IsNot -Not</span></td>
           <td class="mono val" data-lts="false" data-preview="true">false</td>
-          <td class="mark-cell"></td>
-          <td class="mark-cell"><span class="emulated">documented</span></td>
-          <td class="doc"><span class=“mono”>New-TemporaryDirectory</span> cmdlet added</td>
+          <td class="mark-cell"><span class="breaking-mark">breaking</span><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc">Explicit <span class="mono">-&lt;Operator&gt;:$false</span> is honoured rather than treated as present</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26485">#26485</a></td>
+        </tr>
+        <tr class="breaking" class="not-emulated">
+          <td class="mono key">switchParameter.Where-Object.GE.honourExplicitFalse<br><span class="scope mono">Where-Object -EQ -NE -GT -LT -GE -LE -Like -NotLike -Match -NotMatch -Contains -NotContains -In -NotIn -Is -IsNot -Not</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="breaking-mark">breaking</span><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc">Explicit <span class="mono">-&lt;Operator&gt;:$false</span> is honoured rather than treated as present</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26485">#26485</a></td>
+        </tr>
+        <tr class="breaking" class="not-emulated">
+          <td class="mono key">switchParameter.Where-Object.GT.honourExplicitFalse<br><span class="scope mono">Where-Object -EQ -NE -GT -LT -GE -LE -Like -NotLike -Match -NotMatch -Contains -NotContains -In -NotIn -Is -IsNot -Not</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="breaking-mark">breaking</span><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc">Explicit <span class="mono">-&lt;Operator&gt;:$false</span> is honoured rather than treated as present</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26485">#26485</a></td>
+        </tr>
+        <tr class="breaking" class="not-emulated">
+          <td class="mono key">switchParameter.Where-Object.In.honourExplicitFalse<br><span class="scope mono">Where-Object -EQ -NE -GT -LT -GE -LE -Like -NotLike -Match -NotMatch -Contains -NotContains -In -NotIn -Is -IsNot -Not</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="breaking-mark">breaking</span><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc">Explicit <span class="mono">-&lt;Operator&gt;:$false</span> is honoured rather than treated as present</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26485">#26485</a></td>
+        </tr>
+        <tr class="breaking" class="not-emulated">
+          <td class="mono key">switchParameter.Where-Object.Is.honourExplicitFalse<br><span class="scope mono">Where-Object -EQ -NE -GT -LT -GE -LE -Like -NotLike -Match -NotMatch -Contains -NotContains -In -NotIn -Is -IsNot -Not</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="breaking-mark">breaking</span><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc">Explicit <span class="mono">-&lt;Operator&gt;:$false</span> is honoured rather than treated as present</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26485">#26485</a></td>
+        </tr>
+        <tr class="breaking" class="not-emulated">
+          <td class="mono key">switchParameter.Where-Object.IsNot.honourExplicitFalse<br><span class="scope mono">Where-Object -EQ -NE -GT -LT -GE -LE -Like -NotLike -Match -NotMatch -Contains -NotContains -In -NotIn -Is -IsNot -Not</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="breaking-mark">breaking</span><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc">Explicit <span class="mono">-&lt;Operator&gt;:$false</span> is honoured rather than treated as present</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26485">#26485</a></td>
+        </tr>
+        <tr class="breaking" class="not-emulated">
+          <td class="mono key">switchParameter.Where-Object.LE.honourExplicitFalse<br><span class="scope mono">Where-Object -EQ -NE -GT -LT -GE -LE -Like -NotLike -Match -NotMatch -Contains -NotContains -In -NotIn -Is -IsNot -Not</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="breaking-mark">breaking</span><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc">Explicit <span class="mono">-&lt;Operator&gt;:$false</span> is honoured rather than treated as present</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26485">#26485</a></td>
+        </tr>
+        <tr class="breaking" class="not-emulated">
+          <td class="mono key">switchParameter.Where-Object.LT.honourExplicitFalse<br><span class="scope mono">Where-Object -EQ -NE -GT -LT -GE -LE -Like -NotLike -Match -NotMatch -Contains -NotContains -In -NotIn -Is -IsNot -Not</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="breaking-mark">breaking</span><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc">Explicit <span class="mono">-&lt;Operator&gt;:$false</span> is honoured rather than treated as present</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26485">#26485</a></td>
+        </tr>
+        <tr class="breaking" class="not-emulated">
+          <td class="mono key">switchParameter.Where-Object.Like.honourExplicitFalse<br><span class="scope mono">Where-Object -EQ -NE -GT -LT -GE -LE -Like -NotLike -Match -NotMatch -Contains -NotContains -In -NotIn -Is -IsNot -Not</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="breaking-mark">breaking</span><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc">Explicit <span class="mono">-&lt;Operator&gt;:$false</span> is honoured rather than treated as present</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26485">#26485</a></td>
+        </tr>
+        <tr class="breaking" class="not-emulated">
+          <td class="mono key">switchParameter.Where-Object.Match.honourExplicitFalse<br><span class="scope mono">Where-Object -EQ -NE -GT -LT -GE -LE -Like -NotLike -Match -NotMatch -Contains -NotContains -In -NotIn -Is -IsNot -Not</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="breaking-mark">breaking</span><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc">Explicit <span class="mono">-&lt;Operator&gt;:$false</span> is honoured rather than treated as present</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26485">#26485</a></td>
+        </tr>
+        <tr class="breaking" class="not-emulated">
+          <td class="mono key">switchParameter.Where-Object.NE.honourExplicitFalse<br><span class="scope mono">Where-Object -EQ -NE -GT -LT -GE -LE -Like -NotLike -Match -NotMatch -Contains -NotContains -In -NotIn -Is -IsNot -Not</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="breaking-mark">breaking</span><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc">Explicit <span class="mono">-&lt;Operator&gt;:$false</span> is honoured rather than treated as present</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26485">#26485</a></td>
+        </tr>
+        <tr class="breaking" class="not-emulated">
+          <td class="mono key">switchParameter.Where-Object.Not.honourExplicitFalse<br><span class="scope mono">Where-Object -EQ -NE -GT -LT -GE -LE -Like -NotLike -Match -NotMatch -Contains -NotContains -In -NotIn -Is -IsNot -Not</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="breaking-mark">breaking</span><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc">Explicit <span class="mono">-&lt;Operator&gt;:$false</span> is honoured rather than treated as present</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26485">#26485</a></td>
+        </tr>
+        <tr class="breaking" class="not-emulated">
+          <td class="mono key">switchParameter.Where-Object.NotContains.honourExplicitFalse<br><span class="scope mono">Where-Object -EQ -NE -GT -LT -GE -LE -Like -NotLike -Match -NotMatch -Contains -NotContains -In -NotIn -Is -IsNot -Not</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="breaking-mark">breaking</span><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc">Explicit <span class="mono">-&lt;Operator&gt;:$false</span> is honoured rather than treated as present</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26485">#26485</a></td>
+        </tr>
+        <tr class="breaking" class="not-emulated">
+          <td class="mono key">switchParameter.Where-Object.NotIn.honourExplicitFalse<br><span class="scope mono">Where-Object -EQ -NE -GT -LT -GE -LE -Like -NotLike -Match -NotMatch -Contains -NotContains -In -NotIn -Is -IsNot -Not</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="breaking-mark">breaking</span><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc">Explicit <span class="mono">-&lt;Operator&gt;:$false</span> is honoured rather than treated as present</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26485">#26485</a></td>
+        </tr>
+        <tr class="breaking" class="not-emulated">
+          <td class="mono key">switchParameter.Where-Object.NotLike.honourExplicitFalse<br><span class="scope mono">Where-Object -EQ -NE -GT -LT -GE -LE -Like -NotLike -Match -NotMatch -Contains -NotContains -In -NotIn -Is -IsNot -Not</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="breaking-mark">breaking</span><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc">Explicit <span class="mono">-&lt;Operator&gt;:$false</span> is honoured rather than treated as present</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26485">#26485</a></td>
+        </tr>
+        <tr class="breaking" class="not-emulated">
+          <td class="mono key">switchParameter.Where-Object.NotMatch.honourExplicitFalse<br><span class="scope mono">Where-Object -EQ -NE -GT -LT -GE -LE -Like -NotLike -Match -NotMatch -Contains -NotContains -In -NotIn -Is -IsNot -Not</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="breaking-mark">breaking</span><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc">Explicit <span class="mono">-&lt;Operator&gt;:$false</span> is honoured rather than treated as present</td>
+          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26485">#26485</a></td>
+        </tr>
+        <tr class="not-emulated">
+          <td class="mono key">temporaryDirectory.cmdlet<br><span class="scope mono">New-TemporaryDirectory</span></td>
+          <td class="mono val" data-lts="false" data-preview="true">false</td>
+          <td class="mark-cell"><span class="emu-mark">documented, not emulated</span></td>
+          <td class="doc"><span class="mono">New-TemporaryDirectory</span> cmdlet added</td>
           <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/27549">#27549</a></td>
         </tr>
-        <tr>
-          <td class="mono key">unix.lastWriteTime.dynamicWidth</td>
+        <tr class="not-emulated">
+          <td class="mono key">unix.lastWriteTime.dynamicWidth<br><span class="scope mono">engine-wide</span></td>
           <td class="mono val" data-lts="false" data-preview="true">false</td>
-          <td class="mark-cell"></td>
-          <td class="mark-cell"><span class="emulated">documented</span></td>
+          <td class="mark-cell"><span class="emu-mark">documented, not emulated</span></td>
           <td class="doc">LastWriteTime column width is computed dynamically on Unix</td>
           <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/24624">#24624</a></td>
-        </tr>
-        <tr class="breaking">
-          <td class="mono key">validation.throwsArgumentException</td>
-          <td class="mono val" data-lts="false" data-preview="true">false</td>
-          <td class="mark-cell"><span class="breaking-mark">breaking</span></td>
-          <td class="mark-cell"><span class="emulated is-emulated">emulated</span></td>
-          <td class="doc">Not-null-not-empty validation now throws ArgumentException instead of PSArgumentNullException</td>
-          <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26668">#26668</a></td>
         </tr></tbody>
         </table>
       </div>
-      <p class="table-note">13 flags for 15 recorded changes:
+      <p class="table-note">54 documented flags for 22 recorded changes:
         1 change carries
-        no flag, and some share one.
-        <b>engine</b> says whether anything in the source reads the flag &mdash;
-        4 of 13 do.
-        <b>documented</b> means the difference is recorded and cited but nothing branches on it yet;
-        it is computed by searching the source when the profile is generated, not asserted here.</p>
+        no flag. Of those flags 5 are readable by a command;
+        the rest are recorded here and reach no code path at all. A flag the engine does not
+        implement is not written into the profile the engine boots against — it would otherwise be
+        served as a live execution semantic, which is a claim of fidelity no test supports.</p>
 
       <div class="honesty" id="emulated">
-        <p class="honesty-n mono">0 / 15</p>
+        <p class="honesty-n mono">5 / 22</p>
         <p class="honesty-t">changes are emulated. The rest are recorded and cited, but the engine does not
           reproduce them yet. Nothing here claims fidelity a test has not demonstrated.</p>
       </div>
@@ -586,123 +868,231 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
       <ul class="changes">
         <li class="change impact-script-breaking">
           <p class="change-head"><span class="mono change-subject">New-Guid</span><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/27033">#27033</a></p>
-          <p class="change-title"><span class=“mono”>New-Guid</span> emits a time-sortable UUID v7 by default instead of a random UUID v4</p>
-          <p class="change-detail">The output type and format are unchanged, which is what makes this dangerous: a script keeps working, but its identifiers become predictable. Time-ordered UUIDs leak creation time and are guessable in sequence, so anything using <span class=“mono”>New-Guid</span> as a secret or a nonce becomes weaker without any visible change.</p>
-          <p class="change-migration"><b>To migrate.</b> A script that needs a fully random GUID must call <span class=“mono”>[guid]::NewGuid()</span> directly rather than <span class=“mono”>New-Guid</span>. Never use either as a security token: use a CSPRNG.</p>
+          <p class="change-title"><span class="mono">New-Guid</span> emits a time-sortable UUID v7 by default instead of a random UUID v4</p>
+          <p class="change-detail">The output type and format are unchanged, which is what makes this dangerous: a script keeps working, but its identifiers become predictable. Time-ordered UUIDs leak creation time and are guessable in sequence, so anything using <span class="mono">New-Guid</span> as a secret or a nonce becomes weaker without any visible change.</p>
+          <p class="change-migration"><b>To migrate.</b> A script that needs a fully random GUID must call <span class="mono">[guid]::NewGuid()</span> directly rather than <span class="mono">New-Guid</span>. Never use either as a security token: use a CSPRNG.</p>
           <p class="change-meta">
             <span class="impact">script breaking</span>
-            <span class="emulated">not emulated</span>
+            <span class="emulated is-emulated">implemented</span>
+            <span class="evidence">proved by <code class="mono">tests/unit/native-commands.test.mts</code>, <code class="mono">src/commands/native/new-guid.ts</code></span>
           </p>
+          
         </li>
         <li class="change impact-script-breaking">
           <p class="change-head"><span class="mono change-subject">Format-Table, Format-List, Format-Custom</span><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26552">#26552</a></p>
-          <p class="change-title"><span class=“mono”>ValidateNotNullOrEmpty</span> added to <span class=“mono”>-Property</span></p>
-          <p class="change-detail">Confirmed against the reference implementation: <span class=“mono”>Format-Table</span> <span class=“mono”>-Property</span> carries no validation attributes in 7.6.5, so passing an empty string succeeds there and throws in 7.7.</p>
-          <p class="change-migration"><b>To migrate.</b> Filter empty values out of a <span class=“mono”>-Property</span> list before passing it.</p>
+          <p class="change-title"><span class="mono">ValidateNotNullOrEmpty</span> added to <span class="mono">-Property</span></p>
+          <p class="change-detail">Measured in 7.6.5: <span class="mono">-Property</span> carries only ParameterAttribute — no validation attributes — so an empty string BINDS there and then throws System.NotSupportedException (error id ExpressionEmptyString2) from the formatter. In 7.7 it is rejected during parameter binding instead. What changes is where and as what it fails, not whether it fails; an earlier revision of this file claimed it succeeded in 7.6.5, which the probe refutes.</p>
+          <p class="change-migration"><b>To migrate.</b> Filter empty values out of a <span class="mono">-Property</span> list before passing it.</p>
           <p class="change-meta">
             <span class="impact">script breaking</span>
-            <span class="emulated">not emulated</span>
+            <span class="emulated is-emulated">implemented</span>
+            <span class="evidence">proved by <code class="mono">tests/unit/binder-validation.test.mts</code>, <code class="mono">src/binding/validation.ts</code></span>
           </p>
+          
         </li>
         <li class="change impact-script-breaking">
           <p class="change-head"><span class="mono change-subject">argument validation</span><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26668">#26668</a></p>
           <p class="change-title">Not-null-not-empty validation now throws ArgumentException instead of PSArgumentNullException</p>
-          <p class="change-detail">The exception type changes from <span class=“mono”>System.Management.Automation.PSArgumentNullException</span> to <span class=“mono”>System.ArgumentException</span>, so a catch block filtering on the old type stops matching.</p>
-          <p class="change-migration"><b>To migrate.</b> Catch <span class=“mono”>System.ArgumentException</span>, or catch both types during a migration window.</p>
+          <p class="change-detail">Genuinely engine-wide: it is the validation machinery, not one cmdlet. Measured in 7.6.5, <span class="mono">[ValidateNotNullOrEmpty()]</span> on an advanced function raises ParameterBindingValidationException wrapping ValidationMetadataException, error id ParameterArgumentValidationError. The 7.7 exception type is taken from the changelog and could NOT be measured here, because only 7.6.5 is installed.</p>
+          <p class="change-migration"><b>To migrate.</b> Catch <span class="mono">System.ArgumentException</span>, or catch both types during a migration window.</p>
           <p class="change-meta">
             <span class="impact">script breaking</span>
-            <span class="emulated">not emulated</span>
+            <span class="emulated is-emulated">implemented</span>
+            <span class="evidence">proved by <code class="mono">tests/unit/binder-validation.test.mts</code>, <code class="mono">src/binding/validation.ts</code></span>
           </p>
+          
         </li>
         <li class="change impact-observable">
           <p class="change-head"><span class="mono change-subject">Where-Object</span><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26485">#26485</a></p>
-          <p class="change-title">Explicit -&lt;Operator&gt;:$false is now honoured rather than treated as present</p>
-          <p class="change-detail">A switch parameter written as <span class=“mono”>-Not:$false</span> was previously indistinguishable from -Not. This is the general shape of a whole family of 7.7 fixes and is why the binder must model switch semantics rather than mere presence.</p>
+          <p class="change-title">Explicit <span class="mono">-&lt;Operator&gt;:$false</span> is honoured rather than treated as present</p>
+          <p class="change-detail">Measured in 7.6.5: <span class="mono">Where-Object -Property A -GT:$false -Value 1</span> still applies -GT, and <span class="mono">-Not:$false</span> still filters like <span class="mono">-Not</span>. BrowserShell selects the operator by parameter PRESENCE (<span class="mono">resolveOperator</span> in src/commands/powershell/where-object.ts), so it reproduces the 7.6 behaviour under both profiles and does not emulate the fix.</p>
           
           <p class="change-meta">
             <span class="impact">observable</span>
-            <span class="emulated">not emulated</span>
+            <span class="emulated">documented, not emulated</span>
+            
           </p>
+          
+        </li>
+        <li class="change impact-observable">
+          <p class="change-head"><span class="mono change-subject">New-Guid</span><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26140">#26140</a></p>
+          <p class="change-title">Explicit <span class="mono">-Empty:$false</span> is honoured rather than treated as present</p>
+          <p class="change-detail">Measured in 7.6.5: <span class="mono">New-Guid -Empty:$false</span> returns 00000000-0000-0000-0000-000000000000. Emulated in the binder, which is the one place version-awareness lives, so <span class="mono">-Empty:$false</span> binds TRUE under the 7.6 profile and FALSE under 7.7.</p>
+          
+          <p class="change-meta">
+            <span class="impact">observable</span>
+            <span class="emulated is-emulated">verified</span>
+            <span class="evidence">proved by <code class="mono">tests/unit/binder-switch-scope.test.mts</code>, <code class="mono">src/binding/binder.ts</code></span>
+          </p>
+          
+        </li>
+        <li class="change impact-observable">
+          <p class="change-head"><span class="mono change-subject">Get-Random</span><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26457">#26457</a></p>
+          <p class="change-title">Explicit <span class="mono">-Shuffle:$false</span> is honoured rather than treated as present</p>
+          <p class="change-detail">Measured in 7.6.5 across four seeds: <span class="mono">Get-Random -InputObject (1..6) -Shuffle:$false -SetSeed N</span> returns the same shuffled sequence as <span class="mono">-Shuffle</span>, never the single draw that no shuffle produces.</p>
+          
+          <p class="change-meta">
+            <span class="impact">observable</span>
+            <span class="emulated is-emulated">verified</span>
+            <span class="evidence">proved by <code class="mono">tests/unit/binder-switch-scope.test.mts</code>, <code class="mono">src/binding/binder.ts</code></span>
+          </p>
+          
+        </li>
+        <li class="change impact-observable">
+          <p class="change-head"><span class="mono change-subject">Get-SecureRandom</span><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26460">#26460</a></p>
+          <p class="change-title">Explicit <span class="mono">-Shuffle:$false</span> is honoured rather than treated as present</p>
+          <p class="change-detail">BrowserShell has no Get-SecureRandom, so there is nothing to emulate the fix in.</p>
+          
+          <p class="change-meta">
+            <span class="impact">observable</span>
+            <span class="emulated">documented, not emulated</span>
+            
+          </p>
+          
+        </li>
+        <li class="change impact-observable">
+          <p class="change-head"><span class="mono change-subject">Get-TimeZone</span><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26463">#26463</a></p>
+          <p class="change-title">Explicit <span class="mono">-ListAvailable:$false</span> is honoured rather than treated as present</p>
+          <p class="change-detail">Measured in 7.6.5: <span class="mono">-ListAvailable:$false</span> still emits all 141 zones instead of the current one. BrowserShell has no Get-TimeZone.</p>
+          
+          <p class="change-meta">
+            <span class="impact">observable</span>
+            <span class="emulated">documented, not emulated</span>
+            
+          </p>
+          
+        </li>
+        <li class="change impact-observable">
+          <p class="change-head"><span class="mono change-subject">Get-Uptime</span><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26141">#26141</a></p>
+          <p class="change-title">Explicit <span class="mono">-Since:$false</span> is honoured rather than treated as present</p>
+          <p class="change-detail">Measured in 7.6.5: <span class="mono">-Since:$false</span> still returns the boot timestamp rather than the elapsed TimeSpan. BrowserShell has no Get-Uptime.</p>
+          
+          <p class="change-meta">
+            <span class="impact">observable</span>
+            <span class="emulated">documented, not emulated</span>
+            
+          </p>
+          
+        </li>
+        <li class="change impact-observable">
+          <p class="change-head"><span class="mono change-subject">New-PSSession</span><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26469">#26469</a></p>
+          <p class="change-title">Explicit <span class="mono">-&lt;Switch&gt;:$false</span> is honoured rather than treated as present</p>
+          <p class="change-detail">BrowserShell has no remoting and no New-PSSession.</p>
+          
+          <p class="change-meta">
+            <span class="impact">observable</span>
+            <span class="emulated">documented, not emulated</span>
+            
+          </p>
+          
+        </li>
+        <li class="change impact-observable">
+          <p class="change-head"><span class="mono change-subject">Split-Path</span><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26474">#26474</a></p>
+          <p class="change-title">Explicit <span class="mono">-Qualifier</span>/<span class="mono">-NoQualifier</span>/<span class="mono">-Leaf</span>/<span class="mono">-IsAbsolute:$false</span> is honoured</p>
+          <p class="change-detail">Measured in 7.6.5: <span class="mono">Split-Path /a/b/c.txt -Leaf:$false</span> still returns <span class="mono">c.txt</span>. The PR names exactly these four switches, which is why the record does too. BrowserShell has no Split-Path.</p>
+          
+          <p class="change-meta">
+            <span class="impact">observable</span>
+            <span class="emulated">documented, not emulated</span>
+            
+          </p>
+          
+        </li>
+        <li class="change impact-observable">
+          <p class="change-head"><span class="mono change-subject">Test-Connection</span><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26479">#26479</a></p>
+          <p class="change-title">Explicit <span class="mono">-&lt;Switch&gt;:$false</span> is honoured rather than treated as present</p>
+          <p class="change-detail">BrowserShell has no network stack and no Test-Connection.</p>
+          
+          <p class="change-meta">
+            <span class="impact">observable</span>
+            <span class="emulated">documented, not emulated</span>
+            
+          </p>
+          
         </li>
         <li class="change impact-none">
           <p class="change-head"><span class="mono change-subject">New-TemporaryDirectory</span><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/27549">#27549</a></p>
-          <p class="change-title"><span class=“mono”>New-TemporaryDirectory</span> cmdlet added</p>
-          <p class="change-detail">Makes a temp directory a first-class concept, which means the virtual filesystem needs a real <span class=“mono”>/tmp</span> provider rather than an ordinary directory that happens to be named tmp.</p>
+          <p class="change-title"><span class="mono">New-TemporaryDirectory</span> cmdlet added</p>
+          <p class="change-detail">Confirmed absent in 7.6.5 by probe. Makes a temp directory a first-class concept, which means the virtual filesystem needs a real <span class="mono">/tmp</span> provider rather than an ordinary directory that happens to be named tmp.</p>
           
           <p class="change-meta">
             <span class="impact">no impact</span>
-            <span class="emulated">not emulated</span>
+            <span class="emulated">documented, not emulated</span>
+            
           </p>
+          
         </li>
         <li class="change impact-none">
           <p class="change-head"><span class="mono change-subject">Format-Table, Format-List, Format-Custom</span><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26514">#26514</a></p>
-          <p class="change-title"><span class=“mono”>-ExcludeProperty</span> parameter added to Format-* cmdlets</p>
-          <p class="change-detail">Confirmed absent in 7.6.5 by the captured command metadata. Belongs to the formatter, which is why formatting has to be separable from the command.</p>
+          <p class="change-title"><span class="mono">-ExcludeProperty</span> parameter added to Format-* cmdlets</p>
+          <p class="change-detail">Confirmed absent in 7.6.5 by probe and by the captured command metadata. Belongs to the formatter, which is why formatting has to be separable from the command.</p>
           
           <p class="change-meta">
             <span class="impact">no impact</span>
-            <span class="emulated">not emulated</span>
+            <span class="emulated">documented, not emulated</span>
+            
           </p>
+          
         </li>
         <li class="change impact-none">
           <p class="change-head"><span class="mono change-subject">Join-Path</span><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26482">#26482</a></p>
-          <p class="change-title"><span class=“mono”>-Extension</span> parameter added</p>
-          <p class="change-detail">Confirmed absent in 7.6.5 by the captured command metadata.</p>
+          <p class="change-title"><span class="mono">-Extension</span> parameter added</p>
+          <p class="change-detail">Confirmed absent in 7.6.5 by probe and by the captured command metadata.</p>
           
           <p class="change-meta">
             <span class="impact">no impact</span>
-            <span class="emulated">not emulated</span>
+            <span class="emulated">documented, not emulated</span>
+            
           </p>
+          
         </li>
         <li class="change impact-observable">
           <p class="change-head"><span class="mono change-subject">$PSApplicationOutputEncoding</span><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/21219">#21219</a></p>
           <p class="change-title">Automatic variable controlling how native command output is decoded</p>
-          <p class="change-detail">Requires an encoding broker between the object pipeline and the native byte pipeline: without one, native output is decoded once, wrongly, and cannot be recovered.</p>
+          <p class="change-detail">Confirmed absent in 7.6.5 by probe. Requires an encoding broker between the object pipeline and the native byte pipeline: without one, native output is decoded once, wrongly, and cannot be recovered.</p>
           
           <p class="change-meta">
             <span class="impact">observable</span>
-            <span class="emulated">not emulated</span>
+            <span class="emulated">documented, not emulated</span>
+            
           </p>
+          
         </li>
         <li class="change impact-none">
           <p class="change-head"><span class="mono change-subject">WildcardPattern</span><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26515">#26515</a></p>
-          <p class="change-title"><span class=“mono”>ToRegex</span> method added to <span class=“mono”>WildcardPattern</span></p>
-          
+          <p class="change-title"><span class="mono">ToRegex</span> method added to <span class="mono">WildcardPattern</span></p>
+          <p class="change-detail">Confirmed absent in 7.6.5 by probe: the type has no ToRegex method there.</p>
           
           <p class="change-meta">
             <span class="impact">no impact</span>
-            <span class="emulated">not emulated</span>
+            <span class="emulated">documented, not emulated</span>
+            
           </p>
+          
         </li>
         <li class="change impact-script-breaking">
           <p class="change-head"><span class="mono change-subject">Export-Csv</span><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26472">#26472</a></p>
-          <p class="change-title"><span class=“mono”>-Append</span> and <span class=“mono”>-NoHeader</span> are now mutually exclusive</p>
-          
+          <p class="change-title"><span class="mono">-Append</span> and <span class="mono">-NoHeader</span> are now mutually exclusive</p>
+          <p class="change-detail">Measured in 7.6.5: both switches exist and passing them together is ACCEPTED, appending a second row with no header. 7.7 makes that a parameter-binding failure.</p>
           <p class="change-migration"><b>To migrate.</b> Pick one. A script passing both now fails parameter binding.</p>
           <p class="change-meta">
             <span class="impact">script breaking</span>
-            <span class="emulated">not emulated</span>
+            <span class="emulated">documented, not emulated</span>
+            
           </p>
+          
         </li>
         <li class="change impact-observable">
-          <p class="change-head"><span class="mono change-subject">Csv cmdlets</span><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26719">#26719</a></p>
-          <p class="change-title"><span class=“mono”>-NoTypeInformation</span> is an obsolete no-op; <span class=“mono”>-IncludeTypeInformation</span> is evaluated by value</p>
-          
+          <p class="change-head"><span class="mono change-subject">ConvertTo-Csv, Export-Csv</span><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26719">#26719</a></p>
+          <p class="change-title"><span class="mono">-NoTypeInformation</span> is an obsolete no-op; <span class="mono">-IncludeTypeInformation</span> is evaluated by value</p>
+          <p class="change-detail">This IS the CSV entry in the explicit-:$false family, not a second change, which is why it is one record rather than two citing the same PR. Measured in 7.6.5: <span class="mono">-IncludeTypeInformation:$false</span> is ALREADY honoured; <span class="mono">-NoTypeInformation:$false</span> still emits the #TYPE line; and passing both as <span class="mono">:$false</span> throws CannotSpecifyIncludeTypeInformationAndNoTypeInformation. 7.7 removes that error and reduces -NoTypeInformation to a deprecation warning.</p>
           
           <p class="change-meta">
             <span class="impact">observable</span>
-            <span class="emulated">not emulated</span>
+            <span class="emulated">documented, not emulated</span>
+            
           </p>
-        </li>
-        <li class="change impact-observable">
-          <p class="change-head"><span class="mono change-subject">ConvertFrom-Csv, ConvertTo-Csv, `Export-Csv`, Import-Csv, Get-Random, Get-SecureRandom, Get-TimeZone, Get-Uptime, `New-Guid`, New-PSSession, Split-Path, Test-Connection, `Where-Object`</span><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26719">#26719</a></p>
-          <p class="change-title">Explicit -&lt;SwitchParameter&gt;:$false corrected across thirteen cmdlets</p>
-          <p class="change-detail">Thirteen separate upstream PRs fixing one design mistake. This is the strongest argument for a single version-aware binder: fixing it per command would mean thirteen forks.</p>
-          
-          <p class="change-meta">
-            <span class="impact">observable</span>
-            <span class="emulated">not emulated</span>
-          </p>
+          <ul class="sources"><li><span class="src-role">primary</span> <a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26719">#26719</a> Changes exactly CsvCommands.cs, CsvCommandStrings.resx and the ConvertTo-Csv/Export-Csv tests. CsvCommands.cs holds BaseCsvWritingCommand, ConvertToCsvCommand and ExportCsvCommand.</li><li><span class="src-role">docs</span> <a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26719">#26719</a> The What's-New document lists ConvertFrom-Csv and Import-Csv under this PR as well. NOT SUPPORTED by the diff, which touches neither, and refuted by probe: in 7.6.5 the only switches Import-Csv and ConvertFrom-Csv declare are UseCulture, Verbose and Debug — there is no type-information switch on either to fix. The claim is narrowed here to the two cmdlets the PR changes.</li></ul>
         </li>
         <li class="change impact-cosmetic">
           <p class="change-head"><span class="mono change-subject">Unix formatting</span><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/24624">#24624</a></p>
@@ -711,8 +1101,10 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
           
           <p class="change-meta">
             <span class="impact">cosmetic</span>
-            <span class="emulated">not emulated</span>
+            <span class="emulated">documented, not emulated</span>
+            
           </p>
+          
         </li>
         <li class="change impact-cosmetic">
           <p class="change-head"><span class="mono change-subject">formatting</span><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26424">#26424</a></p>
@@ -721,18 +1113,22 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
           
           <p class="change-meta">
             <span class="impact">cosmetic</span>
-            <span class="emulated">not emulated</span>
+            <span class="emulated">documented, not emulated</span>
+            
           </p>
+          
         </li>
         <li class="change impact-cosmetic">
           <p class="change-head"><span class="mono change-subject">progress rendering</span><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26185">#26185</a></p>
           <p class="change-title">Progress bar renders correctly with double-width Unicode characters</p>
-          <p class="change-detail">The archived v1 terminal already computes East Asian width correctly via its <span class=“mono”>dw()</span> helper; that behaviour must survive the rewrite rather than being reintroduced later.</p>
+          <p class="change-detail">The archived v1 terminal already computes East Asian width correctly via its <span class="mono">dw()</span> helper; that behaviour must survive the rewrite rather than being reintroduced later. The width table exists, but nothing renders a progress bar yet, so there is nothing for a flag to switch.</p>
           
           <p class="change-meta">
             <span class="impact">cosmetic</span>
-            <span class="emulated">not emulated</span>
+            <span class="emulated">documented, not emulated</span>
+            
           </p>
+          
         </li></ul>
     </div>
   </section>
@@ -742,7 +1138,7 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
     <p>Every value on this page is read from
       <span class="mono">compat/upstream/releases.lock.json</span>, the two compatibility profiles,
       and the generated delta. The page is regenerated from them; if it drifts, the build fails.</p>
-    <p>Lockfile generated 2026-09-05T01:59:41.743Z from 33 sources across
+    <p>Lockfile generated 2026-09-05T02:51:20.911Z from 41 sources across
       5 precedence ranks.
       Upstream declares <span class="mono">v7.7.0-preview.5</span> as the next
       release, which does not exist yet.</p>

@@ -2,14 +2,16 @@
   "schemaVersion": 1,
   "from": "powershell/7.6.5/linux",
   "to": "powershell/7.7.0-preview.4/linux",
-  "generatedAt": "2026-09-05T01:59:41.743Z",
+  "generatedAt": "2026-09-05T02:51:20.911Z",
   "summary": {
     "breaking": 4,
     "added": 5,
-    "changed": 3,
+    "changed": 10,
     "removed": 0,
     "fixed": 3,
-    "implemented": 0
+    "implemented": 5,
+    "documented": 17,
+    "partial": 0
   },
   "changes": [
     {
@@ -20,46 +22,459 @@
       "detail": "The output type and format are unchanged, which is what makes this dangerous: a script keeps working, but its identifiers become predictable. Time-ordered UUIDs leak creation time and are guessable in sequence, so anything using `New-Guid` as a secret or a nonce becomes weaker without any visible change.",
       "impact": "script-breaking",
       "behaviorKey": "newGuid.defaultVersion",
+      "behaviorKeys": [
+        "newGuid.defaultVersion"
+      ],
+      "scope": {
+        "command": "New-Guid",
+        "parameters": []
+      },
+      "documentedValue": 7,
+      "emulatedValue": 7,
+      "implementation": "implemented",
+      "sources": [
+        {
+          "pr": 27033,
+          "role": "primary",
+          "covers": "NewGuidCommand.cs swaps Guid.NewGuid() for Guid.CreateVersion7(); the test asserts the version nibble is 7."
+        }
+      ],
       "upstreamPr": 27033,
+      "evidence": [
+        "tests/unit/native-commands.test.mts",
+        "src/commands/native/new-guid.ts"
+      ],
       "migration": "A script that needs a fully random GUID must call `[guid]::NewGuid()` directly rather than `New-Guid`. Never use either as a security token: use a CSPRNG.",
       "conformanceFixture": null,
-      "implemented": false
+      "implemented": true
     },
     {
       "kind": "breaking",
       "subject": "Format-Table, Format-List, Format-Custom",
       "subjectKind": "command",
       "title": "`ValidateNotNullOrEmpty` added to `-Property`",
-      "detail": "Confirmed against the reference implementation: `Format-Table` `-Property` carries no validation attributes in 7.6.5, so passing an empty string succeeds there and throws in 7.7.",
+      "detail": "Measured in 7.6.5: `-Property` carries only ParameterAttribute — no validation attributes — so an empty string BINDS there and then throws System.NotSupportedException (error id ExpressionEmptyString2) from the formatter. In 7.7 it is rejected during parameter binding instead. What changes is where and as what it fails, not whether it fails; an earlier revision of this file claimed it succeeded in 7.6.5, which the probe refutes.",
       "impact": "script-breaking",
       "behaviorKey": "format.property.rejectNullOrEmpty",
+      "behaviorKeys": [
+        "format.property.rejectNullOrEmpty"
+      ],
+      "scope": {
+        "command": "Format-Table, Format-List, Format-Custom",
+        "parameters": [
+          "Property"
+        ]
+      },
+      "documentedValue": true,
+      "emulatedValue": true,
+      "implementation": "implemented",
+      "sources": [
+        {
+          "pr": 26552,
+          "role": "primary",
+          "covers": "Adds ValidateNotNullOrEmpty to the -Property parameter of the Format-* cmdlets."
+        }
+      ],
       "upstreamPr": 26552,
+      "evidence": [
+        "tests/unit/binder-validation.test.mts",
+        "src/binding/validation.ts"
+      ],
       "migration": "Filter empty values out of a `-Property` list before passing it.",
       "conformanceFixture": null,
-      "implemented": false
+      "implemented": true
     },
     {
       "kind": "breaking",
       "subject": "argument validation",
       "subjectKind": "engine",
       "title": "Not-null-not-empty validation now throws ArgumentException instead of PSArgumentNullException",
-      "detail": "The exception type changes from `System.Management.Automation.PSArgumentNullException` to `System.ArgumentException`, so a catch block filtering on the old type stops matching.",
+      "detail": "Genuinely engine-wide: it is the validation machinery, not one cmdlet. Measured in 7.6.5, `[ValidateNotNullOrEmpty()]` on an advanced function raises ParameterBindingValidationException wrapping ValidationMetadataException, error id ParameterArgumentValidationError. The 7.7 exception type is taken from the changelog and could NOT be measured here, because only 7.6.5 is installed.",
       "impact": "script-breaking",
       "behaviorKey": "validation.throwsArgumentException",
+      "behaviorKeys": [
+        "validation.throwsArgumentException"
+      ],
+      "scope": {
+        "command": null,
+        "parameters": []
+      },
+      "documentedValue": true,
+      "emulatedValue": true,
+      "implementation": "implemented",
+      "sources": [
+        {
+          "pr": 26668,
+          "role": "primary",
+          "covers": "Changes the exception raised by not-null/not-empty validation from PSArgumentNullException to ArgumentException."
+        }
+      ],
       "upstreamPr": 26668,
+      "evidence": [
+        "tests/unit/binder-validation.test.mts",
+        "src/binding/validation.ts"
+      ],
       "migration": "Catch `System.ArgumentException`, or catch both types during a migration window.",
       "conformanceFixture": null,
-      "implemented": false
+      "implemented": true
     },
     {
       "kind": "breaking",
       "subject": "Where-Object",
       "subjectKind": "command",
-      "title": "Explicit -<Operator>:$false is now honoured rather than treated as present",
-      "detail": "A switch parameter written as `-Not:$false` was previously indistinguishable from -Not. This is the general shape of a whole family of 7.7 fixes and is why the binder must model switch semantics rather than mere presence.",
+      "title": "Explicit `-<Operator>:$false` is honoured rather than treated as present",
+      "detail": "Measured in 7.6.5: `Where-Object -Property A -GT:$false -Value 1` still applies -GT, and `-Not:$false` still filters like `-Not`. BrowserShell selects the operator by parameter PRESENCE (`resolveOperator` in src/commands/powershell/where-object.ts), so it reproduces the 7.6 behaviour under both profiles and does not emulate the fix.",
       "impact": "observable",
-      "behaviorKey": "switchParameters.honourExplicitFalse",
+      "behaviorKey": null,
+      "behaviorKeys": [
+        "switchParameter.Where-Object.EQ.honourExplicitFalse",
+        "switchParameter.Where-Object.NE.honourExplicitFalse",
+        "switchParameter.Where-Object.GT.honourExplicitFalse",
+        "switchParameter.Where-Object.LT.honourExplicitFalse",
+        "switchParameter.Where-Object.GE.honourExplicitFalse",
+        "switchParameter.Where-Object.LE.honourExplicitFalse",
+        "switchParameter.Where-Object.Like.honourExplicitFalse",
+        "switchParameter.Where-Object.NotLike.honourExplicitFalse",
+        "switchParameter.Where-Object.Match.honourExplicitFalse",
+        "switchParameter.Where-Object.NotMatch.honourExplicitFalse",
+        "switchParameter.Where-Object.Contains.honourExplicitFalse",
+        "switchParameter.Where-Object.NotContains.honourExplicitFalse",
+        "switchParameter.Where-Object.In.honourExplicitFalse",
+        "switchParameter.Where-Object.NotIn.honourExplicitFalse",
+        "switchParameter.Where-Object.Is.honourExplicitFalse",
+        "switchParameter.Where-Object.IsNot.honourExplicitFalse",
+        "switchParameter.Where-Object.Not.honourExplicitFalse"
+      ],
+      "scope": {
+        "command": "Where-Object",
+        "parameters": [
+          "EQ",
+          "NE",
+          "GT",
+          "LT",
+          "GE",
+          "LE",
+          "Like",
+          "NotLike",
+          "Match",
+          "NotMatch",
+          "Contains",
+          "NotContains",
+          "In",
+          "NotIn",
+          "Is",
+          "IsNot",
+          "Not"
+        ]
+      },
+      "documentedValue": true,
+      "emulatedValue": null,
+      "implementation": "documented",
+      "sources": [
+        {
+          "pr": 26485,
+          "role": "primary",
+          "covers": "InternalCommands.cs: the operator switches fall back to default boolean property evaluation when set to $false. Covers the comparison operators and their case-sensitive twins."
+        }
+      ],
       "upstreamPr": 26485,
+      "evidence": [],
+      "conformanceFixture": null,
+      "implemented": false
+    },
+    {
+      "kind": "changed",
+      "subject": "New-Guid",
+      "subjectKind": "command",
+      "title": "Explicit `-Empty:$false` is honoured rather than treated as present",
+      "detail": "Measured in 7.6.5: `New-Guid -Empty:$false` returns 00000000-0000-0000-0000-000000000000. Emulated in the binder, which is the one place version-awareness lives, so `-Empty:$false` binds TRUE under the 7.6 profile and FALSE under 7.7.",
+      "impact": "observable",
+      "behaviorKey": "switchParameter.New-Guid.Empty.honourExplicitFalse",
+      "behaviorKeys": [
+        "switchParameter.New-Guid.Empty.honourExplicitFalse"
+      ],
+      "scope": {
+        "command": "New-Guid",
+        "parameters": [
+          "Empty"
+        ]
+      },
+      "documentedValue": true,
+      "emulatedValue": true,
+      "implementation": "verified",
+      "sources": [
+        {
+          "pr": 26140,
+          "role": "primary",
+          "covers": "NewGuidCommand.cs uses Empty.ToBool() instead of testing presence. -Empty is the only switch it touches."
+        }
+      ],
+      "upstreamPr": 26140,
+      "evidence": [
+        "tests/unit/binder-switch-scope.test.mts",
+        "src/binding/binder.ts"
+      ],
+      "conformanceFixture": null,
+      "implemented": true
+    },
+    {
+      "kind": "changed",
+      "subject": "Get-Random",
+      "subjectKind": "command",
+      "title": "Explicit `-Shuffle:$false` is honoured rather than treated as present",
+      "detail": "Measured in 7.6.5 across four seeds: `Get-Random -InputObject (1..6) -Shuffle:$false -SetSeed N` returns the same shuffled sequence as `-Shuffle`, never the single draw that no shuffle produces.",
+      "impact": "observable",
+      "behaviorKey": "switchParameter.Get-Random.Shuffle.honourExplicitFalse",
+      "behaviorKeys": [
+        "switchParameter.Get-Random.Shuffle.honourExplicitFalse"
+      ],
+      "scope": {
+        "command": "Get-Random",
+        "parameters": [
+          "Shuffle"
+        ]
+      },
+      "documentedValue": true,
+      "emulatedValue": true,
+      "implementation": "verified",
+      "sources": [
+        {
+          "pr": 26457,
+          "role": "primary",
+          "covers": "Corrects handling of an explicit -Shuffle:$false in Get-Random."
+        }
+      ],
+      "upstreamPr": 26457,
+      "evidence": [
+        "tests/unit/binder-switch-scope.test.mts",
+        "src/binding/binder.ts"
+      ],
+      "conformanceFixture": null,
+      "implemented": true
+    },
+    {
+      "kind": "changed",
+      "subject": "Get-SecureRandom",
+      "subjectKind": "command",
+      "title": "Explicit `-Shuffle:$false` is honoured rather than treated as present",
+      "detail": "BrowserShell has no Get-SecureRandom, so there is nothing to emulate the fix in.",
+      "impact": "observable",
+      "behaviorKey": "switchParameter.Get-SecureRandom.Shuffle.honourExplicitFalse",
+      "behaviorKeys": [
+        "switchParameter.Get-SecureRandom.Shuffle.honourExplicitFalse"
+      ],
+      "scope": {
+        "command": "Get-SecureRandom",
+        "parameters": [
+          "Shuffle"
+        ]
+      },
+      "documentedValue": true,
+      "emulatedValue": null,
+      "implementation": "documented",
+      "sources": [
+        {
+          "pr": 26460,
+          "role": "primary",
+          "covers": "Corrects handling of an explicit -Shuffle:$false in Get-SecureRandom."
+        }
+      ],
+      "upstreamPr": 26460,
+      "evidence": [],
+      "conformanceFixture": null,
+      "implemented": false
+    },
+    {
+      "kind": "changed",
+      "subject": "Get-TimeZone",
+      "subjectKind": "command",
+      "title": "Explicit `-ListAvailable:$false` is honoured rather than treated as present",
+      "detail": "Measured in 7.6.5: `-ListAvailable:$false` still emits all 141 zones instead of the current one. BrowserShell has no Get-TimeZone.",
+      "impact": "observable",
+      "behaviorKey": "switchParameter.Get-TimeZone.ListAvailable.honourExplicitFalse",
+      "behaviorKeys": [
+        "switchParameter.Get-TimeZone.ListAvailable.honourExplicitFalse"
+      ],
+      "scope": {
+        "command": "Get-TimeZone",
+        "parameters": [
+          "ListAvailable"
+        ]
+      },
+      "documentedValue": true,
+      "emulatedValue": null,
+      "implementation": "documented",
+      "sources": [
+        {
+          "pr": 26463,
+          "role": "primary",
+          "covers": "Corrects handling of an explicit -ListAvailable:$false in Get-TimeZone."
+        }
+      ],
+      "upstreamPr": 26463,
+      "evidence": [],
+      "conformanceFixture": null,
+      "implemented": false
+    },
+    {
+      "kind": "changed",
+      "subject": "Get-Uptime",
+      "subjectKind": "command",
+      "title": "Explicit `-Since:$false` is honoured rather than treated as present",
+      "detail": "Measured in 7.6.5: `-Since:$false` still returns the boot timestamp rather than the elapsed TimeSpan. BrowserShell has no Get-Uptime.",
+      "impact": "observable",
+      "behaviorKey": "switchParameter.Get-Uptime.Since.honourExplicitFalse",
+      "behaviorKeys": [
+        "switchParameter.Get-Uptime.Since.honourExplicitFalse"
+      ],
+      "scope": {
+        "command": "Get-Uptime",
+        "parameters": [
+          "Since"
+        ]
+      },
+      "documentedValue": true,
+      "emulatedValue": null,
+      "implementation": "documented",
+      "sources": [
+        {
+          "pr": 26141,
+          "role": "primary",
+          "covers": "Corrects handling of an explicit -Since:$false in Get-Uptime."
+        }
+      ],
+      "upstreamPr": 26141,
+      "evidence": [],
+      "conformanceFixture": null,
+      "implemented": false
+    },
+    {
+      "kind": "changed",
+      "subject": "New-PSSession",
+      "subjectKind": "command",
+      "title": "Explicit `-<Switch>:$false` is honoured rather than treated as present",
+      "detail": "BrowserShell has no remoting and no New-PSSession.",
+      "impact": "observable",
+      "behaviorKey": null,
+      "behaviorKeys": [
+        "switchParameter.New-PSSession.AllowRedirection.honourExplicitFalse",
+        "switchParameter.New-PSSession.EnableNetworkAccess.honourExplicitFalse",
+        "switchParameter.New-PSSession.RunAsAdministrator.honourExplicitFalse",
+        "switchParameter.New-PSSession.SSHTransport.honourExplicitFalse",
+        "switchParameter.New-PSSession.UseSSL.honourExplicitFalse",
+        "switchParameter.New-PSSession.UseWindowsPowerShell.honourExplicitFalse"
+      ],
+      "scope": {
+        "command": "New-PSSession",
+        "parameters": [
+          "AllowRedirection",
+          "EnableNetworkAccess",
+          "RunAsAdministrator",
+          "SSHTransport",
+          "UseSSL",
+          "UseWindowsPowerShell"
+        ]
+      },
+      "documentedValue": true,
+      "emulatedValue": null,
+      "implementation": "documented",
+      "sources": [
+        {
+          "pr": 26469,
+          "role": "primary",
+          "covers": "Corrects handling of explicit switch :$false values in New-PSSession."
+        }
+      ],
+      "upstreamPr": 26469,
+      "evidence": [],
+      "conformanceFixture": null,
+      "implemented": false
+    },
+    {
+      "kind": "changed",
+      "subject": "Split-Path",
+      "subjectKind": "command",
+      "title": "Explicit `-Qualifier`/`-NoQualifier`/`-Leaf`/`-IsAbsolute:$false` is honoured",
+      "detail": "Measured in 7.6.5: `Split-Path /a/b/c.txt -Leaf:$false` still returns `c.txt`. The PR names exactly these four switches, which is why the record does too. BrowserShell has no Split-Path.",
+      "impact": "observable",
+      "behaviorKey": null,
+      "behaviorKeys": [
+        "switchParameter.Split-Path.Qualifier.honourExplicitFalse",
+        "switchParameter.Split-Path.NoQualifier.honourExplicitFalse",
+        "switchParameter.Split-Path.Leaf.honourExplicitFalse",
+        "switchParameter.Split-Path.IsAbsolute.honourExplicitFalse"
+      ],
+      "scope": {
+        "command": "Split-Path",
+        "parameters": [
+          "Qualifier",
+          "NoQualifier",
+          "Leaf",
+          "IsAbsolute"
+        ]
+      },
+      "documentedValue": true,
+      "emulatedValue": null,
+      "implementation": "documented",
+      "sources": [
+        {
+          "pr": 26474,
+          "role": "primary",
+          "covers": "ParsePathCommand.cs: ProcessRecord stops switching on ParameterSetName and evaluates the four switch values directly."
+        }
+      ],
+      "upstreamPr": 26474,
+      "evidence": [],
+      "conformanceFixture": null,
+      "implemented": false
+    },
+    {
+      "kind": "changed",
+      "subject": "Test-Connection",
+      "subjectKind": "command",
+      "title": "Explicit `-<Switch>:$false` is honoured rather than treated as present",
+      "detail": "BrowserShell has no network stack and no Test-Connection.",
+      "impact": "observable",
+      "behaviorKey": null,
+      "behaviorKeys": [
+        "switchParameter.Test-Connection.Detailed.honourExplicitFalse",
+        "switchParameter.Test-Connection.DontFragment.honourExplicitFalse",
+        "switchParameter.Test-Connection.IPv4.honourExplicitFalse",
+        "switchParameter.Test-Connection.IPv6.honourExplicitFalse",
+        "switchParameter.Test-Connection.MtuSize.honourExplicitFalse",
+        "switchParameter.Test-Connection.Ping.honourExplicitFalse",
+        "switchParameter.Test-Connection.Quiet.honourExplicitFalse",
+        "switchParameter.Test-Connection.Repeat.honourExplicitFalse",
+        "switchParameter.Test-Connection.ResolveDestination.honourExplicitFalse",
+        "switchParameter.Test-Connection.Traceroute.honourExplicitFalse"
+      ],
+      "scope": {
+        "command": "Test-Connection",
+        "parameters": [
+          "Detailed",
+          "DontFragment",
+          "IPv4",
+          "IPv6",
+          "MtuSize",
+          "Ping",
+          "Quiet",
+          "Repeat",
+          "ResolveDestination",
+          "Traceroute"
+        ]
+      },
+      "documentedValue": true,
+      "emulatedValue": null,
+      "implementation": "documented",
+      "sources": [
+        {
+          "pr": 26479,
+          "role": "primary",
+          "covers": "Corrects handling of explicit switch :$false values in Test-Connection."
+        }
+      ],
+      "upstreamPr": 26479,
+      "evidence": [],
       "conformanceFixture": null,
       "implemented": false
     },
@@ -68,10 +483,28 @@
       "subject": "New-TemporaryDirectory",
       "subjectKind": "command",
       "title": "`New-TemporaryDirectory` cmdlet added",
-      "detail": "Makes a temp directory a first-class concept, which means the virtual filesystem needs a real `/tmp` provider rather than an ordinary directory that happens to be named tmp.",
+      "detail": "Confirmed absent in 7.6.5 by probe. Makes a temp directory a first-class concept, which means the virtual filesystem needs a real `/tmp` provider rather than an ordinary directory that happens to be named tmp.",
       "impact": "none",
       "behaviorKey": "temporaryDirectory.cmdlet",
+      "behaviorKeys": [
+        "temporaryDirectory.cmdlet"
+      ],
+      "scope": {
+        "command": "New-TemporaryDirectory",
+        "parameters": []
+      },
+      "documentedValue": true,
+      "emulatedValue": null,
+      "implementation": "documented",
+      "sources": [
+        {
+          "pr": 27549,
+          "role": "primary",
+          "covers": "Adds the New-TemporaryDirectory cmdlet."
+        }
+      ],
       "upstreamPr": 27549,
+      "evidence": [],
       "conformanceFixture": null,
       "implemented": false
     },
@@ -80,10 +513,30 @@
       "subject": "Format-Table, Format-List, Format-Custom",
       "subjectKind": "command",
       "title": "`-ExcludeProperty` parameter added to Format-* cmdlets",
-      "detail": "Confirmed absent in 7.6.5 by the captured command metadata. Belongs to the formatter, which is why formatting has to be separable from the command.",
+      "detail": "Confirmed absent in 7.6.5 by probe and by the captured command metadata. Belongs to the formatter, which is why formatting has to be separable from the command.",
       "impact": "none",
       "behaviorKey": "format.excludeProperty",
+      "behaviorKeys": [
+        "format.excludeProperty"
+      ],
+      "scope": {
+        "command": "Format-Table, Format-List, Format-Custom",
+        "parameters": [
+          "ExcludeProperty"
+        ]
+      },
+      "documentedValue": true,
+      "emulatedValue": null,
+      "implementation": "documented",
+      "sources": [
+        {
+          "pr": 26514,
+          "role": "primary",
+          "covers": "Adds -ExcludeProperty to the Format-* cmdlets."
+        }
+      ],
       "upstreamPr": 26514,
+      "evidence": [],
       "conformanceFixture": null,
       "implemented": false
     },
@@ -92,10 +545,30 @@
       "subject": "Join-Path",
       "subjectKind": "command",
       "title": "`-Extension` parameter added",
-      "detail": "Confirmed absent in 7.6.5 by the captured command metadata.",
+      "detail": "Confirmed absent in 7.6.5 by probe and by the captured command metadata.",
       "impact": "none",
       "behaviorKey": "joinPath.extension",
+      "behaviorKeys": [
+        "joinPath.extension"
+      ],
+      "scope": {
+        "command": "Join-Path",
+        "parameters": [
+          "Extension"
+        ]
+      },
+      "documentedValue": true,
+      "emulatedValue": null,
+      "implementation": "documented",
+      "sources": [
+        {
+          "pr": 26482,
+          "role": "primary",
+          "covers": "Adds -Extension to Join-Path."
+        }
+      ],
       "upstreamPr": 26482,
+      "evidence": [],
       "conformanceFixture": null,
       "implemented": false
     },
@@ -104,10 +577,28 @@
       "subject": "$PSApplicationOutputEncoding",
       "subjectKind": "variable",
       "title": "Automatic variable controlling how native command output is decoded",
-      "detail": "Requires an encoding broker between the object pipeline and the native byte pipeline: without one, native output is decoded once, wrongly, and cannot be recovered.",
+      "detail": "Confirmed absent in 7.6.5 by probe. Requires an encoding broker between the object pipeline and the native byte pipeline: without one, native output is decoded once, wrongly, and cannot be recovered.",
       "impact": "observable",
       "behaviorKey": "application.outputEncodingVariable",
+      "behaviorKeys": [
+        "application.outputEncodingVariable"
+      ],
+      "scope": {
+        "command": null,
+        "parameters": []
+      },
+      "documentedValue": true,
+      "emulatedValue": null,
+      "implementation": "documented",
+      "sources": [
+        {
+          "pr": 21219,
+          "role": "primary",
+          "covers": "Adds the $PSApplicationOutputEncoding automatic variable."
+        }
+      ],
       "upstreamPr": 21219,
+      "evidence": [],
       "conformanceFixture": null,
       "implemented": false
     },
@@ -116,9 +607,26 @@
       "subject": "WildcardPattern",
       "subjectKind": "engine",
       "title": "`ToRegex` method added to `WildcardPattern`",
+      "detail": "Confirmed absent in 7.6.5 by probe: the type has no ToRegex method there.",
       "impact": "none",
       "behaviorKey": null,
+      "behaviorKeys": [],
+      "scope": {
+        "command": null,
+        "parameters": []
+      },
+      "documentedValue": null,
+      "emulatedValue": null,
+      "implementation": "documented",
+      "sources": [
+        {
+          "pr": 26515,
+          "role": "primary",
+          "covers": "Adds WildcardPattern.ToRegex()."
+        }
+      ],
       "upstreamPr": 26515,
+      "evidence": [],
       "conformanceFixture": null,
       "implemented": false
     },
@@ -127,33 +635,70 @@
       "subject": "Export-Csv",
       "subjectKind": "command",
       "title": "`-Append` and `-NoHeader` are now mutually exclusive",
+      "detail": "Measured in 7.6.5: both switches exist and passing them together is ACCEPTED, appending a second row with no header. 7.7 makes that a parameter-binding failure.",
       "impact": "script-breaking",
       "behaviorKey": "exportCsv.appendNoHeaderExclusive",
+      "behaviorKeys": [
+        "exportCsv.appendNoHeaderExclusive"
+      ],
+      "scope": {
+        "command": "Export-Csv",
+        "parameters": [
+          "Append",
+          "NoHeader"
+        ]
+      },
+      "documentedValue": true,
+      "emulatedValue": null,
+      "implementation": "documented",
+      "sources": [
+        {
+          "pr": 26472,
+          "role": "primary",
+          "covers": "Makes -Append and -NoHeader mutually exclusive on Export-Csv."
+        }
+      ],
       "upstreamPr": 26472,
+      "evidence": [],
       "migration": "Pick one. A script passing both now fails parameter binding.",
       "conformanceFixture": null,
       "implemented": false
     },
     {
       "kind": "changed",
-      "subject": "Csv cmdlets",
+      "subject": "ConvertTo-Csv, Export-Csv",
       "subjectKind": "command",
       "title": "`-NoTypeInformation` is an obsolete no-op; `-IncludeTypeInformation` is evaluated by value",
+      "detail": "This IS the CSV entry in the explicit-:$false family, not a second change, which is why it is one record rather than two citing the same PR. Measured in 7.6.5: `-IncludeTypeInformation:$false` is ALREADY honoured; `-NoTypeInformation:$false` still emits the #TYPE line; and passing both as `:$false` throws CannotSpecifyIncludeTypeInformationAndNoTypeInformation. 7.7 removes that error and reduces -NoTypeInformation to a deprecation warning.",
       "impact": "observable",
       "behaviorKey": "csv.noTypeInformationObsolete",
+      "behaviorKeys": [
+        "csv.noTypeInformationObsolete"
+      ],
+      "scope": {
+        "command": "ConvertTo-Csv, Export-Csv",
+        "parameters": [
+          "NoTypeInformation",
+          "IncludeTypeInformation"
+        ]
+      },
+      "documentedValue": true,
+      "emulatedValue": null,
+      "implementation": "documented",
+      "sources": [
+        {
+          "pr": 26719,
+          "role": "primary",
+          "covers": "Changes exactly CsvCommands.cs, CsvCommandStrings.resx and the ConvertTo-Csv/Export-Csv tests. CsvCommands.cs holds BaseCsvWritingCommand, ConvertToCsvCommand and ExportCsvCommand."
+        },
+        {
+          "pr": 26719,
+          "role": "docs",
+          "covers": "The What's-New document lists ConvertFrom-Csv and Import-Csv under this PR as well. NOT SUPPORTED by the diff, which touches neither, and refuted by probe: in 7.6.5 the only switches Import-Csv and ConvertFrom-Csv declare are UseCulture, Verbose and Debug — there is no type-information switch on either to fix. The claim is narrowed here to the two cmdlets the PR changes."
+        }
+      ],
       "upstreamPr": 26719,
-      "conformanceFixture": null,
-      "implemented": false
-    },
-    {
-      "kind": "changed",
-      "subject": "ConvertFrom-Csv, ConvertTo-Csv, `Export-Csv`, Import-Csv, Get-Random, Get-SecureRandom, Get-TimeZone, Get-Uptime, `New-Guid`, New-PSSession, Split-Path, Test-Connection, `Where-Object`",
-      "subjectKind": "command",
-      "title": "Explicit -<SwitchParameter>:$false corrected across thirteen cmdlets",
-      "detail": "Thirteen separate upstream PRs fixing one design mistake. This is the strongest argument for a single version-aware binder: fixing it per command would mean thirteen forks.",
-      "impact": "observable",
-      "behaviorKey": "switchParameters.honourExplicitFalse",
-      "upstreamPr": 26719,
+      "evidence": [],
       "conformanceFixture": null,
       "implemented": false
     },
@@ -164,7 +709,25 @@
       "title": "LastWriteTime column width is computed dynamically on Unix",
       "impact": "cosmetic",
       "behaviorKey": "unix.lastWriteTime.dynamicWidth",
+      "behaviorKeys": [
+        "unix.lastWriteTime.dynamicWidth"
+      ],
+      "scope": {
+        "command": null,
+        "parameters": []
+      },
+      "documentedValue": true,
+      "emulatedValue": null,
+      "implementation": "documented",
+      "sources": [
+        {
+          "pr": 24624,
+          "role": "primary",
+          "covers": "Computes the LastWriteTime column width dynamically in the Unix file-system format data."
+        }
+      ],
       "upstreamPr": 24624,
+      "evidence": [],
       "conformanceFixture": null,
       "implemented": false
     },
@@ -176,7 +739,25 @@
       "detail": "Only meaningful with a real ANSI parser. A formatter that treats escape sequences as ordinary characters cannot reproduce either the bug or the fix.",
       "impact": "cosmetic",
       "behaviorKey": "ansi.resetMidStringHandled",
+      "behaviorKeys": [
+        "ansi.resetMidStringHandled"
+      ],
+      "scope": {
+        "command": null,
+        "parameters": []
+      },
+      "documentedValue": true,
+      "emulatedValue": null,
+      "implementation": "documented",
+      "sources": [
+        {
+          "pr": 26424,
+          "role": "primary",
+          "covers": "Handles a VT Reset sequence occurring mid-string when truncating for display."
+        }
+      ],
       "upstreamPr": 26424,
+      "evidence": [],
       "conformanceFixture": null,
       "implemented": false
     },
@@ -185,10 +766,28 @@
       "subject": "progress rendering",
       "subjectKind": "engine",
       "title": "Progress bar renders correctly with double-width Unicode characters",
-      "detail": "The archived v1 terminal already computes East Asian width correctly via its `dw()` helper; that behaviour must survive the rewrite rather than being reintroduced later.",
+      "detail": "The archived v1 terminal already computes East Asian width correctly via its `dw()` helper; that behaviour must survive the rewrite rather than being reintroduced later. The width table exists, but nothing renders a progress bar yet, so there is nothing for a flag to switch.",
       "impact": "cosmetic",
       "behaviorKey": "progress.doubleWidthAware",
+      "behaviorKeys": [
+        "progress.doubleWidthAware"
+      ],
+      "scope": {
+        "command": null,
+        "parameters": []
+      },
+      "documentedValue": true,
+      "emulatedValue": null,
+      "implementation": "documented",
+      "sources": [
+        {
+          "pr": 26185,
+          "role": "primary",
+          "covers": "Corrects progress-bar rendering when the message contains double-width characters."
+        }
+      ],
       "upstreamPr": 26185,
+      "evidence": [],
       "conformanceFixture": null,
       "implemented": false
     }

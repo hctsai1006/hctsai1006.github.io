@@ -53,6 +53,7 @@ import {
   sortObject,
   whereObject,
 } from '../../src/commands/powershell/index.ts';
+import { viewOfBehaviors } from '../../src/compatibility/profile-resolver.ts';
 
 // ---------------------------------------------------------------------------
 // harness
@@ -69,10 +70,7 @@ function makeHost(): PipelineHost & {
 } {
   const streams = collectingStreams();
   return {
-    profile: {
-      displayVersion: '7.6.5',
-      behavior: <T extends boolean | number | string>(_key: string, fallback: T): T => fallback,
-    },
+    profile: viewOfBehaviors('7.6.5', {}),
     streams,
     errors: streams.collected.error.values,
     native: null,

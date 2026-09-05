@@ -32,6 +32,7 @@ import {
 } from '../../src/commands/format/index.ts';
 import { FORMAT_ENTRY_TYPE, isFormatRecord } from '../../src/formatting/records.ts';
 import { UnknownCultureError } from '../../src/formatting/culture.ts';
+import { viewOfBehaviors } from '../../src/compatibility/profile-resolver.ts';
 
 // ---------------------------------------------------------------------------
 // harness
@@ -40,11 +41,7 @@ import { UnknownCultureError } from '../../src/formatting/culture.ts';
 function makeHost(culture = 'en-US'): PipelineHost & { readonly errors: readonly ErrorRecord[] } {
   const streams = collectingStreams();
   return {
-    profile: {
-      displayVersion: '7.6.5',
-      behavior: <T extends boolean | number | string>(key: string, fallback: T): T =>
-        key === 'formatting.culture' ? (culture as unknown as T) : fallback,
-    },
+    profile: viewOfBehaviors('7.6.5', { 'formatting.culture': culture }),
     streams,
     errors: streams.collected.error.values,
     native: null,

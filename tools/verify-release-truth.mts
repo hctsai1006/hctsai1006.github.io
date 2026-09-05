@@ -947,7 +947,13 @@ const CITATION_SOURCE = 'compat/deltas/powershell-77-changes.source.mts';
  *                      TRAP F this file is organised against.
  */
 async function resolveCitations(): Promise<Lockfile['citations']> {
-  const cited = [...new Set(POWERSHELL_77_CHANGES.map((c) => c.upstreamPr))].sort((a, b) => a - b);
+  // Every source, in every role. A record used to carry a single `upstreamPr`;
+  // it now carries `sources[]`, because the explicit-`$false` family turned out
+  // to be ten upstream PRs cited as one. A supporting citation is exactly the
+  // kind that would otherwise never be resolved against GitHub.
+  const cited = [...new Set(POWERSHELL_77_CHANGES.flatMap((c) => c.sources.map((s) => s.pr)))].sort(
+    (a, b) => a - b,
+  );
   const resolved: CitedPullRequest[] = [];
 
   for (const number of cited) {

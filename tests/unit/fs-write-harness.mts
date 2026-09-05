@@ -41,6 +41,7 @@ import {
   isOk,
 } from '../../src/storage/index.ts';
 import type { FileStat, Result } from '../../src/storage/index.ts';
+import { viewOfBehaviors } from '../../src/compatibility/profile-resolver.ts';
 
 export const HOME = '/home/thc1006';
 export const USER = 'thc1006';
@@ -134,12 +135,7 @@ export async function session(options: SessionOptions = {}): Promise<Session> {
     async run(module, parameters = {}, runOptions = {}): Promise<RunResult> {
       const streams = collectingStreams();
       const context: InvocationContext = {
-        profile: {
-          displayVersion: '7.6.5',
-          behavior<T extends boolean | number | string>(_key: string, fallback: T): T {
-            return fallback;
-          },
-        },
+        profile: viewOfBehaviors('7.6.5', {}),
         streams,
         native: null,
         input: fromValues(runOptions.input ?? []),

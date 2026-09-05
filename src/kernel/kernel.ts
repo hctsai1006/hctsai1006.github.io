@@ -227,6 +227,9 @@ const DEFAULT_PROFILE: CompatibilityView = {
   behavior<T extends boolean | number | string>(_key: string, fallback: T): T {
     return fallback;
   },
+  scopedBehavior<T extends boolean | number | string>(_key: string, whenUndeclared: T): T {
+    return whenUndeclared;
+  },
 };
 
 /** How a stage ended. The last stage's result is the pipeline's. */

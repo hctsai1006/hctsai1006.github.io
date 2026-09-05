@@ -42,6 +42,7 @@ import type {
   InvocationContext,
 } from '../../src/commands/invocation.ts';
 import type { CommandManifest } from '../../src/commands/manifest.ts';
+import { viewOfBehaviors } from '../../src/compatibility/profile-resolver.ts';
 
 // ---------------------------------------------------------------------------
 // harness
@@ -68,10 +69,7 @@ type Host = PipelineHost & { readonly collected: ReturnType<typeof collectingStr
 function testHost(signal?: AbortSignal): Host {
   const streams = collectingStreams();
   return {
-    profile: {
-      displayVersion: '7.6.5',
-      behavior: <T extends boolean | number | string>(_key: string, fallback: T): T => fallback,
-    },
+    profile: viewOfBehaviors('7.6.5', {}),
     streams,
     collected: streams.collected,
     native: null,

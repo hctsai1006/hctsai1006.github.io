@@ -31,6 +31,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 import type { CompatibilityView } from '../../src/commands/invocation.ts';
+import { viewOfBehaviors } from '../../src/compatibility/profile-resolver.ts';
+import { switchBehaviorKey } from '../../src/compatibility/behavior-keys.ts';
 import type { CommandManifest, ParameterMetadata, ParameterSetBinding } from '../../src/commands/manifest.ts';
 import {
   ParameterBindingError,
@@ -51,13 +53,7 @@ function profileView(file: string): CompatibilityView {
   );
   const behaviors = (raw as { behaviors?: Record<string, boolean | number | string> }).behaviors ?? {};
   const displayVersion = (raw as { displayVersion?: string }).displayVersion ?? '?';
-  return {
-    displayVersion,
-    behavior<T extends boolean | number | string>(key: string, fallback: T): T {
-      const value = behaviors[key];
-      return (value === undefined ? fallback : value) as T;
-    },
-  };
+  return viewOfBehaviors(displayVersion, behaviors);
 }
 
 const V76 = profileView('powershell-7.6.5-linux.json');
@@ -464,17 +460,22 @@ describe('switch semantics', () => {
     assert.equal(bindParameters(['-Force:$TRUE'], SW, V77).parameters['Force'], true);
   });
 
-  it('honours -Force:$false only under the 7.7 profile', () => {
-    // The 7.6 binder really does store False — verified — but every 7.6 COMMAND
-    // asks ContainsKey instead of reading the value, so the observable 7.6
-    // behaviour is that -Not:$false filters exactly like -Not:
+  it('honours -Force:$false on an unfixed command under BOTH profiles', () => {
+    // The 7.6 binder really does store False — measured, IsPresent False and
+    // ToBool False with the key present — and so does 7.7. The 7.6 defect is
+    // per COMMAND, in bodies that asked ContainsKey instead of reading the
+    // value, and upstream fixed it one cmdlet at a time:
     //
-    //   pwsh 7.6.5: @(..) | Where-Object -Property A -Not:$false  ==  -Not
-    //   pwsh 7.6.5: Split-Path /a/b/c.txt -Leaf:$false            ==  -Leaf
+    //   pwsh 7.6.5: @(..) | Where-Object -Property A -Not:$false  ==  -Not   (#26485)
+    //   pwsh 7.6.5: Split-Path /a/b/c.txt -Leaf:$false            ==  -Leaf  (#26474)
+    //   pwsh 7.6.5: New-Guid -Empty:$false                        ==  -Empty (#26140)
     //
-    // so the binder reproduces the version's behaviour, not its internals.
-    assert.equal(bindParameters(['-Force:$false'], SW, V76).parameters['Force'], true);
-    assert.equal(bindParameters(['-Force:$false'], SW, V77).parameters['Force'], false);
+    // `Test-Sw -Force` is in none of those PRs, and measurement says a plain
+    // advanced function honours the value in 7.6.5. So both profiles honour it,
+    // and only the declared pairs diverge — see binder-switch-scope.test.mts.
+    for (const profile of [V76, V77]) {
+      assert.equal(bindParameters(['-Force:$false'], SW, profile).parameters['Force'], false);
+    }
   });
 
   it('records the explicit $false under BOTH profiles, so intent is never lost', () => {
@@ -485,16 +486,24 @@ describe('switch semantics', () => {
   });
 
   it('reads the behaviour from the profile, not from a version number', () => {
-    // The flag is what decides; a hand-made view with the flag on behaves as
-    // 7.7 does even while calling itself 7.6.5.
-    const pretender: CompatibilityView = {
-      displayVersion: '7.6.5',
-      behavior: <T extends boolean | number | string>(key: string, fallback: T): T =>
-        (key === 'switchParameters.honourExplicitFalse' ? true : fallback) as T,
-    };
-    assert.equal(bindParameters(['-Force:$false'], SW, pretender).parameters['Force'], false);
-    assert.equal(V76.behavior('switchParameters.honourExplicitFalse', true), false);
-    assert.equal(V77.behavior('switchParameters.honourExplicitFalse', false), true);
+    // The flag is what decides; a hand-made view with the flag OFF for this one
+    // command/parameter pair reproduces 7.6 while calling itself 7.7.
+    const key = switchBehaviorKey('Test-Sw', 'Force');
+    const pretender = viewOfBehaviors('7.7.0-preview.4', { [key]: false });
+    assert.equal(bindParameters(['-Force:$false'], SW, pretender).parameters['Force'], true);
+
+    // And with no declaration at all the value is honoured, under any version
+    // string, because that is what the reference binder measurably does.
+    const silent = viewOfBehaviors('7.6.5', {});
+    assert.equal(bindParameters(['-Force:$false'], SW, silent).parameters['Force'], false);
+  });
+
+  it('has no engine-wide switch flag left to reintroduce', () => {
+    // The key this replaced applied one cmdlet's bug to every switch parameter
+    // in the binder. Asserted absent so a merge cannot quietly bring it back.
+    for (const view of [V76, V77]) {
+      assert.equal(view.behavior('switchParameters.honourExplicitFalse', 'absent'), 'absent');
+    }
   });
 
   it('never consumes the following token as a switch value', () => {
