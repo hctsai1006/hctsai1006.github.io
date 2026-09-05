@@ -98,9 +98,28 @@ import type { VirtualSignal } from './signals.ts';
  * should be branching on that for a value typed `ReadonlySet`, and a caller who
  * wants a real Set can build one from the iterator, which is exactly the copy
  * it should have been making anyway.
+ *
+ * `forEach` IS REIMPLEMENTED RATHER THAN DELEGATED, and that is not tidiness.
+ * The first version of this function forwarded to `inner.forEach(callback,
+ * thisArg)`, and `Set.prototype.forEach` invokes its callback as
+ * `callback(value, value, THE SET)` — so the live Set arrived as the third
+ * argument and the whole defence came apart in one line. An adversarial pass on
+ * this file's own work found it:
+ *
+ *     broker.grants.forEach((_v, _v2, set) => (set as Set).add('device.request'))
+ *     => filesystem.read,device.request
+ *     REAL_CAPABILITIES.forEach((_v, _v2, set) => (set as Set).delete('filesystem.write'))
+ *     => REAL_CAPABILITIES.has('filesystem.write') === false, permanently
+ *
+ * The second one is worse than the first: it corrupts a module constant for
+ * every reader in the process. The loop below passes the VIEW as the third
+ * argument, which is also what that argument is supposed to mean — "the set
+ * being traversed" is the set the caller was given, not the one behind it.
+ * `iterators leak nothing`: a SetIterator has no route back to its Set, which
+ * is why `keys`, `values` and `entries` can still be forwarded.
  */
 export function readonlySetView<T>(inner: ReadonlySet<T>): ReadonlySet<T> {
-  return Object.freeze({
+  const view: ReadonlySet<T> = Object.freeze({
     get size(): number {
       return inner.size;
     },
@@ -112,10 +131,13 @@ export function readonlySetView<T>(inner: ReadonlySet<T>): ReadonlySet<T> {
       callback: (value: T, value2: T, set: ReadonlySet<T>) => void,
       thisArg?: unknown,
     ): void => {
-      inner.forEach(callback, thisArg);
+      // `view` is captured, not copied: by the time this runs the const is
+      // initialised, so the callback never sees `inner`.
+      for (const value of inner) Reflect.apply(callback, thisArg, [value, value, view]);
     },
     [Symbol.iterator]: () => inner[Symbol.iterator](),
   });
+  return view;
 }
 
 /**

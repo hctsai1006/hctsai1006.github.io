@@ -102,6 +102,44 @@ describe('the premise: freezing a Set does nothing', () => {
     inner.add('b');
     assert.deepEqual([...view], ['a', 'b']);
   });
+
+  it('does not hand the live Set to a forEach callback', () => {
+    // FOUND BY THE ADVERSARIAL PASS ON THIS FILE'S OWN FIX, and it defeated the
+    // first version of it completely. `Set.prototype.forEach` invokes its
+    // callback as `callback(value, value, THE SET)`, so a view that delegated
+    // to `inner.forEach` handed the live Set straight to the caller:
+    //
+    //   broker.grants.forEach((_v,_v2,s) => (s as Set).add('device.request'))
+    //   => filesystem.read,device.request
+    //
+    // The third argument is now the view. The test asserts the identity as well
+    // as the throw, because a view that merely lacked `add` while still passing
+    // `inner` would be one `new Set(third)` away from the same escape.
+    const inner = new Set(['a']);
+    const view = readonlySetView(inner);
+    const seen: unknown[] = [];
+    view.forEach((value, value2, set) => {
+      seen.push(value, value2, set);
+    });
+    assert.deepEqual(seen.slice(0, 2), ['a', 'a']);
+    assert.equal(seen[2], view, 'the third argument must be the view, not the Set');
+    assert.equal(seen[2] instanceof Set, false);
+    assert.throws(() => {
+      view.forEach((_v, _v2, set) => asMutable<Set<string>>(set).add('b'));
+    }, TypeError);
+    assert.deepEqual([...inner], ['a']);
+  });
+
+  it('honours thisArg in forEach, since it is no longer Set.prototype doing it', () => {
+    // Reimplementing a standard method means owning its contract. A caller
+    // passing thisArg must still get it.
+    const view = readonlySetView(new Set([1, 2]));
+    const box = { total: 0 };
+    view.forEach(function (this: typeof box, value: number) {
+      this.total += value;
+    }, box);
+    assert.equal(box.total, 3);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -325,6 +363,17 @@ describe('the classification tables cannot be edited from outside', () => {
       () => asMutable<Set<Capability>>(REAL_CAPABILITIES).delete('filesystem.write'),
       TypeError,
     );
+    assert.equal(REAL_CAPABILITIES.has('filesystem.write'), true);
+  });
+
+  it('refuses the forEach route into the real set as well', () => {
+    // A module constant corrupted this way stays corrupted for every reader in
+    // the process, which makes it the worse half of the forEach hole.
+    assert.throws(() => {
+      REAL_CAPABILITIES.forEach((_v, _v2, set) =>
+        asMutable<Set<Capability>>(set).delete('filesystem.write'),
+      );
+    }, TypeError);
     assert.equal(REAL_CAPABILITIES.has('filesystem.write'), true);
   });
 });
