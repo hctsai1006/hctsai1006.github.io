@@ -1,30 +1,53 @@
 /**
- * tokenize.ts — enough PowerShell lexing to know WHERE the caret is.
+ * tokenize.ts — the line editor's VIEW of the one lexer. Not a second lexer.
  *
- * v1 had four independent tokenizers (completion, argv split, pipe split, head
- * extraction) and none of them agreed. The one that drove completion was a
- * single call to `lastIndexOf(' ')`, so `Get-Content 'my file|` believed the
- * word under the caret was `file` and quoting did not exist. The result was that
- * completion could only ever tell "start of line or after a pipe" from
- * "everything else" — two states, where the interesting question has four.
+ * ── WHAT THIS FILE USED TO BE ─────────────────────────────────────────────
  *
- * This is not a parser and does not try to be. It answers exactly one question:
- * given a caret offset, which token is under it, what came before it in the same
- * command, and is the caret inside a quoted string. Anything a parser would need
- * beyond that (expressions, script blocks, expandable-string interiors) is
- * deliberately absent.
+ * It used to be an independent tokenizer, and it was one of nine. Its own
+ * header said it was "enough PowerShell lexing to know WHERE the caret is" and
+ * "not a parser and does not try to be" — a reasonable position, except that
+ * knowing where the caret is requires the same quoting rules as running the
+ * line, so the two implementations had to agree and nothing made them. They did
+ * not agree, and `src/language/lexer.ts` measured which one was right:
+ *
+ *   `--Path`         this file said PARAMETER; pwsh says it is an ARGUMENT.
+ *                    `binder.ts` already said argument, so the highlighter and
+ *                    the binder disagreed about the same characters.
+ *   `-Path a,b`      this file said ONE token, in a comment that explained why.
+ *                    pwsh lexes THREE: `a`, `,`, `b`.
+ *   `$_.Length`      this file said one word. pwsh says `Variable Dot Identifier`
+ *                    — which is the difference between knowing that `.Length` is
+ *                    a member access and thinking it is a filename.
+ *   `f a>b`          this file broke on `>`. pwsh does not: `>` redirects only
+ *                    at the START of a token.
+ *
+ * So the lexing is gone and what remains is a PROJECTION: the real token stream,
+ * mapped onto the four-way classification the completion engine consumes. The
+ * mapping is total and mechanical, which is the point — there is no rule here
+ * that could drift, because there is no rule here at all.
+ *
+ * ── WHY THE PROJECTION STILL EXISTS ───────────────────────────────────────
+ *
+ * Completion asks a narrower question than execution: "is this token something
+ * that starts a new command, something that takes a value, or a value". Four
+ * categories answer it, and 46 token kinds would make every consumer re-derive
+ * the same four. Keeping the projection here means `completion.ts` is unchanged
+ * and there is exactly one place that knows the correspondence.
  */
+
+import { lex } from '../language/lexer.ts';
+import type { Token as LanguageToken, TokenKind as LanguageTokenKind } from '../language/tokens.ts';
 
 export type TokenKind =
   /** A bare or quoted word: a command name, a value, a path. */
   | 'word'
-  /** `-Name` or `--Name`. Not `-1`, which is a negative number. */
+  /** `-Name`. Not `-1`, which is a value, and not `--Path`, which is too. */
   | 'parameter'
-  /** A PowerShell operator spelled like a parameter: `-eq`, `-match`. */
+  /** An operator: `-eq`, `-match`, `.`, `,`, `=`. Never a new command. */
   | 'operator'
   /** `|`, `;`, `&&`, `||`, `(`, `)`, `{`, `}`, newline — a new command starts. */
   | 'separator'
-  /** `>`, `>>`, `2>`, `<` — whatever follows is a path, not an argument. */
+  /** `>`, `>>`, `2>&1`, `<` — whatever follows is a path, not an argument. */
   | 'redirection';
 
 export interface Token {
@@ -42,191 +65,120 @@ export interface Token {
 }
 
 /**
- * Operators that look like parameters. Without this list `$_.Length -gt 10`
- * would put the caret in "parameter position" of `Where-Object` and offer
- * `-Property`, which is worse than offering nothing.
- */
-const OPERATORS: ReadonlySet<string> = new Set(
-  [
-    'eq', 'ne', 'gt', 'ge', 'lt', 'le',
-    'ceq', 'cne', 'cgt', 'cge', 'clt', 'cle',
-    'ieq', 'ine', 'igt', 'ige', 'ilt', 'ile',
-    'like', 'notlike', 'match', 'notmatch',
-    'clike', 'cnotlike', 'cmatch', 'cnotmatch',
-    'ilike', 'inotlike', 'imatch', 'inotmatch',
-    'contains', 'notcontains', 'in', 'notin',
-    'ccontains', 'cnotcontains', 'cin', 'cnotin',
-    'replace', 'creplace', 'ireplace', 'split', 'csplit', 'isplit', 'join',
-    'and', 'or', 'xor', 'not', 'is', 'isnot', 'as',
-    'band', 'bor', 'bxor', 'bnot', 'shl', 'shr', 'f',
-  ].map((o) => o.toLowerCase()),
-);
-
-/**
- * v1's `FLAGRE`, kept verbatim in spirit: one or two dashes then an ASCII
- * letter. The comment there was `只有 -Name 這種才算參數;-1 是負數值,不是參數`
- * — only `-Name` is a parameter, `-1` is a negative number — and that is still
- * the rule.
- */
-const PARAMETER_RE = /^-{1,2}[A-Za-z_]/;
-
-/**
- * Characters that end a bare word.
+ * The projection, as data.
  *
- * `,` is absent on purpose: it is PowerShell's array operator, so `-Path a,b` is
- * one argument to one parameter. Breaking on it would put the caret in "command
- * position" after every comma.
+ * Anything absent is a `word`, which is the right default: the four categories
+ * exist to spot the tokens that CHANGE completion's state, and everything else
+ * is a value.
+ *
+ * `Comma` is an `operator` and deliberately not a `separator`. The old file
+ * refused to break on it at all, with the comment "breaking on it would put the
+ * caret in command position after every comma" — the concern was right and the
+ * remedy was wrong. Lexing it correctly and classifying it as an operator keeps
+ * the caret out of command position, because only `separator` resets the
+ * segment.
  */
-const BREAKS = new Set([' ', '\t', '\n', '\r', '|', ';', '&', '(', ')', '{', '}', '<', '>']);
+const PROJECTION: Partial<Record<LanguageTokenKind, TokenKind>> = {
+  Parameter: 'parameter',
 
-/** Longest match wins, so `&&` is tried before `&` and `||` before `|`. */
-const SEPARATORS: readonly string[] = ['&&', '||', '|', ';', '&', '(', ')', '{', '}', '\n'];
+  Pipe: 'separator',
+  AndAnd: 'separator',
+  OrOr: 'separator',
+  Semi: 'separator',
+  Ampersand: 'separator',
+  NewLine: 'separator',
+  LParen: 'separator',
+  RParen: 'separator',
+  LCurly: 'separator',
+  RCurly: 'separator',
+  DollarParen: 'separator',
+  AtParen: 'separator',
+  AtCurly: 'separator',
+  LBracket: 'separator',
+  RBracket: 'separator',
 
-function isRedirectionAt(text: string, i: number): number {
-  // `2>&1`, `2>>`, `>>`, `>`, `<`. Returns the length matched, or 0.
-  const m = /^(?:\d?>>?(?:&\d)?|<)/.exec(text.slice(i, i + 4));
-  return m === null ? 0 : m[0].length;
+  Redirection: 'redirection',
+  RedirectInStd: 'redirection',
+
+  Comma: 'operator',
+  Dot: 'operator',
+  DotDot: 'operator',
+  ColonColon: 'operator',
+  Colon: 'operator',
+  Equals: 'operator',
+  Minus: 'operator',
+  MinusMinus: 'operator',
+  Plus: 'operator',
+  PlusPlus: 'operator',
+  Multiply: 'operator',
+  Divide: 'operator',
+  Rem: 'operator',
+  Exclaim: 'operator',
+  QuestionMark: 'operator',
+  QuestionQuestion: 'operator',
+
+  Ieq: 'operator', Ine: 'operator', Igt: 'operator', Ige: 'operator',
+  Ilt: 'operator', Ile: 'operator', Ceq: 'operator', Cne: 'operator',
+  Cgt: 'operator', Cge: 'operator', Clt: 'operator', Cle: 'operator',
+  Ilike: 'operator', Inotlike: 'operator', Imatch: 'operator', Inotmatch: 'operator',
+  Clike: 'operator', Cnotlike: 'operator', Cmatch: 'operator', Cnotmatch: 'operator',
+  Icontains: 'operator', Inotcontains: 'operator', Iin: 'operator', Inotin: 'operator',
+  Ccontains: 'operator', Cnotcontains: 'operator', Cin: 'operator', Cnotin: 'operator',
+  Ireplace: 'operator', Creplace: 'operator', Isplit: 'operator', Csplit: 'operator',
+  Join: 'operator', Is: 'operator', IsNot: 'operator', As: 'operator',
+  Shl: 'operator', Shr: 'operator', Format: 'operator',
+  And: 'operator', Or: 'operator', Xor: 'operator', Not: 'operator',
+  Band: 'operator', Bor: 'operator', Bxor: 'operator', Bnot: 'operator',
+};
+
+/**
+ * Trivia the caret can sit in but completion has nothing to say about.
+ *
+ * Dropped rather than projected, because every one of the four categories would
+ * be a lie: a comment is not a word, and calling it a separator would put the
+ * caret in command position after `#`.
+ */
+const TRIVIA: ReadonlySet<LanguageTokenKind> = new Set<LanguageTokenKind>([
+  'Comment',
+  'LineContinuation',
+]);
+
+/** A here-string's opener projects to the quote character it is built from. */
+function legacyQuote(token: LanguageToken): '"' | "'" | null {
+  switch (token.quote) {
+    case '"':
+    case '@"':
+      return '"';
+    case "'":
+    case "@'":
+      return "'";
+    default:
+      return null;
+  }
 }
 
-function classifyWord(raw: string, quote: '"' | "'" | null): TokenKind {
-  if (quote !== null) return 'word';
-  if (!PARAMETER_RE.test(raw)) return 'word';
-  const bare = raw.replace(/^-+/, '').toLowerCase();
-  return OPERATORS.has(bare) ? 'operator' : 'parameter';
-}
-
-/** Lex a command line. Never throws; unterminated quotes produce a token. */
+/**
+ * Lex a command line for the line editor. Never throws.
+ *
+ * A projection of `lex`, so a string cannot be tokenised by a second path.
+ * `tests/unit/lexer-single.test.mts` asserts that this function and the
+ * highlighter agree with the execution parser token for token.
+ */
 export function tokenize(text: string): Token[] {
   const tokens: Token[] = [];
-  const len = text.length;
-  let i = 0;
-
-  while (i < len) {
-    const ch = text[i] ?? '';
-
-    if (ch === ' ' || ch === '\t' || ch === '\r') {
-      i += 1;
-      continue;
-    }
-
-    const redirection = isRedirectionAt(text, i);
-    if (redirection > 0) {
-      const raw = text.slice(i, i + redirection);
-      tokens.push({
-        kind: 'redirection',
-        text: raw,
-        value: raw,
-        start: i,
-        end: i + redirection,
-        quote: null,
-        unterminated: false,
-      });
-      i += redirection;
-      continue;
-    }
-
-    const separator = SEPARATORS.find((s) => text.startsWith(s, i));
-    if (separator !== undefined) {
-      tokens.push({
-        kind: 'separator',
-        text: separator,
-        value: separator,
-        start: i,
-        end: i + separator.length,
-        quote: null,
-        unterminated: false,
-      });
-      i += separator.length;
-      continue;
-    }
-
-    tokens.push(readWord(text, i));
-    const last = tokens[tokens.length - 1];
-    i = last === undefined ? len : Math.max(last.end, i + 1);
+  for (const token of lex(text).tokens) {
+    if (TRIVIA.has(token.kind)) continue;
+    tokens.push({
+      kind: PROJECTION[token.kind] ?? 'word',
+      text: token.text,
+      value: token.value,
+      start: token.start,
+      end: token.end,
+      quote: legacyQuote(token),
+      unterminated: token.unterminated,
+    });
   }
-
   return tokens;
-}
-
-function readWord(text: string, start: number): Token {
-  const len = text.length;
-  const opener = text[start];
-  if (opener === '"' || opener === "'") {
-    const closed = readQuoted(text, start, opener);
-    return {
-      kind: 'word',
-      text: text.slice(start, closed.end),
-      value: closed.value,
-      start,
-      end: closed.end,
-      quote: opener,
-      unterminated: closed.unterminated,
-    };
-  }
-
-  let i = start;
-  let value = '';
-  while (i < len) {
-    const ch = text[i] ?? '';
-    if (BREAKS.has(ch)) break;
-    if (isRedirectionAt(text, i) > 0) break;
-    if (ch === '`' && i + 1 < len) {
-      // Backtick is PowerShell's escape character outside single quotes.
-      value += text[i + 1] ?? '';
-      i += 2;
-      continue;
-    }
-    if (ch === '"' || ch === "'") {
-      // An embedded quote, as in `--path="a b"`. Absorb it into this token.
-      const inner = readQuoted(text, i, ch);
-      value += inner.value;
-      i = inner.end;
-      continue;
-    }
-    value += ch;
-    i += 1;
-  }
-
-  const raw = text.slice(start, i);
-  return {
-    kind: classifyWord(raw, null),
-    text: raw,
-    value,
-    start,
-    end: i,
-    quote: null,
-    unterminated: false,
-  };
-}
-
-function readQuoted(
-  text: string,
-  start: number,
-  quote: '"' | "'",
-): { value: string; end: number; unterminated: boolean } {
-  const len = text.length;
-  let i = start + 1;
-  let value = '';
-  while (i < len) {
-    const ch = text[i] ?? '';
-    if (ch === quote) {
-      // Doubling escapes the quote in both PowerShell string forms.
-      if (text[i + 1] === quote) {
-        value += quote;
-        i += 2;
-        continue;
-      }
-      return { value, end: i + 1, unterminated: false };
-    }
-    if (quote === '"' && ch === '`' && i + 1 < len) {
-      value += text[i + 1] ?? '';
-      i += 2;
-      continue;
-    }
-    value += ch;
-    i += 1;
-  }
-  return { value, end: len, unterminated: true };
 }
 
 /** Quote `value` for insertion, the way PowerShell would need it quoted. */

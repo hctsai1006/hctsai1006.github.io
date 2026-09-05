@@ -76,8 +76,26 @@ describe('tokenizer', () => {
   });
 
   it('tells a parameter from an operator that is spelled like one', () => {
+    // pwsh 7.6.5, via [Parser]::ParseInput:
+    //   Where-Object { $_.Length -gt 10 }
+    //   -> Generic LCurly Variable Dot Identifier Igt Number RCurly
+    //
+    // EIGHT tokens, not six. This assertion used to say six, because the old
+    // tokenizer lexed `$_.Length` as a single word — which is the difference
+    // between knowing `.Length` is a member access and thinking it is part of a
+    // filename. Corrected against the measurement, not adjusted to fit the code:
+    // the fixture in lexer-pwsh-7.6.5.json carries this exact line.
     const kinds = tokenize('Where-Object { $_.Length -gt 10 }').map((t) => t.kind);
-    assert.deepEqual(kinds, ['word', 'separator', 'word', 'operator', 'word', 'separator']);
+    assert.deepEqual(kinds, [
+      'word', // Where-Object
+      'separator', // {
+      'word', // $_
+      'operator', // .
+      'word', // Length
+      'operator', // -gt
+      'word', // 10
+      'separator', // }
+    ]);
   });
 
   it('recognises the separators that start a new command, and redirection', () => {
@@ -98,12 +116,30 @@ describe('tokenizer', () => {
     );
   });
 
-  it('does not break on a comma, which is the array operator', () => {
-    // Breaking there would put the caret in command position after every comma.
+  it('breaks on a comma, and still does not put the caret in command position', () => {
+    // pwsh 7.6.5:
+    //   Get-ChildItem -Path a,b
+    //   -> Generic Parameter Identifier Comma Identifier
+    //
+    // This used to assert ONE token `a,b`, justified in a comment by "breaking
+    // on it would put the caret in command position after every comma". The
+    // concern was right and the remedy was wrong: the comma really is a
+    // separate token, and what keeps the caret out of command position is
+    // classifying it as an OPERATOR rather than a SEPARATOR — only a separator
+    // resets the pipeline segment.
     assert.deepEqual(
-      tokenize('Get-ChildItem -Path a,b').map((t) => t.value),
-      ['Get-ChildItem', '-Path', 'a,b'],
+      tokenize('Get-ChildItem -Path a,b').map((t) => [t.kind, t.value]),
+      [
+        ['word', 'Get-ChildItem'],
+        ['parameter', '-Path'],
+        ['word', 'a'],
+        ['operator', ','],
+        ['word', 'b'],
+      ],
     );
+    // The property the old assertion was protecting, asserted directly.
+    assert.equal(contextOf('Get-ChildItem -Path a,b').commandName, 'Get-ChildItem');
+    assert.notEqual(contextOf('Get-ChildItem -Path a,b').kind, 'command');
   });
 
   it('quotes only what needs it, and prefers single quotes', () => {

@@ -393,13 +393,47 @@ describe('the core is headless', () => {
     }
   });
 
-  it('imports nothing outside the core but the generated manifests', () => {
+  it('imports nothing outside the core but the manifests and the shared lexer', () => {
+    // `../language/*` is allowed, and the allowance is the point rather than a
+    // concession. This gate used to permit only `./` and the manifests, and the
+    // effect was that the line editor could not share the engine's lexer — so it
+    // grew its own, which is how `tokenize.ts` came to disagree with `binder.ts`
+    // about whether `--Path` is a parameter and with pwsh about `-Path a,b`.
+    // A rule that forbids reuse manufactures duplicates.
+    //
+    // What the gate is actually for — no DOM, no host coupling, no reaching into
+    // commands or the kernel — is untouched: `src/language/` is pure TypeScript
+    // over strings, and the sibling test above still refuses browser globals
+    // anywhere in this directory.
     const files = readdirSync(DIRECTORY).filter((f) => f.endsWith('.ts'));
     for (const file of files) {
       for (const specifier of importsIn(readFileSync(join(DIRECTORY, file), 'utf8'), file)) {
         assert.ok(
-          specifier.startsWith('./') || specifier === '../commands/manifests.json',
+          specifier.startsWith('./') ||
+            specifier === '../commands/manifests.json' ||
+            specifier.startsWith('../language/'),
           `${file} imports ${specifier}, which is outside the core`,
+        );
+      }
+    }
+  });
+
+  it('keeps the shared lexer headless too, since the core now depends on it', () => {
+    // The allowance above is only safe while what it allows is itself headless.
+    const languageDir = join(DIRECTORY, '..', 'language');
+    const files = readdirSync(languageDir).filter((f) => f.endsWith('.ts'));
+    assert.ok(files.length >= 4, `expected the language core, found ${files.length} files`);
+    for (const file of files) {
+      const source = readFileSync(join(languageDir, file), 'utf8');
+      assert.deepEqual(
+        browserGlobalsNamedIn(source, file),
+        [],
+        `language/${file} references browser identifiers`,
+      );
+      for (const specifier of importsIn(source, file)) {
+        assert.ok(
+          specifier.startsWith('./'),
+          `language/${file} imports ${specifier}; the lexer must depend on nothing`,
         );
       }
     }
