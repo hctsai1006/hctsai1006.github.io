@@ -349,7 +349,15 @@ describe('every KernelEvent survives structuredClone', () => {
         signalled: null,
       },
     },
-    { kind: 'exit', processId: 1, requestId: 'r1', exitCode: 0, signalled: null },
+    {
+      kind: 'exit',
+      processId: 1,
+      requestId: 'r1',
+      exitCode: 0,
+      succeeded: true,
+      nativeExitCode: null,
+      signalled: null,
+    },
     { kind: 'rejected', requestId: 'r1', requestKind: 'resize', problems: ['columns must be an integer'] },
   ];
 

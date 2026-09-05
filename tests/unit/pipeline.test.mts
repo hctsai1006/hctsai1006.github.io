@@ -161,7 +161,10 @@ describe('composing stages', () => {
     assert.deepEqual(out, ['made up']);
   });
 
-  it('reports the last stage exit code, which is $LASTEXITCODE', async () => {
+  it('reports the last stage status, which is what the pipeline is judged on', async () => {
+    // NOT $LASTEXITCODE. Measured in pwsh 7.6.5: a cmdlet never touches that
+    // variable — `cmd /c "exit 7"` then a failing Get-Item leaves it at 7 —
+    // so a stage's status and $LASTEXITCODE are two different numbers.
     const host = testHost();
     const failing: CommandModule = {
       manifest: testManifest('Fails'),

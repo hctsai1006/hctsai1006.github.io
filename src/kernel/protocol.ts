@@ -472,18 +472,42 @@ export interface ProcessChangedEvent {
 }
 
 /**
- * A process ended, with the code `$LASTEXITCODE` will report.
+ * A process ended.
  *
  * Redundant with the final `process-changed` on purpose. This is the event a
  * caller awaits, and making it its own kind means "wait for completion" is not
  * "watch every snapshot and filter" — which is the version everybody gets
  * subtly wrong when a process exits before they subscribe.
+ *
+ * This used to say "with the code `$LASTEXITCODE` will report". It is not that
+ * code, and the difference is measurable. In pwsh 7.6.5 a cmdlet never touches
+ * `$LASTEXITCODE` — `cmd /c "exit 7"` then a failing `Get-Item` leaves it at 7
+ * — so a cmdlet's status and `$LASTEXITCODE` are two different numbers and are
+ * carried as two different fields.
  */
 export interface ExitEvent {
   readonly kind: 'exit';
   readonly processId: ProcessId;
   readonly requestId: RequestId;
+  /** The process's STATUS. 0 means it succeeded. */
   readonly exitCode: number;
+  /**
+   * What `$?` reports for this process.
+   *
+   * Not simply `exitCode === 0`. Measured in pwsh 7.6.5: a cmdlet that emits
+   * output AND writes a non-terminating error still leaves `$?` False —
+   * `Get-Item 'C:\nope','C:\Windows' -ErrorAction SilentlyContinue` returns one
+   * object and sets `$?` to False.
+   */
+  readonly succeeded: boolean;
+  /**
+   * What this process contributed to `$LASTEXITCODE`, or null for "nothing".
+   *
+   * Null for every cmdlet, which is every command in this milestone. Only a
+   * native program or a script PowerShell launched sets that variable, and the
+   * previous value survives every cmdlet in between.
+   */
+  readonly nativeExitCode: number | null;
   /** The signal that stopped it, or null if it finished on its own. */
   readonly signalled: VirtualSignal | null;
 }

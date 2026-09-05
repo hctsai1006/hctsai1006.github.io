@@ -47,7 +47,7 @@ import type {
   InvocationContext,
 } from '../commands/invocation.ts';
 import { CapabilityDeniedError } from '../commands/invocation.ts';
-import type { Capability, CommandManifest } from '../commands/manifest.ts';
+import type { Capability, CommandManifest, Runtime } from '../commands/manifest.ts';
 import type { DialogPort, FileSystemPort, PreferencesPort } from '../commands/ports.ts';
 import type { PSValue } from '../pipeline/psobject.ts';
 import type {
@@ -102,12 +102,38 @@ function isStopped(error: unknown): boolean {
 // ---------------------------------------------------------------------------
 
 /**
- * `command not found`. The shell convention, and what makes `if (!$?)` and
- * `$LASTEXITCODE -eq 127` mean the same here as in bash and in pwsh on Unix.
+ * `command not found`, as a STATUS.
+ *
+ * 127 is the shell convention for a program that could not be found, and it is
+ * kept because a status number needs a value and this one is the one everybody
+ * recognises. What it is NOT is `$LASTEXITCODE`. Measured in pwsh 7.6.5:
+ *
+ *   cmd /c "exit 13"            $LASTEXITCODE 13
+ *   This-Command-Does-Not-Exist $LASTEXITCODE 13, $? False
+ *
+ * The variable does not move. A missing CMDLET is not a missing program, and
+ * this constant's previous docstring claimed the two agreed.
  */
 export const EXIT_COMMAND_NOT_FOUND = 127;
-/** A command threw, or was denied a capability. */
+/** A command threw, was denied a capability, or could not bind. */
 export const EXIT_FAILURE = 1;
+
+/**
+ * Does a process of this runtime set `$LASTEXITCODE`?
+ *
+ * `wasm` and `vm` mean a separate runtime executed the command — real
+ * execution, but not ours — which is the closest thing this engine has to "a
+ * native program PowerShell launched". `semantic` and `browser` are both
+ * cmdlet-shaped: they run here, they write to the six streams, and pwsh's own
+ * answer for a cmdlet is that `$LASTEXITCODE` does not move.
+ *
+ * Nothing in `manifests.json` is `wasm` or `vm` today — 57 `semantic` and 28
+ * `browser` — so in practice `$LASTEXITCODE` stays unset for a whole session,
+ * which is exactly what a pwsh session that has run no external program shows.
+ */
+function setsLastExitCode(runtime: Runtime): boolean {
+  return runtime === 'wasm' || runtime === 'vm';
+}
 
 // ---------------------------------------------------------------------------
 // stdin
@@ -202,6 +228,19 @@ interface TerminalState {
   cwd: string;
   columns: number;
   rows: number;
+  /**
+   * `$?`. True in a fresh session, which is what pwsh 7.6.5 reports before
+   * anything has run.
+   */
+  lastSucceeded: boolean;
+  /**
+   * `$LASTEXITCODE`, or null for "never set".
+   *
+   * Null and not 0. Measured: in a fresh pwsh 7.6.5 session the variable does
+   * not exist, and `0` would be indistinguishable from a program that ran and
+   * succeeded.
+   */
+  lastExitCode: number | null;
 }
 
 /** The default terminal geometry, used until the UI sends a `resize`. */
@@ -223,9 +262,18 @@ const DEFAULT_PROFILE: CompatibilityView = {
   },
 };
 
-/** How a stage ended. The last stage's result is the pipeline's. */
+/**
+ * How a stage ended.
+ *
+ * Three separate facts, because pwsh keeps them separate and measurably so:
+ * `exitCode` is the command's status, `succeeded` is `$?` (which is False even
+ * for a command that produced output, if it also wrote an error record), and
+ * `nativeExitCode` is the only one of the three that can move `$LASTEXITCODE`.
+ */
 interface StageResult {
   readonly exitCode: number;
+  readonly succeeded: boolean;
+  readonly nativeExitCode: number | null;
   readonly signalled: VirtualSignal | null;
 }
 
@@ -257,6 +305,16 @@ interface Prepared {
   readonly host: PipelineHost;
   readonly signal: AbortSignal;
   readonly errorSink: Sink<ErrorRecord>;
+  /**
+   * Did anything reach stream 2?
+   *
+   * `$?` is not `exitCode === 0`. Measured in pwsh 7.6.5:
+   * `Get-Item 'C:
+ope','C:\Windows' -ErrorAction SilentlyContinue` emits one
+   * object and still leaves `$?` False. Writing an error record is the fact
+   * that decides it, so the fact has to be recorded.
+   */
+  wroteError: boolean;
   outcome: StageResult | null;
 }
 
@@ -383,7 +441,16 @@ export class Kernel {
     // delivered to the AbortController and it is the command's job to notice;
     // a kill a command could ignore would just be SIGTERM with extra steps.
     this.#signals.onSignal((pid, signal) => {
-      if (signal === 'SIGKILL') this.#finish(pid, SIGNAL_EXIT_CODE.SIGKILL, 'SIGKILL');
+      if (signal === 'SIGKILL') {
+        this.#finish(pid, {
+          exitCode: SIGNAL_EXIT_CODE.SIGKILL,
+          succeeded: false,
+          // A killed CMDLET does not move `$LASTEXITCODE` either; a killed
+          // native program on Unix would, and nothing here is one yet.
+          nativeExitCode: null,
+          signalled: 'SIGKILL',
+        });
+      }
       else this.#table.transition(pid, 'stopping');
     });
   }
@@ -431,6 +498,32 @@ export class Kernel {
 
   cwd(terminalId: TerminalId): string {
     return this.#terminals.get(terminalId)?.cwd ?? this.#defaultCwd;
+  }
+
+  /**
+   * `$?` for this terminal. True before anything has run.
+   *
+   * SEPARATE from `lastExitCode`, because pwsh keeps them separate and the
+   * difference is measurable. In pwsh 7.6.5, after `cmd /c "exit 7"` a failing
+   * `Get-Item` leaves `$LASTEXITCODE` at 7 and sets `$?` to False; a succeeding
+   * `Get-Date` leaves it at 7 and sets `$?` to True. A cmdlet moves one of the
+   * two and never the other.
+   */
+  lastSucceeded(terminalId: TerminalId): boolean {
+    return this.#terminals.get(terminalId)?.lastSucceeded ?? true;
+  }
+
+  /**
+   * `$LASTEXITCODE` for this terminal, or null for "never set".
+   *
+   * Null and not 0: in a fresh pwsh 7.6.5 session the variable does not exist,
+   * and 0 would be indistinguishable from a program that ran and succeeded.
+   * Nothing in this milestone is a program PowerShell launched, so it stays
+   * null for a whole session — which is what a pwsh session that has run no
+   * external command shows too.
+   */
+  lastExitCode(terminalId: TerminalId): number | null {
+    return this.#terminals.get(terminalId)?.lastExitCode ?? null;
   }
 
   // -- registration --------------------------------------------------------
@@ -603,7 +696,13 @@ export class Kernel {
   #terminal(terminalId: TerminalId): TerminalState {
     let terminal = this.#terminals.get(terminalId);
     if (terminal === undefined) {
-      terminal = { cwd: this.#defaultCwd, columns: DEFAULT_COLUMNS, rows: DEFAULT_ROWS };
+      terminal = {
+        cwd: this.#defaultCwd,
+        columns: DEFAULT_COLUMNS,
+        rows: DEFAULT_ROWS,
+        lastSucceeded: true,
+        lastExitCode: null,
+      };
       this.#terminals.set(terminalId, terminal);
     }
     return terminal;
@@ -758,7 +857,12 @@ export class Kernel {
               exceptionType: error instanceof Error ? error.name : 'System.Exception',
             }),
           );
-          last.outcome ??= { exitCode: EXIT_FAILURE, signalled: null };
+          last.outcome ??= {
+            exitCode: EXIT_FAILURE,
+            succeeded: false,
+            nativeExitCode: null,
+            signalled: null,
+          };
         }
       }
     } finally {
@@ -767,8 +871,15 @@ export class Kernel {
       // only worth having if the kernel's own events respect it.
       for (const entry of prepared) {
         const outcome = entry.outcome ?? this.#unstarted(entry);
-        this.#finish(entry.snapshot.pid, outcome.exitCode, outcome.signalled);
+        this.#finish(entry.snapshot.pid, outcome);
       }
+
+      // `$?` and `$LASTEXITCODE`, which are two different questions with two
+      // different answers. See `#recordStatus`.
+      this.#recordStatus(
+        terminalId,
+        prepared.map((entry) => entry.outcome ?? this.#unstarted(entry)),
+      );
 
       // A pipeline's exit code is its LAST stage's, in POSIX and in PowerShell
       // alike. Taking the leader's would report success for
@@ -795,10 +906,35 @@ export class Kernel {
    */
   #unstarted(entry: Prepared): StageResult {
     const signalled = this.#signals.deliveredTo(entry.snapshot.pid) ?? null;
+    const exitCode = signalled === null ? EXIT_FAILURE : SIGNAL_EXIT_CODE[signalled];
     return {
-      exitCode: signalled === null ? EXIT_FAILURE : SIGNAL_EXIT_CODE[signalled],
+      exitCode,
+      succeeded: false,
+      nativeExitCode: setsLastExitCode(entry.module.manifest.runtime) ? exitCode : null,
       signalled,
     };
+  }
+
+  /**
+   * Update `$?` and `$LASTEXITCODE` for a terminal, from one pipeline's stages.
+   *
+   * Two different rules, because pwsh has two different rules.
+   *
+   * `$?` is the AND over the pipeline. Measured in pwsh 7.6.5: a failing first
+   * stage feeding a succeeding last stage still leaves `$?` False
+   * (`Get-Item 'C:\nope' -ErrorAction SilentlyContinue | Measure-Object`), so
+   * it is not simply the last stage's answer.
+   *
+   * `$LASTEXITCODE` is the LAST stage that set one, and it is left ALONE when
+   * no stage set one. Measured: `cmd /c "exit 77" | Out-Null` reports 77, and
+   * every cmdlet in between leaves the previous value standing.
+   */
+  #recordStatus(terminalId: TerminalId, results: readonly StageResult[]): void {
+    const terminal = this.#terminal(terminalId);
+    terminal.lastSucceeded = results.every((result) => result.succeeded);
+    for (const result of results) {
+      if (result.nativeExitCode !== null) terminal.lastExitCode = result.nativeExitCode;
+    }
   }
 
   #track(promise: Promise<void>): void {
@@ -858,7 +994,17 @@ export class Kernel {
         ),
       ),
     });
-    this.#finish(snapshot.pid, EXIT_COMMAND_NOT_FOUND, null);
+    // `$?` False, `$LASTEXITCODE` untouched. Measured: after `cmd /c "exit 13"`
+    // a command-not-found leaves the variable at 13.
+    this.#finish(snapshot.pid, {
+      exitCode: EXIT_COMMAND_NOT_FOUND,
+      succeeded: false,
+      nativeExitCode: null,
+      signalled: null,
+    });
+    this.#recordStatus(terminalId, [
+      { exitCode: EXIT_COMMAND_NOT_FOUND, succeeded: false, nativeExitCode: null, signalled: null },
+    ]);
   }
 
   /**
@@ -900,7 +1046,15 @@ export class Kernel {
         ...(error.parameterName === null ? {} : { targetObject: error.parameterName }),
       }),
     });
-    this.#finish(snapshot.pid, EXIT_FAILURE, null);
+    this.#finish(snapshot.pid, {
+      exitCode: EXIT_FAILURE,
+      succeeded: false,
+      nativeExitCode: null,
+      signalled: null,
+    });
+    this.#recordStatus(terminalId, [
+      { exitCode: EXIT_FAILURE, succeeded: false, nativeExitCode: null, signalled: null },
+    ]);
   }
 
   /**
@@ -920,8 +1074,14 @@ export class Kernel {
     const { pid, requestId, terminalId, background } = snapshot;
     const signal = this.#signals.register(pid, groupLeader);
     const stdin = new StdinPipe();
+    // Declared before the sinks so the error sink can record into it. The
+    // fields the sinks do not need are filled in at the end.
+    const prepared = { wroteError: false } as {
+      wroteError: boolean;
+    } & Partial<Prepared>;
 
     const onError = (record: ErrorRecord): void => {
+      prepared.wroteError = true;
       if (background) this.#jobs.recordError(groupLeader, record);
       // Sanitised, not merely checked. `ErrorRecord.targetObject` is a PSValue,
       // so an error naming the object that failed is a hole exactly as wide as
@@ -974,7 +1134,7 @@ export class Kernel {
       dialog: this.#dialog,
     };
 
-    return {
+    return Object.assign(prepared, {
       snapshot,
       module,
       binding,
@@ -982,7 +1142,7 @@ export class Kernel {
       signal,
       errorSink: streams.streams.error,
       outcome: null,
-    };
+    }) as Prepared;
   }
 
   /**
@@ -1041,7 +1201,14 @@ export class Kernel {
           exitCode = SIGNAL_EXIT_CODE[signalled];
         }
 
-        entry.outcome = { exitCode, signalled };
+        entry.outcome = {
+          exitCode,
+          // `$?`: the status AND the error stream AND the signal. Every one of
+          // the three was measured to matter on its own.
+          succeeded: exitCode === 0 && !entry.wroteError && signalled === null,
+          nativeExitCode: setsLastExitCode(module.manifest.runtime) ? exitCode : null,
+          signalled,
+        };
         return exitCode;
       },
     };
@@ -1055,7 +1222,8 @@ export class Kernel {
    * will later settle and try to report its own code. The kill happened first
    * and is what the user saw, so the later report must lose.
    */
-  #finish(pid: ProcessId, exitCode: number, signalled: VirtualSignal | null): void {
+  #finish(pid: ProcessId, result: StageResult): void {
+    const { exitCode, signalled } = result;
     if (this.#finished.has(pid)) return;
     const existing = this.#table.get(pid);
     if (existing === undefined) return;
@@ -1082,6 +1250,8 @@ export class Kernel {
       processId: pid,
       requestId: snapshot?.requestId ?? existing.requestId,
       exitCode,
+      succeeded: result.succeeded,
+      nativeExitCode: result.nativeExitCode,
       signalled,
     });
   }

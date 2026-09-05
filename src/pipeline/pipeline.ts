@@ -302,9 +302,16 @@ export interface PipelineStage {
   readonly name: string;
   run(input: AsyncIterable<PSValue>, host: PipelineHost): AsyncIterable<PSValue>;
   /**
-   * The exit code of the most recent run. PowerShell's `$LASTEXITCODE` is the
-   * LAST stage's, which is why this lives on the stage rather than being
-   * returned by the pipeline.
+   * The STATUS of the most recent run: 0 for success, anything else for
+   * failure. It lives on the stage rather than being returned by the pipeline
+   * because a pipeline's status is its LAST stage's, and every stage's is
+   * separately interesting to a caller that wants to know which one failed.
+   *
+   * NOT `$LASTEXITCODE`, which this docstring used to call it. Measured in
+   * pwsh 7.6.5: `cmd /c "exit 7"` followed by a failing `Get-Item` leaves
+   * `$LASTEXITCODE` at 7 and sets `$?` to False. A cmdlet's status shows in
+   * `$?`; `$LASTEXITCODE` reports native programs and scripts, and the kernel
+   * models the two separately.
    */
   readonly exitCode: number;
 }

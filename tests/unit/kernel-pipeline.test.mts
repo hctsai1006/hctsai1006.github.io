@@ -495,6 +495,157 @@ describe('the kernel binds parameters instead of inventing an empty BindingResul
 });
 
 // ---------------------------------------------------------------------------
+// $? and $LASTEXITCODE are two different questions
+// ---------------------------------------------------------------------------
+
+describe('$? and $LASTEXITCODE', () => {
+  /** A command whose manifest says a separate runtime executed it. */
+  function nativeCommand(name: string, status: number): CommandModule {
+    return {
+      manifest: { ...manifest(name), runtime: 'wasm' },
+      invoke: async () => status,
+    };
+  }
+
+  it('starts as pwsh does: $? true, $LASTEXITCODE unset', () => {
+    // Measured in a fresh pwsh 7.6.5 session: `Get-Variable LASTEXITCODE`
+    // finds nothing, and `$?` is True.
+    const { kernel } = newKernel();
+    assert.equal(kernel.lastSucceeded('t1'), true);
+    assert.equal(kernel.lastExitCode('t1'), null, 'null, not 0 — 0 means a program succeeded');
+  });
+
+  it('a cmdlet moves $? and NEVER $LASTEXITCODE', async () => {
+    // The measurement this whole model comes from, in pwsh 7.6.5:
+    //   cmd /c "exit 42"                 $LASTEXITCODE 42, $? False
+    //   Get-Date                         $LASTEXITCODE 42, $? True
+    //   cmd /c "exit 7"; Get-Item nosuch $LASTEXITCODE  7, $? False
+    const { kernel } = newKernel();
+    kernel.register(nativeCommand('program', 42));
+    kernel.register(command('ok', async () => 0));
+    kernel.register(command('fails', async () => 3));
+
+    kernel.send({ kind: 'exec', requestId: 'r1', terminalId: 't1', source: 'program', background: false });
+    await kernel.drain();
+    assert.equal(kernel.lastExitCode('t1'), 42);
+    assert.equal(kernel.lastSucceeded('t1'), false);
+
+    kernel.send({ kind: 'exec', requestId: 'r2', terminalId: 't1', source: 'ok', background: false });
+    await kernel.drain();
+    assert.equal(kernel.lastSucceeded('t1'), true);
+    assert.equal(kernel.lastExitCode('t1'), 42, 'a cmdlet that SUCCEEDED left it alone');
+
+    kernel.send({ kind: 'exec', requestId: 'r3', terminalId: 't1', source: 'fails', background: false });
+    await kernel.drain();
+    assert.equal(kernel.lastSucceeded('t1'), false);
+    assert.equal(kernel.lastExitCode('t1'), 42, 'a cmdlet that FAILED left it alone too');
+  });
+
+  it('$? is false for a command that produced output AND wrote an error', async () => {
+    // Measured: `Get-Item 'C:\nope','C:\Windows' -ErrorAction SilentlyContinue`
+    // emits one object and still leaves $? False. So $? is not exitCode === 0.
+    const { kernel, events } = newKernel();
+    kernel.register(
+      command('partial', async (context) => {
+        await context.streams.success.write('one');
+        await context.streams.error.write({
+          message: 'the other one is missing',
+          fullyQualifiedErrorId: 'PathNotFound,partial',
+          category: 'ObjectNotFound',
+          exceptionType: 'System.Management.Automation.ItemNotFoundException',
+        });
+        return 0;
+      }),
+    );
+
+    kernel.send({ kind: 'exec', requestId: 'r1', terminalId: 't1', source: 'partial', background: false });
+    await kernel.drain();
+
+    assert.deepEqual(objects(events), ['one'], 'it really did produce output');
+    const exit = events.find((event) => event.kind === 'exit');
+    assert.equal(exit?.exitCode, 0, 'and its status really is zero');
+    assert.equal(exit?.succeeded, false);
+    assert.equal(kernel.lastSucceeded('t1'), false);
+  });
+
+  it('a command-not-found sets $? false and leaves $LASTEXITCODE alone', async () => {
+    // Measured: `cmd /c "exit 13"` then This-Command-Does-Not-Exist leaves the
+    // variable at 13. 127 is this engine's STATUS for it, not that variable.
+    const { kernel, events } = newKernel();
+    kernel.register(nativeCommand('program', 13));
+
+    kernel.send({ kind: 'exec', requestId: 'r1', terminalId: 't1', source: 'program', background: false });
+    await kernel.drain();
+    kernel.send({ kind: 'exec', requestId: 'r2', terminalId: 't1', source: 'nope', background: false });
+    await kernel.drain();
+
+    assert.equal(kernel.lastExitCode('t1'), 13);
+    assert.equal(kernel.lastSucceeded('t1'), false);
+    const exits = events.filter((event) => event.kind === 'exit');
+    assert.equal(exits[1]?.exitCode, 127, 'the status is still the shell convention');
+    assert.equal(exits[1]?.nativeExitCode, null, 'but it is not $LASTEXITCODE');
+  });
+
+  it('$? is the AND over a pipeline, not just the last stage', async () => {
+    // Measured: `Get-Item 'C:\nope' -ErrorAction SilentlyContinue | Measure-Object`
+    // leaves $? False even though the last stage succeeded.
+    const { kernel } = newKernel();
+    kernel.register(command('fails', async () => 3));
+    kernel.register(
+      command('counts', async (context) => {
+        let seen = 0;
+        for await (const _value of context.input) seen += 1;
+        await context.streams.success.write(seen);
+        return 0;
+      }),
+    );
+
+    kernel.send({
+      kind: 'exec',
+      requestId: 'r1',
+      terminalId: 't1',
+      source: 'fails | counts',
+      background: false,
+    });
+    await kernel.drain();
+    assert.equal(kernel.lastSucceeded('t1'), false);
+  });
+
+  it('$LASTEXITCODE is the last stage that set one, even mid-pipeline', async () => {
+    // Measured: `cmd /c "exit 77" | Out-Null`  ->  $LASTEXITCODE 77.
+    const { kernel } = newKernel();
+    kernel.register(nativeCommand('program', 77));
+    kernel.register(
+      command('sink', async (context) => {
+        for await (const _value of context.input) {
+          // consumed and discarded
+        }
+        return 0;
+      }),
+    );
+
+    kernel.send({
+      kind: 'exec',
+      requestId: 'r1',
+      terminalId: 't1',
+      source: 'program | sink',
+      background: false,
+    });
+    await kernel.drain();
+    assert.equal(kernel.lastExitCode('t1'), 77);
+  });
+
+  it('keeps $? per terminal, because two panes are two sessions', async () => {
+    const { kernel } = newKernel();
+    kernel.register(command('fails', async () => 1));
+    kernel.send({ kind: 'exec', requestId: 'r1', terminalId: 't1', source: 'fails', background: false });
+    await kernel.drain();
+    assert.equal(kernel.lastSucceeded('t1'), false);
+    assert.equal(kernel.lastSucceeded('t2'), true);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // the object model across a stage boundary
 // ---------------------------------------------------------------------------
 
