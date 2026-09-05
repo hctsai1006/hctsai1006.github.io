@@ -105,10 +105,43 @@ if (result.error !== undefined) {
 }
 
 const output = `${result.stdout ?? ''}`;
-process.stdout.write(output);
 if (result.stderr) process.stderr.write(result.stderr);
 
-if (result.status !== 0) process.exit(result.status ?? 1);
+/**
+ * Exit only after the captured output has actually reached the pipe.
+ *
+ * On POSIX, stdout to a pipe is ASYNCHRONOUS, and `process.exit()` discards
+ * whatever has not drained. On Windows it is synchronous, so the same code is
+ * correct there -- which is exactly how this survived review: it was written and
+ * tested on Windows, and it destroys evidence only on CI.
+ *
+ * MEASURED. A `verify` run failed on Linux CI and its output stopped mid-line:
+ *
+ *     ✔ applies -TotalCount and -Tail PER FILE (1.146913ms)
+ *       ✔ -Total
+ *
+ * 74,536 bytes, no trailing newline, no summary, no failing-test name, and
+ * nothing after it. The suite really had failed -- that is why the exit branch
+ * ran at all -- and the one thing that could say WHY was thrown away by the line
+ * reporting it. Two attempts to reproduce it locally succeeded in full, because
+ * both ran on Windows; the platform was the whole difference.
+ *
+ * `write`'s callback fires once the chunk has been flushed, so exiting from
+ * there keeps the early-exit shape and loses nothing. A gate that hides the
+ * reason for its own failure is worse than one that merely flakes: the flake
+ * gets re-run, and the reason is never learned.
+ */
+function writeThenExit(text: string, code: number): never {
+  process.stdout.write(text, () => {
+    process.exit(code);
+  });
+  // Unreachable in practice; `never` documents that nothing after a call to
+  // this runs, which is what the callers rely on.
+  return undefined as never;
+}
+
+if (result.status !== 0) writeThenExit(output, result.status ?? 1);
+process.stdout.write(output);
 
 /**
  * Read one `ℹ <name> <n>` line out of the spec reporter's summary.
