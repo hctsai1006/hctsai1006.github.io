@@ -16,7 +16,12 @@ import { ProcessTable } from '../../src/kernel/process/table.ts';
 import type { ProcessSpec } from '../../src/kernel/process/table.ts';
 import { isFailure, isTerminated, PROCESS_STATES } from '../../src/kernel/process/snapshot.ts';
 import type { ProcessSnapshot } from '../../src/kernel/process/snapshot.ts';
-import { JobManager, isJobFinished } from '../../src/kernel/process/jobs.ts';
+import {
+  JOB_ERROR_LIMIT,
+  JOB_VALUE_LIMIT,
+  JobManager,
+  isJobFinished,
+} from '../../src/kernel/process/jobs.ts';
 import { KERNEL_PID } from '../../src/kernel/ids.ts';
 import { errorRecord } from '../../src/pipeline/streams.ts';
 
@@ -253,5 +258,75 @@ describe('jobs', () => {
     const job = jobs.start(1, 'a');
     assert.equal(Object.hasOwn(job, 'instanceId'), false);
     assert.equal(Number.isInteger(job.id), true);
+  });
+});
+
+describe('a job that nobody receives', () => {
+  it('stops growing, and says how much it dropped', () => {
+    // The buffer was unbounded. `receive`'s own docstring said it "would grow
+    // without bound in a tab that stays open for days" and offered the
+    // destructive default of Receive-Job as the answer -- which is only an
+    // answer if somebody runs it. Real pwsh is unbounded too, and that is fine
+    // on a desktop; here the runaway takes the page down with it, including the
+    // terminal the user would have used to stop the job.
+    const jobs = new JobManager(() => 1);
+    const job = jobs.start(1, 'Start-Job { 1..100000 }');
+
+    const overshoot = 250;
+    for (let i = 0; i < JOB_VALUE_LIMIT + overshoot; i += 1) jobs.record(1, i);
+
+    const out = jobs.receive(job.id, true);
+    assert.equal(out.values.length, JOB_VALUE_LIMIT, 'bounded');
+    assert.equal(out.droppedValues, overshoot, 'and it counted what it dropped');
+
+    // The OLDEST went, so what remains is what the job is doing now.
+    assert.equal(out.values[0], overshoot);
+    assert.equal(out.values.at(-1), JOB_VALUE_LIMIT + overshoot - 1);
+  });
+
+  it('never lets a runaway success stream push out an error', () => {
+    // Errors are rarer and worth more, so they get their own room. One flood of
+    // objects must not be able to evict the error that explains it.
+    const jobs = new JobManager(() => 1);
+    const job = jobs.start(1, 'noisy');
+    jobs.recordError(1, errorRecord('the one that matters', 'Boom', 'noisy'));
+    for (let i = 0; i < JOB_VALUE_LIMIT * 2; i += 1) jobs.record(1, i);
+
+    const out = jobs.receive(job.id, true);
+    assert.equal(out.errors.length, 1);
+    assert.equal(out.errors[0]?.message, 'the one that matters');
+    assert.equal(out.droppedErrors, 0);
+    assert.ok(out.droppedValues > 0);
+  });
+
+  it('keeps the count after a drain, so a second receive cannot look complete', () => {
+    const jobs = new JobManager(() => 1);
+    const job = jobs.start(1, 'x');
+    for (let i = 0; i < JOB_VALUE_LIMIT + 5; i += 1) jobs.record(1, i);
+
+    const first = jobs.receive(job.id);
+    assert.equal(first.droppedValues, 5);
+
+    const second = jobs.receive(job.id);
+    assert.equal(second.values.length, 0, 'drained');
+    assert.equal(
+      second.droppedValues,
+      5,
+      'but still incomplete, and still says so -- zeroing this would let a ' +
+        'second Receive-Job report a complete answer for a job that lost output',
+    );
+    assert.equal(jobs.get(job.id)?.droppedValues, 5, 'and Get-Job can see it too');
+  });
+
+  it('bounds errors on their own limit', () => {
+    const jobs = new JobManager(() => 1);
+    const job = jobs.start(1, 'failing');
+    for (let i = 0; i < JOB_ERROR_LIMIT + 3; i += 1) {
+      jobs.recordError(1, errorRecord(`e${String(i)}`, 'Boom', 'failing'));
+    }
+    const out = jobs.receive(job.id, true);
+    assert.equal(out.errors.length, JOB_ERROR_LIMIT);
+    assert.equal(out.droppedErrors, 3);
+    assert.equal(out.errors[0]?.message, 'e3', 'the oldest went');
   });
 });

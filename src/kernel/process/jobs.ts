@@ -67,18 +67,72 @@ export interface JobSnapshot {
   readonly startedAt: number;
   readonly endedAt: number | null;
   readonly exitCode: number | null;
+  /**
+   * How many objects and errors this job produced that the buffer could not
+   * keep. Non-zero means `Receive-Job` will return less than the job emitted,
+   * and both `Get-Job` and `Receive-Job` are expected to say so. See
+   * JOB_VALUE_LIMIT.
+   */
+  readonly droppedValues: number;
+  readonly droppedErrors: number;
 }
 
 /** What `Receive-Job` hands back: the success objects and the errors, apart. */
 export interface JobOutput {
   readonly values: readonly PSValue[];
   readonly errors: readonly ErrorRecord[];
+  /**
+   * Produced but not kept, because the buffer was full. Carried here so that
+   * `Receive-Job` can report an incomplete answer AS incomplete: a suffix that
+   * looks like the whole output is the failure this exists to prevent.
+   */
+  readonly droppedValues: number;
+  readonly droppedErrors: number;
 }
 
 interface JobEntry {
   snapshot: JobSnapshot;
   values: PSValue[];
   errors: ErrorRecord[];
+}
+
+/**
+ * How much a job may accumulate before the oldest is dropped.
+ *
+ * A KNOWN DIVERGENCE, recorded rather than hidden: real PowerShell does not
+ * bound this. It is a desktop process, and a job that fills memory is the
+ * user's problem to notice. This is a browser tab, where the same runaway takes
+ * the page down with it — including the terminal the user would have used to
+ * stop the job.
+ *
+ * `receive`'s docstring already says a buffer that never drained "would grow
+ * without bound in a tab that stays open for days", and offered the destructive
+ * default of `Receive-Job` as the answer. That is only an answer if somebody
+ * runs it. A job nobody receives grew forever.
+ *
+ * THE OLDEST GOES, and the count of what went is kept. Two reasons for that
+ * direction rather than refusing new output: a person checking on a
+ * long-running job wants what it is doing NOW, and refusing is not available
+ * anyway — the job has already produced the value by the time this is called.
+ * What matters is that the loss is COUNTED and reaches the snapshot, so
+ * `Get-Job` and `Receive-Job` can say it happened. Silently returning a
+ * plausible-looking suffix is the failure mode; a suffix plus "4,213 dropped"
+ * is not.
+ *
+ * Errors are capped separately and never compete with values for room. They are
+ * rarer and worth more, and one runaway success stream must not be able to push
+ * out the error that explains it.
+ */
+export const JOB_VALUE_LIMIT = 10_000;
+export const JOB_ERROR_LIMIT = 1_000;
+
+/** Append, dropping the oldest at the limit. Returns how many were dropped. */
+function appendBounded<T>(buffer: T[], item: T, limit: number): number {
+  buffer.push(item);
+  if (buffer.length <= limit) return 0;
+  const excess = buffer.length - limit;
+  buffer.splice(0, excess);
+  return excess;
 }
 
 export type JobListener = (snapshot: JobSnapshot) => void;
@@ -140,6 +194,8 @@ export class JobManager {
         return Object.freeze({
           values: frozenList(output.values),
           errors: frozenList(output.errors),
+          droppedValues: output.droppedValues,
+          droppedErrors: output.droppedErrors,
         });
       },
       onChange: (listener: JobListener): (() => void) => jobs.onChange(listener),
@@ -169,6 +225,8 @@ export class JobManager {
       startedAt: this.#clock(),
       endedAt: null,
       exitCode: null,
+      droppedValues: 0,
+      droppedErrors: 0,
     });
     this.#jobs.set(id, { snapshot, values: [], errors: [] });
     this.#byPid.set(pid, id);
@@ -194,7 +252,8 @@ export class JobManager {
   record(pid: ProcessId, value: PSValue): void {
     const entry = this.#entryForPid(pid);
     if (entry === undefined) return;
-    entry.values.push(value);
+    const dropped = appendBounded(entry.values, value, JOB_VALUE_LIMIT);
+    if (dropped > 0) this.#countDropped(entry, dropped, 0);
     this.#setHasMoreData(entry, true);
   }
 
@@ -202,7 +261,8 @@ export class JobManager {
   recordError(pid: ProcessId, record: ErrorRecord): void {
     const entry = this.#entryForPid(pid);
     if (entry === undefined) return;
-    entry.errors.push(record);
+    const dropped = appendBounded(entry.errors, record, JOB_ERROR_LIMIT);
+    if (dropped > 0) this.#countDropped(entry, 0, dropped);
     this.#setHasMoreData(entry, true);
   }
 
@@ -216,9 +276,17 @@ export class JobManager {
    */
   receive(id: JobId, keep = false): JobOutput {
     const entry = this.#jobs.get(id);
-    if (entry === undefined) return { values: [], errors: [] };
+    if (entry === undefined) return { values: [], errors: [], droppedValues: 0, droppedErrors: 0 };
 
-    const output: JobOutput = { values: [...entry.values], errors: [...entry.errors] };
+    // The dropped counts are NOT reset by a drain. They describe what this job
+    // produced and lost, which stays true after the buffer is emptied; zeroing
+    // them here would make a second Receive-Job report a complete answer.
+    const output: JobOutput = {
+      values: [...entry.values],
+      errors: [...entry.errors],
+      droppedValues: entry.snapshot.droppedValues,
+      droppedErrors: entry.snapshot.droppedErrors,
+    };
     if (!keep) {
       entry.values.length = 0;
       entry.errors.length = 0;
@@ -289,6 +357,22 @@ export class JobManager {
   #entryForPid(pid: ProcessId): JobEntry | undefined {
     const id = this.#byPid.get(pid);
     return id === undefined ? undefined : this.#jobs.get(id);
+  }
+
+  /**
+   * Record output this job produced and the buffer could not keep.
+   *
+   * Announced like any other snapshot change, so a UI watching a job learns
+   * that it started losing output at the moment it started -- not when someone
+   * eventually runs Receive-Job and wonders why the numbers do not add up.
+   */
+  #countDropped(entry: JobEntry, values: number, errors: number): void {
+    entry.snapshot = Object.freeze({
+      ...entry.snapshot,
+      droppedValues: entry.snapshot.droppedValues + values,
+      droppedErrors: entry.snapshot.droppedErrors + errors,
+    });
+    this.#announce(entry.snapshot);
   }
 
   #setHasMoreData(entry: JobEntry, hasMoreData: boolean): void {
