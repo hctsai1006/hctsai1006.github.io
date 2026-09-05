@@ -64,7 +64,6 @@
  */
 
 import type { BindingResult, BoundParameters, CompatibilityView } from '../commands/invocation.ts';
-import { switchBehaviorKey } from '../compatibility/behavior-keys.ts';
 import type { CommandManifest, ParameterMetadata } from '../commands/manifest.ts';
 import type { PSValue } from '../pipeline/psobject.ts';
 
@@ -89,6 +88,7 @@ import {
   parameterSetNames,
   resolveParameterName,
 } from './parameters.ts';
+import { applyParameterPatches, switchHonoursExplicitFalse, type ParameterPatchSet } from './patches.ts';
 import { rulesFor, unenforceable, validate } from './validation.ts';
 import type { ValidationDetail } from './validation.ts';
 
@@ -128,6 +128,20 @@ export interface BindOptions {
    * the default here.
    */
   readonly allowRemainingArguments?: boolean;
+  /**
+   * The resolved profile's `commands.<Name>.parameterPatches`.
+   *
+   * How a version DIFFERS from the captured 7.6.5 metadata, without capturing a
+   * second manifest set or forking the command. See `patches.ts`; the schema
+   * and the resolver's merge have carried this shape for a while and nothing
+   * applied it until now.
+   *
+   * It arrives here rather than through `CompatibilityView` on purpose:
+   * `invocation.ts` keeps that view narrow so a command asks "is this behaviour
+   * on?" and never "which version am I?", and a parameter patch changes what
+   * BINDING accepts, which no command body should be able to see.
+   */
+  readonly parameterPatches?: ParameterPatchSet;
 }
 
 /**
@@ -151,6 +165,15 @@ export interface BindingSuccess extends BindingResult {
    * without its arguments and therefore not enforced. Empty is the good case.
    */
   readonly unenforcedValidation: readonly string[];
+  /**
+   * Profile parameter patches that could not be honoured, with the reason.
+   *
+   * Almost always a patch naming a parameter the captured metadata does not
+   * have, which this project will not invent. Reported rather than dropped: a
+   * silently ignored patch is a profile that looks like it is doing something
+   * it is not.
+   */
+  readonly unappliedPatches: readonly string[];
 }
 
 export type BindingOutcome =
@@ -227,11 +250,24 @@ export function tryBindParameters(
 
 function bind(
   args: readonly string[],
+  // Reassigned once, by `applyParameterPatches` below. Deliberately not a new
+  // name: every line after that point must see the PATCHED manifest, and a
+  // second binding called `manifest` sitting in scope is how one of them
+  // eventually reads the unpatched one.
+  // eslint-disable-next-line prefer-const
   manifest: CommandManifest,
   profile: CompatibilityView,
   options: BindOptions,
 ): BindingSuccess {
   const command = manifest.display;
+
+  // Profile parameter patches are applied FIRST, so everything below — name
+  // resolution, parameter sets, mandatory checks, validation — sees the
+  // version's real surface rather than the captured 7.6.5 one. Applying them
+  // later would mean each of those had to remember to ask.
+  const patched = applyParameterPatches(manifest, options.parameterPatches);
+  const unappliedPatches = patched.unapplied;
+  manifest = patched.manifest;
 
   // A manifest with no declared parameters cannot bind anything, and erroring
   // on every token would break the simulated pass-through commands (`ls -la`,
@@ -243,6 +279,7 @@ function bind(
       remaining: [...args],
       explicitlyFalseSwitches: [],
       unenforcedValidation: [],
+      unappliedPatches: [],
     };
   }
 
@@ -260,7 +297,7 @@ function bind(
    * on every command as an unknown key.
    */
   const honoursExplicitFalse = (parameter: ParameterMetadata): boolean =>
-    profile.scopedBehavior(switchBehaviorKey(manifest.display, parameter.name), true);
+    switchHonoursExplicitFalse(manifest, parameter, profile, options.parameterPatches);
   const details = options.validationDetails ?? [];
   const remainingArgumentParameters = new Set(
     (options.valueFromRemainingArguments ?? []).map((name) => name.toLowerCase()),
@@ -588,5 +625,6 @@ function bind(
     remaining: leftover,
     explicitlyFalseSwitches,
     unenforcedValidation: unenforced,
+    unappliedPatches,
   };
 }

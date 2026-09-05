@@ -54,6 +54,15 @@ export {
 } from './parameters.ts';
 
 export {
+  ParameterPatchError,
+  applyParameterPatches,
+  switchHonoursExplicitFalse,
+  type ParameterPatch,
+  type ParameterPatchSet,
+  type PatchReport,
+} from './patches.ts';
+
+export {
   parseValidationRule,
   rulesFor,
   validate,
