@@ -31,7 +31,7 @@ Fidelity claims need evidence. pwsh 7.6.5 on .NET 10.0.11 is installed on the de
   - *evidence:* `compat/upstream/v7.6.5/command-metadata.json` — `commands`
   - *evidence:* `compat/upstream/v7.6.5/command-metadata.json` — `requested`
   - *evidence:* `npm run capture:metadata`
-  - *evidence:* `tests/unit/binder-manifests.test.mts` — test "the manifest file still has the shape the binder reads"
+  - *evidence:* `tests/unit/binder-differential.test.mts` — test "reproduces the reference exactly under the 7.6 profile too, with no exceptions"
 - [x] **11.4** Record known-differences.yml for deliberate divergences, with a reason for each
   - STALE todo, corrected 2026-09-06. The file is not merely present: a narrow YAML reader parses it, every entry needs a reason of at least twenty characters and a case id that exists in the corpus, and a test proves the file was really read rather than silently coming back empty.
   - *evidence:* `tools/conformance.mts` exports `runConformance`

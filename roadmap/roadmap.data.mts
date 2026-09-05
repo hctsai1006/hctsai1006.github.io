@@ -1266,7 +1266,7 @@ export const WORK = [
           { kind: 'json', file: 'compat/upstream/v7.6.5/command-metadata.json', path: 'commands' },
           { kind: 'json', file: 'compat/upstream/v7.6.5/command-metadata.json', path: 'requested' },
           { kind: 'script', name: 'capture:metadata' },
-          { kind: 'test', file: 'tests/unit/binder-manifests.test.mts', name: 'the manifest file still has the shape the binder reads' },
+          { kind: 'test', file: 'tests/unit/binder-differential.test.mts', name: 'reproduces the reference exactly under the 7.6 profile too, with no exceptions' },
         ],
       },
       {
