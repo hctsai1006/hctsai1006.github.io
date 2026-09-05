@@ -27,6 +27,7 @@
 import { compareValues, valuesEqual, isOfType, isTruthy } from '../../pipeline/psobject.ts';
 import type { PSValue } from '../../pipeline/psobject.ts';
 import { throwIfCancelled } from '../../pipeline/pipeline.ts';
+import { errorRecord } from '../../pipeline/streams.ts';
 import type { BindingResult, CommandModule, InvocationContext } from '../invocation.ts';
 import {
   OBJECT,
@@ -39,6 +40,7 @@ import {
   rawValue,
   renderValue,
   resolveProperty,
+  scriptBlockHandleOf,
   stringValue,
   wildcardPattern,
 } from './support.ts';
@@ -173,7 +175,26 @@ export const whereObject: CommandModule = {
 
   async invoke(context: InvocationContext, bound: BindingResult): Promise<number> {
     const parameters = bound.parameters;
-    const filter = asScriptBlock(rawValue(parameters, 'FilterScript'));
+    const filterScript = rawValue(parameters, 'FilterScript');
+    const filter = asScriptBlock(filterScript);
+    // A script block is a HANDLE into this realm's registry, so "not a script
+    // block" and "a script block whose closure lives somewhere else" are two
+    // different answers. Collapsing them would leave `filter` undefined and
+    // Where-Object would fall through to its no-filter branch, which passes
+    // every object — a filter that silently stops filtering.
+    if (filter === undefined && scriptBlockHandleOf(filterScript) !== undefined) {
+      await context.streams.error.write(
+        errorRecord(
+          'The script block was created in another execution context and cannot be run here. ' +
+            'A script block travels as a handle; its closure does not cross a worker boundary.',
+          'ScriptBlockNotInThisRuntime',
+          'Where-Object',
+          'InvalidOperation',
+          { exceptionType: 'System.Management.Automation.PSInvalidOperationException' },
+        ),
+      );
+      return 1;
+    }
     const property = stringValue(parameters, 'Property');
     const operator = resolveOperator(parameters);
     const right = rawValue(parameters, 'Value') ?? null;

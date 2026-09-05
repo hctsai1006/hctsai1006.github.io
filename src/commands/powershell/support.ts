@@ -22,7 +22,6 @@ import {
   hasProperty,
   isPSObject,
   psObject,
-  psWrap,
   typeNameOf,
 } from '../../pipeline/psobject.ts';
 import type { PSObject, PSValue } from '../../pipeline/psobject.ts';
@@ -52,23 +51,154 @@ export const SCRIPT_BLOCK_TYPE = 'System.Management.Automation.ScriptBlock';
 export type ScriptBlockFn = (current: PSValue) => PSValue | Promise<PSValue>;
 
 /**
- * Carry a script block through `BoundParameters`, which is typed as `PSValue`.
+ * What a script block IS on the wire: a name, not a thing.
  *
- * `PSObject.baseObject` exists for exactly this — "the underlying host value,
- * when there is one, never serialised". So a script block is a PSObject of the
- * right type name wrapping the callback, which means `$sb.GetType().FullName`
- * and `-is [scriptblock]` both work without a special case, and the real parser
- * can later produce the identical shape.
+ * This used to be `psWrap({}, [SCRIPT_BLOCK_TYPE], fn)` — a JavaScript closure
+ * in `PSObject.baseObject`, typed as a `PSValue` and therefore as if it could
+ * be sent. It cannot. `structuredClone` throws `DataCloneError` on a function,
+ * and the protocol strips `baseObject` before emitting anyway, so `Where-Object`
+ * needed the closure and the boundary destroyed it. The unit tests passed only
+ * because everything ran in one JS realm.
+ *
+ * There is no parser yet — PR-08 owns lexing and the AST — so a SERIALISABLE
+ * script block is not available: there is nothing to serialise. What is
+ * reachable today is an opaque handle. The closure stays in the realm that
+ * created it, the handle crosses, and looking one up in the wrong realm returns
+ * nothing rather than silently resolving to somebody else's block.
+ *
+ * When the parser lands, the same object gains an `Ast` property and the handle
+ * stops being the only content — a `WireValue` throughout, either way.
  */
-export function scriptBlock(fn: ScriptBlockFn): PSObject {
-  return psWrap({}, [SCRIPT_BLOCK_TYPE, 'System.Object'], fn);
+export interface ScriptBlockHandle {
+  readonly kind: 'script-block-handle';
+  readonly id: string;
 }
 
-export function asScriptBlock(value: PSValue | undefined): ScriptBlockFn | undefined {
+export const SCRIPT_BLOCK_HANDLE_KIND = 'script-block-handle';
+
+/** The two properties a script-block object carries in place of a closure. */
+const HANDLE_KIND_PROPERTY = 'Kind';
+const HANDLE_ID_PROPERTY = 'Id';
+
+/**
+ * An identifier for the registry this process's script blocks live in.
+ *
+ * Part of every handle id, and the reason a foreign handle FAILS instead of
+ * resolving. Two realms both counting from 1 would otherwise hand out the same
+ * ids, so a handle minted in a Worker would resolve on the UI thread to
+ * whatever block happened to be first there — a wrong answer rather than a
+ * missing one, which is the failure this whole change exists to prevent.
+ */
+function newRealmId(): string {
+  const source: unknown = globalThis.crypto;
+  if (typeof source === 'object' && source !== null && 'randomUUID' in source) {
+    return (source as Crypto).randomUUID().slice(0, 8);
+  }
+  // No crypto (an old host, a stripped test runner). Still per-instance, which
+  // is what the id is for; it is not a security token.
+  return Math.random().toString(36).slice(2, 10);
+}
+
+/**
+ * Where the closures live. One per realm, and never sent.
+ *
+ * A registry is unavoidably a leak unless something releases entries, so it
+ * says so rather than hiding it: `size` is public, `release` and `clear` exist,
+ * and the only producer of handles today is a test or the future parser, which
+ * owns the lifetime of the blocks it creates.
+ */
+export class ScriptBlockRegistry {
+  readonly #realm: string;
+  readonly #blocks = new Map<string, ScriptBlockFn>();
+  #next = 1;
+
+  constructor(realm: string = newRealmId()) {
+    this.#realm = realm;
+  }
+
+  get realm(): string {
+    return this.#realm;
+  }
+
+  /** How many closures are still held. Public so a leak is measurable. */
+  get size(): number {
+    return this.#blocks.size;
+  }
+
+  register(fn: ScriptBlockFn): ScriptBlockHandle {
+    const id = `${this.#realm}:${this.#next}`;
+    this.#next += 1;
+    this.#blocks.set(id, fn);
+    return { kind: SCRIPT_BLOCK_HANDLE_KIND, id };
+  }
+
+  /** The closure, or undefined when the handle is foreign, stale or released. */
+  resolve(handle: ScriptBlockHandle): ScriptBlockFn | undefined {
+    return this.#blocks.get(handle.id);
+  }
+
+  release(handle: ScriptBlockHandle): boolean {
+    return this.#blocks.delete(handle.id);
+  }
+
+  clear(): void {
+    this.#blocks.clear();
+  }
+}
+
+/** This realm's registry. Module state on purpose: a realm has exactly one. */
+export const scriptBlocks = new ScriptBlockRegistry();
+
+/**
+ * Carry a script block through `BoundParameters`, which is typed as `PSValue`.
+ *
+ * The object is ordinary data — two string properties and a type-name chain —
+ * so `$sb.GetType().FullName` and `-is [scriptblock]` still work without a
+ * special case, and `structuredClone` carries it without complaint.
+ */
+export function scriptBlock(fn: ScriptBlockFn, registry: ScriptBlockRegistry = scriptBlocks): PSObject {
+  const handle = registry.register(fn);
+  return psObject(
+    { [HANDLE_KIND_PROPERTY]: handle.kind, [HANDLE_ID_PROPERTY]: handle.id },
+    [SCRIPT_BLOCK_TYPE, 'System.Object'],
+  );
+}
+
+/**
+ * Is this a script block, and which one?
+ *
+ * Separate from `asScriptBlock` because the two answers are different: "that is
+ * not a script block" is a binding question, and "that is a script block whose
+ * closure is not in this realm" is a transport failure. A command that cannot
+ * tell them apart treats the second as the first and silently does nothing —
+ * which for `Where-Object` means passing every object through.
+ */
+export function scriptBlockHandleOf(value: PSValue | undefined): ScriptBlockHandle | undefined {
   if (value === undefined || !isPSObject(value)) return undefined;
   if (value.typeNames[0] !== SCRIPT_BLOCK_TYPE) return undefined;
-  const base = value.baseObject;
-  return typeof base === 'function' ? (base as ScriptBlockFn) : undefined;
+  const kind = getProperty(value, HANDLE_KIND_PROPERTY);
+  const id = getProperty(value, HANDLE_ID_PROPERTY);
+  if (kind !== SCRIPT_BLOCK_HANDLE_KIND || typeof id !== 'string' || id.length === 0) {
+    return undefined;
+  }
+  return { kind: SCRIPT_BLOCK_HANDLE_KIND, id };
+}
+
+export function asScriptBlock(
+  value: PSValue | undefined,
+  registry: ScriptBlockRegistry = scriptBlocks,
+): ScriptBlockFn | undefined {
+  const handle = scriptBlockHandleOf(value);
+  return handle === undefined ? undefined : registry.resolve(handle);
+}
+
+/** Let go of a script block's closure. The other half of `scriptBlock`. */
+export function releaseScriptBlock(
+  value: PSValue | undefined,
+  registry: ScriptBlockRegistry = scriptBlocks,
+): boolean {
+  const handle = scriptBlockHandleOf(value);
+  return handle === undefined ? false : registry.release(handle);
 }
 
 // ---------------------------------------------------------------------------
