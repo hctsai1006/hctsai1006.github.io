@@ -640,3 +640,56 @@ describe('the branch is updated by compare-and-swap, not by blind force', () => 
     );
   });
 });
+
+describe('the lease is a lock, not a label', () => {
+  it('refuses to push when the branch moved between the fetch and the push', () => {
+    // THE WINDOW THE LEASE EXISTS FOR, exercised rather than asserted.
+    //
+    // Checking that `--force-with-lease=` appears in the argv proves the flag is
+    // spelled correctly and nothing else. The author check already runs BEFORE
+    // the push, so the case that matters is a branch that moves after the fetch
+    // and after the check — and by the same bot, so the authorship guard has
+    // nothing to say about it. This drives the remote forward at exactly that
+    // moment and asserts the push is refused rather than overwriting it.
+    const { work, origin } = scratchRepo();
+    writeFileSync(join(work, 'lock.json'), '{"n":1}\n', 'utf8');
+    publishBranch(publishOpts(work, 'sync 1'));
+
+    // A second clone, standing in for another writer holding the same identity.
+    const intruder = mkdtempSync(join(tmpdir(), 'upstream-sync-intruder-'));
+    git(intruder, 'clone', origin, '.');
+    git(intruder, 'config', 'user.name', 'github-actions[bot]');
+    git(intruder, 'config', 'user.email', BOT);
+    git(intruder, 'checkout', BRANCH);
+    writeFileSync(join(intruder, 'lock.json'), '{"n":"intruder"}\n', 'utf8');
+    git(intruder, 'commit', '-am', 'landed while the workflow was thinking');
+
+    let moved = false;
+    git(work, 'checkout', 'main');
+    writeFileSync(join(work, 'lock.json'), '{"n":2}\n', 'utf8');
+
+    assert.throws(
+      () =>
+        publishBranch({
+          ...publishOpts(work, 'sync 2'),
+          run: (cmd, args, cwd) => {
+            // Move the remote forward in the instant before the push leaves.
+            if (cmd === 'git' && args[0] === 'push' && !moved) {
+              moved = true;
+              git(intruder, 'push', 'origin', BRANCH);
+            }
+            return realRunner(cmd, args, cwd);
+          },
+        }),
+      /stale info|rejected|failed to push/i,
+      'a branch that moved after the fetch must not be overwritten',
+    );
+
+    assert.equal(moved, true, 'the race was actually staged');
+    assert.equal(
+      git(origin, 'log', '-1', '--format=%s', BRANCH).trim(),
+      'landed while the workflow was thinking',
+      'and the commit that landed first is still there',
+    );
+  });
+});

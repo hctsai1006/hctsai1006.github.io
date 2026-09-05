@@ -56,7 +56,7 @@
  */
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { CLASSIFICATION } from '../src/commands/classification.data.mts';
@@ -217,6 +217,40 @@ function build(): { manifests: CommandManifest[]; problems: string[]; stats: Rec
   const captured = existsSync(capturedPath) ? read<Captured>(capturedPath) : null;
 
   const problems: string[] = [];
+
+  // NO CAPTURE FOR THE DECLARED LTS IS A REFUSAL, NOT A QUIETER RUN.
+  //
+  // The LTS version comes from the release lockfile, and the scheduled
+  // upstream-sync job rewrites that lockfile whenever upstream moves. A routine
+  // patch release is enough. MEASURED, by pointing the lockfile at a v7.6.6
+  // that has no capture and regenerating:
+  //
+  //   parameterReference                    v7.6.5 -> v7.6.6
+  //   commands with measured metadata           31 -> 0
+  //   parameters                               341 -> 183
+  //   exit code                                        0
+  //
+  // 158 measured parameters deleted, 31 commands relabelled from
+  // `reference-implementation` to `declared`, and the generator said "wrote 85
+  // manifests" and succeeded. Every downstream gate would then agree, because
+  // they check that the artifact matches the generator, and it does.
+  //
+  // That is the exact failure this project is organised against, pointed the
+  // other way: not claiming a measurement that was never taken, but silently
+  // DISCARDING measurements that were, and reporting success. An automated
+  // sync would have shipped it.
+  //
+  // The honest answer when the reference moves is that somebody has to capture
+  // the new one. Until then this refuses, and names the command that does it.
+  if (captured === null) {
+    problems.push(
+      `no captured metadata for the declared LTS v${ltsVersion} at ${relative(REPO, capturedPath)}. ` +
+        'Parameter metadata would silently fall back to what the v1 inventory declares, dropping ' +
+        'every measurement taken from the reference implementation. Capture it first: ' +
+        `npm run capture:metadata (on a real pwsh ${ltsVersion}), or correct channels.lts in the ` +
+        'release lockfile if the bump was not intended.',
+    );
+  }
   const manifests: CommandManifest[] = [];
 
   const entries: Array<{ name: string; display: string; aliases: string[]; help: string; params: string[] }> = [
