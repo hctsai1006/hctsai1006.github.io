@@ -425,6 +425,32 @@ export function isLockConflict(cause: unknown): boolean {
   return exceptionName(cause) === 'NoModificationAllowedError';
 }
 
+/**
+ * Read a file WITHOUT taking the exclusive lock, for a follower.
+ *
+ * `getFile()` is the only way into an OPFS file that does not lock it, and
+ * MEASURED it works while another context holds a sync access handle on the
+ * same file — including from a SECOND BROWSER TAB, which read back exactly what
+ * the first tab had written. It also sees UNFLUSHED bytes, so a follower's view
+ * is as fresh as the leader's rather than as fresh as its last flush.
+ *
+ * `null` for a file that is not there, because a follower attaching to a store
+ * that has never been checkpointed is an ordinary outcome and not an error.
+ */
+export async function readWithoutLock(
+  directory: OpfsDirectory,
+  name: string,
+): Promise<Result<Uint8Array | null>> {
+  try {
+    const file = await directory.getFileHandle(name, { create: false });
+    const snapshot = await file.getFile();
+    return ok(new Uint8Array(await snapshot.arrayBuffer()));
+  } catch (cause) {
+    if (isNotFound(cause)) return ok(null);
+    return fromException(cause, name, 'read', UNKNOWN_USAGE);
+  }
+}
+
 /** True when the throw was the platform saying "there is nothing there". */
 export function isNotFound(cause: unknown): boolean {
   return exceptionName(cause) === 'NotFoundError';

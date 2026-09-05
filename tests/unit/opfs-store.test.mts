@@ -19,8 +19,10 @@ import assert from 'node:assert/strict';
 import { FakeOpfs, storePath } from './opfs-fake.mts';
 import {
   MemoryStorage,
+  OpfsStore,
   STORE_FILES,
   STORE_VERSION,
+  decodePlan,
   decodeSlot,
   decodeSnapshot,
   encodeSlot,
@@ -73,6 +75,19 @@ function code(result: Result<unknown>): StorageErrorCode | 'ok' {
   return result.ok ? 'ok' : result.error.code;
 }
 
+/**
+ * The store a LEADER mount holds. Asserts it is there rather than using `!`.
+ *
+ * `MountReport.store` is null for a follower, and the type says so on purpose:
+ * a follower holds no handles and has nothing to close or checkpoint. Every
+ * mount in this file except the follower block is a leader, so this narrows
+ * once and fails loudly if that ever stops being true.
+ */
+function leaderStore(report: MountReport): OpfsStore {
+  assert.ok(report.store !== null, 'expected a leader mount, got a follower');
+  return report.store;
+}
+
 async function mount(
   fake: FakeOpfs,
   overrides: Partial<Parameters<typeof mountOpfsStorage>[0]> = {},
@@ -104,8 +119,8 @@ describe('OpfsStore: durability across a remount', () => {
     // The mount ends with a checkpoint, so generation 1 is on disk before a
     // single command has run. That is what makes the next mount's recovery path
     // the ordinary one rather than a special case.
-    assert.equal(mounted.store.generation, 1);
-    mounted.store.close();
+    assert.equal(leaderStore(mounted).generation, 1);
+    mounted.store?.close();
   });
 
   it('a write survives a clean close and a remount', async () => {
@@ -113,12 +128,12 @@ describe('OpfsStore: durability across a remount', () => {
     const first = await mount(fake);
     assert.ok((await first.backend.writeText('/home/me/notes.txt', 'kept')).ok);
     assert.ok((await first.backend.checkpoint()).ok);
-    first.store.close();
+    first.store?.close();
 
     const second = await mount(fake);
     assert.equal(value(await second.backend.readText('/home/me/notes.txt')), 'kept');
     assert.equal(second.recovery.slot !== null, true);
-    second.store.close();
+    second.store?.close();
   });
 
   it('an edit to a SEEDED file survives, which is the defect three verbs shared', async () => {
@@ -131,11 +146,11 @@ describe('OpfsStore: durability across a remount', () => {
     const first = await mount(fake);
     assert.ok((await first.backend.writeText('/home/me/README.md', 'mine now')).ok);
     assert.ok((await first.backend.checkpoint()).ok);
-    first.store.close();
+    first.store?.close();
 
     const second = await mount(fake);
     assert.equal(value(await second.backend.readText('/home/me/README.md')), 'mine now');
-    second.store.close();
+    second.store?.close();
   });
 
   it('the seed is rebuilt from code, not restored from the checkpoint', async () => {
@@ -146,7 +161,7 @@ describe('OpfsStore: durability across a remount', () => {
     const first = await mount(fake);
     assert.ok((await first.backend.writeText('/home/me/mine.txt', 'user data')).ok);
     assert.ok((await first.backend.checkpoint()).ok);
-    first.store.close();
+    first.store?.close();
 
     const updated: SeedSpec = {
       ...SEED,
@@ -157,7 +172,7 @@ describe('OpfsStore: durability across a remount', () => {
     const second = await mount(fake, { seed: updated });
     assert.equal(value(await second.backend.readText('/home/me/README.md')), 'version two');
     assert.equal(value(await second.backend.readText('/home/me/mine.txt')), 'user data');
-    second.store.close();
+    second.store?.close();
   });
 });
 
@@ -184,7 +199,7 @@ describe('OpfsStore: what a crash keeps and what it drops', () => {
     assert.equal(value(await second.backend.readText('/home/me/a.txt')), 'A');
     assert.equal(await second.backend.exists('/home/me/b.txt'), false, 'B was in flight');
     assert.equal(second.recovery.replay.length, 1, 'exactly one committed plan replayed');
-    second.store.close();
+    second.store?.close();
   });
 
   it('sync() before the crash keeps the last one too', async () => {
@@ -199,7 +214,7 @@ describe('OpfsStore: what a crash keeps and what it drops', () => {
 
     const second = await mount(fake);
     assert.equal(value(await second.backend.readText('/home/me/b.txt')), 'B');
-    second.store.close();
+    second.store?.close();
   });
 
   it('a checkpoint before the crash keeps everything with no replay at all', async () => {
@@ -212,7 +227,7 @@ describe('OpfsStore: what a crash keeps and what it drops', () => {
     const second = await mount(fake);
     assert.equal(value(await second.backend.readText('/home/me/a.txt')), 'A');
     assert.deepEqual(second.recovery.replay, [], 'the log was reset by the checkpoint');
-    second.store.close();
+    second.store?.close();
   });
 
   it('a torn record at the tail is dropped, and the truncation is reported', async () => {
@@ -232,7 +247,7 @@ describe('OpfsStore: what a crash keeps and what it drops', () => {
     const second = await mount(fake);
     assert.ok(second.recovery.truncatedBytes > 0, 'the tear is reported, not hidden');
     assert.equal(value(await second.backend.readText('/home/me/a.txt')), 'A');
-    second.store.close();
+    second.store?.close();
   });
 
   it('a stale log from an older generation is discarded whole', async () => {
@@ -244,8 +259,8 @@ describe('OpfsStore: what a crash keeps and what it drops', () => {
     const first = await mount(fake);
     assert.ok((await first.backend.writeText('/home/me/a.txt', 'A')).ok);
     assert.ok((await first.backend.checkpoint()).ok);
-    const generation = first.store.generation;
-    first.store.close();
+    const generation = leaderStore(first).generation;
+    first.store?.close();
 
     // A log stamped one generation behind, carrying a plan that would remove a
     // file that no longer exists if it were replayed.
@@ -269,7 +284,7 @@ describe('OpfsStore: what a crash keeps and what it drops', () => {
     const second = await mount(fake);
     assert.deepEqual(second.recovery.replay, [], 'a log from another generation counts for nothing');
     assert.equal(value(await second.backend.readText('/home/me/a.txt')), 'A');
-    second.store.close();
+    second.store?.close();
   });
 
   it('falls back to the other slot when the newer one is corrupt', async () => {
@@ -283,8 +298,8 @@ describe('OpfsStore: what a crash keeps and what it drops', () => {
     assert.ok((await first.backend.checkpoint()).ok);
     assert.ok((await first.backend.writeText('/home/me/a.txt', 'second')).ok);
     assert.ok((await first.backend.checkpoint()).ok);
-    const active = first.store.activeSlot;
-    first.store.close();
+    const active = leaderStore(first).activeSlot;
+    first.store?.close();
 
     const path = storePath(DIRECTORY, active === 'a' ? STORE_FILES.slotA : STORE_FILES.slotB);
     const damaged = fake.durableBytes(path);
@@ -298,7 +313,7 @@ describe('OpfsStore: what a crash keeps and what it drops', () => {
       'first',
       'the older checkpoint is still a checkpoint',
     );
-    second.store.close();
+    second.store?.close();
   });
 
   it('reports a store whose slots are both unreadable rather than pretending', async () => {
@@ -306,7 +321,7 @@ describe('OpfsStore: what a crash keeps and what it drops', () => {
     const first = await mount(fake);
     assert.ok((await first.backend.writeText('/home/me/a.txt', 'gone')).ok);
     assert.ok((await first.backend.checkpoint()).ok);
-    first.store.close();
+    first.store?.close();
 
     for (const file of [STORE_FILES.slotA, STORE_FILES.slotB]) {
       fake.setDurableBytes(storePath(DIRECTORY, file), TEXT.encode('not a checkpoint at all'));
@@ -318,7 +333,7 @@ describe('OpfsStore: what a crash keeps and what it drops', () => {
     assert.equal(await second.backend.exists('/home/me/a.txt'), false);
     // The seed still comes back, because the seed is code.
     assert.equal(value(await second.backend.readText('/home/me/README.md')), 'seeded');
-    second.store.close();
+    second.store?.close();
   });
 });
 
@@ -465,8 +480,8 @@ describe('migrations', () => {
     const first = await mount(fake);
     assert.ok((await first.backend.writeText('/home/me/keep.txt', 'survives')).ok);
     assert.ok((await first.backend.checkpoint()).ok);
-    const active = first.store.activeSlot;
-    first.store.close();
+    const active = leaderStore(first).activeSlot;
+    first.store?.close();
 
     // Restamp the slot as if an older build had written it.
     const path = storePath(DIRECTORY, active === 'a' ? STORE_FILES.slotA : STORE_FILES.slotB);
@@ -496,7 +511,7 @@ describe('migrations', () => {
     assert.deepEqual(second.recovery.migrated, ['test bridge']);
     assert.equal(second.recovery.storeVersion, STORE_VERSION);
     assert.equal(value(await second.backend.readText('/home/me/keep.txt')), 'survives');
-    second.store.close();
+    second.store?.close();
   });
 
   it('rolls back an interrupted migration on the next mount', async () => {
@@ -506,10 +521,10 @@ describe('migrations', () => {
     const first = await mount(fake);
     assert.ok((await first.backend.writeText('/home/me/before.txt', 'pre-migration')).ok);
     assert.ok((await first.backend.checkpoint()).ok);
-    const active = first.store.activeSlot;
+    const active = leaderStore(first).activeSlot;
     const slotPath = storePath(DIRECTORY, active === 'a' ? STORE_FILES.slotA : STORE_FILES.slotB);
     const preMigration = fake.durableBytes(slotPath);
-    first.store.close();
+    first.store?.close();
 
     // Hand-build the state a crash mid-migration leaves: the rollback copy
     // present, and the OTHER slot holding a newer generation the migration
@@ -539,23 +554,23 @@ describe('migrations', () => {
       false,
       'and the evidence is cleared, so the next mount is ordinary',
     );
-    second.store.close();
+    second.store?.close();
   });
 
   it('rollbackTo undoes an applied migration and drops the log with it', async () => {
     const fake = new FakeOpfs();
     const mounted = await mount(fake, { migrations: [marker(STORE_VERSION, 7)] });
-    const before = mounted.store.generation;
-    const rolled = mounted.store.rollbackTo(STORE_VERSION - 1);
+    const before = leaderStore(mounted).generation;
+    const rolled = leaderStore(mounted).rollbackTo(STORE_VERSION - 1);
     // STORE_VERSION is 1, so rolling back below it needs a migration from 0.
     const outcome = await rolled;
     if (STORE_VERSION === 1) {
       assert.equal(code(outcome), 'EINVAL', 'there is no version 0 to go back to');
     } else {
       assert.ok(outcome.ok);
-      assert.ok(mounted.store.generation > before);
+      assert.ok(leaderStore(mounted).generation > before);
     }
-    mounted.store.close();
+    mounted.store?.close();
   });
 });
 
@@ -629,7 +644,7 @@ describe('leader election', () => {
     assert.equal(code(second), 'EROFS');
     assert.ok(!second.ok && second.error.message.includes('another tab'));
     first.leadership?.release();
-    first.store.close();
+    first.store?.close();
   });
 
   it('the platform refuses a second store even when the lock is not consulted', async () => {
@@ -639,10 +654,10 @@ describe('leader election', () => {
     const second = await mountOpfsStorage({ root: fake.root, clock: clock(), seed: SEED });
     assert.equal(code(second), 'EIO');
     assert.ok(!second.ok && second.error.message.includes('locked by another context'));
-    first.store.close();
+    first.store?.close();
     // And once the first store gives the handles back, the second mount works.
     const third = await mount(fake);
-    third.store.close();
+    third.store?.close();
   });
 });
 
@@ -661,7 +676,7 @@ describe('quota', () => {
     assert.equal(usage.quota, 1_000_000);
     assert.ok(usage.used > 0, 'the checkpoint itself is on disk');
     assert.equal(usage.persisted, false);
-    mounted.store.close();
+    mounted.store?.close();
   });
 
   it('reports quota: null when the platform declines to say', async () => {
@@ -671,11 +686,16 @@ describe('quota', () => {
     const mounted = await mount(fake);
     const usage = value(await mounted.backend.quota());
     assert.equal(usage.quota, null);
-    mounted.store.close();
+    mounted.store?.close();
   });
 
   it('warns once on the way past the threshold, and re-arms below it', async () => {
-    const fake = new FakeOpfs({ quota: 1000 });
+    // The fake starts UNBOUNDED so the mount's own checkpoint cannot warn
+    // before the test has said anything. That is not test scaffolding: the
+    // mount checkpoints, the checkpoint now asks about quota, and an adversarial
+    // pass found that this test only passed before because the warning fired
+    // nowhere except an explicit `quota()` call.
+    const fake = new FakeOpfs();
     const warnings: number[] = [];
     const mounted = await mount(fake, {
       threshold: 0.5,
@@ -696,7 +716,7 @@ describe('quota', () => {
     fake.setQuota(Math.max(1, fake.usedBytes() * 2 - 1));
     assert.ok((await mounted.backend.quota()).ok);
     assert.equal(warnings.length, 2, 'dropping back under re-arms it');
-    mounted.store.close();
+    mounted.store?.close();
   });
 
   it('a full origin is ENOSPC at the journal, with nothing applied', async () => {
@@ -709,7 +729,7 @@ describe('quota', () => {
     const attempt = await mounted.backend.writeText('/home/me/big.txt', 'x'.repeat(500));
     assert.equal(code(attempt), 'ENOSPC');
     assert.equal(await mounted.backend.exists('/home/me/big.txt'), false, 'nothing was applied');
-    mounted.store.close();
+    mounted.store?.close();
   });
 });
 
@@ -735,7 +755,7 @@ describe('OpfsStorage: overlapping calls', () => {
     }
     for (const outcome of await Promise.all(writes)) assert.equal(code(outcome), 'ok');
     assert.ok((await mounted.backend.checkpoint()).ok);
-    mounted.store.close();
+    mounted.store?.close();
 
     const second = await mount(fake);
     for (let index = 0; index < 24; index += 1) {
@@ -745,17 +765,17 @@ describe('OpfsStorage: overlapping calls', () => {
         `file ${String(index)} did not survive`,
       );
     }
-    second.store.close();
+    second.store?.close();
   });
 
   it('a refused mutation does not trigger a checkpoint', async () => {
     const fake = new FakeOpfs();
     const mounted = await mount(fake, { checkpointBytes: 1 });
-    const before = mounted.store.generation;
+    const before = leaderStore(mounted).generation;
     assert.equal(code(await mounted.backend.readText('/home/me/missing.txt')), 'ENOENT');
     assert.equal(code(await mounted.backend.remove('/home/me/missing.txt')), 'ENOENT');
-    assert.equal(mounted.store.generation, before, 'a failure writes no plan to fold in');
-    mounted.store.close();
+    assert.equal(leaderStore(mounted).generation, before, 'a failure writes no plan to fold in');
+    mounted.store?.close();
   });
 });
 
@@ -776,12 +796,12 @@ describe('OpfsStorage: reset', () => {
     assert.ok((await first.backend.writeText('/home/me/a.txt', 'two')).ok);
     assert.ok((await first.backend.checkpoint()).ok);
     assert.ok((await first.backend.reset()).ok);
-    first.store.close();
+    first.store?.close();
 
     const second = await mount(fake);
     assert.equal(await second.backend.exists('/home/me/a.txt'), false);
     assert.equal(second.recovery.slot, null, 'both slots were cleared');
-    second.store.close();
+    second.store?.close();
   });
 });
 
@@ -815,6 +835,361 @@ describe('OpfsStorage: forwarded semantics', () => {
         `the two backends disagreed on: ${label}`,
       );
     }
-    mounted.store.close();
+    mounted.store?.close();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// what an adversarial pass over this branch's own work found
+// ---------------------------------------------------------------------------
+
+describe('adversarial: findings against the first draft of the OPFS store', () => {
+  it('a follower mounts read-only instead of failing', async () => {
+    // FINDING 1. `allowFollower` was a flag that did nothing of what its name
+    // said: it skipped the Web Locks refusal and then mounted as a leader
+    // anyway, so the failure just arrived later and worse — as the platform's
+    // NoModificationAllowedError wrapped in an EIO.
+    //
+    // A follower CAN read: `getFile()` is not refused while another context
+    // holds a sync access handle, MEASURED across two real browser tabs, and it
+    // returns unflushed bytes too. So the second tab shows the filesystem
+    // read-only rather than an error.
+    const fake = new FakeOpfs();
+    const locks = new FakeLocks();
+    const leader = await mount(fake, { locks });
+    assert.equal(leader.role, 'leader');
+    assert.ok((await leader.backend.writeText('/home/me/shared.txt', 'from the leader')).ok);
+    assert.ok((await leader.backend.checkpoint()).ok);
+
+    const follower = value(
+      await mountOpfsStorage({
+        root: fake.root,
+        clock: clock(),
+        seed: SEED,
+        user: 'me',
+        manager: fake,
+        locks,
+        allowFollower: true,
+      }),
+    );
+    assert.equal(follower.role, 'follower');
+    assert.equal(follower.store, null, 'a follower holds no handles, so there is nothing to close');
+    assert.equal(follower.backend.readOnly, true);
+    assert.equal(
+      value(await follower.backend.readText('/home/me/shared.txt')),
+      'from the leader',
+      'the follower can read what the leader wrote',
+    );
+    assert.equal(value(await follower.backend.readText('/home/me/README.md')), 'seeded');
+
+    // And every mutating verb is EROFS, not a platform exception.
+    for (const [label, attempt] of [
+      ['writeText', await follower.backend.writeText('/home/me/x', 'no')],
+      ['appendText', await follower.backend.appendText('/home/me/shared.txt', 'no')],
+      ['mkdir', await follower.backend.mkdir('/home/me/d')],
+      ['remove', await follower.backend.remove('/home/me/shared.txt')],
+      ['rename', await follower.backend.rename('/home/me/shared.txt', '/home/me/y')],
+      ['copy', await follower.backend.copy('/home/me/shared.txt', '/home/me/y')],
+      ['chmod', await follower.backend.chmod('/home/me/shared.txt', 0o600)],
+      ['utimes', await follower.backend.utimes('/home/me/shared.txt', { mtime: 1 })],
+      ['reset', await follower.backend.reset()],
+      ['checkpoint', await follower.backend.checkpoint()],
+      ['installImage', await follower.backend.installImage(SEED)],
+    ] as const) {
+      assert.equal(code(attempt), 'EROFS', `${label} should be EROFS on a follower`);
+    }
+
+    // The leader is untouched by any of it.
+    assert.equal(value(await leader.backend.readText('/home/me/shared.txt')), 'from the leader');
+    leader.leadership?.release();
+    leaderStore(leader).close();
+  });
+
+  it("a follower sees the leader's uncheckpointed, committed writes", async () => {
+    // The follower reads the log as well as the checkpoint, and applies the
+    // same rule recovery does: committed plans only. One implementation of
+    // "which of these plans counted" — `committedPlans` — is shared by both,
+    // because two would drift and the way that is discovered is a lost file.
+    const fake = new FakeOpfs();
+    const locks = new FakeLocks();
+    const leader = await mount(fake, { locks });
+    assert.ok((await leader.backend.writeText('/home/me/one.txt', 'first')).ok);
+    assert.ok((await leader.backend.writeText('/home/me/two.txt', 'second')).ok);
+
+    const follower = value(
+      await mountOpfsStorage({
+        root: fake.root,
+        clock: clock(),
+        seed: SEED,
+        user: 'me',
+        manager: fake,
+        locks,
+        allowFollower: true,
+      }),
+    );
+    assert.equal(value(await follower.backend.readText('/home/me/one.txt')), 'first');
+    // AND `two.txt`, whose commit marker has NOT been flushed.
+    //
+    // This assertion was the other way round when it was written, on the
+    // assumption that a follower sees only what a crash would keep. It does
+    // not, and the reason is measured: `getFile()` returns UNFLUSHED bytes, so
+    // a follower reads the log as the leader has it in hand rather than as the
+    // disk has it. That is the better answer for a second tab — it wants the
+    // leader's current state, not a crash-consistent one — but it is a real
+    // difference from recovery and it is written down here rather than left to
+    // be rediscovered.
+    assert.equal(value(await follower.backend.readText('/home/me/two.txt')), 'second');
+    leader.leadership?.release();
+    leaderStore(leader).close();
+  });
+
+  it('an unreadable log is reported as such, not as an empty one', async () => {
+    // FINDING 2. `RecoveryReport` reported `truncatedBytes: 0` for two
+    // completely different situations: a clean log with nothing in it, and a
+    // log whose header did not parse. The second is every mutation since the
+    // last checkpoint being gone, and it was indistinguishable from the
+    // ordinary case in everything the mount returned.
+    const fake = new FakeOpfs();
+    const first = await mount(fake);
+    assert.ok((await first.backend.writeText('/home/me/a.txt', 'A')).ok);
+    assert.ok((await first.backend.checkpoint()).ok);
+    leaderStore(first).close();
+
+    const clean = await mount(fake);
+    assert.equal(clean.recovery.log, 'empty', 'a log with nothing in it');
+    leaderStore(clean).close();
+
+    fake.setDurableBytes(storePath(DIRECTORY, STORE_FILES.wal), TEXT.encode('WRECKED!'));
+    const wrecked = await mount(fake);
+    assert.equal(wrecked.recovery.log, 'unreadable', 'a log whose framing is gone');
+    assert.equal(
+      value(await wrecked.backend.readText('/home/me/a.txt')),
+      'A',
+      'the checkpoint still stands',
+    );
+    leaderStore(wrecked).close();
+  });
+
+  it('reports every other fate of the log by name', async () => {
+    // EACH FATE GETS ITS OWN STORE. The first draft of this test reused one,
+    // and every mount ends with a checkpoint that bumps the generation and
+    // resets the log — so a log captured before one mount was already STALE by
+    // the next, and the 'torn' case reported 'stale'. The test was wrong and
+    // the code was right, which is the more useful half of an adversarial pass.
+    const written = async (): Promise<{ bytes: Uint8Array; generation: number; fake: FakeOpfs }> => {
+      const fake = new FakeOpfs();
+      const first = await mount(fake);
+      assert.ok((await first.backend.writeText('/home/me/a.txt', 'A')).ok);
+      assert.ok((await first.backend.writeText('/home/me/b.txt', 'B')).ok);
+      assert.ok(first.backend.sync().ok);
+      const bytes = fake.durableBytes(storePath(DIRECTORY, STORE_FILES.wal));
+      const generation = leaderStore(first).generation;
+      leaderStore(first).close();
+      return { bytes, generation, fake };
+    };
+
+    const cleanCase = await written();
+    const clean = await mount(cleanCase.fake);
+    assert.equal(clean.recovery.log, 'clean');
+    // TWO, not one: `sync()` flushed the second commit marker as well, so both
+    // writes are durable and both replay. Without the `sync()` this is 1 — see
+    // 'keeps every operation but the last, and says which'.
+    assert.equal(clean.recovery.replay.length, 2, 'sync() made both commit markers durable');
+    leaderStore(clean).close();
+
+    const tornCase = await written();
+    tornCase.fake.setDurableBytes(
+      storePath(DIRECTORY, STORE_FILES.wal),
+      tornCase.bytes.slice(0, tornCase.bytes.byteLength - 3),
+    );
+    const torn = await mount(tornCase.fake);
+    assert.equal(torn.recovery.log, 'torn');
+    assert.ok(torn.recovery.truncatedBytes > 0);
+    leaderStore(torn).close();
+
+    const staleCase = await written();
+    staleCase.fake.setDurableBytes(
+      storePath(DIRECTORY, STORE_FILES.wal),
+      walHeader(staleCase.generation - 1),
+    );
+    const stale = await mount(staleCase.fake);
+    assert.equal(stale.recovery.log, 'stale');
+    leaderStore(stale).close();
+  });
+
+  it('the quota warning arrives without anyone calling quota()', async () => {
+    // FINDING 3. `#maybeWarn` was only reachable from `quota()`, so a session
+    // that never asked filled the disk and got an ENOSPC with no warning at
+    // all — which is PR-09 task 9.6 ("warn before the ceiling") not happening.
+    // The checkpoint asks now, which is once per `checkpointBytes` of log.
+    const fake = new FakeOpfs();
+    const warnings: number[] = [];
+    const mounted = await mount(fake, {
+      checkpointBytes: 1,
+      threshold: 0.5,
+      onQuotaWarning: (warning) => warnings.push(warning.fraction),
+    });
+    assert.deepEqual(warnings, [], 'no quota, nothing to warn about');
+
+    fake.setQuota(Math.max(1, fake.usedBytes() * 2 - 1));
+    assert.ok((await mounted.backend.writeText('/home/me/a.txt', 'a')).ok);
+    assert.equal(warnings.length, 1, 'a plain write warned, with no quota() call anywhere');
+    leaderStore(mounted).close();
+  });
+
+  it('checkpointBytes counts log bytes, not the header that is always there', async () => {
+    // FINDING 4, and the smallest of the four. `checkpointDue` compared
+    // `journal.byteLength` — which INCLUDES the 16-byte header present in a
+    // freshly reset, empty log — against the threshold. So an empty log was
+    // already "due" for any threshold of 16 or less, and no value in 0..16
+    // meant anything different from any other.
+    //
+    // The consequence is wasted work rather than lost data: a spurious
+    // checkpoint rewrites the overlay and resets a log that was already empty.
+    // It is fixed anyway because `checkpointBytes` is documented as bytes of
+    // LOG, and an option whose units are wrong is one nobody can tune.
+    //
+    // The assertion is on the EMPTY log, because that is where the two
+    // definitions differ by exactly the header and the boundary is crisp. A
+    // behavioural assertion — "one small write does not trip a 4 KiB
+    // threshold" — passes under both and proves nothing.
+    const fake = new FakeOpfs();
+    const mounted = await mount(fake, { checkpointBytes: 16 });
+    assert.equal(
+      leaderStore(mounted).checkpointDue,
+      false,
+      'a log with nothing in it is 0 bytes of log, not 16',
+    );
+    assert.ok((await mounted.backend.writeText('/home/me/a.txt', 'small')).ok);
+    assert.equal(
+      leaderStore(mounted).checkpointDue,
+      false,
+      'and after a checkpoint it is empty again',
+    );
+    leaderStore(mounted).close();
+  });
+
+  it('MemoryStorage.replay refuses a plan the tree cannot take, rather than throwing', async () => {
+    // The recovery entry point, on the path that matters: a plan read off disk
+    // was validated against a tree that may no longer exist. `types.ts` says
+    // `#apply` returns an `Err` for exactly this, and without a caller the
+    // sentence described something nobody could do.
+    const store = new MemoryStorage({ clock: clock(), user: 'me', group: 'me' });
+    assert.ok((await store.installImage(SEED)).ok);
+    const outcome = await store.replay({
+      id: 'stale-1',
+      syscall: 'remove',
+      steps: [{ op: 'remove', path: '/home/me/never-existed' }],
+      byteDelta: 0,
+    });
+    assert.equal(code(outcome), 'ENOENT');
+
+    const applied = await store.replay({
+      id: 'good-1',
+      syscall: 'write',
+      steps: [{ op: 'create-file', path: '/home/me/replayed.txt', data: TEXT.encode('hi') }],
+      byteDelta: 2,
+    });
+    assert.equal(code(applied), 'ok');
+    assert.equal(value(await store.readText('/home/me/replayed.txt')), 'hi');
+  });
+
+  it('a failed replay stops the mount replaying the plans after it', async () => {
+    // Losing the tail of a crashed session is a smaller loss than a middle that
+    // never existed: each plan was validated against the tree its predecessor
+    // left, so applying the next one after skipping this one applies it against
+    // a tree it never saw.
+    const fake = new FakeOpfs();
+    const first = await mount(fake);
+    assert.ok((await first.backend.writeText('/home/me/a.txt', 'A')).ok);
+    assert.ok(first.backend.sync().ok);
+    const generation = leaderStore(first).generation;
+    leaderStore(first).close();
+
+    // A log whose first plan cannot apply, followed by one that could.
+    const bad = walRecord(
+      1,
+      TEXT.encode(
+        JSON.stringify({
+          id: 'bad-1',
+          syscall: 'remove',
+          steps: [{ op: 'remove', path: '/home/me/never-existed' }],
+          byteDelta: 0,
+        }),
+      ),
+    );
+    const good = walRecord(
+      1,
+      TEXT.encode(
+        JSON.stringify({
+          id: 'good-1',
+          syscall: 'write',
+          steps: [{ op: 'create-file', path: '/home/me/after.txt', data: '' }],
+          byteDelta: 0,
+        }),
+      ),
+    );
+    fake.setDurableBytes(
+      storePath(DIRECTORY, STORE_FILES.wal),
+      new Uint8Array([
+        ...walHeader(generation),
+        ...bad,
+        ...walRecord(2, TEXT.encode(JSON.stringify({ id: 'bad-1' }))),
+        ...good,
+        ...walRecord(2, TEXT.encode(JSON.stringify({ id: 'good-1' }))),
+      ]),
+    );
+
+    const second = await mount(fake);
+    assert.equal(second.failures.length, 1, 'the failure is reported, not swallowed');
+    assert.equal(second.failures[0]?.code, 'ENOENT');
+    assert.equal(
+      await second.backend.exists('/home/me/after.txt'),
+      false,
+      'and nothing after it was applied',
+    );
+    leaderStore(second).close();
+  });
+
+  it('a plan record that does not decode refuses the whole log', async () => {
+    // Not "skip the bad one". The steps are ordered, and a hole in the middle
+    // means the plans after it were validated against a tree this recovery is
+    // not going to build.
+    const fake = new FakeOpfs();
+    const first = await mount(fake);
+    assert.ok((await first.backend.writeText('/home/me/a.txt', 'A')).ok);
+    assert.ok(first.backend.sync().ok);
+    const generation = leaderStore(first).generation;
+    leaderStore(first).close();
+
+    fake.setDurableBytes(
+      storePath(DIRECTORY, STORE_FILES.wal),
+      new Uint8Array([
+        ...walHeader(generation),
+        ...walRecord(1, TEXT.encode('{"id":"x","syscall":"nonsense","steps":[],"byteDelta":0}')),
+        ...walRecord(2, TEXT.encode(JSON.stringify({ id: 'x' }))),
+      ]),
+    );
+
+    const outcome = await mountOpfsStorage({
+      root: fake.root,
+      clock: clock(),
+      seed: SEED,
+      user: 'me',
+      manager: fake,
+    });
+    assert.equal(code(outcome), 'EINVAL');
+    assert.ok(!outcome.ok && outcome.error.message.includes('unknown syscall'));
+  });
+
+  it('a move step with no source is refused at decode, before anything is applied', async () => {
+    // `#apply` names this as the one malformed step it returns EINVAL for. The
+    // decoder catches it first, so the refusal happens before the steps in
+    // front of it have been applied.
+    const outcome = decodePlan(
+      TEXT.encode('{"id":"m","syscall":"rename","steps":[{"op":"move","path":"/a"}],"byteDelta":0}'),
+    );
+    assert.equal(code(outcome), 'EINVAL');
+    assert.ok(!outcome.ok && outcome.error.message.includes('no source'));
   });
 });

@@ -587,24 +587,7 @@ export class OpfsJournal implements MutationJournal {
     if (!bytes.ok) return bytes;
     const parsed = parseWal(bytes.value);
     if (!parsed.ok) return parsed;
-
-    const plans: MutationPlan[] = [];
-    const committed = new Set<string>();
-    for (const record of parsed.value.records) {
-      if (record.kind === RECORD_COMMIT) {
-        const id = readCommitId(record.payload);
-        if (!id.ok) return id;
-        committed.add(id.value);
-        continue;
-      }
-      if (record.kind !== RECORD_PLAN) {
-        return refuse('bad-kind', `a journal record has unknown kind ${String(record.kind)}`);
-      }
-      const plan = decodePlan(record.payload);
-      if (!plan.ok) return plan;
-      plans.push(plan.value);
-    }
-    return ok(plans.filter((plan) => committed.has(plan.id)));
+    return committedPlans(parsed.value);
   }
 
   /**
@@ -645,6 +628,35 @@ export class OpfsJournal implements MutationJournal {
     this.#dirty = false;
     return ok(undefined);
   }
+}
+
+/**
+ * The committed plans in a parsed log, in write order.
+ *
+ * ONE implementation, used by recovery (which holds the log open with an
+ * exclusive handle) and by a FOLLOWER (which reads the same bytes through
+ * `getFile()` and holds nothing). Two implementations of "which of these plans
+ * counted" is exactly the pair that drifts, and the way it is discovered is a
+ * user losing a file.
+ */
+export function committedPlans(contents: WalContents): Result<readonly MutationPlan[]> {
+  const plans: MutationPlan[] = [];
+  const committed = new Set<string>();
+  for (const record of contents.records) {
+    if (record.kind === RECORD_COMMIT) {
+      const id = readCommitId(record.payload);
+      if (!id.ok) return id;
+      committed.add(id.value);
+      continue;
+    }
+    if (record.kind !== RECORD_PLAN) {
+      return refuse('bad-kind', `a journal record has unknown kind ${String(record.kind)}`);
+    }
+    const plan = decodePlan(record.payload);
+    if (!plan.ok) return plan;
+    plans.push(plan.value);
+  }
+  return ok(plans.filter((plan) => committed.has(plan.id)));
 }
 
 function readCommitId(payload: Uint8Array): Result<string> {

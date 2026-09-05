@@ -85,7 +85,7 @@ import type {
   WriteOptions,
   WriteReceipt,
 } from './types.ts';
-import { OpfsStore } from './opfs-store.ts';
+import { OpfsStore, readFollowerView } from './opfs-store.ts';
 import type { OpfsStoreOptions, RecoveryReport } from './opfs-store.ts';
 import type { OpfsDirectory, OpfsStorageManager } from './opfs-platform.ts';
 import { UNKNOWN_USAGE } from './opfs-platform.ts';
@@ -358,7 +358,13 @@ export function createCoordinator(options: CoordinatorOptions = {}): StorageCoor
 // ---------------------------------------------------------------------------
 
 export interface OpfsStorageOptions {
-  readonly store: OpfsStore;
+  /**
+   * Absent for a FOLLOWER, which holds no handles and has nothing to
+   * checkpoint. Every method that would reach the store is behind `readOnly`,
+   * and the two that are not -- `checkpoint` and `sync` -- refuse explicitly
+   * rather than being handed an inert object to call methods on.
+   */
+  readonly store?: OpfsStore;
   readonly memory: MemoryStorage;
   /** `navigator.storage`. Absent means quota is reported as unknown. */
   readonly manager?: OpfsStorageManager;
@@ -368,6 +374,18 @@ export interface OpfsStorageOptions {
   readonly onQuotaWarning?: (warning: QuotaWarning) => void;
   readonly coordinator?: StorageCoordinator;
   readonly name?: string;
+  /**
+   * Refuse every mutation with EROFS. What a FOLLOWER mounts as.
+   *
+   * A separate flag from `MemoryStorage`'s own `readOnly`, because the tree
+   * underneath has to be WRITABLE for the mount to graft the recovered overlay
+   * onto it — `restoreSnapshot` goes through the ordinary write API, on purpose
+   * (a snapshot is a file someone can hand you, and a restore that bypassed the
+   * permission checks would let a crafted one write into `/etc`). So the
+   * read-only-ness belongs to this wrapper, which is what a command holds, and
+   * `MountReport.memory` is documented as being for reads.
+   */
+  readonly readOnly?: boolean;
 }
 
 /**
@@ -382,7 +400,7 @@ export class OpfsStorage implements StorageBackend {
   readonly readOnly: boolean;
 
   readonly #memory: MemoryStorage;
-  readonly #store: OpfsStore;
+  readonly #store: OpfsStore | null;
   readonly #manager: OpfsStorageManager | null;
   readonly #seed: SeedSpec | undefined;
   readonly #clock: () => number;
@@ -427,7 +445,7 @@ export class OpfsStorage implements StorageBackend {
 
   constructor(options: OpfsStorageOptions) {
     this.#memory = options.memory;
-    this.#store = options.store;
+    this.#store = options.store ?? null;
     this.#manager = options.manager ?? null;
     this.#seed = options.seed;
     this.#clock = options.clock;
@@ -435,11 +453,11 @@ export class OpfsStorage implements StorageBackend {
     this.#warn = options.onQuotaWarning ?? ((): void => {});
     this.#coordinator = options.coordinator ?? new NullCoordinator();
     this.name = options.name ?? 'opfs';
-    this.readOnly = options.memory.readOnly;
+    this.readOnly = options.readOnly ?? options.memory.readOnly;
   }
 
-  /** The store, for a caller that wants to checkpoint or sync explicitly. */
-  get store(): OpfsStore {
+  /** The store, or null for a follower. See `OpfsStorageOptions.store`. */
+  get store(): OpfsStore | null {
     return this.#store;
   }
 
@@ -584,13 +602,16 @@ export class OpfsStorage implements StorageBackend {
    * the class of bug the seed/overlay regression tests exist for.
    */
   async reset(): Promise<Result<void>> {
+    if (this.readOnly) return this.#refuseReadOnly();
     return this.#serialise(async () => {
       const cleared = await this.#memory.reset();
       if (!cleared.ok) return cleared;
-      const wiped = await this.#store.reset();
+      const store = this.#store;
+      if (store === null) return this.#refuseReadOnly();
+      const wiped = await store.reset();
       if (!wiped.ok) return wiped;
       this.#warned = false;
-      this.#coordinator.announce({ kind: 'reset', generation: this.#store.generation });
+      this.#coordinator.announce({ kind: 'reset', generation: store.generation });
       return ok(undefined);
     });
   }
@@ -605,28 +626,56 @@ export class OpfsStorage implements StorageBackend {
    * overlay snapshot already records only the DEVIATIONS from it.
    */
   async installImage(spec: SeedSpec): Promise<Result<void>> {
+    if (this.readOnly) return this.#refuseReadOnly();
     return this.#memory.installImage(spec);
+  }
+
+  #refuseReadOnly(): Result<never> {
+    return err({
+      code: 'EROFS',
+      path: '/',
+      syscall: 'write',
+      message:
+        'this tab is following another tab that holds the filesystem. ' +
+        'Close the other tab and reload to take over.',
+      mount: this.name,
+    });
   }
 
   // --- durability ---------------------------------------------------------
 
   /** Fold the log into a checkpoint now, whatever its size. */
   async checkpoint(): Promise<Result<number>> {
+    if (this.#store === null) return this.#refuseReadOnly();
     return this.#serialise(() => this.#checkpointLocked());
   }
 
   async #checkpointLocked(): Promise<Result<number>> {
-    const generation = await this.#store.checkpoint(this.#memory, {
+    const store = this.#store;
+    if (store === null) return this.#refuseReadOnly();
+    const generation = await store.checkpoint(this.#memory, {
       seed: this.#seed,
       now: this.#clock(),
     });
     if (!generation.ok) return generation;
     this.#coordinator.announce({ kind: 'checkpoint', generation: generation.value });
+    // The warning has to fire somewhere a caller does not have to ask for it.
+    // Before an adversarial pass over this file it only fired from `quota()`,
+    // so a session that never called `quota()` filled the disk and got an
+    // ENOSPC with no warning at all — which is the whole of PR-09 task 9.6 not
+    // happening. Once per checkpoint is once per `checkpointBytes` of log.
+    //
+    // AWAITED, not fired and forgotten. An unawaited promise here would make
+    // whether the warning has arrived depend on scheduling, which is the one
+    // property a test of a warning cannot work without — and `estimate()` is a
+    // single call already made once per quarter-megabyte of log.
+    await this.quota();
     return generation;
   }
 
   /** For a `pagehide` handler. See `OpfsJournal.sync`. */
   sync(): Result<void> {
+    if (this.#store === null) return this.#refuseReadOnly();
     return this.#store.sync();
   }
 
@@ -653,10 +702,25 @@ export class OpfsStorage implements StorageBackend {
    * memory; the error says the disk did not keep up.
    */
   #durable<T>(operation: () => Promise<Result<T>>): Promise<Result<T>> {
+    if (this.readOnly) {
+      // A follower. Refused HERE and not by the memory backend underneath,
+      // which has to stay writable so the mount can graft the overlay onto it.
+      return Promise.resolve(
+        err({
+          code: 'EROFS',
+          path: '/',
+          syscall: 'write',
+          message:
+            'this tab is following another tab that holds the filesystem. ' +
+            'Close the other tab and reload to take over.',
+          mount: this.name,
+        }),
+      );
+    }
     return this.#serialise(async () => {
       const result = await operation();
       if (!result.ok) return result;
-      if (!this.#store.checkpointDue) return result;
+      if (this.#store === null || !this.#store.checkpointDue) return result;
       const checkpointed = await this.#checkpointLocked();
       if (!checkpointed.ok) return checkpointed;
       return result;
@@ -708,22 +772,38 @@ export interface MountOptions extends Omit<OpfsStoreOptions, 'root'> {
   readonly threshold?: number;
   readonly onQuotaWarning?: (warning: QuotaWarning) => void;
   /**
-   * Mount even when another tab holds the leader lock. Default false.
+   * Mount READ-ONLY when another tab holds the leader lock. Default false.
    *
-   * A follower cannot get the sync access handles anyway (MEASURED across two
-   * tabs), so this only changes whether the failure is reported as "not the
-   * leader" or as the platform's `NoModificationAllowedError` wrapped in EIO.
-   * The first is a message a user can act on.
+   * A follower cannot take the sync access handles — MEASURED across two real
+   * tabs, the platform refuses with `NoModificationAllowedError` — so without
+   * this the second tab simply fails. With it, the second tab reads the store
+   * through `getFile()`, which is NOT refused (MEASURED: a second tab read back
+   * exactly what the first had written, unflushed bytes included) and shows the
+   * filesystem read-only. Every mutation is EROFS with a message that says
+   * which tab to close.
+   *
+   * An earlier version of this flag did nothing of the sort: it mounted as a
+   * leader anyway and the failure just arrived later, from the platform, as an
+   * EIO wrapping a DOMException. An adversarial pass over this file found it.
    */
   readonly allowFollower?: boolean;
 }
 
 export interface MountReport {
   readonly backend: OpfsStorage;
-  readonly store: OpfsStore;
+  /**
+   * Null for a follower, which holds no handles and has nothing to close.
+   * That is the difference the type is making visible.
+   */
+  readonly store: OpfsStore | null;
+  /**
+   * The tree underneath. FOR READS. Writing through it bypasses both the
+   * durability layer and the follower's read-only refusal.
+   */
   readonly memory: MemoryStorage;
   readonly recovery: RecoveryReport;
   readonly leadership: Leadership | null;
+  readonly role: 'leader' | 'follower';
   /** Plans that could not be replayed. Non-empty means data was lost. */
   readonly failures: readonly StorageError[];
 }
@@ -755,17 +835,21 @@ export async function mountOpfsStorage(options: MountOptions): Promise<Result<Mo
   let leadership: Leadership | null = null;
   if (options.locks !== undefined) {
     leadership = await requestLeadership(options.locks);
-    if (!leadership.granted && options.allowFollower !== true) {
+    if (!leadership.granted) {
       leadership.release();
-      return err({
-        code: 'EROFS',
-        path: '/',
-        syscall: 'write',
-        message:
-          "another tab already holds this origin's storage. Close it, or reload this one " +
-          'after it is gone, to take over.',
-        mount: 'opfs',
-      });
+      leadership = null;
+      if (options.allowFollower !== true) {
+        return err({
+          code: 'EROFS',
+          path: '/',
+          syscall: 'write',
+          message:
+            "another tab already holds this origin's storage. Close it, or reload this one " +
+            'after it is gone, to take over.',
+          mount: 'opfs',
+        });
+      }
+      return mountFollower(options);
     }
   }
 
@@ -846,7 +930,111 @@ export async function mountOpfsStorage(options: MountOptions): Promise<Result<Mo
 
   store.journal.beginRecording();
 
-  return ok({ backend, store, memory, recovery: recovered.value, leadership, failures });
+  return ok({
+    backend,
+    store,
+    memory,
+    recovery: recovered.value,
+    leadership,
+    role: 'leader',
+    failures,
+  });
+}
+
+/**
+ * Mount read-only against a store another tab owns.
+ *
+ * It takes NO handles, so it cannot interrupt the leader and the leader cannot
+ * interrupt it. It also cannot repair: an interrupted migration stays
+ * interrupted until the leader mounts, a damaged slot is reported rather than
+ * rewritten, and a store version newer than this build is a refusal.
+ *
+ * WHAT A FOLLOWER'S VIEW IS AS OF: the leader's last COMMITTED operation, not
+ * its last flush.
+ *
+ * That is a real difference from recovery, and it took a failing test to state
+ * it correctly. `getFile()` returns UNFLUSHED bytes (MEASURED), so the log a
+ * follower reads is the log the leader has in hand rather than the log the disk
+ * has. A follower therefore sees an operation that a crash at the same instant
+ * would lose. That is the right answer for a second tab — it wants to show what
+ * the other tab has done, not what would survive a power cut — but it must not
+ * be mistaken for the recovery rule.
+ *
+ * What it does NOT do is show uncommitted work. `committedPlans` is the same
+ * function recovery uses, so a plan whose apply failed, or whose commit marker
+ * had not been written when the follower looked, is skipped in both.
+ *
+ * It does not update itself afterwards; that is what `StorageCoordinator`
+ * announcements are for, and acting on one means mounting again.
+ */
+async function mountFollower(options: MountOptions): Promise<Result<MountReport>> {
+  const view = await readFollowerView({
+    root: options.root,
+    ...(options.directory === undefined ? {} : { directory: options.directory }),
+    ...(options.migrations === undefined ? {} : { migrations: options.migrations }),
+  });
+  if (!view.ok) return view;
+
+  const memory = new MemoryStorage({
+    clock: options.clock,
+    capacity: options.capacity ?? null,
+    name: 'opfs-follower',
+    ...(options.user === undefined ? {} : { user: options.user, group: options.user }),
+  });
+
+  const cleared = await memory.reset();
+  if (!cleared.ok) return cleared;
+  if (options.seed !== undefined) {
+    const installed = await memory.installImage(options.seed);
+    if (!installed.ok) return installed;
+  }
+  if (view.value.overlay !== null) {
+    const grafted = await importSnapshot(memory, view.value.overlay, {
+      ...(options.seed === undefined ? {} : { seed: options.seed }),
+    });
+    if (!grafted.ok) return grafted;
+  }
+
+  const failures: StorageError[] = [];
+  for (const plan of view.value.replay) {
+    const applied = await memory.replay(plan);
+    if (!applied.ok) {
+      failures.push(applied.error);
+      break;
+    }
+  }
+
+  const backend = new OpfsStorage({
+    memory,
+    clock: options.clock,
+    readOnly: true,
+    name: 'opfs-follower',
+    ...(options.manager === undefined ? {} : { manager: options.manager }),
+    ...(options.seed === undefined ? {} : { seed: options.seed }),
+    ...(options.threshold === undefined ? {} : { threshold: options.threshold }),
+    ...(options.onQuotaWarning === undefined ? {} : { onQuotaWarning: options.onQuotaWarning }),
+    ...(options.coordinator === undefined ? {} : { coordinator: options.coordinator }),
+  });
+
+  return ok({
+    backend,
+    store: null,
+    memory,
+    recovery: {
+      generation: view.value.generation,
+      storeVersion: view.value.storeVersion,
+      slot: view.value.slot,
+      migrated: [],
+      replay: view.value.replay,
+      truncatedBytes: 0,
+      log: view.value.log,
+      overlay: view.value.overlay,
+      damaged: view.value.damaged,
+    },
+    leadership: null,
+    role: 'follower',
+    failures,
+  });
 }
 
 function closing<T>(

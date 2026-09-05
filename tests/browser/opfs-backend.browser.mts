@@ -457,7 +457,7 @@ export async function runOpfsBrowserSuite(): Promise<readonly BrowserCheck[]> {
     if (!written.ok) throw new Error(`the write failed: ${written.error.message}`);
     const checkpointed = await first.value.backend.checkpoint();
     if (!checkpointed.ok) throw new Error(`the checkpoint failed: ${checkpointed.error.message}`);
-    first.value.store.close();
+    first.value.store?.close();
 
     const second = await mountOpfsStorage({
       root,
@@ -476,7 +476,7 @@ export async function runOpfsBrowserSuite(): Promise<readonly BrowserCheck[]> {
     const seeded = await second.value.backend.readText('/home/me/README.md');
     if (!seeded.ok) throw new Error(`the seed file was missing: ${seeded.error.message}`);
     checks.equal(seeded.value, 'seeded', 'the seed file');
-    second.value.store.close();
+    second.value.store?.close();
   });
 
   await checks.run('a second mount is refused while the first holds the store', async () => {
@@ -505,7 +505,65 @@ export async function runOpfsBrowserSuite(): Promise<readonly BrowserCheck[]> {
       checks.equal(second.ok, false, 'the second mount');
       checks.equal(second.ok ? '' : second.error.code, 'EIO', 'the code the platform refusal maps to');
     } finally {
-      first.value.store.close();
+      first.value.store?.close();
+    }
+  });
+
+  await checks.run('a follower mounts read-only against a store the leader owns', async () => {
+    // The measured capability this rests on is `getFile()` NOT being refused
+    // while another context holds a sync access handle — which the row above
+    // checks directly, and which a second browser tab was observed doing.
+    const clock = (): number => 1_700_000_000_000;
+    const leader = await mountOpfsStorage({
+      root,
+      directory: 'follower',
+      clock,
+      seed: SEED,
+      user: 'me',
+      manager,
+    });
+    if (!leader.ok) throw new Error(`the leader mount failed: ${leader.error.message}`);
+    try {
+      const written = await leader.value.backend.writeText('/home/me/shared.txt', 'from the leader');
+      if (!written.ok) throw new Error(`the write failed: ${written.error.message}`);
+      const checkpointed = await leader.value.backend.checkpoint();
+      if (!checkpointed.ok) throw new Error(`the checkpoint failed: ${checkpointed.error.message}`);
+
+      // Hold the leader lock so the next mount is genuinely a follower. The
+      // leader above never took it, so it still holds every sync access handle
+      // — which is what makes this a real test: the follower has to read the
+      // store through `getFile()` because `createSyncAccessHandle` would be
+      // refused, and both of those are the platform's behaviour, not a fake's.
+      const { requestLeadership } = await import('../../src/storage/opfs.ts');
+      const held = await requestLeadership(navigator.locks);
+      checks.equal(held.granted, true, 'the suite took the lock');
+      try {
+        const follower = await mountOpfsStorage({
+          root,
+          directory: 'follower',
+          clock,
+          seed: SEED,
+          user: 'me',
+          manager,
+          locks: navigator.locks,
+          allowFollower: true,
+        });
+        if (!follower.ok) throw new Error(`the follower mount failed: ${follower.error.message}`);
+        checks.equal(follower.value.role, 'follower', 'the role');
+        checks.equal(follower.value.store, null, 'a follower holds no handles');
+        checks.equal(follower.value.backend.readOnly, true, 'and refuses every mutation');
+        const read = await follower.value.backend.readText('/home/me/shared.txt');
+        if (!read.ok) throw new Error(`the follower could not read: ${read.error.message}`);
+        checks.equal(read.value, 'from the leader', "the leader's file, read without a lock");
+        const refused = await follower.value.backend.writeText('/home/me/nope.txt', 'no');
+        checks.equal(refused.ok, false, 'a follower write');
+        checks.equal(refused.ok ? '' : refused.error.code, 'EROFS', 'the code');
+      } finally {
+        held.release();
+        await held.done;
+      }
+    } finally {
+      leader.value.store?.close();
     }
   });
 

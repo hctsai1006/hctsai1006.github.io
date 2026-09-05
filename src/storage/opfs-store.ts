@@ -94,33 +94,23 @@
  * durability is a runtime question.
  */
 
-import { MemoryStorage } from './memory.ts';
-import {
-  createSnapshot,
-  decodeSnapshot,
-  encodeSnapshot,
-  exportSnapshot,
-  restoreSnapshot,
-} from './snapshot.ts';
+import type { MemoryStorage } from './memory.ts';
+import { exportSnapshot } from './snapshot.ts';
 import { err, ok } from './types.ts';
-import type {
-  MutationPlan,
-  QuotaUsage,
-  Result,
-  SeedSpec,
-  StorageError,
-} from './types.ts';
+import type { MutationPlan, QuotaUsage, Result, SeedSpec } from './types.ts';
 import {
+  STORE_DIRECTORY,
   STORE_FILES,
   SyncFile,
   UNKNOWN_USAGE,
   fnv1a32Bytes,
   isNotFound,
+  readWithoutLock,
 } from './opfs-platform.ts';
 import type { OpfsDirectory } from './opfs-platform.ts';
 import { MIGRATIONS, STORE_VERSION, migrateDown, migrateUp } from './opfs-migrate.ts';
 import type { Migration, MigrationReport } from './opfs-migrate.ts';
-import { OpfsJournal, WAL_HEADER_BYTES, parseWal, walHeader } from './opfs-wal.ts';
+import { OpfsJournal, WAL_HEADER_BYTES, committedPlans, parseWal } from './opfs-wal.ts';
 
 const ENCODER = new TextEncoder();
 const DECODER = new TextDecoder('utf-8', { fatal: false });
@@ -229,6 +219,23 @@ export interface OpfsStoreOptions {
   readonly checkpointBytes?: number;
 }
 
+/**
+ * What became of the write-ahead log, as one word.
+ *
+ * ADDED AFTER AN ADVERSARIAL PASS, which found the earlier version reporting
+ * `truncatedBytes: 0` for two completely different situations: a clean log with
+ * nothing in it, and a log whose header did not parse at all. The second is a
+ * corrupt store losing every mutation since its last checkpoint, and it was
+ * indistinguishable from the ordinary case in everything the mount returned.
+ *
+ *   empty       nothing in it, or no log file yet
+ *   clean       parsed whole, every record verified
+ *   torn        parsed, with a partial record at the end — an ordinary crash
+ *   stale       parsed, but from a generation the checkpoint already contains
+ *   unreadable  the header or framing did not parse. THIS IS DATA LOSS.
+ */
+export type LogStatus = 'empty' | 'clean' | 'torn' | 'stale' | 'unreadable';
+
 export interface RecoveryReport {
   /** The generation that was read, or 0 for a store that did not exist. */
   readonly generation: number;
@@ -241,6 +248,8 @@ export interface RecoveryReport {
   readonly replay: readonly MutationPlan[];
   /** Bytes at the end of the log that were torn. Non-zero means a crash. */
   readonly truncatedBytes: number;
+  /** Why the log contributed what it did. `unreadable` means data was lost. */
+  readonly log: LogStatus;
   /** The overlay to hand to `bootStorage`, or null when there is nothing yet. */
   readonly overlay: Uint8Array | null;
   /** Slots that were present but unreadable. Non-empty means damage. */
@@ -420,6 +429,7 @@ export class OpfsStore {
         migrated: [],
         replay: [],
         truncatedBytes: 0,
+        log: 'empty',
         overlay: null,
         damaged,
       });
@@ -438,17 +448,27 @@ export class OpfsStore {
     if (!raw.ok) return raw;
     let replay: readonly MutationPlan[] = [];
     let truncatedBytes = 0;
+    let log: LogStatus;
     const parsed = parseWal(raw.value);
-    if (parsed.ok && parsed.value.generation === current.generation) {
-      truncatedBytes = parsed.value.truncatedBytes;
-      const committed = await this.journal.replayable();
-      if (!committed.ok) return committed;
-      replay = committed.value;
-    } else if (parsed.ok) {
+    if (!parsed.ok) {
+      // A log whose header or framing does not parse. NOT the same as an empty
+      // one, and reporting it as `truncatedBytes: 0` — which an earlier version
+      // of this method did — hid the difference between "nothing had happened
+      // since the checkpoint" and "everything since the checkpoint is gone".
+      // A brand new store never reaches here: it returns above with `slot:
+      // null` before the log is looked at.
+      log = raw.value.byteLength === 0 ? 'empty' : 'unreadable';
+    } else if (parsed.value.generation !== current.generation) {
       // A log from a generation the checkpoint has already absorbed. Not
       // damage; the ordinary result of dying between "slot flushed" and "log
       // reset". Everything in it is inside the checkpoint already.
-      truncatedBytes = 0;
+      log = 'stale';
+    } else {
+      truncatedBytes = parsed.value.truncatedBytes;
+      log = truncatedBytes > 0 ? 'torn' : parsed.value.records.length === 0 ? 'empty' : 'clean';
+      const committed = committedPlans(parsed.value);
+      if (!committed.ok) return committed;
+      replay = committed.value;
     }
 
     // Reset unconditionally. Whether the log was stale, torn or clean, from
@@ -464,6 +484,7 @@ export class OpfsStore {
       migrated: migrated.value.applied,
       replay,
       truncatedBytes,
+      log,
       overlay: current.payload,
       damaged,
     });
@@ -608,9 +629,17 @@ export class OpfsStore {
     return ok(generation);
   }
 
-  /** True when the log has grown past the threshold and a checkpoint is due. */
+  /**
+   * True when the log has grown past the threshold and a checkpoint is due.
+   *
+   * The HEADER IS NOT COUNTED. `journal.byteLength` includes the 16-byte header
+   * that exists in a freshly reset, empty log, so comparing it directly made
+   * `checkpointBytes: 16` mean "checkpoint after every mutation" and
+   * `checkpointBytes: 0` impossible to distinguish from it. The option is
+   * documented as bytes of LOG, and this is what makes that true.
+   */
   get checkpointDue(): boolean {
-    return this.journal.byteLength >= this.#checkpointBytes;
+    return this.journal.byteLength - WAL_HEADER_BYTES >= this.#checkpointBytes;
   }
 
   /**
@@ -794,73 +823,129 @@ export class OpfsStore {
 }
 
 /**
- * Rebuild an overlay from a checkpoint plus committed plans, without a mount.
+ * What a FOLLOWER can see: the durable state, read without taking any lock.
  *
- * Used by `Export-FileSystem` when the caller wants the durable state rather
- * than the live one, and by the tests that prove replay is faithful. It builds
- * a scratch `MemoryStorage`, which is the cheapest correct way to interpret a
- * `MutationPlan`: the steps mean whatever `#apply` says they mean, and a second
- * interpreter written here would be a second definition of the same thing.
+ * A second tab cannot open the store — MEASURED across two real tabs, the
+ * platform refuses its `createSyncAccessHandle` with
+ * `NoModificationAllowedError`. But `getFile()` is not refused: the second tab
+ * read back exactly what the first had written, including bytes the first had
+ * not flushed. So a follower can show the filesystem read-only instead of
+ * showing an error, and this is what it reads to do that.
+ *
+ * IT TAKES NO HANDLES, so it cannot be interrupted by the leader and cannot
+ * interrupt it, and there is nothing to close afterwards. It also cannot
+ * repair anything: an interrupted migration stays interrupted until the leader
+ * mounts, a damaged slot is reported and not rewritten, and the store version
+ * is migrated IN MEMORY ONLY for this one view.
  */
-export async function materialise(options: {
-  readonly seed: SeedSpec;
+export interface FollowerView {
+  readonly generation: number;
+  readonly storeVersion: number;
+  readonly slot: 'a' | 'b' | null;
   readonly overlay: Uint8Array | null;
   readonly replay: readonly MutationPlan[];
-  readonly clock: () => number;
-  readonly user?: string;
-}): Promise<Result<{ backend: MemoryStorage; failures: readonly StorageError[] }>> {
-  const backend = new MemoryStorage({
-    clock: options.clock,
-    ...(options.user === undefined ? {} : { user: options.user, group: options.user }),
-  });
-  const cleared = await backend.reset();
-  if (!cleared.ok) return cleared;
-  const installed = await backend.installImage(options.seed);
-  if (!installed.ok) return installed;
+  readonly damaged: readonly ('a' | 'b')[];
+  readonly log: LogStatus;
+}
 
-  if (options.overlay !== null) {
-    const document = decodeSnapshot(options.overlay);
-    if (!document.ok) return document;
-    const restored = await restoreSnapshot(backend, document.value, { seed: options.seed });
-    if (!restored.ok) return restored;
-  }
-
-  const failures: StorageError[] = [];
-  for (const plan of options.replay) {
-    const applied = await backend.replay(plan);
-    if (!applied.ok) {
-      failures.push(applied.error);
-      // STOP, do not continue. The plans are ordered and each was validated
-      // against the tree its predecessor left. Skipping one and applying the
-      // next means applying a plan against a tree it never saw, which is the
-      // exact condition `#apply` was changed to return an error for rather than
-      // throw. Losing the tail is a smaller loss than corrupting the middle.
-      break;
+export async function readFollowerView(options: {
+  readonly root: OpfsDirectory;
+  readonly directory?: string;
+  readonly migrations?: readonly Migration[];
+}): Promise<Result<FollowerView>> {
+  const name = options.directory ?? STORE_DIRECTORY;
+  let directory: OpfsDirectory;
+  try {
+    directory = await options.root.getDirectoryHandle(name, { create: false });
+  } catch (cause) {
+    if (isNotFound(cause)) {
+      return ok({
+        generation: 0,
+        storeVersion: STORE_VERSION,
+        slot: null,
+        overlay: null,
+        replay: [],
+        damaged: [],
+        log: 'empty',
+      });
     }
+    return err({
+      code: 'EIO',
+      path: name,
+      syscall: 'read',
+      message: `could not read the store directory: ${String(cause)}`,
+      cause: String(cause),
+    });
   }
-  return ok({ backend, failures });
-}
 
-/** Convenience: the overlay bytes a materialised store would export. */
-export async function materialiseOverlay(options: {
-  readonly seed: SeedSpec;
-  readonly overlay: Uint8Array | null;
-  readonly replay: readonly MutationPlan[];
-  readonly clock: () => number;
-  readonly now: number;
-}): Promise<Result<Uint8Array>> {
-  const built = await materialise(options);
-  if (!built.ok) return built;
-  const document = await createSnapshot(built.value.backend, {
-    scope: 'overlay',
-    now: options.now,
-    seed: options.seed,
+  const a = await readWithoutLock(directory, STORE_FILES.slotA);
+  if (!a.ok) return a;
+  const b = await readWithoutLock(directory, STORE_FILES.slotB);
+  if (!b.ok) return b;
+
+  const parsedA = a.value === null ? null : decodeSlot(a.value);
+  const parsedB = b.value === null ? null : decodeSlot(b.value);
+  const damaged: ('a' | 'b')[] = [];
+  if (parsedA === null && a.value !== null && a.value.byteLength > 0) damaged.push('a');
+  if (parsedB === null && b.value !== null && b.value.byteLength > 0) damaged.push('b');
+
+  let winner: { contents: SlotContents; slot: 'a' | 'b' } | null = null;
+  if (parsedA !== null) winner = { contents: parsedA, slot: 'a' };
+  if (parsedB !== null && (winner === null || parsedB.generation > winner.contents.generation)) {
+    winner = { contents: parsedB, slot: 'b' };
+  }
+  if (winner === null) {
+    return {
+      ok: true,
+      value: {
+        generation: 0,
+        storeVersion: STORE_VERSION,
+        slot: null,
+        overlay: null,
+        replay: [],
+        damaged,
+        log: 'empty',
+      },
+    };
+  }
+
+  let payload = winner.contents.payload;
+  if (winner.contents.storeVersion !== STORE_VERSION) {
+    const migrated = migrateUp(
+      payload,
+      winner.contents.storeVersion,
+      STORE_VERSION,
+      options.migrations ?? MIGRATIONS,
+    );
+    if (!migrated.ok) return migrated;
+    payload = migrated.value.payload;
+  }
+
+  const raw = await readWithoutLock(directory, STORE_FILES.wal);
+  if (!raw.ok) return raw;
+  const read = raw.value === null ? null : parseWal(raw.value);
+  let replay: readonly MutationPlan[] = [];
+  let log: LogStatus = 'empty';
+  if (read !== null && read.ok) {
+    if (read.value.generation !== winner.contents.generation) log = 'stale';
+    else {
+      log = read.value.truncatedBytes > 0 ? 'torn' : 'clean';
+      const committed = committedPlans(read.value);
+      if (!committed.ok) return committed;
+      replay = committed.value;
+    }
+  } else if (read !== null) {
+    log = 'unreadable';
+  }
+
+  return ok({
+    generation: winner.contents.generation,
+    storeVersion: STORE_VERSION,
+    slot: winner.slot,
+    overlay: payload,
+    replay,
+    damaged,
+    log,
   });
-  if (!document.ok) return document;
-  return ok(encodeSnapshot(document.value));
 }
 
-/** Header bytes of a fresh, empty log. Exported so a test can build one by hand. */
-export function emptyWal(generation: number): Uint8Array {
-  return walHeader(generation);
-}

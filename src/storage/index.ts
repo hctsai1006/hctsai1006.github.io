@@ -130,16 +130,37 @@ export type {
   StorageCoordinator,
 } from './opfs.ts';
 
-export { OpfsStore, decodeSlot, encodeSlot, materialise, materialiseOverlay } from './opfs-store.ts';
-export type { OpfsStoreOptions, RecoveryReport, SlotContents } from './opfs-store.ts';
+export { OpfsStore, decodeSlot, encodeSlot, readFollowerView } from './opfs-store.ts';
+export type {
+  FollowerView,
+  LogStatus,
+  OpfsStoreOptions,
+  RecoveryReport,
+  SlotContents,
+} from './opfs-store.ts';
 
 export { MIGRATIONS, STORE_VERSION, migrateDown, migrateUp, orderMigrations } from './opfs-migrate.ts';
 export type { Migration, MigrationReport } from './opfs-migrate.ts';
 
-export { OpfsJournal, decodePlan, encodePlan, parseWal, walHeader, walRecord } from './opfs-wal.ts';
+export {
+  OpfsJournal,
+  committedPlans,
+  decodePlan,
+  encodePlan,
+  parseWal,
+  walHeader,
+  walRecord,
+} from './opfs-wal.ts';
 export type { WalContents, WalRecord } from './opfs-wal.ts';
 
-export { STORE_DIRECTORY, STORE_FILES, SyncFile, fnv1a32Bytes, fromException } from './opfs-platform.ts';
+export {
+  STORE_DIRECTORY,
+  STORE_FILES,
+  SyncFile,
+  fnv1a32Bytes,
+  fromException,
+  readWithoutLock,
+} from './opfs-platform.ts';
 export type {
   OpfsDirectory,
   OpfsFile,
