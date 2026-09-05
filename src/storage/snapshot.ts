@@ -261,6 +261,38 @@ function seedExpectations(spec: SeedSpec | undefined): Map<string, SeedExpectati
 }
 
 /**
+ * A metadata field, but ONLY when `isEntry` would accept it back.
+ *
+ * The exporter must never write what the importer refuses, and it could:
+ * `isSaneTime` wants `> 0` while `utimes` happily stores mtime 0 — the epoch,
+ * an ordinary date — and `isSaneMode` caps at 0o7777 while `chmod` stores any
+ * number. MEASURED, both reachable through the public API and both fatal to
+ * the WHOLE document, not just the offending entry:
+ *
+ *     utimes('/odd', { mtime: 0 })  -> export ok, decode refused 'bad-entry'
+ *     chmod('/f', 0o10644)          -> export ok, decode refused 'bad-entry'
+ *
+ * A user who ran `touch -d @0` once had a backup that always wrote and never
+ * restored, and nothing said so until the day they needed it.
+ *
+ * Dropping the field rather than the entry is the least-loss answer available
+ * here: the node keeps its content and everything else, and only the value the
+ * format cannot represent goes missing. The alternative — widening the
+ * validator — would contradict a decision this repo has already made and
+ * tested (`['negative mtime', { t: 'f', p: '/x', mt: -1 }]` must be refused).
+ * The door-level question, whether `chmod` should bound a mode to 0o7777 and
+ * `utimes` a time to > 0, is left alone deliberately: that is a filesystem-API
+ * change, and this guard holds whatever the answer turns out to be.
+ */
+function carriable(field: 'm', value: number): { m?: number };
+function carriable(field: 'mt', value: number): { mt?: number };
+function carriable(field: 'm' | 'mt', value: number): { m?: number; mt?: number } {
+  const usable = field === 'm' ? isSaneMode(value) : isSaneTime(value);
+  if (!usable) return {};
+  return field === 'm' ? { m: value } : { mt: value };
+}
+
+/**
  * Every path this build's seed OWNS, and what kind it puts there.
  *
  * Not just the spec's own entries: `installImage` creates a missing ancestor
@@ -304,11 +336,29 @@ export async function createSnapshot(
   const entries: SnapshotEntry[] = [];
   const skipped: string[] = [];
   const expectations = seedExpectations(options.seed);
-  const seedTime = options.seed?.time ?? null;
+  const seedPaths = seedKinds(options.seed);
+  // Normalised ONCE, here, and used for both the deviation test below and the
+  // document's own field. Reading the raw value in one place and the sane one
+  // in the other is the same "two functions that agree on the values someone
+  // thought to try" shape that made the signer and the verifier disagree; a
+  // seed spec with `time: 0` recorded `seedTime: null` while still comparing
+  // every node's mtime against 0. For any real seed time this is the identity.
+  const seedTime = saneTime(options.seed?.time);
   const full = options.scope === 'full';
 
   const record = async (stat: FileStat): Promise<Result<void>> => {
-    const isSeed = stat.origin === 'seed';
+    // A node claiming seed origin that THIS BUILD'S SEED does not declare is
+    // not a seed node, and must not be exported as one — the exporter's half of
+    // the check `restoreSnapshot` already does on the way back in.
+    //
+    // Origin is not only set by `installImage`: `WriteOptions.origin` is public,
+    // so `writeText(path, data, { origin: 'seed' })` marks the caller's OWN file
+    // as seed. Believed here, the overlay then records it with no content and
+    // the next boot drops it — MEASURED, the file was ENOENT after one reload.
+    // Without a seed spec there is no authority and the claim stands, which is
+    // the same position the importer takes for the same reason.
+    const seedPath = seedPaths?.get(stat.path);
+    const isSeed = stat.origin === 'seed' && (seedPaths === null || seedPath === stat.kind);
 
     if (isSeed && !full) {
       // A seed node carries no content. It is recorded only when the user
@@ -321,8 +371,8 @@ export async function createSnapshot(
         t: stat.kind === 'directory' ? 'd' : 'f',
         p: stat.path,
         s: 1,
-        ...(modeChanged ? { m: stat.mode } : {}),
-        ...(timeChanged ? { mt: stat.mtime } : {}),
+        ...(modeChanged ? carriable('m', stat.mode) : {}),
+        ...(timeChanged ? carriable('mt', stat.mtime) : {}),
       });
       return ok(undefined);
     }
@@ -331,8 +381,8 @@ export async function createSnapshot(
       entries.push({
         t: 'd',
         p: stat.path,
-        m: stat.mode,
-        mt: stat.mtime,
+        ...carriable('m', stat.mode),
+        ...carriable('mt', stat.mtime),
         ...(isSeed ? { s: 1 as const } : {}),
       });
       return ok(undefined);
@@ -347,8 +397,8 @@ export async function createSnapshot(
       t: 'f',
       p: stat.path,
       c: toBase64(bytes.value),
-      m: stat.mode,
-      mt: stat.mtime,
+      ...carriable('m', stat.mode),
+      ...carriable('mt', stat.mtime),
       ...(isSeed ? { s: 1 as const } : {}),
     });
     return ok(undefined);
@@ -382,7 +432,7 @@ export async function createSnapshot(
     version: SNAPSHOT_VERSION,
     scope: options.scope,
     createdAt: saneTime(options.now) ?? 0,
-    seedTime: saneTime(seedTime),
+    seedTime,
     entries,
     skipped,
   } as const;

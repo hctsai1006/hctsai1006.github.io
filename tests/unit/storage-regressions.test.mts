@@ -33,6 +33,7 @@ import {
   encodeSnapshot,
   exportSnapshot,
   fnv1a32,
+  importSnapshot,
   restoreSnapshot,
   snapshotPayload,
   toBase64,
@@ -879,5 +880,135 @@ describe('the signer and the verifier are the same function', () => {
       );
       assert.ok(decodeSnapshot(exported).ok, `${label} produced a document this build refuses`);
     }
+  });
+});
+
+describe('the exporter never writes what the importer refuses', () => {
+  it('survives an mtime the format cannot represent', async () => {
+    // `utimes` stores mtime 0 — the epoch, an ordinary date — and `isSaneTime`
+    // wants > 0, so ONE `touch -d @0` made the user's entire backup
+    // undecodable: the export succeeded, so they believed they had one.
+    const store = backend();
+    await store.writeText('/keep', 'important user data');
+    await store.writeText('/odd', 'also important');
+    assert.ok((await store.utimes('/odd', { mtime: 0 }, false)).ok);
+    assert.equal(value(await store.stat('/odd')).mtime, 0);
+
+    const exported = value(await exportSnapshot(store, { scope: 'full', now: 1 }));
+    const decoded = decodeSnapshot(exported);
+    assert.ok(decoded.ok, 'the whole document must still decode');
+
+    const rebuilt = backend();
+    assert.ok((await importSnapshot(rebuilt, exported)).ok);
+    assert.equal(value(await rebuilt.readText('/keep')), 'important user data');
+    assert.equal(value(await rebuilt.readText('/odd')), 'also important', 'the content survives');
+  });
+
+  it('survives a mode the format cannot represent', async () => {
+    // `chmod` stores any number; `isSaneMode` caps at 0o7777. 0o10644 is still
+    // readable, so the file is exported rather than skipped, and the entry then
+    // failed validation on the way back in.
+    const store = backend();
+    await store.writeText('/keep', 'important user data');
+    await store.writeText('/f', 'x');
+    assert.ok((await store.chmod('/f', 0o10644)).ok);
+
+    const exported = value(await exportSnapshot(store, { scope: 'full', now: 1 }));
+    assert.ok(decodeSnapshot(exported).ok, 'the whole document must still decode');
+    const rebuilt = backend();
+    assert.ok((await importSnapshot(rebuilt, exported)).ok);
+    assert.equal(value(await rebuilt.readText('/keep')), 'important user data');
+  });
+
+  it('still carries mode and mtime when they are representable', async () => {
+    // The guard must drop only the unrepresentable value, never the ordinary one.
+    const store = backend();
+    await store.writeText('/f', 'x', { mode: 0o600 });
+    await store.utimes('/f', { mtime: 1_650_000_000_000 }, false);
+    const exported = value(await createSnapshot(store, { scope: 'full', now: 1 }));
+    const row = exported.entries.find((entry) => entry.p === '/f');
+    assert.ok(row !== undefined);
+    assert.equal(row.m, 0o600);
+    assert.equal(row.mt, 1_650_000_000_000);
+  });
+});
+
+describe('renaming a seed node away', () => {
+  it('keeps a renamed seed FILE across a reboot', async () => {
+    // The third sibling of the same defect. `#apply`'s move branch relocates
+    // the node and never touched origin, so `mv ~/README.md ~/README.bak` left
+    // README.bak marked seed; the overlay recorded it as `s: 1` with no
+    // content, and the next boot dropped it. The file was gone and `~/projects`
+    // was back where it started, so the move did not even stick.
+    const seed = buildSeed();
+    const clock = fakeClock().now;
+    const first = value(await bootStorage({ clock, seed }));
+    const original = value(await first.vfs.readText(`${HOME}/README.md`));
+    assert.ok((await first.vfs.rename(`${HOME}/README.md`, `${HOME}/README.bak`)).ok);
+    assert.equal(value(await first.backend.stat(`${HOME}/README.bak`)).origin, 'user');
+
+    const overlay = value(await createSnapshot(first.backend, { scope: 'overlay', now: 2, seed }));
+    const second = value(await bootStorage({ clock, seed, overlay: encodeSnapshot(overlay) }));
+    assert.deepEqual(second.restore?.dropped, []);
+    assert.equal(value(await second.backend.readText(`${HOME}/README.bak`)), original);
+  });
+
+  it('keeps a renamed seed DIRECTORY, including an empty one, with its own mode', async () => {
+    // A renamed directory used to survive only as a side effect of its children
+    // being restored with `createParents: true` — so its own mode and mtime
+    // were lost, and an EMPTY one disappeared altogether.
+    const seed = buildSeed();
+    const clock = fakeClock().now;
+    const first = value(await bootStorage({ clock, seed }));
+    assert.ok((await first.vfs.rename(`${HOME}/projects`, `${HOME}/work`)).ok);
+    assert.ok((await first.vfs.chmod(`${HOME}/work`, 0o750)).ok);
+    assert.deepEqual(value(await first.vfs.readdir(`${HOME}/work`)), [], 'the seed ships it empty');
+
+    const overlay = value(await createSnapshot(first.backend, { scope: 'overlay', now: 2, seed }));
+    const second = value(await bootStorage({ clock, seed, overlay: encodeSnapshot(overlay) }));
+    assert.deepEqual(second.restore?.dropped, []);
+    const moved = value(await second.backend.stat(`${HOME}/work`));
+    assert.equal(moved.kind, 'directory', 'an empty renamed directory must not vanish');
+    assert.equal(moved.mode, 0o750, 'and it keeps the mode the user gave it');
+  });
+});
+
+describe('a node claiming seed origin that the seed never declared', () => {
+  it('is exported with its content, so the next boot does not drop it', async () => {
+    // `WriteOptions.origin` is public, so a caller can mark its OWN file as a
+    // seed node. Believed by the exporter, the overlay recorded it with no
+    // content and the next boot dropped it — the same forgery the s:1 import
+    // gate refuses, arriving by the direct route. The exporter now applies the
+    // same authority check.
+    const seed = buildSeed();
+    const clock = fakeClock().now;
+    const first = value(await bootStorage({ clock, seed }));
+    const forged = `${HOME}/forged.md`;
+    assert.ok((await first.vfs.writeText(forged, 'my data', { origin: 'seed' })).ok);
+
+    const overlay = value(await createSnapshot(first.backend, { scope: 'overlay', now: 2, seed }));
+    const row = overlay.entries.find((entry) => entry.p === forged);
+    assert.ok(row !== undefined, 'it must be exported');
+    assert.equal(row.s, undefined, 'not as a seed node');
+    assert.ok(row.c !== undefined, 'and with its content');
+
+    const second = value(await bootStorage({ clock, seed, overlay: encodeSnapshot(overlay) }));
+    assert.deepEqual(second.restore?.dropped, []);
+    assert.equal(value(await second.backend.readText(forged)), 'my data');
+  });
+
+  it('still exports a REAL seed node as a contentless seed entry', async () => {
+    // The control: the whole point of the overlay is that a genuine seed file
+    // costs a handful of bytes, not its whole content.
+    const seed = buildSeed();
+    const clock = fakeClock().now;
+    const booted = value(await bootStorage({ clock, seed }));
+    const readme = `${HOME}/README.md`;
+    assert.ok((await booted.vfs.chmod(readme, 0o600)).ok);
+    const overlay = value(await createSnapshot(booted.backend, { scope: 'overlay', now: 2, seed }));
+    const row = overlay.entries.find((entry) => entry.p === readme);
+    assert.ok(row !== undefined);
+    assert.equal(row.s, 1);
+    assert.equal(row.c, undefined);
   });
 });
