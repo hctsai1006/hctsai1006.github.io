@@ -1430,6 +1430,176 @@ describe('the shell moving, as an event rather than as prompt chrome', () => {
   });
 });
 
+describe('cancelling something that has not started yet', () => {
+  /**
+   * Counts INVOCATIONS, not exit codes, and that is the whole design of these
+   * tests. A kernel that runs the command and then reports 130 passes any
+   * assertion about the exit code while having already committed whatever side
+   * effects the command performs — which is the thing a Ctrl+C before the
+   * command starts is supposed to prevent.
+   */
+  function counter(name: string, calls: { n: number }): CommandModule {
+    return command({ name, display: name }, async (context) => {
+      calls.n += 1;
+      context.signal.throwIfAborted();
+      await context.streams.success.write('ran');
+      return 0;
+    });
+  }
+
+  it('does not invoke the command when the cancel arrived first', async () => {
+    // MEASURED before the reordering: `invocations = 1`. The check used to run
+    // AFTER `#track(#drive(...))`, and `#drive` is an async function — calling
+    // it executes as far as its first await, which is far enough to enter the
+    // first stage.
+    const calls = { n: 0 };
+    const { kernel, events } = newKernel();
+    kernel.register(counter('work', calls));
+
+    kernel.send({ kind: 'cancel', requestId: 'r1' });
+    kernel.send({ kind: 'exec', requestId: 'r1', terminalId: 't1', source: 'work', background: false });
+    await kernel.drain();
+
+    assert.equal(calls.n, 0, 'the command must not have run at all');
+    assert.deepEqual(objectValues(events), []);
+    const exit = events.find((e) => e.kind === 'exit');
+    assert.equal(exit?.signalled, 'SIGINT');
+    assert.equal(exit?.exitCode, SIGNAL_EXIT_CODE.SIGINT);
+    assert.equal(exit?.succeeded, false);
+  });
+
+  it('honours a cancel sent from a process-changed listener', async () => {
+    // The window this closes: `#exec` creates every snapshot before registering
+    // any abort controller, so there is a moment when a process is in the table
+    // — findable — and unreachable by a signal. The old code branched on
+    // findability, so the cancel was neither remembered nor delivered.
+    // MEASURED before the fix:
+    //
+    //   invocations = 1   exits = [{"code":0,"signalled":null}]
+    //
+    // A Ctrl+C that vanished, and a command that reported success.
+    const calls = { n: 0 };
+    const { kernel, events } = newKernel();
+    kernel.register(counter('work', calls));
+
+    let cancelled = false;
+    kernel.on((event) => {
+      if (event.kind !== 'process-changed' || cancelled) return;
+      cancelled = true;
+      kernel.send({ kind: 'cancel', requestId: 'r1' });
+    });
+
+    kernel.send({ kind: 'exec', requestId: 'r1', terminalId: 't1', source: 'work', background: false });
+    await kernel.drain();
+
+    assert.equal(calls.n, 0, 'the command must not have run at all');
+    assert.equal(events.find((e) => e.kind === 'exit')?.signalled, 'SIGINT');
+  });
+
+  it('still produces exactly one exit per stage of the abandoned pipeline', async () => {
+    const calls = { n: 0 };
+    const { kernel, events } = newKernel();
+    kernel.register(counter('a', calls));
+    kernel.register(counter('b', calls));
+
+    kernel.send({ kind: 'cancel', requestId: 'r1' });
+    kernel.send({ kind: 'exec', requestId: 'r1', terminalId: 't1', source: 'a | b', background: false });
+    await kernel.drain();
+
+    assert.equal(calls.n, 0);
+    const exits = events.filter((e) => e.kind === 'exit');
+    assert.equal(exits.length, 2, 'one exit per process, cancelled or not');
+    assert.deepEqual(exits.map((e) => e.signalled), ['SIGINT', 'SIGINT']);
+  });
+
+  it('does not leave the cancellation lying around for the next request', async () => {
+    const calls = { n: 0 };
+    const { kernel } = newKernel();
+    kernel.register(counter('work', calls));
+
+    kernel.send({ kind: 'cancel', requestId: 'r1' });
+    kernel.send({ kind: 'exec', requestId: 'r1', terminalId: 't1', source: 'work', background: false });
+    await kernel.drain();
+    assert.equal(calls.n, 0);
+
+    kernel.send({ kind: 'exec', requestId: 'r2', terminalId: 't1', source: 'work', background: false });
+    await kernel.drain();
+    assert.equal(calls.n, 1, 'a different request must not inherit the cancellation');
+  });
+});
+
+describe('the status a process exits with is readable when the exit arrives', () => {
+  it('commits $? before publishing the exit that describes it', async () => {
+    // MEASURED before the reorder: `lastSucceeded at exit = true`, `after drain
+    // = false`. A listener reading the kernel on the event that says "this
+    // finished" was shown the PREVIOUS request's answer. A sequence number
+    // orders events; it cannot make an unwritten state readable.
+    const { kernel } = newKernel();
+    kernel.register(command({ name: 'fail', display: 'fail' }, async () => 3));
+
+    let atExit: { succeeded: boolean } | null = null;
+    kernel.on((event) => {
+      if (event.kind === 'exit') atExit = { succeeded: kernel.lastSucceeded('t1') };
+    });
+
+    kernel.send({ kind: 'exec', requestId: 'r1', terminalId: 't1', source: 'fail', background: false });
+    await kernel.drain();
+
+    assert.deepEqual(atExit, { succeeded: false });
+    assert.equal(kernel.lastSucceeded('t1'), false);
+  });
+
+  it('is still right when the listener submits the next request on the spot', async () => {
+    // The autopilot case: a listener that answers `exit` by sending the next
+    // `exec`. The second request's own teardown must not be able to reach back
+    // and overwrite the first's answer before the first listener has read it.
+    const { kernel } = newKernel();
+    kernel.register(command({ name: 'fail', display: 'fail' }, async () => 3));
+    kernel.register(emitter('ok', ['done']));
+
+    const observed: boolean[] = [];
+    kernel.on((event) => {
+      if (event.kind !== 'exit') return;
+      observed.push(kernel.lastSucceeded('t1'));
+      if (event.requestId === 'r1') {
+        kernel.send({ kind: 'exec', requestId: 'r2', terminalId: 't1', source: 'ok', background: false });
+      }
+    });
+
+    kernel.send({ kind: 'exec', requestId: 'r1', terminalId: 't1', source: 'fail', background: false });
+    await kernel.drain();
+
+    assert.deepEqual(observed, [false, true], 'each exit saw its own request’s result');
+  });
+
+  it('does not let a background job rewrite the terminal it was started from', async () => {
+    // MEASURED in pwsh 7.6.5 on this machine, via tools-free probe:
+    //
+    //   after Get-Date   : $? = True
+    //   job state        : Failed
+    //   after Wait-Job   : $? = True          <- the failure did NOT move it
+    //   after native job exit 42 : $LASTEXITCODE = <unset>
+    //
+    // A job is isolated from the session that started it. Before this, a
+    // background failure flipped the foreground terminal's `$?`.
+    const { kernel } = newKernel();
+    kernel.register(emitter('ok', ['done']));
+    kernel.register(command({ name: 'bad', display: 'bad' }, async () => 1));
+
+    kernel.send({ kind: 'exec', requestId: 'r1', terminalId: 't1', source: 'ok', background: false });
+    await kernel.drain();
+    assert.equal(kernel.lastSucceeded('t1'), true);
+
+    kernel.send({ kind: 'exec', requestId: 'r2', terminalId: 't1', source: 'bad', background: true });
+    await kernel.drain();
+    assert.equal(kernel.lastSucceeded('t1'), true, 'the job failed; the session did not');
+
+    // And the job itself still reports what happened, which is where the
+    // failure is supposed to be visible.
+    assert.equal(kernel.jobs.list()[0]?.state, 'Failed');
+  });
+});
+
 describe('a listener that throws', () => {
   /**
    * The transport's `postMessage` IS a listener, and `postMessage` throws

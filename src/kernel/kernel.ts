@@ -780,15 +780,30 @@ export class Kernel {
         return;
       }
       case 'cancel': {
-        const processes = this.#table.byRequest(request.requestId).filter((p) => p.state !== 'exited');
-        if (processes.length === 0) {
-          // No process yet: the request is still being resolved. Remember the
-          // cancellation so it is honoured when one appears — this window is
-          // exactly why `cancel` addresses a request and `signal` a process.
-          this.#cancelled.add(request.requestId);
-          return;
-        }
-        for (const pgid of new Set(processes.map((p) => p.pgid))) {
+        const known = this.#table.byRequest(request.requestId);
+        const live = known.filter((p) => p.state !== 'exited');
+        // REMEMBERED AS WELL AS DELIVERED, and the "as well" is the fix.
+        //
+        // This used to branch on whether a process could be FOUND, and a
+        // process can be found in the table before it can be REACHED by a
+        // signal: `#exec` creates every snapshot first and registers the abort
+        // controllers afterwards, so between the two there is a process with a
+        // pid and no signal target. A `process-changed` listener that cancels
+        // on the spot — the natural thing for a UI to do — lands exactly there.
+        // MEASURED before this change:
+        //
+        //   cancel-from-listener: invocations = 1
+        //                         exits = [{"code":0,"signalled":null}]
+        //
+        // The Ctrl+C vanished: not remembered, because a process was found; not
+        // delivered, because none was registered. The command ran to completion
+        // and reported SUCCESS.
+        //
+        // The record is dropped by `#exec` when it consumes it and by `#drive`'s
+        // teardown when the request ends, so the only ids that persist are those
+        // of requests that were cancelled and never submitted.
+        if (known.length === 0 || live.length > 0) this.#cancelled.add(request.requestId);
+        for (const pgid of new Set(live.map((p) => p.pgid))) {
           this.#signals.raiseGroup(pgid, 'SIGINT');
         }
         return;
@@ -936,18 +951,59 @@ export class Kernel {
       this.#prepare(snapshots[index] as ProcessSnapshot, entry.module, entry.binding, groupLeader),
     );
 
+    // CHECKED BEFORE THE WORK STARTS, not after.
+    //
+    // This used to run after `#track(#drive(...))`, and `#drive` is an async
+    // function: calling it executes synchronously as far as its first await,
+    // which is far enough to enter the first stage's `invoke`. So a cancel that
+    // had ALREADY ARRIVED still let the command run its prologue, and the
+    // SIGINT that followed only stopped whatever was left. MEASURED:
+    //
+    //   cancel-before-exec: invocations = 1
+    //
+    // Cancelling something that has not started must mean it does not start.
+    // An exit code of 130 with the side effects already committed is the
+    // failure this reordering exists to prevent, which is why the regression
+    // test counts INVOCATIONS and not exit codes.
+    if (this.#cancelled.has(requestId)) {
+      this.#cancelled.delete(requestId);
+      this.#abandon(prepared, requestId, terminalId, groupLeader, background);
+      return;
+    }
+
     // Synchronously, before the first await. A test that sends a signal on the
     // line after `send` must find a process that is already running, and the
     // pipeline generator does not start until it is iterated.
     for (const stage of prepared) this.#table.transition(stage.snapshot.pid, 'running');
 
     this.#track(this.#drive(prepared, requestId, terminalId, groupLeader, background));
+  }
 
-    // A cancel that arrived before the processes existed still has to land.
-    if (this.#cancelled.has(requestId)) {
-      this.#cancelled.delete(requestId);
-      this.#signals.raiseGroup(groupLeader, 'SIGINT');
+  /**
+   * End a pipeline that was cancelled before any of it ran.
+   *
+   * Every stage reports SIGINT and exit code 130 without `invoke` ever being
+   * called, and the request goes through the same teardown a completed one
+   * does — so the UI's invariant holds: one `exit` per process, always.
+   */
+  #abandon(
+    prepared: readonly Prepared[],
+    requestId: RequestId,
+    terminalId: TerminalId,
+    groupLeader: ProcessGroupId,
+    background: boolean,
+  ): void {
+    for (const entry of prepared) {
+      entry.outcome = {
+        exitCode: SIGNAL_EXIT_CODE.SIGINT,
+        succeeded: false,
+        // A cancelled CMDLET does not move `$LASTEXITCODE`, and nothing in this
+        // milestone is a native program. Same answer as `#unstarted`.
+        nativeExitCode: null,
+        signalled: 'SIGINT',
+      };
     }
+    this.#teardown(prepared, requestId, terminalId, groupLeader, background);
   }
 
   /**
@@ -1011,39 +1067,71 @@ export class Kernel {
         }
       }
     } finally {
-      // BEFORE the exits, not after. A terminal prints its next prompt when the
-      // request's last process exits, so a `cwd-changed` that arrives after it
-      // is a prompt that is one command stale.
+      this.#teardown(prepared, requestId, terminalId, groupLeader, background);
+    }
+  }
+
+  /**
+   * End a request: commit its state, then say it ended.
+   *
+   * THE ORDER HERE IS THE POINT, and it was wrong. `exit` used to be emitted
+   * before `#recordStatus` ran, so a listener that read the kernel on the event
+   * that says "this finished" was shown the PREVIOUS request's answer.
+   * MEASURED:
+   *
+   *     lastSucceeded at exit = true      after drain = false
+   *
+   * A monotonic sequence number orders EVENTS; it cannot make a state that has
+   * not been written yet readable. So the terminal's `$?` and `$LASTEXITCODE`
+   * are committed first, then the exits are published, and a listener that
+   * submits the next command on `exit` — the obvious autopilot — reads the
+   * result of the request that just ended rather than the one before it.
+   *
+   * `cwd-changed` goes first for the same reason at one remove: a prompt drawn
+   * when the last process exits has to already know where the shell is.
+   */
+  #teardown(
+    prepared: readonly Prepared[],
+    requestId: RequestId,
+    terminalId: TerminalId,
+    groupLeader: ProcessGroupId,
+    background: boolean,
+  ): void {
+    const outcomes = prepared.map((entry) => entry.outcome ?? this.#unstarted(entry));
+
+    // A background pipeline does NOT write the terminal's status. Measured in
+    // pwsh 7.6.5 on this machine: a job whose command throws reaches State
+    // `Failed` while the session's `$?` is still True after `Wait-Job`, and a
+    // job running `cmd /c "exit 42"` leaves the session's `$LASTEXITCODE`
+    // unset. (`$?` only goes False at `Receive-Job`, because Receive-Job is
+    // itself the statement that then fails.) Before this, a background failure
+    // silently flipped the foreground terminal's `$?`.
+    if (!background) {
       this.#syncLocation(terminalId);
-
-      // Reported after the output has drained, so the last `objects` event
-      // always precedes the `exit` that follows it — the sequence number is
-      // only worth having if the kernel's own events respect it.
-      for (const entry of prepared) {
-        const outcome = entry.outcome ?? this.#unstarted(entry);
-        this.#finish(entry.snapshot.pid, outcome);
-      }
-
       // `$?` and `$LASTEXITCODE`, which are two different questions with two
       // different answers. See `#recordStatus`.
-      this.#recordStatus(
-        terminalId,
-        prepared.map((entry) => entry.outcome ?? this.#unstarted(entry)),
-      );
-
-      // A pipeline's exit code is its LAST stage's, in POSIX and in PowerShell
-      // alike. Taking the leader's would report success for
-      // `Get-Content missing.txt | Select-Object -First 1`, because the reader
-      // is not the stage that failed.
-      const last = prepared[prepared.length - 1]?.outcome ?? undefined;
-      if (background && last !== undefined && last !== null) {
-        this.#jobs.finish(groupLeader, last.exitCode, last.signalled !== null);
-      }
-      if (!background && this.#signals.foregroundGroup(terminalId) === groupLeader) {
-        this.#signals.setForeground(terminalId, null);
-      }
-      this.#cancelled.delete(requestId);
+      this.#recordStatus(terminalId, outcomes);
     }
+
+    // Published after the output has drained AND after the state above is
+    // committed, so the last `objects` event always precedes the `exit` that
+    // follows it and the state that `exit` describes is already readable.
+    for (const [index, entry] of prepared.entries()) {
+      this.#finish(entry.snapshot.pid, outcomes[index] as StageResult);
+    }
+
+    // A pipeline's exit code is its LAST stage's, in POSIX and in PowerShell
+    // alike. Taking the leader's would report success for
+    // `Get-Content missing.txt | Select-Object -First 1`, because the reader
+    // is not the stage that failed.
+    const last = outcomes[outcomes.length - 1];
+    if (background && last !== undefined) {
+      this.#jobs.finish(groupLeader, last.exitCode, last.signalled !== null);
+    }
+    if (!background && this.#signals.foregroundGroup(terminalId) === groupLeader) {
+      this.#signals.setForeground(terminalId, null);
+    }
+    this.#cancelled.delete(requestId);
   }
 
   /**
