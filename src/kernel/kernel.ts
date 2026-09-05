@@ -197,8 +197,39 @@ export interface KernelOptions {
    * The embedder's ports. The kernel itself is in-memory and headless — it
    * neither creates a filesystem nor knows what a dialog is — but it has to be
    * able to HAND one to a command, which it previously could not.
+   *
+   * ONE PORT MEANS ONE CURRENT DIRECTORY, for every terminal and every job.
+   * A `FileSystemPort` closes over a filesystem view, and a view has a
+   * location, so a `Set-Location` in one terminal moves the relative-path
+   * baseline of every other. That is stated rather than hidden because it is
+   * the right answer for a single-session embedder and the wrong one for a
+   * page with two panes; `openFileSystem` is how a page with two panes avoids
+   * it. Supplying both is refused rather than silently resolved.
    */
   readonly fs?: FileSystemPort | null;
+  /**
+   * A filesystem view PER SESSION: share the storage backend, not the location.
+   *
+   * Called once per terminal, and once more for each background pipeline. What
+   * it returns must read and write the same files as every other view — one
+   * `MountTable` over one backend, handed to a fresh `VirtualFileSystem` whose
+   * `cwd` is the `cwd` given here — so the only thing that is NOT shared is
+   * where the session happens to be standing.
+   *
+   * MEASURED in pwsh 7.6.5 on this machine, which is where the background rule
+   * comes from:
+   *
+   *   session location          : C:\Users\...\Temp
+   *   job start location        : C:\Users\...\Temp   (inherited)
+   *   job after its own cd      : C:\                 (moved only itself)
+   *   session location after    : C:\Users\...\Temp   (unchanged)
+   *
+   * A job is a separate runspace: it starts where the session was and its `cd`
+   * does not follow the session home. So a background pipeline gets its own
+   * view, seeded with the terminal's location at the moment it was started, and
+   * the kernel never reads that view back.
+   */
+  readonly openFileSystem?: (session: FileSystemSession) => FileSystemPort;
   readonly preferences?: PreferencesPort | null;
   readonly dialog?: DialogPort | null;
   /**
@@ -222,11 +253,62 @@ export interface KernelOptions {
    * holds the capture supplies this.
    */
   readonly bindOptions?: (manifest: CommandManifest) => BindOptions;
+  /**
+   * What to do when an event listener throws.
+   *
+   * It has to be somebody's decision, because the default before this option
+   * existed was the worst of the three: the throw travelled out of `#emit`,
+   * out of `send`, and aborted whatever kernel operation happened to be
+   * emitting. MEASURED against the shipped class, with two listeners and the
+   * first one throwing on `process-changed`:
+   *
+   *     send() threw: listener blew up
+   *     listener A saw: [1]
+   *     listener B saw: []      <- never told about seq 1 at all
+   *     final seq: 1            <- the pipeline never started
+   *
+   * One renderer with a bug, or one `postMessage` refusing a value, and the
+   * kernel stops executing. That is not a hypothetical across a Worker: the
+   * transport's post IS a listener, and `postMessage` throws `DataCloneError`.
+   *
+   * So a listener's failure is now contained to that listener, and this says
+   * where it goes. The default rethrows it on a fresh microtask, which is loud
+   * — an uncaught exception in Node, `self.onerror` in a Worker — while being
+   * nowhere near the kernel's own stack.
+   */
+  readonly onListenerError?: (error: unknown, event: KernelEvent) => void;
+}
+
+/** Which session a filesystem view is being opened for. */
+export interface FileSystemSession {
+  readonly terminalId: TerminalId;
+  /** Where the new view must start. For a job, where the terminal was. */
+  readonly cwd: string;
+  /** True for a background pipeline, which gets a view of its own. */
+  readonly background: boolean;
 }
 
 /** Per-terminal state the kernel owns because the DOM is not reachable. */
 interface TerminalState {
-  cwd: string;
+  /**
+   * The last directory this terminal was TOLD about, not where it is.
+   *
+   * Not a second source of truth, and it used to be one: `TerminalState.cwd`
+   * held a directory while the filesystem port held another, `Get-Location`
+   * read the first and relative-path resolution followed the second, and after
+   * a successful `Set-Location` the two disagreed for the rest of the session.
+   * The authority is now the session's filesystem view and `Kernel.cwd` reads
+   * it live; this is only the watermark that decides whether a `cwd-changed`
+   * still needs to be emitted.
+   */
+  reportedCwd: string;
+  /**
+   * This terminal's own filesystem view, when the embedder supplies a factory.
+   *
+   * Null means there is no per-session view and the kernel-wide `fs` is used —
+   * which is one location shared by everything. See `KernelOptions.fs`.
+   */
+  fs: FileSystemPort | null;
   columns: number;
   rows: number;
   /**
@@ -402,10 +484,12 @@ export class Kernel {
   readonly #profile: CompatibilityView;
   readonly #defaultCwd: string;
   readonly #fs: FileSystemPort | null;
+  readonly #openFileSystem: ((session: FileSystemSession) => FileSystemPort) | null;
   readonly #preferences: PreferencesPort | null;
   readonly #dialog: DialogPort | null;
   readonly #validateEvents: boolean;
   readonly #bindOptions: (manifest: CommandManifest) => BindOptions;
+  readonly #onListenerError: (error: unknown, event: KernelEvent) => void;
   /**
    * The last sequence number handed out. Never reset, so a consumer that sees
    * seq N knows it has missed nothing if it has already seen 1..N-1.
@@ -434,7 +518,24 @@ export class Kernel {
     this.#defaultCwd = options.cwd ?? '/home/thc1006';
     this.#validateEvents = options.validateEvents ?? true;
     this.#bindOptions = options.bindOptions ?? (() => ({}));
+    this.#onListenerError =
+      options.onListenerError ??
+      ((error: unknown) => {
+        queueMicrotask(() => {
+          throw error;
+        });
+      });
     this.#fs = options.fs ?? null;
+    this.#openFileSystem = options.openFileSystem ?? null;
+    if (this.#fs !== null && this.#openFileSystem !== null) {
+      // Two answers to "which filesystem", and picking one silently is how a
+      // session ends up resolving relative paths against a view nothing else
+      // reads. The embedder decides: one shared port, or one view per session.
+      throw new TypeError(
+        'KernelOptions.fs and KernelOptions.openFileSystem are alternatives: ' +
+          'supply a single shared port, or a factory that opens one view per session',
+      );
+    }
     this.#preferences = options.preferences ?? null;
     this.#dialog = options.dialog ?? null;
 
@@ -539,8 +640,35 @@ export class Kernel {
     };
   }
 
+  /**
+   * Where this terminal is, read from the filesystem view that IS the answer.
+   *
+   * Live rather than cached, and that is the fix for having had two current
+   * directories. `Get-Location` reads the process's `context.cwd`, relative
+   * paths resolve against the port, and the two used to be separate states
+   * that disagreed the moment `Set-Location` succeeded: the port moved and
+   * nothing moved the kernel's copy. There is now one authority — the
+   * session's view — and `snapshot.cwd`, `$PWD` and this getter all read it.
+   *
+   * Falls back to the configured default when there is no filesystem at all,
+   * which is every kernel that has not been given one.
+   */
   cwd(terminalId: TerminalId): string {
-    return this.#terminals.get(terminalId)?.cwd ?? this.#defaultCwd;
+    const port = this.#fsFor(terminalId);
+    if (port !== null) {
+      try {
+        return port.location.full;
+      } catch {
+        // A backend that has gone away must not make the current directory
+        // unreadable; the last directory the terminal was told about stands.
+      }
+    }
+    return this.#terminals.get(terminalId)?.reportedCwd ?? this.#defaultCwd;
+  }
+
+  /** This terminal's own view, or the kernel-wide port, or nothing. */
+  #fsFor(terminalId: TerminalId): FileSystemPort | null {
+    return this.#terminals.get(terminalId)?.fs ?? this.#fs;
   }
 
   /**
@@ -636,10 +764,39 @@ export class Kernel {
         // Copy the listener set first: a listener that unsubscribes on `exit` —
         // the obvious thing for a "wait for this command" helper to do — would
         // otherwise mutate it while it is being iterated.
-        for (const listener of [...this.#listeners]) listener(next);
+        //
+        // CONTAINED, one listener at a time. A throw used to escape this loop
+        // entirely: the listeners registered after the failing one never saw
+        // the event, the events still queued behind it were delivered late,
+        // and the exception surfaced inside whichever kernel operation was
+        // emitting — so `#exec` aborted half-way and left a process in
+        // `created` forever. See `KernelOptions.onListenerError` for the
+        // transcript. A renderer's bug is not the kernel's control flow.
+        for (const listener of [...this.#listeners]) {
+          try {
+            listener(next);
+          } catch (error: unknown) {
+            this.#reportListenerError(error, next);
+          }
+        }
       }
     } finally {
       this.#delivering = false;
+    }
+  }
+
+  /** Hand a listener's failure to the handler, and survive a handler that throws too. */
+  #reportListenerError(error: unknown, event: KernelEvent): void {
+    try {
+      this.#onListenerError(error, event);
+    } catch {
+      // SWALLOWED, and this is the one place in the kernel where that is the
+      // right answer. `#onListenerError` IS the place errors go; if it throws,
+      // the embedder's error sink is the thing that is broken, and there is
+      // nowhere left to put either error. Rethrowing here — even
+      // asynchronously — would turn a bug in a log line into a dead kernel,
+      // which is precisely the failure the surrounding try/catch exists to
+      // prevent. Delivery continues, which is the property being protected.
     }
   }
 
@@ -719,15 +876,30 @@ export class Kernel {
         return;
       }
       case 'cancel': {
-        const processes = this.#table.byRequest(request.requestId).filter((p) => p.state !== 'exited');
-        if (processes.length === 0) {
-          // No process yet: the request is still being resolved. Remember the
-          // cancellation so it is honoured when one appears — this window is
-          // exactly why `cancel` addresses a request and `signal` a process.
-          this.#cancelled.add(request.requestId);
-          return;
-        }
-        for (const pgid of new Set(processes.map((p) => p.pgid))) {
+        const known = this.#table.byRequest(request.requestId);
+        const live = known.filter((p) => p.state !== 'exited');
+        // REMEMBERED AS WELL AS DELIVERED, and the "as well" is the fix.
+        //
+        // This used to branch on whether a process could be FOUND, and a
+        // process can be found in the table before it can be REACHED by a
+        // signal: `#exec` creates every snapshot first and registers the abort
+        // controllers afterwards, so between the two there is a process with a
+        // pid and no signal target. A `process-changed` listener that cancels
+        // on the spot — the natural thing for a UI to do — lands exactly there.
+        // MEASURED before this change:
+        //
+        //   cancel-from-listener: invocations = 1
+        //                         exits = [{"code":0,"signalled":null}]
+        //
+        // The Ctrl+C vanished: not remembered, because a process was found; not
+        // delivered, because none was registered. The command ran to completion
+        // and reported SUCCESS.
+        //
+        // The record is dropped by `#exec` when it consumes it and by `#drive`'s
+        // teardown when the request ends, so the only ids that persist are those
+        // of requests that were cancelled and never submitted.
+        if (known.length === 0 || live.length > 0) this.#cancelled.add(request.requestId);
+        for (const pgid of new Set(live.map((p) => p.pgid))) {
           this.#signals.raiseGroup(pgid, 'SIGINT');
         }
         return;
@@ -767,7 +939,17 @@ export class Kernel {
     let terminal = this.#terminals.get(terminalId);
     if (terminal === undefined) {
       terminal = {
-        cwd: this.#defaultCwd,
+        reportedCwd: this.#defaultCwd,
+        // Opened once per terminal, at the default location. Every view the
+        // factory returns reads the same files; only the location differs.
+        fs:
+          this.#openFileSystem === null
+            ? null
+            : this.#openFileSystem({
+                terminalId,
+                cwd: this.#defaultCwd,
+                background: false,
+              }),
         columns: DEFAULT_COLUMNS,
         rows: DEFAULT_ROWS,
         lastSucceeded: true,
@@ -779,9 +961,27 @@ export class Kernel {
   }
 
   #exec(requestId: RequestId, terminalId: TerminalId, source: string, background: boolean): void {
-    const terminal = this.#terminal(terminalId);
+    this.#terminal(terminalId);
+    // Read ONCE, from the session's view, and used for every snapshot in this
+    // pipeline — so `$PWD`, `Get-Location` and relative resolution cannot
+    // disagree about where the command started.
+    const cwd = this.cwd(terminalId);
     const stages = splitPipeline(source);
-    if (stages.length === 0) return;
+    if (stages.length === 0) {
+      // NOT a silent return, which is what this was. MEASURED: an `exec` whose
+      // source was `'   '` produced zero events and left `sequence` at 0, while
+      // the requestId was already recorded in `#submitted` — so the correlation
+      // id was spent, nothing was reported against it, and anything waiting for
+      // the request to finish waited forever. Every accepted `exec` now ends in
+      // at least one `exit` or in exactly one `rejected`.
+      this.#emit({
+        kind: 'rejected',
+        requestId,
+        requestKind: 'exec',
+        problems: ['source contains no command'],
+      });
+      return;
+    }
 
     // Resolve every stage BEFORE starting any of them. A pipeline whose third
     // stage does not exist must not run its first two — in a shell that would
@@ -796,7 +996,7 @@ export class Kernel {
 
     const missing = resolved.find((entry) => entry.module === undefined);
     if (missing !== undefined) {
-      this.#reportUnknownCommand(requestId, terminalId, terminal.cwd, missing.name, missing.stage);
+      this.#reportUnknownCommand(requestId, terminalId, cwd, missing.name, missing.stage, background);
       return;
     }
 
@@ -821,7 +1021,15 @@ export class Kernel {
         this.#bindOptions(module.manifest),
       );
       if (!outcome.ok) {
-        this.#reportBindingFailure(requestId, terminalId, terminal.cwd, module, entry.stage, outcome.error);
+        this.#reportBindingFailure(
+          requestId,
+          terminalId,
+          cwd,
+          module,
+          entry.stage,
+          outcome.error,
+          background,
+        );
         return;
       }
       bound.push({ stage: entry.stage, module, binding: outcome.result });
@@ -836,7 +1044,7 @@ export class Kernel {
       const snapshot = this.#table.create({
         name: entry.module.manifest.display,
         commandLine: entry.stage,
-        cwd: terminal.cwd,
+        cwd,
         runtime: entry.module.manifest.runtime,
         terminalId,
         requestId,
@@ -857,9 +1065,46 @@ export class Kernel {
     // output can be buffered under one job however many stages it has.
     if (background) this.#jobs.start(groupLeader, source);
 
+    // A background pipeline gets a view of ITS OWN, seeded with the location
+    // the terminal was standing in when the job started, and never read back.
+    // Measured in pwsh 7.6.5: a job starts where the session was, its own
+    // `cd` moves only itself, and the session's location is unchanged after.
+    // Without a factory there is one port for everything, so a job shares the
+    // terminal's location — see `KernelOptions.fs`.
+    const port =
+      background && this.#openFileSystem !== null
+        ? this.#openFileSystem({ terminalId, cwd, background: true })
+        : this.#fsFor(terminalId);
+
     const prepared = bound.map((entry, index) =>
-      this.#prepare(snapshots[index] as ProcessSnapshot, entry.module, entry.binding, groupLeader),
+      this.#prepare(
+        snapshots[index] as ProcessSnapshot,
+        entry.module,
+        entry.binding,
+        groupLeader,
+        port,
+      ),
     );
+
+    // CHECKED BEFORE THE WORK STARTS, not after.
+    //
+    // This used to run after `#track(#drive(...))`, and `#drive` is an async
+    // function: calling it executes synchronously as far as its first await,
+    // which is far enough to enter the first stage's `invoke`. So a cancel that
+    // had ALREADY ARRIVED still let the command run its prologue, and the
+    // SIGINT that followed only stopped whatever was left. MEASURED:
+    //
+    //   cancel-before-exec: invocations = 1
+    //
+    // Cancelling something that has not started must mean it does not start.
+    // An exit code of 130 with the side effects already committed is the
+    // failure this reordering exists to prevent, which is why the regression
+    // test counts INVOCATIONS and not exit codes.
+    if (this.#cancelled.has(requestId)) {
+      this.#cancelled.delete(requestId);
+      this.#abandon(prepared, requestId, terminalId, groupLeader, background);
+      return;
+    }
 
     // Synchronously, before the first await. A test that sends a signal on the
     // line after `send` must find a process that is already running, and the
@@ -867,12 +1112,33 @@ export class Kernel {
     for (const stage of prepared) this.#table.transition(stage.snapshot.pid, 'running');
 
     this.#track(this.#drive(prepared, requestId, terminalId, groupLeader, background));
+  }
 
-    // A cancel that arrived before the processes existed still has to land.
-    if (this.#cancelled.has(requestId)) {
-      this.#cancelled.delete(requestId);
-      this.#signals.raiseGroup(groupLeader, 'SIGINT');
+  /**
+   * End a pipeline that was cancelled before any of it ran.
+   *
+   * Every stage reports SIGINT and exit code 130 without `invoke` ever being
+   * called, and the request goes through the same teardown a completed one
+   * does — so the UI's invariant holds: one `exit` per process, always.
+   */
+  #abandon(
+    prepared: readonly Prepared[],
+    requestId: RequestId,
+    terminalId: TerminalId,
+    groupLeader: ProcessGroupId,
+    background: boolean,
+  ): void {
+    for (const entry of prepared) {
+      entry.outcome = {
+        exitCode: SIGNAL_EXIT_CODE.SIGINT,
+        succeeded: false,
+        // A cancelled CMDLET does not move `$LASTEXITCODE`, and nothing in this
+        // milestone is a native program. Same answer as `#unstarted`.
+        nativeExitCode: null,
+        signalled: 'SIGINT',
+      };
     }
+    this.#teardown(prepared, requestId, terminalId, groupLeader, background);
   }
 
   /**
@@ -927,43 +1193,134 @@ export class Kernel {
               exceptionType: error instanceof Error ? error.name : 'System.Exception',
             }),
           );
-          last.outcome ??= {
+          // OVERWRITTEN, not defaulted. `??=` left a stage that had already
+          // reported its own success in place, and the stage HAS usually
+          // succeeded here: the failure is in the kernel's consumption of what
+          // it produced, not in producing it. So a pipeline whose output could
+          // not be carried across the boundary wrote an error record and then
+          // reported exit 0. MEASURED, with a Format-Table record that the wire
+          // now refuses:
+          //
+          //   ERROR: PipelineFailed,Format-Table | value cannot cross …
+          //   exit: 0
+          //   exit: 0
+          //
+          // `signalled` is preserved because a stage that was stopped was
+          // stopped, whatever went wrong afterwards.
+          last.outcome = {
             exitCode: EXIT_FAILURE,
             succeeded: false,
             nativeExitCode: null,
-            signalled: null,
+            signalled: last.outcome?.signalled ?? null,
           };
         }
       }
     } finally {
-      // Reported after the output has drained, so the last `objects` event
-      // always precedes the `exit` that follows it — the sequence number is
-      // only worth having if the kernel's own events respect it.
-      for (const entry of prepared) {
-        const outcome = entry.outcome ?? this.#unstarted(entry);
-        this.#finish(entry.snapshot.pid, outcome);
-      }
+      this.#teardown(prepared, requestId, terminalId, groupLeader, background);
+    }
+  }
 
+  /**
+   * End a request: commit its state, then say it ended.
+   *
+   * THE ORDER HERE IS THE POINT, and it was wrong. `exit` used to be emitted
+   * before `#recordStatus` ran, so a listener that read the kernel on the event
+   * that says "this finished" was shown the PREVIOUS request's answer.
+   * MEASURED:
+   *
+   *     lastSucceeded at exit = true      after drain = false
+   *
+   * A monotonic sequence number orders EVENTS; it cannot make a state that has
+   * not been written yet readable. So the terminal's `$?` and `$LASTEXITCODE`
+   * are committed first, then the exits are published, and a listener that
+   * submits the next command on `exit` — the obvious autopilot — reads the
+   * result of the request that just ended rather than the one before it.
+   *
+   * `cwd-changed` goes first for the same reason at one remove: a prompt drawn
+   * when the last process exits has to already know where the shell is.
+   */
+  #teardown(
+    prepared: readonly Prepared[],
+    requestId: RequestId,
+    terminalId: TerminalId,
+    groupLeader: ProcessGroupId,
+    background: boolean,
+  ): void {
+    const outcomes = prepared.map((entry) => entry.outcome ?? this.#unstarted(entry));
+
+    // A background pipeline does NOT write the terminal's status. Measured in
+    // pwsh 7.6.5 on this machine: a job whose command throws reaches State
+    // `Failed` while the session's `$?` is still True after `Wait-Job`, and a
+    // job running `cmd /c "exit 42"` leaves the session's `$LASTEXITCODE`
+    // unset. (`$?` only goes False at `Receive-Job`, because Receive-Job is
+    // itself the statement that then fails.) Before this, a background failure
+    // silently flipped the foreground terminal's `$?`.
+    if (!background) {
+      this.#syncLocation(terminalId);
       // `$?` and `$LASTEXITCODE`, which are two different questions with two
       // different answers. See `#recordStatus`.
-      this.#recordStatus(
-        terminalId,
-        prepared.map((entry) => entry.outcome ?? this.#unstarted(entry)),
-      );
-
-      // A pipeline's exit code is its LAST stage's, in POSIX and in PowerShell
-      // alike. Taking the leader's would report success for
-      // `Get-Content missing.txt | Select-Object -First 1`, because the reader
-      // is not the stage that failed.
-      const last = prepared[prepared.length - 1]?.outcome ?? undefined;
-      if (background && last !== undefined && last !== null) {
-        this.#jobs.finish(groupLeader, last.exitCode, last.signalled !== null);
-      }
-      if (!background && this.#signals.foregroundGroup(terminalId) === groupLeader) {
-        this.#signals.setForeground(terminalId, null);
-      }
-      this.#cancelled.delete(requestId);
+      this.#recordStatus(terminalId, outcomes);
     }
+
+    // Published after the output has drained AND after the state above is
+    // committed, so the last `objects` event always precedes the `exit` that
+    // follows it and the state that `exit` describes is already readable.
+    for (const [index, entry] of prepared.entries()) {
+      this.#finish(entry.snapshot.pid, outcomes[index] as StageResult);
+    }
+
+    // A pipeline's exit code is its LAST stage's, in POSIX and in PowerShell
+    // alike. Taking the leader's would report success for
+    // `Get-Content missing.txt | Select-Object -First 1`, because the reader
+    // is not the stage that failed.
+    const last = outcomes[outcomes.length - 1];
+    if (background && last !== undefined) {
+      this.#jobs.finish(groupLeader, last.exitCode, last.signalled !== null);
+    }
+    if (!background && this.#signals.foregroundGroup(terminalId) === groupLeader) {
+      this.#signals.setForeground(terminalId, null);
+    }
+    this.#cancelled.delete(requestId);
+  }
+
+  /**
+   * Notice that a command moved the shell, and say so.
+   *
+   * Roadmap task 6.4, "stop commands mutating prompt chrome; return a CWD
+   * change instead". In v1 `cd` writes the prompt itself — `CWD = p;` then
+   * `document.getElementById('prompt').textContent = shortCwd()` — which is
+   * three things a Worker cannot do and one thing the DOM's owner cannot
+   * override. Here `Set-Location` moves the FILESYSTEM PORT and touches nothing
+   * else; this is the kernel noticing, and `cwd-changed` is it saying so.
+   *
+   * Polled rather than pushed, deliberately. The alternative is a callback on
+   * the port that every backend would have to remember to fire, and a port that
+   * forgot would leave the terminal permanently wrong with nothing to notice
+   * it. The location is one property read, once per pipeline.
+   *
+   * THE LIMIT, because it is real and this is where somebody would look for it:
+   * a Kernel has ONE `FileSystemPort` and a port has ONE location, so two
+   * terminals share a current directory. Terminal B running anything will
+   * observe A's `cd` and emit its own `cwd-changed` — consistent, and still
+   * surprising to anyone expecting two independent shells. Per-terminal
+   * locations belong to whoever owns the port, not here.
+   */
+  #syncLocation(terminalId: TerminalId): void {
+    const port = this.#fsFor(terminalId);
+    if (port === null) return;
+    let current: string;
+    try {
+      current = port.location.full;
+    } catch {
+      // A port whose `location` getter throws must not cost the pipeline its
+      // `exit` events — this runs inside `#drive`'s finally. The directory
+      // simply stays where the kernel last saw it.
+      return;
+    }
+    const terminal = this.#terminal(terminalId);
+    if (current === terminal.reportedCwd) return;
+    terminal.reportedCwd = current;
+    this.#emit({ kind: 'cwd-changed', terminalId, cwd: current });
   }
 
   /**
@@ -1036,6 +1393,7 @@ export class Kernel {
     cwd: string,
     name: string,
     stage: string,
+    background: boolean,
   ): void {
     const snapshot = this.#table.create({
       name,
@@ -1044,8 +1402,11 @@ export class Kernel {
       runtime: 'semantic',
       terminalId,
       requestId,
-      background: false,
+      background,
     });
+    // A background failure is a JOB that failed, and it has to be visible
+    // somewhere. It used to be visible in the wrong place: the terminal's `$?`.
+    if (background) this.#jobs.start(snapshot.pid, stage);
     this.#table.transition(snapshot.pid, 'running');
     this.#emit({
       kind: 'stream',
@@ -1072,9 +1433,14 @@ export class Kernel {
       nativeExitCode: null,
       signalled: null,
     });
-    this.#recordStatus(terminalId, [
-      { exitCode: EXIT_COMMAND_NOT_FOUND, succeeded: false, nativeExitCode: null, signalled: null },
-    ]);
+    if (background) this.#jobs.finish(snapshot.pid, EXIT_COMMAND_NOT_FOUND, false);
+    // NOT for a background pipeline, for the reason `#teardown` gives: measured
+    // in pwsh 7.6.5, a job that fails leaves the session's `$?` True.
+    else {
+      this.#recordStatus(terminalId, [
+        { exitCode: EXIT_COMMAND_NOT_FOUND, succeeded: false, nativeExitCode: null, signalled: null },
+      ]);
+    }
   }
 
   /**
@@ -1093,6 +1459,7 @@ export class Kernel {
     module: CommandModule,
     stage: string,
     error: ParameterBindingError,
+    background: boolean,
   ): void {
     const snapshot = this.#table.create({
       name: module.manifest.display,
@@ -1101,8 +1468,9 @@ export class Kernel {
       runtime: module.manifest.runtime,
       terminalId,
       requestId,
-      background: false,
+      background,
     });
+    if (background) this.#jobs.start(snapshot.pid, stage);
     this.#table.transition(snapshot.pid, 'running');
     this.#emit({
       kind: 'stream',
@@ -1122,9 +1490,12 @@ export class Kernel {
       nativeExitCode: null,
       signalled: null,
     });
-    this.#recordStatus(terminalId, [
-      { exitCode: EXIT_FAILURE, succeeded: false, nativeExitCode: null, signalled: null },
-    ]);
+    if (background) this.#jobs.finish(snapshot.pid, EXIT_FAILURE, false);
+    else {
+      this.#recordStatus(terminalId, [
+        { exitCode: EXIT_FAILURE, succeeded: false, nativeExitCode: null, signalled: null },
+      ]);
+    }
   }
 
   /**
@@ -1140,6 +1511,7 @@ export class Kernel {
     module: CommandModule,
     binding: BindingResult,
     groupLeader: ProcessGroupId,
+    port: FileSystemPort | null,
   ): Prepared {
     const { pid, requestId, terminalId, background } = snapshot;
     const signal = this.#signals.register(pid, groupLeader);
@@ -1199,7 +1571,9 @@ export class Kernel {
       requireCapability: (capability: Capability) => {
         scoped.require(capability);
       },
-      fs: this.#fs,
+      // The SESSION's view, not a kernel-wide one: which directory a relative
+      // path resolves against is a property of the session that typed it.
+      fs: port,
       preferences: this.#preferences,
       dialog: this.#dialog,
     };

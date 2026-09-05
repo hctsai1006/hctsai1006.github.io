@@ -461,13 +461,25 @@ export const POWERSHELL_77_CHANGES = [
     subjectKind: 'variable',
     title: 'Automatic variable controlling how native command output is decoded',
     detail:
-      'Confirmed absent in 7.6.5 by probe. Requires an encoding broker between the object pipeline and the native byte pipeline: without one, native output is decoded once, wrongly, and cannot be recovered.',
+      'Confirmed absent in 7.6.5 by probe on BOTH platforms: `Get-Variable PSApplicationOutputEncoding` returns nothing, and `Get-Variable | Where-Object Name -like "*Encoding*"` lists exactly one variable, OutputEncoding. The reason a new variable was needed is measurable in 7.6.5: `$OutputEncoding` does NOT decode native command output. Capturing a native command that emits the bytes 61 E9 80 7A, setting `$OutputEncoding` to Latin1 changed nothing on either platform, while setting `[Console]::OutputEncoding` to Latin1 changed the result on both (U+0061 U+00E9 U+0080 U+007A). `$OutputEncoding` is the encoder for text piped INTO a native command; the only 7.6.5 knob for the decode is a global console property. That is what the new variable separates. The two really do diverge in practice: on the Windows host probed, `$OutputEncoding` is utf-8 while `[Console]::OutputEncoding` is big5 and ReferenceEquals is False; on Ubuntu they are the same object.',
     impact: 'observable',
     behaviorKey: 'application.outputEncodingVariable',
     upstreamValue: true,
     scope: { command: null },
     sources: [primary(21219, 'Adds the $PSApplicationOutputEncoding automatic variable.')],
-    implementation: 'documented',
+    implementation: 'implemented',
+    // src/pipeline/encoding.ts routes the decision through the profile rather
+    // than a version comparison, so the 7.6.5 branch is unreachable under a
+    // 7.6.5 profile by construction. The test drives both profiles and asserts
+    // the key's literal spelling, which is the contract the generator writes.
+    //
+    // WHAT IS AND IS NOT PROVEN. The 7.6.5 half is MEASURED: the variable is
+    // absent, and the decode follows [Console]::OutputEncoding. The 7.7 half
+    // rests on PR #21219, because no 7.7 build was available to probe -- the
+    // same footing as the New-Guid and ValidateNotNullOrEmpty records above,
+    // and the conformance corpus cannot improve on it, since it captures 7.6.5
+    // and 7.6.5 is precisely the version that lacks the variable.
+    evidence: ['tests/unit/encoding.test.mts', 'src/pipeline/encoding.ts'],
   },
   {
     kind: 'added',

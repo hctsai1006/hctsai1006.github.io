@@ -71,6 +71,41 @@ interface Entry {
   attribute: string;
 }
 
+/**
+ * Parse ONE `git ls-files --eol -z` record. Exported so the shapes git actually
+ * emits can be tested without a repository in a particular state.
+ *
+ * Returns null for a record this does not understand, so the caller decides
+ * whether that is fatal — it is, but the decision belongs at the call site.
+ */
+export function parseEolRecord(record: string): Entry | null {
+  // The attribute field can itself contain spaces — `attr/text=auto eol=lf` —
+  // so the path is what follows the TAB, not what follows the last space. A
+  // `\S*` for the attribute silently leaked `eol=lf` into the reported path.
+  const tab = record.indexOf('\t');
+  if (tab === -1) return null;
+  const head = record.slice(0, tab);
+  // `\S*`, not `\S+`, on both fields. `git ls-files --eol` leaves the WORKING
+  // TREE value EMPTY for a file that is tracked but not currently on disk:
+  //
+  //     i/lf    w/lf    attr/text=auto eol=lf   package.json    (present)
+  //     i/lf    w/      attr/text=auto eol=lf   package.json    (deleted)
+  //
+  // That is an ordinary state — a file deleted but not yet staged, a partial
+  // checkout, an interrupted rebase — and `\S+` made this gate EXIT rather than
+  // check anything. Reproduced by moving package.json aside: "could not parse a
+  // git ls-files record". A gate that dies on a normal repository state is a
+  // gate that gets removed, and the index value it needs is in the same record.
+  const match = /^i\/(\S*)\s+w\/(\S*)\s+attr\/(.*)$/.exec(head.trim());
+  if (match === null) return null;
+  return {
+    index: match[1] ?? '',
+    working: match[2] ?? '',
+    attribute: (match[3] ?? '').trim(),
+    path: record.slice(tab + 1),
+  };
+}
+
 function listing(): readonly Entry[] {
   // -z: NUL-separated and unquoted. Without it git octal-escapes any non-ASCII
   // path and wraps it in quotes — this repository has several — so the paths
@@ -84,26 +119,14 @@ function listing(): readonly Entry[] {
   const entries: Entry[] = [];
   for (const record of (listed.stdout ?? '').split('\0')) {
     if (record.trim().length === 0) continue;
-    // The attribute field can itself contain spaces — `attr/text=auto eol=lf` —
-    // so the path is what follows the TAB, not what follows the last space. A
-    // `\S*` for the attribute silently leaked `eol=lf` into the reported path.
-    const tab = record.indexOf('\t');
-    if (tab === -1) {
-      process.stderr.write(`\n  could not parse a git ls-files record: ${JSON.stringify(record)}\n\n`);
+    const parsed = parseEolRecord(record);
+    if (parsed === null) {
+      process.stderr.write(
+        `\n  could not parse a git ls-files record: ${JSON.stringify(record)}\n\n`,
+      );
       process.exit(3);
     }
-    const head = record.slice(0, tab);
-    const match = /^i\/(\S+)\s+w\/(\S+)\s+attr\/(.*)$/.exec(head.trim());
-    if (match === null) {
-      process.stderr.write(`\n  could not parse a git ls-files record: ${JSON.stringify(record)}\n\n`);
-      process.exit(3);
-    }
-    entries.push({
-      index: match[1] ?? '',
-      working: match[2] ?? '',
-      attribute: (match[3] ?? '').trim(),
-      path: record.slice(tab + 1),
-    });
+    entries.push(parsed);
   }
   return entries;
 }
@@ -145,4 +168,7 @@ function main(): void {
   process.stdout.write(`  ${checked} source files, none binary to git.\n`);
 }
 
-main();
+// Only when Node started this file, so the parser above can be imported and
+// tested without running the check. See tools/verify-release-truth.mts, where
+// a top-level `main()` was the reason a boundary bug went untested for months.
+if (import.meta.main) main();

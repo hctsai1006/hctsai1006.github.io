@@ -1,0 +1,3 @@
+PS /home/thc1006> Add-Content
+Add-Content: Cannot process command because of one or more missing mandatory parameters: Path.
+

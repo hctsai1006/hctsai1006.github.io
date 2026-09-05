@@ -1,0 +1,7 @@
+PS /home/thc1006> tracepath
+traceroute to nycu.edu.tw (140.113.207.85), 30 hops max, 60 byte packets
+ 1  _gateway (10.6.1.1)  1.204 ms  1.118 ms  1.083 ms
+ 2  140.113.1.254  3.912 ms  3.845 ms  4.201 ms
+ 3  tpe-core.twaren.net (211.79.48.1)  8.774 ms  9.012 ms  8.660 ms
+ 4  nycu.edu.tw (140.113.207.85)  12.331 ms  11.907 ms  12.114 ms
+

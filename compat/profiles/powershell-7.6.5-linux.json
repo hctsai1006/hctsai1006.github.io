@@ -26,6 +26,7 @@
     "PowerShellGet": "2.2.5"
   },
   "behaviors": {
+    "application.outputEncodingVariable": false,
     "format.property.rejectNullOrEmpty": false,
     "newGuid.defaultVersion": 4,
     "switchParameter.Get-Random.Shuffle.honourExplicitFalse": false,
@@ -33,6 +34,12 @@
     "validation.throwsArgumentException": false
   },
   "behaviorDocs": {
+    "application.outputEncodingVariable": {
+      "summary": "Automatic variable controlling how native command output is decoded",
+      "upstreamPr": 21219,
+      "breaking": false,
+      "since": "7.7.0-preview.4"
+    },
     "format.property.rejectNullOrEmpty": {
       "summary": "`ValidateNotNullOrEmpty` added to `-Property`",
       "upstreamPr": 26552,
@@ -85,8 +92,8 @@
       "value": false,
       "upstreamValue": true,
       "baselineValue": false,
-      "implementation": "documented",
-      "emulated": false,
+      "implementation": "implemented",
+      "emulated": true,
       "upstreamPr": 21219,
       "breaking": false,
       "since": "7.7.0-preview.4",

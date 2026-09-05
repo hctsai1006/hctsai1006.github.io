@@ -1,0 +1,5 @@
+PS /home/thc1006> Get-Location
+Path
+-------------
+/home/thc1006
+

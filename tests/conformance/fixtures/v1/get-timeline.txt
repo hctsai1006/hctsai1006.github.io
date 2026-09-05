@@ -1,0 +1,10 @@
+PS /home/thc1006> Get-Timeline
+Year  Highlights                                                         
+----  -------------------------------------------------------------------
+2023  總統教育獎 · 捷克進修 · 首次 COSCUP 講者                           
+2024  Nephio TSC · CTU GDSC Lead · O-RAN organizer                       
+2025  IEEE R10 ACEI · O-RAN × NTN 研究                                   
+2026  CNCF Ambassador · 國科會研究創作獎 (114) · TASA 青年人才 · DRA 稽核
+
+  來源: /experience/
+

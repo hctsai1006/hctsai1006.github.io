@@ -1,0 +1,3 @@
+PS /home/thc1006> bash
+舊版 bash CLI(user@hctsai1006)還在 -> classic.html
+

@@ -43,6 +43,7 @@ import {
   emit,
   fsReadManifest,
   nativeIdentity,
+  readTextSniffed,
   requirePort,
   sortDirectoryEntries,
   splitLines,
@@ -140,7 +141,7 @@ async function grepOneFile(
     await context.streams.error.write(diagnostic(fileArgument, 'Is a directory'));
     return EXIT_ERROR;
   }
-  const text = await fs.readText(resolved.value.full);
+  const text = await readTextSniffed(fs, resolved.value.full);
   if (!text.ok) {
     await context.streams.error.write(diagnostic(fileArgument, 'Permission denied'));
     return EXIT_ERROR;
@@ -190,7 +191,7 @@ async function grepWholeTree(
         if (!(await walk(child))) return false;
         continue;
       }
-      const text = await fs.readText(child);
+      const text = await readTextSniffed(fs, child);
       if (!text.ok) continue;
       for (const line of splitLines(text.value)) {
         if (line === '' || !regexp.test(line)) continue;

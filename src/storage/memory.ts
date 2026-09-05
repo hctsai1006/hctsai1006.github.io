@@ -183,6 +183,67 @@ export interface MemoryStorageOptions {
  * plan, rather than that a method exists.
  */
 export class NullJournal implements MutationJournal {
+  /**
+   * Deliberately keeps NOTHING. This class used to retain every plan it was
+   * handed, and that was a leak, not an implementation.
+   *
+   * `MutationStep.data` is file content. `MemoryStorage` installs this journal
+   * BY DEFAULT, so every write in the process appended its whole payload to two
+   * arrays that were never cleared — not by `remove`, not by `reset`, which
+   * swaps the root and zeroes `#used` without touching the journal.
+   *
+   * MEASURED before the fix. Sixteen overwrites of one 64 KiB file, then
+   * `remove('/big')`, then `reset()`:
+   *
+   *     plans retained in journal.written   : 17
+   *     plans retained in journal.committed : 17
+   *     distinct payload buffers referenced : 16
+   *     bytes still referenced              : 1,048,576
+   *     live file exists                    : false
+   *     quota.used reports                  : 0
+   *
+   * A megabyte pinned, invisible to the quota accounting that is supposed to be
+   * the authority on how much this backend is using, for a filesystem with
+   * nothing in it. In a tab left open for a day it is unbounded.
+   *
+   * The retention was not load-bearing for anything in production; it existed so
+   * a test could assert that the seam carries the plan. That is what
+   * `RecordingJournal` is now for, and a test has to ask for it by name.
+   *
+   * WHY DISCARDING IS THE CORRECT BEHAVIOUR AND NOT A DEGRADATION. `types.ts`
+   * already argues that a store which cannot survive an interruption has
+   * nothing for a log to recover to. For such a store there is genuinely never
+   * anything pending: the tab's death takes the tree and the log together.
+   * Reporting an empty `pending()` is the true answer, not a stub's answer.
+   *
+   * A DURABLE journal cannot inherit this. It must keep records until a
+   * checkpoint supersedes them, and "pending is empty" must never be read as
+   * "the bytes are released" — see `OpfsJournal`, where the release is a
+   * `truncate` on a real file and happens only after a checkpoint is flushed.
+   */
+  async write(_plan: MutationPlan): Promise<Result<void>> {
+    return ok(undefined);
+  }
+
+  async commit(_plan: MutationPlan): Promise<Result<void>> {
+    return ok(undefined);
+  }
+
+  async pending(): Promise<Result<readonly MutationPlan[]>> {
+    return ok([]);
+  }
+}
+
+/**
+ * A journal that remembers, for tests that need to see what the seam carried.
+ *
+ * TEST AFFORDANCE, named to say so, in the same spirit as
+ * `MemoryStorageOptions.injectFault`. IT RETAINS EVERY PAYLOAD FOR THE LIFETIME
+ * OF THE OBJECT and has no compaction, so it must never be the default and must
+ * never be installed by anything that runs in a browser tab. `clear()` exists
+ * for a test that wants to keep one instance across phases.
+ */
+export class RecordingJournal implements MutationJournal {
   readonly #written: MutationPlan[] = [];
   readonly #committed: MutationPlan[] = [];
 
@@ -217,6 +278,12 @@ export class NullJournal implements MutationJournal {
 
   get committed(): readonly MutationPlan[] {
     return this.#committed;
+  }
+
+  /** Drop everything recorded so far, including the payloads. */
+  clear(): void {
+    this.#written.length = 0;
+    this.#committed.length = 0;
   }
 }
 
@@ -410,6 +477,42 @@ export class MemoryStorage implements StorageBackend {
     } finally {
       this.#used = this.#usedBytes();
     }
+  }
+
+  /**
+   * Apply a plan that was validated by a PREVIOUS PROCESS. Recovery only.
+   *
+   * PRIVILEGED, like `installImage`, and for a symmetrical reason: the checks
+   * this bypasses are exactly the ones that must not apply. The plan was
+   * already validated — against permissions, against quota, against the tree —
+   * by the session that wrote it to a durable journal, and re-validating it now
+   * would ask a different question. The user's own `chmod 000` on a file, made
+   * three plans earlier in the same log, would make the plan after it fail.
+   *
+   * THIS IS THE METHOD `types.ts` PROMISED, not a new door. `MutationJournal`
+   * exists so "a durable backend can decide at mount whether to replay or
+   * discard", and `#apply` was changed from throwing to returning an `Err`
+   * specifically because "`MutationJournal.pending()` exists so a durable
+   * backend can REPLAY a plan it read back off disk at mount. That plan was
+   * validated against a tree that may no longer exist, and the recovery path
+   * needs an answer it can branch on, not an exception." Without this method
+   * that sentence describes something no caller could do.
+   *
+   * NOT REACHABLE FROM A COMMAND. `VirtualFileSystem` is what a command holds
+   * and it does not forward this, exactly as it does not forward `installImage`
+   * — and `index.ts` exports `MutationPlan` as a TYPE only, so a command cannot
+   * construct an argument for it either.
+   *
+   * Runs under the mutex, so a replay cannot interleave with a live mutation.
+   * Does NOT journal: the plan is already in the journal, and re-writing it
+   * during the replay of that same journal is how a recovery loop starts.
+   */
+  async replay(plan: MutationPlan): Promise<Result<void>> {
+    return this.#serialise(async () => {
+      const failed = this.#apply(plan);
+      if (failed !== null) return failed;
+      return ok(undefined);
+    });
   }
 
   #installEntries(spec: SeedSpec): Result<void> {
@@ -689,7 +792,22 @@ export class MemoryStorage implements StorageBackend {
     if (!this.#can(found.value, 'read')) return eacces(path, 'read', 'read');
     // A copy, not the stored array: handing out the live buffer would let a
     // caller mutate the file by writing through the view it was given.
-    return ok(found.value.data.slice());
+    //
+    // `own()`, NOT `.slice()`, and the difference is not cosmetic. This line
+    // WAS `.slice()`, and `.slice()` is only a copy for a plain `Uint8Array`.
+    // MEASURED before the fix, with a `Buffer` — which is a `Uint8Array`, which
+    // this signature accepts, and whose `slice` is an alias for `subarray`:
+    //
+    //     await st.writeBytes('/buf', Buffer.from([7, 8, 9]));
+    //     const a = await st.readBytes('/buf');  a.value[0] = 200;
+    //     await st.readBytes('/buf')  ->  [200, 8, 9]
+    //
+    // The file changed because the "copy" was a view. `own()` at the write
+    // boundary already makes every stored array a plain `Uint8Array`, so this
+    // is belt and braces — but it is the same defect in the opposite direction,
+    // it was reachable through the same public API, and the two ends of a
+    // buffer-ownership rule should not be enforced by different mechanisms.
+    return ok(own(found.value.data));
   }
 
   async readText(path: string): Promise<Result<string>> {
@@ -1021,6 +1139,9 @@ export class MemoryStorage implements StorageBackend {
    * The guard runs INSIDE the critical section, not before it. `readOnly` and
    * the path precondition are cheap, but validating outside the lock and
    * mutating inside it is the shape this whole class of defect comes from.
+   *
+   * ALSO THE OWNERSHIP BOUNDARY. Every one of the four public write verbs comes
+   * through here, and `own()` is called before the bytes can reach a plan.
    */
   async #writeEntry(
     path: string,
@@ -1031,7 +1152,7 @@ export class MemoryStorage implements StorageBackend {
   ): Promise<Result<WriteReceipt>> {
     const guarded = this.#guardWrite(path, syscall);
     if (guarded !== null) return guarded;
-    return this.#write(path, data, options, syscall, append);
+    return this.#write(path, own(data), options, syscall, append);
   }
 
   async #write(
@@ -1453,7 +1574,11 @@ export class MemoryStorage implements StorageBackend {
         steps.push({
           op: 'create-file',
           path: targetPath,
-          data: node.data.slice(),
+          // `own`, not `.slice()`: see `readBytes`. A `.slice()` of a `Buffer`
+          // is a view, and a copy that is a view would alias the destination
+          // file's bytes to the source file's — so writing one would silently
+          // change the other, and `cp a b; echo x > a` would rewrite `b`.
+          data: own(node.data),
           mode: node.mode,
           origin: 'user',
         });
@@ -1588,5 +1713,53 @@ function concat(left: Uint8Array, right: Uint8Array): Uint8Array {
   out.set(left, 0);
   out.set(right, left.byteLength);
   return out;
+}
+
+/**
+ * Take ownership of bytes crossing the API boundary, in either direction.
+ *
+ * Allocate and `set`, and NOT `bytes.slice()`, because `slice` is only a copy
+ * for a plain `Uint8Array`. A Node `Buffer` IS a `Uint8Array` — it passes every
+ * signature in this file — and `Buffer.prototype.slice` is an alias for
+ * `subarray`, which returns a VIEW over the same memory. MEASURED:
+ *
+ *     const buf = Buffer.from([1, 2, 3]);
+ *     const s = buf.slice(); s[0] = 42;   buf[0] -> 42
+ *
+ * So `.slice()` copies or aliases depending on what the caller happened to
+ * pass, which is the worst of both: correct in every test that uses a literal
+ * array, wrong the first time anything reads a file off disk.
+ *
+ * `Uint8Array.from(bytes)` is also correct and was the first fix. It is not
+ * what shipped because it goes through the iterator protocol: MEASURED at
+ * 200,000 copies of a 10-byte array, `Uint8Array.from` 31.5 ms against 16.3 ms
+ * for allocate-and-`set` and 15.3 ms for the unsafe `slice`. Ownership costs
+ * essentially nothing when it is a memcpy, and this is on the write path of
+ * every command.
+ *
+ * WHAT THIS CLOSES. Without it, the whole plan/validate/apply discipline could
+ * be bypassed with an assignment. MEASURED before the fix:
+ *
+ *     const input = new Uint8Array([65, 66]);
+ *     await st.writeBytes('/file', input);   // resolves
+ *     input[0] = 90;                          // caller reuses its own buffer
+ *     await st.readBytes('/file')  ->  [90, 66]
+ *
+ *     const inp = new Uint8Array([1, 2]);
+ *     await st.appendBytes('/new', inp);      // the CREATE path, different code
+ *     inp[0] = 99;
+ *     await st.readBytes('/new')   ->  [99, 2]
+ *
+ * A stored file changed with no syscall, no mtime bump, no journal record and
+ * no quota accounting — the exact set of guarantees this class exists to make.
+ *
+ * THE CONTRACT, stated so it can be tested: once a write's promise resolves,
+ * the stored content no longer depends on the array the caller passed, and the
+ * array a read returns is not the stored one.
+ */
+function own(bytes: Uint8Array): Uint8Array {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return copy;
 }
 

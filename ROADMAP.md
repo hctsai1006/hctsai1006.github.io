@@ -5,24 +5,26 @@
 
 Turning a single-file PowerShell-flavoured web terminal into a browser workstation with a versioned PowerShell compatibility layer, a real object pipeline, durable state, a trusted package model and an audited AI surface.
 
-**34 of 104 tasks complete.**  `##########......................`
+**64 of 105 tasks complete**, 12 partial.  `####################////........`
 
-Legend: `[x]` done · `[~]` in progress · `[ ]` todo · `[!]` blocked · `[-]` deferred
+Legend: `[x]` done · `[/]` partial · `[~]` in progress · `[ ]` todo · `[!]` blocked · `[-]` deferred
+
+Every `done` and `partial` task cites evidence — a symbol, a passing test, a value in a data file, or a search that finds nothing — and `npm run roadmap:evidence` re-derives all of it from the tree. See each item page for the citations.
 
 ## Phases
 
 | Phase | Goal | Items | Progress |
 | --- | --- | --- | --- |
-| **Ground truth** | Make it impossible to be wrong about upstream by accident. Nothing downstream is trustworthy until version truth is mechanised. | 1, 2, 3 | `################..` 27/30 |
-| **Core** | A real execution engine: one lexer, one AST, a version-aware binder, and a typed object pipeline. This is where the current site is weakest. | 4, 5, 6, 7, 8 | `###...............` 6/31 |
-| **State** | Durable, inspectable, recoverable virtual machine state — filesystem, providers, transactions, migrations. | 9, 10 | `..................` 0/11 |
-| **Compatibility** | Prove the emulation is faithful by differential-testing against real pwsh, and express version differences as data. | 11, 12 | `##................` 1/8 |
+| **Ground truth** | Make it impossible to be wrong about upstream by accident. Nothing downstream is trustworthy until version truth is mechanised. | 1, 2, 3 | `#################/` 29/31 +2 partial |
+| **Core** | A real execution engine: one lexer, one AST, a version-aware binder, and a typed object pipeline. This is where the current site is weakest. | 4, 5, 6, 7, 8 | `############///...` 21/31 +5 partial |
+| **State** | Durable, inspectable, recoverable virtual machine state — filesystem, providers, transactions, migrations. | 9, 10 | `###########///....` 7/11 +2 partial |
+| **Compatibility** | Prove the emulation is faithful by differential-testing against real pwsh, and express version differences as data. | 11, 12 | `###########//.....` 5/8 +1 partial |
 | **Declarative** | The workstation as a configuration that can be exported, diffed, tested and restored. | 13 | `..................` 0/4 |
-| **Supply chain** | Packages with identity, integrity, capabilities and trust — from the first line, not retrofitted. | 14 | `..................` 0/4 |
-| **AI** | One command metadata source feeding help, completion, MCP tools and the AI planner, behind an approval gate. | 15 | `..................` 0/5 |
-| **Rendering** | Optional ANSI/TUI rendering path alongside the semantic DOM terminal. | 16 | `..................` 0/4 |
+| **Supply chain** | Packages with identity, integrity, capabilities and trust — from the first line, not retrofitted. | 14 | `/////.............` 0/4 +1 partial |
+| **AI** | One command metadata source feeding help, completion, MCP tools and the AI planner, behind an approval gate. | 15 | `####..............` 1/5 |
+| **Rendering** | Optional ANSI/TUI rendering path alongside the semantic DOM terminal. | 16 | `/////.............` 0/4 +1 partial |
 | **Future runtime** | Keep the door open to a real .NET/WASM PowerShell without betting the architecture on it. | 17 | `..................` 0/3 |
-| **Desktop** | The apps that make it feel like a machine rather than a prompt. | 18 | `..................` 0/4 |
+| **Desktop** | The apps that make it feel like a machine rather than a prompt. | 18 | `#####.............` 1/4 |
 
 ## Execution order
 
@@ -30,24 +32,24 @@ Dependency-respecting. An item cannot be complete before everything it depends o
 
 | # | Item | Phase | Status | Depends on | Tasks |
 | --- | --- | --- | --- | --- | --- |
-| 1 | [Archive the single-file terminal and capture golden transcripts](roadmap/pr/PR-01-archive-and-golden-transcripts.md) | Ground truth | [~] in progress | — | 2/5 |
+| 1 | [Archive the single-file terminal and capture golden transcripts](roadmap/pr/PR-01-archive-and-golden-transcripts.md) | Ground truth | [x] done | — | 6/6 |
 | 2 | [Mechanise version truth across five axes](roadmap/pr/PR-02-verify-release-truth.md) | Ground truth | [x] done | — | 17/17 |
-| 3 | [Express 7.6.5 and 7.7.0-preview.4 as compatibility profiles](roadmap/pr/PR-03-compatibility-profiles.md) | Ground truth | [~] in progress | 2 | 8/8 |
-| 4 | [Extract portfolio data and command manifests out of index.html](roadmap/pr/PR-04-extract-data-and-manifests.md) | Core | [~] in progress | 1 | 4/9 |
-| 5 | [Extract a headless LineEditorCore behind input and render adapters](roadmap/pr/PR-05-headless-line-editor.md) | Core | [ ] todo | 4 | 0/5 |
-| 6 | [Move execution into a worker behind a typed kernel protocol](roadmap/pr/PR-06-worker-kernel-protocol.md) | Core | [ ] todo | 5 | 0/4 |
-| 7 | [Build the typed object pipeline and stream model](roadmap/pr/PR-07-object-pipeline.md) | Core | [~] in progress | 6 | 2/6 |
-| 8 | [Build one lexer, one AST and a version-aware parameter binder](roadmap/pr/PR-08-version-aware-binder.md) | Core | [ ] todo | 3, 7 | 0/7 |
-| 9 | [OPFS-backed filesystem with overlay, WAL, snapshots and migrations](roadmap/pr/PR-09-storage-layer.md) | State | [ ] todo | 6 | 0/7 |
-| 10 | [PowerShell provider model over the mount table](roadmap/pr/PR-10-provider-model.md) | State | [ ] todo | 9 | 0/4 |
-| 11 | [Differential conformance against real pwsh 7.6.5](roadmap/pr/PR-11-differential-conformance.md) | Compatibility | [~] in progress | 8 | 1/5 |
-| 12 | [Ship the version-difference explorer](roadmap/pr/PR-12-behavior-delta-ui.md) | Compatibility | [ ] todo | 11 | 0/3 |
+| 3 | [Express 7.6.5 and 7.7.0-preview.4 as compatibility profiles](roadmap/pr/PR-03-compatibility-profiles.md) | Ground truth | [~] in progress | 2 | 6/8 +2 partial |
+| 4 | [Extract portfolio data and command manifests out of index.html](roadmap/pr/PR-04-extract-data-and-manifests.md) | Core | [~] in progress | 1 | 8/9 |
+| 5 | [Extract a headless LineEditorCore behind input and render adapters](roadmap/pr/PR-05-headless-line-editor.md) | Core | [~] in progress | 4 | 3/5 +1 partial |
+| 6 | [Move execution into a worker behind a typed kernel protocol](roadmap/pr/PR-06-worker-kernel-protocol.md) | Core | [~] in progress | 5 | 2/4 +2 partial |
+| 7 | [Build the typed object pipeline and stream model](roadmap/pr/PR-07-object-pipeline.md) | Core | [~] in progress | 6 | 6/6 |
+| 8 | [Build one lexer, one AST and a version-aware parameter binder](roadmap/pr/PR-08-version-aware-binder.md) | Core | [~] in progress | 3, 7 | 2/7 +2 partial |
+| 9 | [OPFS-backed filesystem with overlay, WAL, snapshots and migrations](roadmap/pr/PR-09-storage-layer.md) | State | [~] in progress | 6 | 6/7 +1 partial |
+| 10 | [PowerShell provider model over the mount table](roadmap/pr/PR-10-provider-model.md) | State | [~] in progress | 9 | 1/4 +1 partial |
+| 11 | [Differential conformance against real pwsh 7.6.5](roadmap/pr/PR-11-differential-conformance.md) | Compatibility | [~] in progress | 8 | 4/5 +1 partial |
+| 12 | [Ship the version-difference explorer](roadmap/pr/PR-12-behavior-delta-ui.md) | Compatibility | [~] in progress | 11 | 1/3 |
 | 13 | [DSC-style declarative workstation state](roadmap/pr/PR-13-workstation-state.md) | Declarative | [ ] todo | 10 | 0/4 |
-| 14 | [Package identity, integrity, capabilities and trust promotion](roadmap/pr/PR-14-package-trust.md) | Supply chain | [ ] todo | 10 | 0/4 |
-| 15 | [MCP tool schema generation and the approval gate](roadmap/pr/PR-15-mcp-and-approval.md) | AI | [ ] todo | 8, 14 | 0/5 |
-| 16 | [Optional xterm.js ANSI renderer alongside the semantic DOM terminal](roadmap/pr/PR-16-ansi-renderer.md) | Rendering | [ ] todo | 7 | 0/4 |
+| 14 | [Package identity, integrity, capabilities and trust promotion](roadmap/pr/PR-14-package-trust.md) | Supply chain | [~] in progress | 10 | 0/4 +1 partial |
+| 15 | [MCP tool schema generation and the approval gate](roadmap/pr/PR-15-mcp-and-approval.md) | AI | [~] in progress | 8, 14 | 1/5 |
+| 16 | [Optional xterm.js ANSI renderer alongside the semantic DOM terminal](roadmap/pr/PR-16-ansi-renderer.md) | Rendering | [~] in progress | 7 | 0/4 +1 partial |
 | 17 | [Research spike: real PowerShell parser via .NET WASM](roadmap/pr/PR-17-dotnet-wasm-spike.md) | Future runtime | [-] deferred | 8, 11 | 0/3 |
-| 18 | [File manager, task manager, settings and window management](roadmap/pr/PR-18-desktop-apps.md) | Desktop | [ ] todo | 10, 13 | 0/4 |
+| 18 | [File manager, task manager, settings and window management](roadmap/pr/PR-18-desktop-apps.md) | Desktop | [~] in progress | 10, 13 | 1/4 |
 
 ## Corrections to the originating design
 
@@ -185,12 +187,13 @@ Every claim below was checked against a primary source on 2026-09-04. These are 
 
 ### Ground truth
 
-- [~] **1. Archive the single-file terminal and capture golden transcripts** — [detail](roadmap/pr/PR-01-archive-and-golden-transcripts.md)
+- [x] **1. Archive the single-file terminal and capture golden transcripts** — [detail](roadmap/pr/PR-01-archive-and-golden-transcripts.md)
   - [x] 1.1 Copy index.html to legacy/terminal-v1.html, unmodified, and pin the commit sha it came from
   - [x] 1.2 Keep the live site serving the v1 file until the rewrite reaches parity
-  - [ ] 1.3 Script a headless capture of every command in CMDLETS + ALIAS + EGGS against v1
-  - [ ] 1.4 Store transcripts as tests/conformance/fixtures/v1/*.txt keyed by command
-  - [ ] 1.5 Record the 4 seeded history entries and the boot banner as fixtures too
+  - [x] 1.3 Script a headless capture of every command in CMDLETS + ALIAS + EGGS against v1
+  - [x] 1.4 Store transcripts as tests/conformance/fixtures/v1/*.txt keyed by command
+  - [x] 1.5 Record the 4 seeded history entries and the boot banner as fixtures too
+  - [x] 1.6 Classify every source of nondeterminism by measurement, not by reading
 - [x] **2. Mechanise version truth across five axes** — [detail](roadmap/pr/PR-02-verify-release-truth.md)
   - [x] 2.1 Resolve which releases exist from the GitHub Releases API
   - [x] 2.2 Dereference annotated tags to real commit shas
@@ -214,8 +217,8 @@ Every claim below was checked against a primary source on 2026-09-04. These are 
   - [x] 3.2 Author powershell-7.7.0-preview.4-linux.json inheriting from it
   - [x] 3.3 Populate behaviors for every 7.7 breaking change, each with a behaviorDocs entry citing its upstream PR
   - [x] 3.4 Generate compat/deltas/7.6.5__7.7.0-preview.4.json
-  - [x] 3.5 Mark each delta entry implemented:false until a conformance fixture proves it
-  - [x] 3.6 Record engineLimits.nativePowerShellEngine=false and the unimplemented AST node list
+  - [/] 3.5 Mark each delta entry implemented:false until a conformance fixture proves it
+  - [/] 3.6 Record engineLimits.nativePowerShellEngine=false and the unimplemented AST node list
   - [x] 3.7 Record bundled module versions
   - [x] 3.8 Build the profile resolver with deep-merge inheritance and cycle detection
 
@@ -226,65 +229,65 @@ Every claim below was checked against a primary source on 2026-09-04. These are 
   - [x] 4.7 Extract the authoritative v1 command inventory
   - [x] 4.8 Declare a fidelity level for every command
   - [x] 4.9 Derive parameter metadata from the reference implementation
-  - [ ] 4.2 Remove the load-time mutation of D.profile (the __STATS__ sentinel patch)
-  - [ ] 4.3 Convert each CMDLETS entry into a declarative manifest + separate implementation
-  - [ ] 4.4 Break the command-table/filesystem cycle
-  - [ ] 4.5 Unify command resolution so aliases and easter eggs share one lookup order
+  - [x] 4.2 Remove the load-time mutation of D.profile (the __STATS__ sentinel patch)
+  - [x] 4.3 Convert each CMDLETS entry into a declarative manifest + separate implementation
+  - [x] 4.4 Break the command-table/filesystem cycle
+  - [x] 4.5 Unify command resolution so aliases and easter eggs share one lookup order
   - [ ] 4.6 Delete the dead `hidden` flag that no entry ever sets, and the unused GROUPNAME/ED.path/ED.wantCol
-- [ ] **5. Extract a headless LineEditorCore behind input and render adapters** — [detail](roadmap/pr/PR-05-headless-line-editor.md)
-  - [ ] 5.1 Lift TextBuffer, HistoryEngine, CompletionEngine, PredictionEngine, KeyBindingEngine into pure modules
+- [~] **5. Extract a headless LineEditorCore behind input and render adapters** — [detail](roadmap/pr/PR-05-headless-line-editor.md)
+  - [x] 5.1 Lift TextBuffer, HistoryEngine, CompletionEngine, PredictionEngine, KeyBindingEngine into pure modules
   - [ ] 5.2 Keep the real textarea as an input adapter only
-  - [ ] 5.3 Define a TerminalMetrics port so width is injected, not measured via a probe span in #out
-  - [ ] 5.4 Tag every history entry with origin (user | completion | ai | script), cwd and profile
-  - [ ] 5.5 Preserve the IME triple-guard (isComposing || composing || keyCode===229)
-- [ ] **6. Move execution into a worker behind a typed kernel protocol** — [detail](roadmap/pr/PR-06-worker-kernel-protocol.md)
-  - [ ] 6.1 Define the kernel protocol: submit, cancel, signal, event stream
-  - [ ] 6.2 Split run() into parse -> execute -> render with no DOM access in the middle
-  - [ ] 6.3 Model async commands as event streams instead of the asyncOut/busy globals
-  - [ ] 6.4 Stop commands mutating prompt chrome; return a CWD change instead
+  - [x] 5.3 Define a TerminalMetrics port so width is injected, not measured via a probe span in #out
+  - [x] 5.4 Tag every history entry with origin (user | completion | ai | script), cwd and profile
+  - [/] 5.5 Preserve the IME triple-guard (isComposing || composing || keyCode===229)
+- [~] **6. Move execution into a worker behind a typed kernel protocol** — [detail](roadmap/pr/PR-06-worker-kernel-protocol.md)
+  - [x] 6.1 Define the kernel protocol: submit, cancel, signal, event stream
+  - [/] 6.2 Split run() into parse -> execute -> render with no DOM access in the middle
+  - [x] 6.3 Model async commands as event streams instead of the asyncOut/busy globals
+  - [/] 6.4 Stop commands mutating prompt chrome; return a CWD change instead
 - [~] **7. Build the typed object pipeline and stream model** — [detail](roadmap/pr/PR-07-object-pipeline.md)
   - [x] 7.1 Define PSObject with typed properties and a type name
   - [x] 7.2 Implement the six PowerShell streams plus a separate native byte pipeline
-  - [ ] 7.3 Move formatting to the end of the pipeline as Format-* directives
-  - [ ] 7.4 Reimplement Get-ChildItem to emit objects, with formatting applied last
-  - [ ] 7.5 Make Sort/Select/Where/Measure/Group operate on properties, not on rendered text
-  - [ ] 7.6 Keep an EncodingBroker so native byte streams are not corrupted by UTF-16 round-trips
-- [ ] **8. Build one lexer, one AST and a version-aware parameter binder** — [detail](roadmap/pr/PR-08-version-aware-binder.md)
-  - [ ] 8.1 Write one lexer with real quote and escape handling
+  - [x] 7.3 Move formatting to the end of the pipeline as Format-* directives
+  - [x] 7.4 Reimplement Get-ChildItem to emit objects, with formatting applied last
+  - [x] 7.5 Make Sort/Select/Where/Measure/Group operate on properties, not on rendered text
+  - [x] 7.6 Keep an EncodingBroker so native byte streams are not corrupted by UTF-16 round-trips
+- [~] **8. Build one lexer, one AST and a version-aware parameter binder** — [detail](roadmap/pr/PR-08-version-aware-binder.md)
+  - [/] 8.1 Write one lexer with real quote and escape handling
   - [ ] 8.2 Separate the editing parser (incremental, error-tolerant) from the execution parser (strict)
   - [ ] 8.3 Refuse to execute recognised-but-unimplemented syntax with an explicit error naming the AST node
-  - [ ] 8.4 Implement ParameterBinder with validation, parameter sets and positional binding
-  - [ ] 8.5 Support switchSemantics so -Switch:$false differs from -Switch absent
-  - [ ] 8.6 Apply profile parameterPatches over base metadata rather than forking commands
+  - [x] 8.4 Implement ParameterBinder with validation, parameter sets and positional binding
+  - [x] 8.5 Support switchSemantics so -Switch:$false differs from -Switch absent
+  - [/] 8.6 Apply profile parameterPatches over base metadata rather than forking commands
   - [ ] 8.7 Make the highlighter share the real lexer so it cannot colour syntax the engine rejects
 
 ### State
 
-- [ ] **9. OPFS-backed filesystem with overlay, WAL, snapshots and migrations** — [detail](roadmap/pr/PR-09-storage-layer.md)
-  - [ ] 9.1 Implement OPFS backend with sync access handles inside a dedicated StorageWorker
-  - [ ] 9.2 Keep the seed/overlay split that already works: rebuild seed each boot, graft user changes
-  - [ ] 9.3 Add a write-ahead log and snapshot/restore
-  - [ ] 9.4 Add versioned migrations with rollback
-  - [ ] 9.5 Elect a storage leader with Web Locks; use SharedWorker for coordination where available
-  - [ ] 9.6 Surface quota via navigator.storage.estimate() and warn before the ceiling
-  - [ ] 9.7 Return Result<void, StorageError> instead of a rendered error row
-- [ ] **10. PowerShell provider model over the mount table** — [detail](roadmap/pr/PR-10-provider-model.md)
-  - [ ] 10.1 Define the provider interface (drive, item, child-item, content)
+- [~] **9. OPFS-backed filesystem with overlay, WAL, snapshots and migrations** — [detail](roadmap/pr/PR-09-storage-layer.md)
+  - [x] 9.1 Implement OPFS backend with sync access handles inside a dedicated StorageWorker
+  - [x] 9.2 Keep the seed/overlay split that already works: rebuild seed each boot, graft user changes
+  - [/] 9.3 Add a write-ahead log and snapshot/restore
+  - [x] 9.4 Add versioned migrations with rollback
+  - [x] 9.5 Elect a storage leader with Web Locks; use SharedWorker for coordination where available
+  - [x] 9.6 Surface quota via navigator.storage.estimate() and warn before the ceiling
+  - [x] 9.7 Return Result<void, StorageError> instead of a rendered error row
+- [~] **10. PowerShell provider model over the mount table** — [detail](roadmap/pr/PR-10-provider-model.md)
+  - [/] 10.1 Define the provider interface (drive, item, child-item, content)
   - [ ] 10.2 Implement FileSystem, Env, Variable, Function, Alias providers
   - [ ] 10.3 Implement Portfolio, Process, Package and Browser providers
-  - [ ] 10.4 Move quote-stripping out of resolvePath; paths should arrive already lexed
+  - [x] 10.4 Move quote-stripping out of resolvePath; paths should arrive already lexed
 
 ### Compatibility
 
 - [~] **11. Differential conformance against real pwsh 7.6.5** — [detail](roadmap/pr/PR-11-differential-conformance.md)
-  - [ ] 11.1 Write generate-conformance-fixtures.ps1 to capture real pwsh output for a command corpus
-  - [ ] 11.2 Normalise machine-specific output (paths, times, pids, widths) before comparison
+  - [x] 11.1 Write generate-conformance-fixtures.ps1 to capture real pwsh output for a command corpus
+  - [x] 11.2 Normalise machine-specific output (paths, times, pids, widths) before comparison
   - [x] 11.3 Capture Get-Command metadata from real pwsh to validate our manifests
-  - [ ] 11.4 Record known-differences.yml for deliberate divergences, with a reason for each
-  - [ ] 11.5 Report per-profile conformance coverage as a number the site can display
-- [ ] **12. Ship the version-difference explorer** — [detail](roadmap/pr/PR-12-behavior-delta-ui.md)
+  - [x] 11.4 Record known-differences.yml for deliberate divergences, with a reason for each
+  - [/] 11.5 Report per-profile conformance coverage as a number the site can display
+- [~] **12. Ship the version-difference explorer** — [detail](roadmap/pr/PR-12-behavior-delta-ui.md)
   - [ ] 12.1 Add a command that diffs a script across two profiles
-  - [ ] 12.2 Show, per difference, whether BrowserShell actually emulates it or merely documents it
+  - [x] 12.2 Show, per difference, whether BrowserShell actually emulates it or merely documents it
   - [ ] 12.3 Let the session switch profiles without losing the filesystem
 
 ### Declarative
@@ -297,27 +300,27 @@ Every claim below was checked against a primary source on 2026-09-04. These are 
 
 ### Supply chain
 
-- [ ] **14. Package identity, integrity, capabilities and trust promotion** — [detail](roadmap/pr/PR-14-package-trust.md)
+- [~] **14. Package identity, integrity, capabilities and trust promotion** — [detail](roadmap/pr/PR-14-package-trust.md)
   - [ ] 14.1 Define the package manifest with publisher, capabilities and integrity digest
   - [ ] 14.2 Verify digests before execution; refuse on mismatch
-  - [ ] 14.3 Run third-party modules in a sandboxed worker behind a capability broker
+  - [/] 14.3 Run third-party modules in a sandboxed worker behind a capability broker
   - [ ] 14.4 Implement a lockfile and a discovery -> review -> promotion flow
 
 ### AI
 
-- [ ] **15. MCP tool schema generation and the approval gate** — [detail](roadmap/pr/PR-15-mcp-and-approval.md)
+- [~] **15. MCP tool schema generation and the approval gate** — [detail](roadmap/pr/PR-15-mcp-and-approval.md)
   - [ ] 15.1 Generate MCP tool schemas from command manifests
-  - [ ] 15.2 Classify every command by risk: read / query-external / write / destructive / device / privileged-simulation
+  - [x] 15.2 Classify every command by risk: read / query-external / write / destructive / device / privileged-simulation
   - [ ] 15.3 Route AI plans through schema validation, AST validation, capability analysis and WhatIf preview before approval
   - [ ] 15.4 Deny the AI direct handles: no OPFS, clipboard, device, package token or storage key
   - [ ] 15.5 Audit-log every AI-originated action with its plan and approval
 
 ### Rendering
 
-- [ ] **16. Optional xterm.js ANSI renderer alongside the semantic DOM terminal** — [detail](roadmap/pr/PR-16-ansi-renderer.md)
+- [~] **16. Optional xterm.js ANSI renderer alongside the semantic DOM terminal** — [detail](roadmap/pr/PR-16-ansi-renderer.md)
   - [ ] 16.1 Define TerminalPort with both a semantic DOM and an xterm adapter
   - [ ] 16.2 Separate the ANSI parser from plain-text formatting
-  - [ ] 16.3 Use cell width rather than string length everywhere
+  - [/] 16.3 Use cell width rather than string length everywhere
   - [ ] 16.4 Keep the semantic renderer the default and keep aria-live output intact
 
 ### Future runtime
@@ -329,8 +332,8 @@ Every claim below was checked against a primary source on 2026-09-04. These are 
 
 ### Desktop
 
-- [ ] **18. File manager, task manager, settings and window management** — [detail](roadmap/pr/PR-18-desktop-apps.md)
-  - [ ] 18.1 Rebuild the nano/vim editor on the extracted core rather than on global ED state
+- [~] **18. File manager, task manager, settings and window management** — [detail](roadmap/pr/PR-18-desktop-apps.md)
+  - [x] 18.1 Rebuild the nano/vim editor on the extracted core rather than on global ED state
   - [ ] 18.2 File manager over the provider model
   - [ ] 18.3 Task manager over the process/job model
   - [ ] 18.4 Settings backed by declarative workstation state

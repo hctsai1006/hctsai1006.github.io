@@ -1,0 +1,12 @@
+PS /home/thc1006> Get-ChildItem
+    Directory: /home/thc1006
+
+UnixMode    User     Group    LastWriteTime    Size  Name         
+----------  -------  -------  ---------------  ----  -------------
+drwxr-xr-x  thc1006  thc1006  7/19/2026 12:00  4096  awards       
+drwxr-xr-x  thc1006  thc1006  7/19/2026 12:00  4096  contributions
+drwxr-xr-x  thc1006  thc1006  7/19/2026 12:00  4096  projects     
+drwxr-xr-x  thc1006  thc1006  7/19/2026 12:00  4096  publications 
+-rw-r--r--  thc1006  thc1006  7/19/2026 12:00  447   README.md    
+-rw-r--r--  thc1006  thc1006  7/19/2026 12:00  457   profile.ps1  
+

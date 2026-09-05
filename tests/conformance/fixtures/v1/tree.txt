@@ -1,0 +1,51 @@
+PS /home/thc1006> tree
+/home/thc1006
+├── awards
+│   ├── 2023-ocean-governance.md
+│   ├── 2023-presidential-education-award.md
+│   ├── 2026-make-ntu.md
+│   ├── 2026-nstc-research-award.md
+│   └── 2026-tasa-space-talent.md
+├── contributions
+│   ├── argo-workflows.md
+│   ├── community-operators.md
+│   ├── devstats-viewer.md
+│   ├── dra-driver-cpu.md
+│   ├── dranet.md
+│   ├── in-review.md
+│   ├── jaeger-ui.md
+│   ├── k8s-gpu-dra-driver.md
+│   ├── kubernetes.md
+│   ├── kueue.md
+│   ├── llm-d-router.md
+│   ├── muxleq.md
+│   ├── ocudu.md
+│   ├── opentelemetry-cpp.md
+│   ├── porch.md
+│   ├── RocketPy.md
+│   ├── test-infra.md
+│   ├── volcano.md
+│   └── zephyr.md
+├── projects
+│   ├── coscup-2026.md
+│   ├── dra-correctness-audit.md
+│   ├── nephio-lfn.md
+│   ├── o-ran-ntn.md
+│   └── upstream-correctness-audits.md
+├── publications
+│   ├── a-large-scale-empirical-study.md
+│   ├── an-iterative-dual-channel-neural.md
+│   ├── band-as-modality-learning-for-multispectral.md
+│   ├── cross-layer-diagnostics-for-operator-side.md
+│   ├── ecd-length-and-fold.md
+│   ├── federated-o-ran-slice-sla.md
+│   ├── ground-side-mission-plan-compilation.md
+│   ├── intelligent-management-system-of.md
+│   ├── oobwatch-s3-surfacing-a-zephyr.md
+│   ├── physics-grounded-deep-reinforcement-learning.md
+│   ├── sub-millijoule-intrusion-detection-on.md
+│   ├── the-development-and-prospect.md
+│   └── trusted-floors-under-untrusted.md
+├── profile.ps1
+└── README.md
+

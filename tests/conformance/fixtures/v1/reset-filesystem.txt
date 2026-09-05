@@ -1,0 +1,3 @@
+PS /home/thc1006> Reset-FileSystem
+File system restored to its initial state.
+

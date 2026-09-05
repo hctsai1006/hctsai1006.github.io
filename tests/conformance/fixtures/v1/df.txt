@@ -1,0 +1,5 @@
+PS /home/thc1006> df
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/root        48G   19G   27G  42% /
+tmpfs           7.8G     0  7.8G   0% /dev/shm
+

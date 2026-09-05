@@ -1,0 +1,3 @@
+PS /home/thc1006> move
+Move-Item: Cannot process command because of one or more missing mandatory parameters: Path Destination.
+

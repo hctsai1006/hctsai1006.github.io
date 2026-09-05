@@ -420,6 +420,8 @@ function copyPSObjectOrBag(
     }
   }
 
+  refuseIfEmptiedByTheDrop(source, typeNames.value, properties.value as object, path);
+
   charge(state, path, OVERHEAD_PER_NODE);
   const out = { typeNames: [] as readonly WireValue[], properties: {} as Record<string, WireValue> };
   state.memo.set(source, out as unknown as WireObject);
@@ -442,6 +444,68 @@ function copyPSObjectOrBag(
   out.properties = copyBag(properties.value as object, `${path}.properties`, depth + 1, state);
 
   return out as unknown as WireObject;
+}
+
+/**
+ * Refuse a value whose ENTIRE content is the thing the boundary drops.
+ *
+ * Dropping `baseObject` is right: it is the underlying host value — a File
+ * handle, a Response, a closure — and it is useful inside the kernel and
+ * meaningless outside it. What is NOT right is dropping it when it was the only
+ * content, because the result is an object that still declares its type and
+ * carries nothing, and NOTHING ANYWHERE REPORTS THAT.
+ *
+ * MEASURED, on a `Format-Table` record:
+ *
+ *   before: isFormatRecord = true    document present = true
+ *   after wire: {"typeNames":["…Format.FormatEntryData","System.Object"],
+ *                "properties":{}}
+ *   after: document present = false  still typed as a format record = true
+ *
+ * A renderer on the far side would identify it, confidently, and draw nothing.
+ * `src/formatting/records.ts` puts the whole `FormatDocument` in `baseObject`
+ * ON PURPOSE — the empty property bag mirrors pwsh, where a downstream stage
+ * can see a format record go past and learn nothing from it — and that
+ * modelling is correct. What was missing is that a kernel-local representation
+ * typed as if it could be sent has to fail LOUDLY when it cannot.
+ *
+ * This is the same defect the script block already taught, in a different
+ * costume: a closure could not cross, so it became a realm-prefixed handle, and
+ * the load-bearing half was that an UNRESOLVABLE handle is an ERROR rather than
+ * a silent pass — without it `Where-Object` passed every object through. A
+ * format record that arrives empty is the same silent pass one layer down.
+ *
+ * THE NARROW RULE, because the general one would be wrong: an object that keeps
+ * SOME of its content is still carried, with `baseObject` dropped, exactly as
+ * before. Only "everything it had is gone" is refused. And `undefined` or
+ * `null` in `baseObject` is not content, so nothing is lost by dropping it.
+ *
+ * WHAT THIS DOES NOT DO: make a format record crossable. That needs a sendable
+ * representation, which belongs to whoever owns `src/formatting/` — either a
+ * serialised document (a `FormatDocument` is data, unlike a closure, so this is
+ * the easier case) or a realm-local handle as script blocks use. Until then the
+ * failure is an error naming the type instead of a blank line.
+ */
+function refuseIfEmptiedByTheDrop(
+  source: object,
+  typeNames: unknown,
+  bag: object,
+  path: string,
+): void {
+  const base = ownValue(source, 'baseObject', `${path}.baseObject`);
+  if (!base.present || base.value === undefined || base.value === null) return;
+  // Read through [[OwnPropertyKeys]], which is what `copyBag` will iterate; a
+  // getter is never invoked to answer this.
+  if (Object.keys(bag).length > 0) return;
+
+  const name = Array.isArray(typeNames) && typeof typeNames[0] === 'string' ? typeNames[0] : 'object';
+  throw new WireValueError(
+    path,
+    `everything a ${name} carries is in baseObject, which the boundary drops — so it would ` +
+      'arrive declaring its type with an empty property bag, and nothing anywhere would say ' +
+      'so. A kernel-local representation has to become sendable data, or a handle into a ' +
+      'realm-local table as a script block is, before it can cross',
+  );
 }
 
 function copyBag(
