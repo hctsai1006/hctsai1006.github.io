@@ -536,3 +536,93 @@ describe('bytes stay bytes until something asks for text', () => {
     assert.deepEqual([...encodeText(decodeBytes(all, 'latin1'), 'latin1')], [...all]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// the gate
+// ---------------------------------------------------------------------------
+
+describe('there is only ONE place that decides an encoding', () => {
+  // THE DEFECT SHAPE THIS GUARDS. This repository has now found the same thing
+  // five times: one conversion implemented twice and drifting silently —
+  // value-to-string three times, width twice, three date engines, and this.
+  //
+  // Before this module there were two encoding tables. `fs-read/get-content.ts`
+  // held a decode table and `fs-write/set-content.ts` an encode table, and they
+  // had drifted: they disagreed about `ascii`, disagreed about which names
+  // existed at all, and neither agreed with pwsh about `oem`. Neither was
+  // tested, so nothing said so.
+  //
+  // A comment asking the next person not to add a third would not have stopped
+  // either of the first two, so this asks the source.
+
+  const ALLOWED = new Set([
+    // The broker itself. UTF-8 is delegated deliberately: Node, Chrome and .NET
+    // were measured to agree on it, including on invalid input.
+    'src/pipeline/encoding.ts',
+    // The storage backend's own UTF-8 text API, which predates the broker and
+    // lives behind `FileSystemPort.readText`/`writeText`. It is a REAL second
+    // decision — `cat`, `grep` and `Select-String` read through it and get
+    // UTF-8 with no BOM sniff — and it is recorded rather than fixed here
+    // because src/storage/ belongs to another change in flight.
+    'src/storage/memory.ts',
+    'src/storage/snapshot.ts',
+  ]);
+
+  it('no module outside the broker constructs a TextDecoder or TextEncoder', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { globSync } = await import('node:fs');
+    const { fileURLToPath } = await import('node:url');
+    const { dirname, resolve } = await import('node:path');
+    const repo = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+
+    const offenders: string[] = [];
+    for (const relative of globSync('src/**/*.ts', { cwd: repo }).sort()) {
+      // globSync yields Windows separators on Windows; String.fromCharCode(92)
+      // is the backslash, written this way so the literal cannot be mangled by
+      // whatever writes this file next.
+      const normalised = relative.split(String.fromCharCode(92)).join('/');
+      if (ALLOWED.has(normalised)) continue;
+      const source = readFileSync(resolve(repo, relative), 'utf8');
+      // Only real constructions: the broker's docstring quotes these forms, and
+      // a comment describing the trap must not read as falling into it.
+      for (const [index, line] of source.split('\n').entries()) {
+        const code = line.trimStart();
+        if (code.startsWith('*') || code.startsWith('//')) continue;
+        if (/new Text(Decoder|Encoder)\s*\(/.test(line)) {
+          offenders.push(`${normalised}:${String(index + 1)}`);
+        }
+      }
+    }
+    assert.deepEqual(
+      offenders,
+      [],
+      'These modules decide an encoding themselves. Route them through ' +
+        'src/pipeline/encoding.ts, or add them to ALLOWED with the reason.',
+    );
+  });
+
+  it('no module outside the broker keeps its own table of -Encoding names', () => {
+    // The two tables were spelled as a Map of decoder labels and a Set of
+    // recognised names. Both are gone; this is what stops a third.
+    const names = ['bigendianunicode', 'utf8nobom', 'bigendianutf32'];
+    assert.ok(
+      names.every((n) => resolveEncodingName(n).kind === 'ok'),
+      'the broker must know every name a command could need, or a command will keep its own list',
+    );
+  });
+
+  it('resolves every name a command can be given to exactly one codec', () => {
+    // Same name, same answer, no matter who asks — which was NOT true before:
+    // get-content mapped 'ascii' to windows-1252 while set-content substituted
+    // '?', so the same file written and read back changed underneath the user.
+    const roundTrip = (name: string): string | null => {
+      const r = resolveEncodingName(name);
+      return r.kind === 'ok' ? r.id : null;
+    };
+    assert.equal(roundTrip('ascii'), 'ascii');
+    assert.equal(roundTrip('ASCII'), 'ascii');
+    // and the write path and the read path now agree about what that means
+    assert.equal(hex(encodeText('aé', 'ascii')), '61 3F');
+    assert.equal(units(decodeBytes(bytes(0x61, 0x3f), 'ascii')), 'U+0061 U+003F');
+  });
+});

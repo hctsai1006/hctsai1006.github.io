@@ -57,6 +57,8 @@
 
 import type { PSValue } from '../../pipeline/psobject.ts';
 import type { BindingResult, CommandModule, InvocationContext } from '../invocation.ts';
+import { decodeBytes, encodeText, resolveEncodingName } from '../../pipeline/encoding.ts';
+import type { EncodingId } from '../../pipeline/encoding.ts';
 import type { CommandManifest } from '../manifest.ts';
 import { isBound, rawValue, stringArray, stringValue, switchValue } from '../powershell/support.ts';
 import type { StorageError } from '../../storage/index.ts';
@@ -79,74 +81,84 @@ import type { PSErrorShape, ProviderErrorIds } from './support.ts';
 // ---------------------------------------------------------------------------
 
 /**
- * MEASURED byte-for-byte:
+ * `-Encoding` NAMES are resolved by the broker in `pipeline/encoding.ts`; the
+ * bytes are produced by its `encodeText`. Nothing about an encoding is decided
+ * here any more.
+ *
+ * THIS FILE USED TO OWN THE SECOND OF TWO ENCODING TABLES. The other lived in
+ * `fs-read/get-content.ts`, and they had drifted:
+ *
+ *   - they disagreed about `ascii`. This one substituted '?' for anything
+ *     outside 7 bits, which is right; that one decoded high bytes as
+ *     windows-1252, which is not what pwsh does in either direction.
+ *   - they disagreed about which names existed at all: `latin1` and `utf32`
+ *     were recognised here and absent there.
+ *   - neither agreed with pwsh about `oem`, which is UTF-8 on Ubuntu.
+ *
+ * One conversion implemented twice, drifting silently, is a shape this project
+ * has now found five times. The table is gone; the names come from one place.
+ *
+ * The byte-level behaviour was MEASURED and is unchanged by this:
  *
  *   (default)   'abc' -> 97,98,99,<term>            UTF-8, no BOM
- *   utf8BOM     'abc' -> 239,187,191,97,98,99,…     the BOM, then UTF-8
- *   ascii       'ab'  -> 97,98,<term>
- *   unicode     'ab'  -> 255,254,97,0,98,0,…        UTF-16LE with a BOM
+ *   utf8BOM     'abc' -> 239,187,191,97,98,99,...   the BOM, then UTF-8
+ *   ascii       'aé'  -> 97,63,<term>               '?' for anything >= 0x80
+ *   unicode     'ab'  -> 255,254,97,0,98,0,...      UTF-16LE with a BOM
  *   sausage     binding failure, ParameterArgumentTransformationError /
  *               InvalidData, "'sausage' is not a supported encoding name."
  *
- * Implemented here: the three that this filesystem can store faithfully. The
- * UTF-16 and UTF-32 families are RECOGNISED AND REFUSED rather than silently
- * written as UTF-8: `StorageBackend.readText` decodes UTF-8 with replacement,
- * so a UTF-16 file would come back as mojibake from `Get-Content` and nothing
- * downstream could tell that from a corrupt file.
+ * WHY THE UTF-16 AND UTF-32 FAMILIES ARE STILL REFUSED, and why the reason in
+ * the message CHANGED. It used to say Get-Content could not read them back.
+ * That is no longer true — Get-Content reads bytes and BOM-sniffs, so a UTF-16
+ * file written here would round-trip through it correctly today. But `cat`,
+ * `grep` and `Select-String` all read through `FileSystemPort.readText`, which
+ * decodes UTF-8 with replacement and has no sniff, so those three would return
+ * mojibake for such a file. Writing them would trade one honest refusal for
+ * three silent wrong answers, so the refusal stays and now names the real
+ * reason. Fixing it means giving readText an encoding, which lives in
+ * `src/storage/` — see the report accompanying this change.
  */
-const RECOGNISED_ENCODINGS = new Set([
-  'ascii',
-  'ansi',
-  'bigendianunicode',
-  'bigendianutf32',
-  'oem',
-  'unicode',
-  'utf7',
-  'utf8',
-  'utf8bom',
-  'utf8nobom',
-  'utf32',
-  'latin1',
-  'default',
-]);
+
+/** What this engine can WRITE such that every reader in it can read it back. */
+const WRITABLE: ReadonlySet<EncodingId> = new Set<EncodingId>(['utf8', 'utf8bom', 'ascii']);
 
 type Encoding =
-  | { readonly kind: 'utf8'; readonly bom: boolean }
-  | { readonly kind: 'ascii' }
-  | { readonly kind: 'refused'; readonly name: string }
+  | { readonly kind: 'ok'; readonly id: EncodingId; readonly name: string }
+  | { readonly kind: 'refused'; readonly name: string; readonly why: string }
   | { readonly kind: 'unknown'; readonly name: string };
 
 function encodingOf(raw: string | undefined): Encoding {
-  if (raw === undefined || raw.trim() === '') return { kind: 'utf8', bom: false };
-  const name = raw.trim().toLowerCase();
-  // PowerShell 7's default is utf8NoBOM, and plain `utf8` means the same thing.
-  if (name === 'utf8' || name === 'utf8nobom' || name === 'default') {
-    return { kind: 'utf8', bom: false };
+  const resolved = resolveEncodingName(raw);
+  if (resolved.kind === 'unknown') return { kind: 'unknown', name: resolved.name };
+  if (resolved.kind === 'unsupported') {
+    return { kind: 'refused', name: resolved.name, why: resolved.why };
   }
-  if (name === 'utf8bom') return { kind: 'utf8', bom: true };
-  if (name === 'ascii') return { kind: 'ascii' };
-  if (RECOGNISED_ENCODINGS.has(name)) return { kind: 'refused', name };
-  return { kind: 'unknown', name };
+  if (!WRITABLE.has(resolved.id)) {
+    return {
+      kind: 'refused',
+      name: resolved.name,
+      why:
+        'This engine can produce those bytes, but `cat`, `grep` and `Select-String` read ' +
+        'through a port that decodes UTF-8 only, so the file would come back as mojibake ' +
+        'from three of the four commands that read it.',
+    };
+  }
+  return { kind: 'ok', id: resolved.id, name: resolved.name };
 }
 
-/** .NET's ASCIIEncoding replaces anything outside 7 bits with a question mark. */
-function toAscii(text: string): string {
-  let out = '';
-  for (const character of text) {
-    const code = character.codePointAt(0) ?? 0;
-    out += code < 0x80 ? character : '?';
-  }
-  return out;
-}
-
-const UTF8_BOM = new Uint8Array([0xef, 0xbb, 0xbf]);
-
-function withBom(text: string): Uint8Array {
-  const body = new TextEncoder().encode(text);
-  const out = new Uint8Array(UTF8_BOM.length + body.length);
-  out.set(UTF8_BOM, 0);
-  out.set(body, UTF8_BOM.length);
-  return out;
+/**
+ * The text an APPEND writes: the codec's substitutions applied, preamble not.
+ *
+ * A preamble belongs at the start of a file, so appending one would put it in
+ * the middle; the port has `appendText` and no `appendBytes`, so an append is
+ * expressed as text. Only utf8, utf8BOM and ascii are writable here: the first
+ * two append the body unchanged, and ascii's '?' substitution produces pure
+ * 7-bit text, which is its own UTF-8 encoding. Round-tripping through the codec
+ * is what keeps that substitution the ENCODER's rather than a second copy of it
+ * living in this file, which is how the two tables drifted in the first place.
+ */
+function appendableText(body: string, id: EncodingId): string {
+  return id === 'ascii' ? decodeBytes(encodeText(body, 'ascii'), 'utf8') : body;
 }
 
 // ---------------------------------------------------------------------------
@@ -315,8 +327,7 @@ function contentCommand(mode: Mode): CommandModule {
             exceptionType: 'System.NotSupportedException',
             message:
               `-Encoding ${encoding.name} is recognised but not implemented by BrowserShell. ` +
-              'The storage layer reads text as UTF-8, so a file written in this encoding could ' +
-              'not be read back; writing it as UTF-8 anyway would be a silent wrong answer.',
+              `${encoding.why} Writing it as UTF-8 anyway would be a silent wrong answer.`,
           },
           null,
         );
@@ -345,7 +356,6 @@ function contentCommand(mode: Mode): CommandModule {
       const passThru = switchValue(bound.parameters, 'PassThru');
       const lines = contentLines(value);
       const body = contentBody(lines, noNewline);
-      const text = encoding.kind === 'ascii' ? toAscii(body) : body;
 
       let failures = 0;
       const written: string[] = [];
@@ -373,12 +383,15 @@ function contentCommand(mode: Mode): CommandModule {
         // -Force does not create a parent here), `exclusive` would break the
         // measured "a missing file is created", and `mode` is the storage
         // layer's default because pwsh does not let a content cmdlet choose one.
+        // The codec produces the bytes, preamble included. Measured:
+        //   Set-Content -Encoding ascii 'aé'   -> 61 3F
+        //   Set-Content -Encoding utf8BOM 'abc' -> EF BB BF 61 62 63
+        // Appending to a file that already has content writes text instead, so
+        // a second BOM cannot land in the middle of one.
         const outcome =
-          encoding.kind === 'utf8' && encoding.bom && (!mode.append || creating)
-            ? await port.writeBytes(path, withBom(text))
-            : mode.append
-              ? await port.appendText(path, text)
-              : await port.writeText(path, text);
+          mode.append && !creating
+            ? await port.appendText(path, appendableText(body, encoding.id))
+            : await port.writeBytes(path, encodeText(body, encoding.id));
 
         if (!outcome.ok) {
           await reportError(context, mode.manifest, shapeFor(mode, outcome.error, path), path);
