@@ -81,8 +81,9 @@
 
 import { throwIfCancelled } from '../../pipeline/pipeline.ts';
 import type { PSValue } from '../../pipeline/psobject.ts';
-import type { DirectoryEntry } from '../../storage/index.ts';
 import type { ResolvedPath } from '../../storage/vfs.ts';
+import { FileSystemProvider, providerRelativePath } from '../../providers/index.ts';
+import type { ProviderItem, ProviderRegistry } from '../../providers/index.ts';
 import type { BindingResult, CommandModule, InvocationContext } from '../invocation.ts';
 import type { FileSystemPort } from '../ports.ts';
 import {
@@ -97,13 +98,16 @@ import {
   commandError,
   emit,
   fileSystemInfo,
+  filterNotSupportedError,
   fsReadManifest,
   hasWildcard,
   isHidden,
   matchesAny,
+  namedParameterNotFoundError,
+  providerNotSupportedError,
+  providerTargets,
   requirePort,
   resolveTargets,
-  sortDirectoryEntries,
   storageErrorRecord,
 } from './support.ts';
 import type { FsErrorIds, Target } from './support.ts';
@@ -138,6 +142,21 @@ interface Options {
 }
 
 /**
+ * The two things every filter here asks about an item.
+ *
+ * A `DirectoryEntry` used to be the parameter type, and it is one member too
+ * many: `-File`, `-Directory`, `-Filter`, `-Include`, `-Exclude`, `-Hidden` and
+ * `-Force` all read a NAME and a CONTAINER FLAG, which is exactly what a
+ * `ProviderItem` carries and exactly what a session-state item can supply.
+ * Narrowing it is what lets the flat-drive listing below reuse these predicates
+ * instead of restating them.
+ */
+interface Filterable {
+  readonly name: string;
+  readonly isContainer: boolean;
+}
+
+/**
  * The same question for a target the PATH itself matched.
  *
  * `-Include`/`-Exclude` are applied here because rule 5 says they are effective
@@ -145,14 +164,16 @@ interface Options {
  * never reaches this.
  */
 function acceptsTarget(target: Target, options: Options): boolean {
-  return accepts({ name: target.stat.name, stat: target.stat }, options);
+  return accepts(
+    { name: target.stat.name, isContainer: target.stat.kind === 'directory' },
+    options,
+  );
 }
 
 /** Does one entry survive `-Filter`, `-Include`, `-Exclude`, `-File`, `-Directory`? */
-function accepts(entry: DirectoryEntry, options: Options): boolean {
-  const isDirectory = entry.stat.kind === 'directory';
-  if (options.filesOnly && isDirectory) return false;
-  if (options.directoriesOnly && !isDirectory) return false;
+function accepts(entry: Filterable, options: Options): boolean {
+  if (options.filesOnly && entry.isContainer) return false;
+  if (options.directoriesOnly && !entry.isContainer) return false;
   if (options.filter !== undefined && !matchesAny(entry.name, [options.filter])) return false;
   if (options.include !== undefined && !matchesAny(entry.name, options.include)) return false;
   if (options.exclude !== undefined && matchesAny(entry.name, options.exclude)) return false;
@@ -167,14 +188,27 @@ function accepts(entry: DirectoryEntry, options: Options): boolean {
  *   pwsh: Get-ChildItem -Hidden          ->  .hidden, and nothing else
  *   pwsh: Get-ChildItem -Hidden -Force   ->  .hidden, and nothing else
  */
-function visible(entry: DirectoryEntry, options: Options): boolean {
+function visible(entry: Filterable, options: Options): boolean {
   const hidden = isHidden(entry.name);
   if (options.hiddenOnly) return hidden;
   return options.force || !hidden;
 }
 
 interface Walker {
-  readonly fs: FileSystemPort;
+  /**
+   * The FileSystem provider, over the same brokered port the command was
+   * handed.
+   *
+   * Constructed by the command rather than taken from `context.providers`, and
+   * that is deliberate: it is the same class the registry holds, over the same
+   * port, and building one costs a field write. Taking it from the registry
+   * would have meant a null branch — "no registry, so read the directory the
+   * old way" — and that branch is a SECOND implementation of "list one level of
+   * a directory", which is the drift this PR exists to remove. There is one
+   * now, in `FileSystemProvider.getChildItems`, and it is the only place the
+   * directories-first ordering rule is written.
+   */
+  readonly provider: FileSystemProvider;
   readonly context: InvocationContext;
   readonly options: Options;
   /** The path the `-Name` output is relative to. */
@@ -188,21 +222,10 @@ function relativeName(base: string, path: string): string {
   return path;
 }
 
-function childPath(parent: ResolvedPath, name: string): ResolvedPath {
-  const path = parent.path === '/' ? `/${name}` : `${parent.path}/${name}`;
-  const full = parent.full.endsWith('/') ? `${parent.full}${name}` : `${parent.full}/${name}`;
-  return { drive: parent.drive, path, full, clampedAtRoot: false };
-}
-
-async function emitEntry(
-  walker: Walker,
-  parent: ResolvedPath,
-  entry: DirectoryEntry,
-): Promise<boolean> {
-  const resolved = childPath(parent, entry.name);
+async function emitEntry(walker: Walker, entry: ProviderItem): Promise<boolean> {
   const value: PSValue = walker.options.nameOnly
-    ? relativeName(walker.base, resolved.path)
-    : fileSystemInfo(entry.stat, resolved);
+    ? relativeName(walker.base, entry.path.path)
+    : entry.value;
   return emit(walker.context.streams.success, walker.context.signal, value);
 }
 
@@ -216,7 +239,9 @@ async function emitEntry(
 async function walk(walker: Walker, directory: ResolvedPath, depth: number): Promise<boolean> {
   throwIfCancelled(walker.context.signal, 'Get-ChildItem');
 
-  const rows = await walker.fs.readdir(directory.full);
+  // ONE level, already ordered directories-first-then-collated, from the
+  // FileSystem provider. Note 1's ordering rule lives there and nowhere else.
+  const rows = await walker.provider.getChildItems(directory);
   if (!rows.ok) {
     await walker.context.streams.error.write(
       storageErrorRecord(GET_CHILDITEM, rows.error, directory.full, IDS),
@@ -224,7 +249,7 @@ async function walk(walker: Walker, directory: ResolvedPath, depth: number): Pro
     return true;
   }
 
-  const entries = sortDirectoryEntries(rows.value).filter((e) => visible(e, walker.options));
+  const entries = rows.value.filter((e) => visible(e, walker.options));
   const mayDescend = walker.options.recurse && depth < walker.options.maxDepth;
 
   if (walker.options.immediateDescent) {
@@ -233,12 +258,11 @@ async function walk(walker: Walker, directory: ResolvedPath, depth: number): Pro
     // directory's own files — which is what produced `aa\aaa\a2.txt | aa\a1.txt`.
     for (const entry of entries) {
       if (walker.context.signal.aborted) return false;
-      const isDirectory = entry.stat.kind === 'directory';
       if (accepts(entry, walker.options)) {
-        if (!(await emitEntry(walker, directory, entry))) return false;
+        if (!(await emitEntry(walker, entry))) return false;
       }
-      if (isDirectory && mayDescend) {
-        if (!(await walk(walker, childPath(directory, entry.name), depth + 1))) return false;
+      if (entry.isContainer && mayDescend) {
+        if (!(await walk(walker, entry.path, depth + 1))) return false;
       }
     }
     return true;
@@ -247,13 +271,13 @@ async function walk(walker: Walker, directory: ResolvedPath, depth: number): Pro
   // Note 2: everything at this level first...
   for (const entry of entries) {
     if (!accepts(entry, walker.options)) continue;
-    if (!(await emitEntry(walker, directory, entry))) return false;
+    if (!(await emitEntry(walker, entry))) return false;
   }
   // ...and only then down, in the same order.
   if (!mayDescend) return true;
   for (const entry of entries) {
-    if (entry.stat.kind !== 'directory') continue;
-    if (!(await walk(walker, childPath(directory, entry.name), depth + 1))) return false;
+    if (!entry.isContainer) continue;
+    if (!(await walk(walker, entry.path, depth + 1))) return false;
   }
   return true;
 }
@@ -287,6 +311,9 @@ export const getChildItem: CommandModule = {
     const parameters = bound.parameters;
     const fs = await requirePort(context, GET_CHILDITEM);
     if (fs === null) return 1;
+    // See `Walker.provider` for why this is built here rather than read off
+    // `context.providers`.
+    const provider = new FileSystemProvider(fs);
 
     // Attributes/-ReadOnly/-System/-FollowSymlink describe things this storage
     // does not have: a Windows flags enum, two Windows-only attribute bits and
@@ -348,6 +375,22 @@ export const getChildItem: CommandModule = {
     for (const raw of paths) {
       throwIfCancelled(context.signal, 'Get-ChildItem');
 
+      const registry = context.providers;
+      const resolvedOnce = fs.resolve(raw);
+      if (registry !== null && resolvedOnce.ok && registry.handles(resolvedOnce.value.drive)) {
+        const outcome = await listProviderDrive(
+          context,
+          registry,
+          resolvedOnce.value,
+          raw,
+          literal !== undefined,
+          options,
+          parameters,
+        );
+        if (!outcome.keepGoing) return outcome.exitCode;
+        continue;
+      }
+
       // Rule 9. `*` collapses to its parent, which turns the argument back into
       // an ordinary directory listing; anything else with a wildcard names
       // ITEMS, and the items are the answer.
@@ -365,7 +408,7 @@ export const getChildItem: CommandModule = {
 
       for (const target of targets) {
         if (includeIsInert) continue;
-        const walker: Walker = { fs, context, options, base: target.resolved.path };
+        const walker: Walker = { provider, context, options, base: target.resolved.path };
 
         if (target.stat.kind !== 'directory') {
           // A matched file is the answer whichever way the path was written.
@@ -394,6 +437,123 @@ export const getChildItem: CommandModule = {
     return 0;
   },
 };
+
+/**
+ * `Get-ChildItem` on a drive that is not the filesystem — the acceptance
+ * criterion `Get-ChildItem Env:/ works`.
+ *
+ * IT IS NOT THE WALK ABOVE WITH A DIFFERENT READDIR, and that is the point of
+ * the whole PR. MEASURED against pwsh 7.6.5 on `Env:`:
+ *
+ *   -Recurse        NO-OP. 107 items with it, 107 without. A flat provider has
+ *                   nothing to descend into, so notes 2 and 3 above — which are
+ *                   entirely about traversal order — describe nothing here.
+ *   -Depth          REFUSED: NotSupported, "Provider operation stopped because
+ *                   the provider does not support the 'Depth' parameter."
+ *   -Filter         REFUSED: NotSupported, "Cannot call method. The provider
+ *                   does not support the use of filters." FileSystem is the
+ *                   only provider whose Capabilities include Filter.
+ *   -File -Directory -Hidden -Attributes
+ *                   REFUSED: NamedParameterNotFound. They are FileSystem
+ *                   dynamic parameters and do not exist on a flat drive.
+ *   -Include        binds, and is INERT with a literal path — count 0, exactly
+ *                   the filesystem's rule 5.
+ *   -Exclude -Force -Name -Recurse
+ *                   all bind and behave.
+ *   -LiteralPath Env:zzTp on a LEAF
+ *                   returns the LEAF ITSELF, count 1. Not empty, not an error.
+ *
+ * The error message names a THIRD path form, which is why `displayPath` is a
+ * parameter of `storageErrorRecord` rather than a rule inside it:
+ *
+ *   Get-ChildItem Env:zzNoSuch      "Cannot find path 'zzNoSuch' ..."
+ *   Get-ChildItem Env:zzLeaf/more   "Cannot find path 'zzLeaf/more' ..."
+ *
+ * — the provider-internal path, with NO drive on it, where `Get-Item` prints
+ * `Env:/zzNoSuch` and `Set-Location` prints what was typed.
+ */
+async function listProviderDrive(
+  context: InvocationContext,
+  registry: ProviderRegistry,
+  resolved: ResolvedPath,
+  raw: string,
+  literal: boolean,
+  options: Options,
+  parameters: BindingResult['parameters'],
+): Promise<{ keepGoing: boolean; exitCode: number }> {
+  for (const absent of ['File', 'Directory', 'Hidden'] as const) {
+    if (isBound(parameters, absent)) {
+      await context.streams.error.write(namedParameterNotFoundError(GET_CHILDITEM, absent));
+      return { keepGoing: false, exitCode: 1 };
+    }
+  }
+  if (isBound(parameters, 'Depth')) {
+    await context.streams.error.write(
+      providerNotSupportedError(
+        GET_CHILDITEM,
+        "Provider operation stopped because the provider does not support the 'Depth' parameter.",
+      ),
+    );
+    return { keepGoing: false, exitCode: 1 };
+  }
+  if (options.filter !== undefined && !registry.supports(resolved.drive, 'Filter')) {
+    await context.streams.error.write(filterNotSupportedError(GET_CHILDITEM));
+    return { keepGoing: false, exitCode: 1 };
+  }
+
+  const targets = await providerTargets(registry, resolved, literal);
+  if (!targets.ok) {
+    await context.streams.error.write(
+      // The provider-internal path; see the header.
+      storageErrorRecord(GET_CHILDITEM, targets.error, providerRelativePath(resolved), IDS),
+    );
+    return { keepGoing: true, exitCode: 0 };
+  }
+
+  // A container is listed; a leaf IS the answer. Same rule as the filesystem's
+  // rule 9, minus the recursion a flat provider cannot do.
+  const rows: ProviderItem[] = [];
+  for (const target of targets.value) {
+    if (!target.isContainer) {
+      rows.push(target);
+      continue;
+    }
+    const children = await registry.childItems(target.path);
+    if (!children.ok) {
+      await context.streams.error.write(
+        storageErrorRecord(GET_CHILDITEM, children.error, providerRelativePath(target.path), IDS),
+      );
+      continue;
+    }
+    rows.push(...children.value);
+  }
+
+  // Rule 5, measured on `Env:` as well as on the filesystem: `-Include` with a
+  // literal path matches nothing at all.
+  const includeIsInert =
+    options.include !== undefined && !literal && !hasWildcard(raw) && !options.recurse;
+
+  for (const row of rows) {
+    if (includeIsInert) break;
+    // NO HIDDEN RULE HERE, and that is measured rather than an omission. A
+    // leading dot is the FileSystem provider's hiding rule and nothing else's:
+    //
+    //   pwsh: Set-Item 'Env:.zzDot' 'v'
+    //         Get-ChildItem Env:          ->  .zzDot IS listed
+    //         Get-ChildItem Env: -Force   ->  .zzDot, same count
+    //
+    // The first version of this loop applied `isHidden` and would have made a
+    // dot-named environment variable invisible without -Force, which pwsh does
+    // not do.
+    if (options.include !== undefined && !matchesAny(row.name, options.include)) continue;
+    if (options.exclude !== undefined && matchesAny(row.name, options.exclude)) continue;
+    const value: PSValue = options.nameOnly ? row.name : row.value;
+    if (!(await emit(context.streams.success, context.signal, value))) {
+      return { keepGoing: false, exitCode: 0 };
+    }
+  }
+  return { keepGoing: true, exitCode: 0 };
+}
 
 /** `-LiteralPath` skips globbing entirely; a `*` in the name is a `*` in the name. */
 async function literalTarget(

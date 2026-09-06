@@ -141,6 +141,8 @@ export async function session(options: SessionOptions = {}): Promise<Session> {
         input: fromValues(runOptions.input ?? []),
         cwd: HOME,
         env: new Map<string, string>(),
+        // No providers: the write commands are not rewired in PR-10.
+        providers: null,
         signal: runOptions.signal ?? new AbortController().signal,
         requireCapability(capability: Capability): void {
           if (granted !== undefined && !granted.includes(capability)) {

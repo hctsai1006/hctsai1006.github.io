@@ -59,6 +59,8 @@ import { decodeFile, resolveEncodingName } from '../../pipeline/encoding.ts';
 import type { EncodingId } from '../../pipeline/encoding.ts';
 import type { PSValue } from '../../pipeline/psobject.ts';
 import type { ErrorRecord } from '../../pipeline/streams.ts';
+import type { ResolvedPath } from '../../storage/index.ts';
+import type { ProviderRegistry } from '../../providers/index.ts';
 import type { BindingResult, CommandModule, InvocationContext } from '../invocation.ts';
 import type { FileSystemPort } from '../ports.ts';
 import { isBound, numberValue, stringArray, stringValue, switchValue } from '../powershell/support.ts';
@@ -69,6 +71,9 @@ import {
   fsReadManifest,
   hasWildcard,
   matchesAny,
+  filterNotSupportedError,
+  namedParameterNotFoundError,
+  providerTargets,
   requirePort,
   resolveTargets,
   splitLines,
@@ -187,8 +192,15 @@ function codecFor(encoding: string | undefined): EncodingId | ErrorRecord {
   );
 }
 
-/** `-ReadCount n` batches lines into arrays. `-ReadCount 0` is one array. */
-function batched(lines: readonly string[], readCount: number | undefined): readonly PSValue[] {
+/**
+ * `-ReadCount n` batches lines into arrays. `-ReadCount 0` is one array.
+ *
+ * Takes `PSValue` rather than `string`, because a provider's content is not
+ * text: `Get-Content Variable:PID` is a `System.Int32` in pwsh, measured, and
+ * narrowing this to strings would have forced that value through `String()` at
+ * the one place the type is the whole point.
+ */
+function batched(lines: readonly PSValue[], readCount: number | undefined): readonly PSValue[] {
   if (readCount === undefined || readCount === 1) return [...lines];
   // pwsh: Get-Content trail.txt -ReadCount 0 -> one System.Object[] of 3
   if (readCount <= 0) return lines.length === 0 ? [] : [[...lines]];
@@ -396,6 +408,22 @@ export const getContent: CommandModule = {
     for (const path of paths) {
       throwIfCancelled(context.signal, 'Get-Content');
 
+      const registry = context.providers;
+      const resolvedOnce = fs.resolve(path);
+      if (registry !== null && resolvedOnce.ok && registry.handles(resolvedOnce.value.drive)) {
+        const handled = await readProviderContent(
+          context,
+          registry,
+          resolvedOnce.value,
+          path,
+          literal !== undefined,
+          options,
+          parameters,
+        );
+        if (!handled.keepGoing) return handled.exitCode;
+        continue;
+      }
+
       const targets =
         literal === undefined
           ? await resolveTargets(fs, context, GET_CONTENT, path, {
@@ -453,6 +481,113 @@ export const getContent: CommandModule = {
     return 0;
   },
 };
+
+/**
+ * `Get-Content` on a drive that is not the filesystem.
+ *
+ * MEASURED, and the whole point is that content here is NOT a file's content:
+ *
+ *   Get-Content Env:zzContent        System.String, count 1
+ *   Get-Content Variable:zzContentV  the VALUE, whatever type it holds
+ *   Get-Content Alias:ls             "Get-ChildItem"
+ *   Get-Content <env var = "a\nb">   count 1, NOT 2
+ *
+ * That last line is why `splitLines` is not called: a file with those bytes
+ * yields two objects and an environment variable yields one. Reusing the file
+ * path would have produced a plausible, wrong answer.
+ *
+ * `-ReadCount`, `-TotalCount`, `-Include`, `-Exclude` and `-Force` bind here
+ * and are honoured. `-Raw`, `-AsByteStream`, `-Delimiter`, `-Encoding` and
+ * `-Wait` do NOT exist on a flat provider, and `-Tail` and `-Filter` have their
+ * own refusals — all measured, all reproduced.
+ */
+async function readProviderContent(
+  context: InvocationContext,
+  registry: ProviderRegistry,
+  resolved: ResolvedPath,
+  raw: string,
+  literal: boolean,
+  options: Options,
+  parameters: BindingResult['parameters'],
+): Promise<{ keepGoing: boolean; exitCode: number }> {
+  for (const absent of ['Raw', 'AsByteStream', 'Delimiter', 'Encoding'] as const) {
+    if (isBound(parameters, absent)) {
+      await context.streams.error.write(namedParameterNotFoundError(GET_CONTENT, absent));
+      return { keepGoing: false, exitCode: 1 };
+    }
+  }
+  if (isBound(parameters, 'Tail')) {
+    // Its own id, and not `NotSupported`. Measured.
+    await context.streams.error.write(
+      commandError(
+        GET_CONTENT,
+        'The Tail parameter currently is supported only for the FileSystem provider.',
+        'TailNotSupported',
+        'InvalidOperation',
+        'System.InvalidOperationException',
+        raw,
+      ),
+    );
+    return { keepGoing: false, exitCode: 1 };
+  }
+  if (options.filter !== undefined && !registry.supports(resolved.drive, 'Filter')) {
+    await context.streams.error.write(filterNotSupportedError(GET_CONTENT));
+    return { keepGoing: false, exitCode: 1 };
+  }
+
+  const targets = await providerTargets(registry, resolved, literal);
+  if (!targets.ok) {
+    await context.streams.error.write(
+      storageErrorRecord(GET_CONTENT, targets.error, resolved.full, IDS),
+    );
+    return { keepGoing: true, exitCode: 0 };
+  }
+
+  const kept = targets.value.filter((item) => {
+    if (options.include !== undefined && !matchesAny(item.name, options.include)) return false;
+    if (options.exclude !== undefined && matchesAny(item.name, options.exclude)) return false;
+    return true;
+  });
+
+  for (const item of kept) {
+    if (item.isContainer) {
+      // MEASURED, and it is NOT the filesystem's answer. A directory gives
+      // `GetContainerContentException` / InvalidOperation / "Unable to get
+      // content because it is a directory"; a provider's drive ROOT gives
+      //   Argument,...GetContentCommand, PSArgumentException, InvalidArgument,
+      //   "Cannot process argument because the value of argument \"path\" is not
+      //    valid. Change the value of the \"path\" argument and run the operation
+      //    again."
+      // Routing this through `storageErrorRecord` would have produced the
+      // filesystem's shape for a case that is not a directory at all.
+      await context.streams.error.write(
+        commandError(
+          GET_CONTENT,
+          'Cannot process argument because the value of argument "path" is not valid. ' +
+            'Change the value of the "path" argument and run the operation again.',
+          'Argument',
+          'InvalidArgument',
+          'System.Management.Automation.PSArgumentException',
+          raw,
+        ),
+      );
+      continue;
+    }
+    const content = await registry.content(item.path);
+    if (!content.ok) {
+      await context.streams.error.write(
+        storageErrorRecord(GET_CONTENT, content.error, item.path.full, IDS),
+      );
+      continue;
+    }
+    for (const value of batched(window(content.value, options), options.readCount)) {
+      if (!(await emit(context.streams.success, context.signal, value))) {
+        return { keepGoing: false, exitCode: 0 };
+      }
+    }
+  }
+  return { keepGoing: true, exitCode: 0 };
+}
 
 async function literalTarget(
   fs: FileSystemPort,

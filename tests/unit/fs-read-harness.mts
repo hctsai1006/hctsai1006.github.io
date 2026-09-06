@@ -24,6 +24,8 @@ import { MemoryStorage, MountTable, VirtualFileSystem, isErr } from '../../src/s
 import type { StorageError, StorageSyscall } from '../../src/storage/index.ts';
 import { brokeredFileSystem } from '../../src/commands/ports.ts';
 import type { FileSystemPort } from '../../src/commands/ports.ts';
+import { MapSessionStateStore, installProviders } from '../../src/providers/index.ts';
+import type { ProviderRegistry } from '../../src/providers/index.ts';
 import { CapabilityDeniedError } from '../../src/commands/invocation.ts';
 import type {
   BindingResult,
@@ -55,6 +57,12 @@ export interface Harness {
   readonly vfs: VirtualFileSystem;
   readonly backend: MemoryStorage;
   readonly port: FileSystemPort;
+  /**
+   * Attached to `vfs`, so `Env:` resolves through the SAME `resolvePath` the
+   * filesystem does — which is PR-10's acceptance criterion and would be
+   * untested if the harness built a second drive table of its own.
+   */
+  readonly providers: ProviderRegistry;
 }
 
 export interface HarnessOptions {
@@ -62,6 +70,10 @@ export interface HarnessOptions {
   readonly granted?: readonly Capability[];
   /** Raise EIO from the backend on the syscalls named here. */
   readonly faultOn?: readonly StorageSyscall[];
+  /** Seeds `Env:`. Empty by default, as a fresh session's environment is here. */
+  readonly environment?: Readonly<Record<string, string>>;
+  /** Seeds `Alias:`. The real registry's alias table in the shipped host. */
+  readonly aliases?: Readonly<Record<string, string>>;
 }
 
 function unwrapOrThrow<T>(result: { ok: true; value: T } | { ok: false; error: StorageError }): T {
@@ -106,7 +118,12 @@ export async function harness(tree: Tree = {}, options: HarnessOptions = {}): Pr
   const port = brokeredFileSystem(vfs, (capability) => {
     if (!granted.has(capability)) throw new CapabilityDeniedError(capability, 'test');
   });
-  return { vfs, backend, port };
+  const providers = installProviders(vfs, {
+    fs: port,
+    environment: new MapSessionStateStore(Object.entries(options.environment ?? {})),
+    aliases: new MapSessionStateStore(Object.entries(options.aliases ?? {})),
+  });
+  return { vfs, backend, port, providers };
 }
 
 export interface RunResult {
@@ -120,6 +137,7 @@ export interface RunOptions {
   readonly input?: readonly PSValue[];
   /** null runs the command with no filesystem at all, which is the shipped case. */
   readonly port?: FileSystemPort | null;
+  readonly providers?: ProviderRegistry | null;
   readonly signal?: AbortSignal;
   readonly cwd?: string;
   readonly granted?: readonly Capability[];
@@ -149,6 +167,7 @@ export function contextFor(options: RunOptions & { port: FileSystemPort | null }
       }
     },
     fs: options.port,
+    providers: options.providers ?? null,
     preferences: null,
     dialog: null,
   };

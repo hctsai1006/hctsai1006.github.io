@@ -163,6 +163,7 @@ function host(input: readonly PSValue[]): {
       signal: new AbortController().signal,
       requireCapability: () => undefined,
       fs: null,
+      providers: null,
       preferences: null,
       dialog: null,
     },

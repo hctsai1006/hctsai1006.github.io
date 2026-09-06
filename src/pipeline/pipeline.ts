@@ -53,6 +53,7 @@ import type {
   InvocationContext,
 } from '../commands/invocation.ts';
 import type { Capability } from '../commands/manifest.ts';
+import type { ProviderRegistry } from '../providers/index.ts';
 import type { DialogPort, FileSystemPort, PreferencesPort } from '../commands/ports.ts';
 
 // ---------------------------------------------------------------------------
@@ -293,6 +294,8 @@ export interface PipelineHost {
    * command must check rather than assume.
    */
   readonly fs?: FileSystemPort | null;
+  /** The provider registry, when the host has one. See `InvocationContext`. */
+  readonly providers?: ProviderRegistry | null;
   readonly preferences?: PreferencesPort | null;
   readonly dialog?: DialogPort | null;
 }
@@ -387,6 +390,7 @@ async function* runCommand(
     signal,
     requireCapability: (capability: Capability) => host.requireCapability(capability),
     fs: host.fs ?? null,
+    providers: host.providers ?? null,
     preferences: host.preferences ?? null,
     dialog: host.dialog ?? null,
   };

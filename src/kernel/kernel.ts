@@ -48,6 +48,7 @@ import type {
 } from '../commands/invocation.ts';
 import { CapabilityDeniedError } from '../commands/invocation.ts';
 import type { Capability, CommandManifest, Runtime } from '../commands/manifest.ts';
+import type { ProviderRegistry } from '../providers/index.ts';
 import type { DialogPort, FileSystemPort, PreferencesPort } from '../commands/ports.ts';
 import type { PSValue } from '../pipeline/psobject.ts';
 import type {
@@ -230,6 +231,21 @@ export interface KernelOptions {
    * the kernel never reads that view back.
    */
   readonly openFileSystem?: (session: FileSystemSession) => FileSystemPort;
+  /**
+   * Which drive belongs to which provider. Built by the embedder with
+   * `installProviders`, because the registry has to be handed to the same
+   * `VirtualFileSystem` the port wraps and the kernel never sees that view.
+   *
+   * ONE REGISTRY FOR EVERY SESSION, deliberately, and the reason is the same
+   * one `fs` states above: a registry holds a `FileSystemProvider` over one
+   * port, so it inherits that port's single current directory. There is no
+   * `openProviders` counterpart to `openFileSystem` yet — pairing the two
+   * factories per session needs one factory returning BOTH, which is a change
+   * to a tested option and belongs with the embedder that first opens two
+   * panes. `src/kernel/browser-worker.ts` wires no filesystem at all today, so
+   * nothing shipped is waiting on it.
+   */
+  readonly providers?: ProviderRegistry | null;
   readonly preferences?: PreferencesPort | null;
   readonly dialog?: DialogPort | null;
   /**
@@ -485,6 +501,7 @@ export class Kernel {
   readonly #defaultCwd: string;
   readonly #fs: FileSystemPort | null;
   readonly #openFileSystem: ((session: FileSystemSession) => FileSystemPort) | null;
+  readonly #providers: ProviderRegistry | null;
   readonly #preferences: PreferencesPort | null;
   readonly #dialog: DialogPort | null;
   readonly #validateEvents: boolean;
@@ -536,6 +553,7 @@ export class Kernel {
           'supply a single shared port, or a factory that opens one view per session',
       );
     }
+    this.#providers = options.providers ?? null;
     this.#preferences = options.preferences ?? null;
     this.#dialog = options.dialog ?? null;
 
@@ -1574,6 +1592,7 @@ export class Kernel {
       // The SESSION's view, not a kernel-wide one: which directory a relative
       // path resolves against is a property of the session that typed it.
       fs: port,
+      providers: this.#providers,
       preferences: this.#preferences,
       dialog: this.#dialog,
     };

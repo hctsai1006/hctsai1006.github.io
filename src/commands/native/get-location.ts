@@ -25,6 +25,9 @@
 
 import { psObject } from '../../pipeline/psobject.ts';
 import type { PSObject } from '../../pipeline/psobject.ts';
+import { providerRelativePath } from '../../providers/index.ts';
+import type { ProviderRegistry } from '../../providers/index.ts';
+import type { ResolvedPath } from '../../storage/index.ts';
 import { throwIfCancelled } from '../../pipeline/pipeline.ts';
 import type { BindingResult, CommandModule, InvocationContext } from '../invocation.ts';
 import { STRING_ARRAY, SWITCH, manifest, parameter, switchValue } from '../powershell/support.ts';
@@ -122,21 +125,118 @@ export function driveInfo(path: string, home: string): PSObject {
 }
 
 /**
+ * Where the session is standing, when that is NOT the filesystem.
+ *
+ * MEASURED, pwsh 7.6.5 after `Set-Location Env:` — and every field differs from
+ * the filesystem's:
+ *
+ *   (Get-Location).Path                    Env:\  on Windows, Env:/  on Linux
+ *   (Get-Location).Drive.Name              Env
+ *   (Get-Location).Drive.Root              <empty>
+ *   (Get-Location).Drive.CurrentLocation   <empty>
+ *   (Get-Location).Provider.Name           Environment
+ *   (Get-Location).Provider.Home           <empty>
+ *   (Get-Location).ProviderPath            <empty>
+ *   (Get-Location).Provider.ImplementingType
+ *                                          Microsoft.PowerShell.Commands.EnvironmentProvider
+ *
+ * `ProviderPath` being EMPTY is the one that would have been invented wrongly:
+ * for the filesystem it is the same string as `Path`, and the obvious
+ * generalisation ("the path without the drive") happens to give the same empty
+ * answer at the root but is a different rule. It is the PROVIDER-INTERNAL path,
+ * which at `Env:/` is nothing at all.
+ */
+export interface ProviderLocation {
+  readonly providerName: string;
+  readonly implementingType: string;
+  readonly moduleName: string;
+  readonly driveName: string;
+  readonly driveRoot: string;
+  readonly itemSeparator: string;
+  /** The path inside the provider. Empty at a session-state drive's root. */
+  readonly providerPath: string;
+}
+
+/**
  * The PathInfo for a working directory.
  *
  * Exported as a pure function so `tools/conformance.mts` can probe the same
  * code the command runs instead of a re-implementation of it.
+ *
+ * `location` is absent for the filesystem, where `shapeOf` derives everything
+ * from the path — including for the REAL host path the conformance probe hands
+ * in, which no provider registry knows about.
  */
-export function pathInfo(cwd: string, home = '/home/thc1006'): PSObject {
-  return psObject(
+export function pathInfo(
+  cwd: string,
+  home = '/home/thc1006',
+  location?: ProviderLocation,
+): PSObject {
+  if (location === undefined) {
+    return psObject(
+      {
+        Drive: driveInfo(cwd, home),
+        Provider: providerInfo(cwd, home),
+        ProviderPath: cwd,
+        Path: cwd,
+      },
+      PATH_INFO_TYPE_NAMES,
+    );
+  }
+
+  const provider = psObject(
     {
-      Drive: driveInfo(cwd, home),
-      Provider: providerInfo(cwd, home),
-      ProviderPath: cwd,
-      Path: cwd,
+      ImplementingType: location.implementingType,
+      Name: location.providerName,
+      ModuleName: location.moduleName,
+      Description: '',
+      Home: '',
+      VolumeSeparatedByColon: location.itemSeparator === '\\',
+      ItemSeparator: location.itemSeparator,
+      AltItemSeparator: location.itemSeparator === '\\' ? '/' : '\\',
     },
+    PROVIDER_INFO_TYPE_NAMES,
+  );
+  const drive = psObject(
+    {
+      CurrentLocation: location.providerPath,
+      Name: location.driveName,
+      Provider: provider,
+      Root: location.driveRoot,
+      DisplayRoot: '',
+      VolumeSeparatedByColon: location.itemSeparator === '\\',
+    },
+    DRIVE_INFO_TYPE_NAMES,
+  );
+  return psObject(
+    { Drive: drive, Provider: provider, ProviderPath: location.providerPath, Path: cwd },
     PATH_INFO_TYPE_NAMES,
   );
+}
+
+/**
+ * Read the session's location off the registry, or null when it is on the
+ * filesystem drive and `shapeOf` already answers.
+ */
+export function providerLocationOf(
+  registry: ProviderRegistry | null,
+  where: ResolvedPath | null,
+): ProviderLocation | null {
+  if (registry === null || where === null) return null;
+  // `handles`, not `!isFileSystem`: a second STORAGE mount is still a
+  // filesystem, and `shapeOf` already describes it correctly.
+  if (!registry.handles(where.drive)) return null;
+  const drive = registry.driveFor(where.drive);
+  if (drive === null) return null;
+  return {
+    providerName: drive.provider.name,
+    implementingType: drive.provider.implementingType,
+    moduleName: drive.provider.moduleName,
+    driveName: drive.name,
+    driveRoot: drive.root,
+    itemSeparator: drive.provider.itemSeparator,
+    providerPath: providerRelativePath(where),
+  };
 }
 
 export function createGetLocation(services: { readonly machine: { readonly homeDirectory: string } }): CommandModule {
@@ -151,7 +251,18 @@ export function createGetLocation(services: { readonly machine: { readonly homeD
         // object would claim a feature that does not exist here.
         return 0;
       }
-      await context.streams.success.write(pathInfo(context.cwd, services.machine.homeDirectory));
+      // The location comes from the filesystem VIEW rather than from
+      // `context.cwd`, which is a rendered string: after `Set-Location Env:` it
+      // reads `Env:/`, and `shapeOf` would parse that as a filesystem path and
+      // report the FileSystem provider for an environment drive. The view still
+      // holds the resolved form, drive and all.
+      const where = context.fs?.location ?? null;
+      const location = providerLocationOf(context.providers, where);
+      await context.streams.success.write(
+        location === null
+          ? pathInfo(context.cwd, services.machine.homeDirectory)
+          : pathInfo(where?.full ?? context.cwd, services.machine.homeDirectory, location),
+      );
       return 0;
     },
   };

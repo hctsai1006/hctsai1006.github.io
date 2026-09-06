@@ -265,6 +265,7 @@ describe('a script block crosses as a handle and not as a closure', () => {
           signal: new AbortController().signal,
           requireCapability: () => undefined,
           fs: null,
+          providers: null,
           preferences: null,
           dialog: null,
         },
