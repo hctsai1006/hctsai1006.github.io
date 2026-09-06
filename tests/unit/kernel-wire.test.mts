@@ -29,6 +29,7 @@ import {
   sanitizePSValue,
 } from '../../src/kernel/wire.ts';
 import { cloneSafetyProblems, isCloneSafe } from '../../src/kernel/protocol.ts';
+import type { FormatDocument } from '../../src/formatting/views.ts';
 
 /** A PSObject whose property bag is writable, for building malformed graphs. */
 interface MutablePSObject {
@@ -385,6 +386,42 @@ describe('a value whose entire content is the thing the boundary drops', () => {
     assert.deepEqual(recordDocument(safe), document);
     // And it really is clone-safe, not merely accepted by the sanitiser.
     assert.deepEqual(recordDocument(structuredClone(safe) as PSValue), document);
+  });
+
+  it('refuses a format record too big for the byte budget, ONE character over', async () => {
+    // Carrying the document as text gave it a CEILING, and the change that
+    // moved it there derived that number from byte accounting instead of
+    // triggering it. This triggers it, at the SHIPPED 8 MiB limit, on the real
+    // record, at the exact character where the answer changes.
+    //
+    // Found by bisection, not by arithmetic: `(8 MiB - 8) / 2` is 4,194,300,
+    // and the true crossing point is 148 characters lower because the record is
+    // more than its one string — two type names, a property name and four node
+    // overheads are charged first. An assertion computed from the formula would
+    // have agreed with the wrong number.
+    const { formatRecord } = await import('../../src/formatting/records.ts');
+
+    // `raw` with one line makes the JSON a fixed wrapper plus the line, so the
+    // boundary can be hit on the nose rather than approached in rows.
+    const document = (line: number): FormatDocument => ({
+      sections: [{ kind: 'raw', lines: ['x'.repeat(line)] }],
+    });
+    const wrapper = JSON.stringify(document(0)).length;
+    /** The largest document, in JSON characters, that crosses at 8 MiB. */
+    const CROSSES = 4_194_152;
+    const lineFor = (json: number): number => json - wrapper;
+    assert.equal(JSON.stringify(document(lineFor(CROSSES))).length, CROSSES);
+
+    assert.doesNotThrow(() => sanitizePSValue(formatRecord(document(lineFor(CROSSES)))));
+    assert.throws(
+      () => sanitizePSValue(formatRecord(document(lineFor(CROSSES + 1)))),
+      (error: unknown) =>
+        error instanceof WireValueError &&
+        // The PROPERTY is named, so a host is told where the size is, not just
+        // that something somewhere was too big.
+        /formatDocumentJson/u.test(error.message) &&
+        new RegExp(`larger than ${DEFAULT_WIRE_LIMITS.maxBytes} bytes`, 'u').test(error.message),
+    );
   });
 
   it('still carries an object that keeps some of its content', () => {

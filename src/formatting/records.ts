@@ -46,10 +46,33 @@
  *      `toPSString`, `compareValues` and `Get-Member` typed as something it is
  *      not. A string is a `PSValue` with nothing asserted about it.
  *   3. It costs something, and the number is here rather than assumed. On a
- *      200,000-row table (node 24.13): stringify 27ms, parse 200ms, against
- *      build 71ms and render 401ms for the same document. So the round trip
- *      adds about half again to the work `Format-Table | Out-String` already
- *      does, on the largest table anyone would type.
+ *      200,000-row table (node 24.13): stringify 52ms, parse 306ms, against
+ *      build 121ms and render 431ms for the same document. So the round trip
+ *      adds about two thirds again to the work `Format-Table | Out-String`
+ *      already does.
+ *
+ * ── AND IT HAS A CEILING, WHICH IS NOT INFINITE ───────────────────────────
+ *
+ * A string costs `8 + length * 2` bytes against `DEFAULT_WIRE_LIMITS.maxBytes`,
+ * which is 8 MiB, so a big enough document cannot cross. TRIGGERED rather than
+ * derived — bisected against `sanitizePSValue` on the record this file builds:
+ *
+ *   4,194,152 JSON characters   crosses
+ *   4,194,153 JSON characters   WireValueError: value.properties.
+ *                               formatDocumentJson ... larger than 8388608 bytes
+ *
+ * That is 148 characters short of the `(8 MiB - 8) / 2` the string charge alone
+ * would allow, and the 148 is the rest of the record — two type names, one
+ * property name, four node overheads.
+ *
+ * In ROWS it depends entirely on the row: a three-column table of short cells
+ * reached it at about 116,000, and the 200,000-row table timed above is 6.2M
+ * characters and is REFUSED. What a host sees is an error naming the property,
+ * on a pipeline that reports failure — the same loud-not-silent shape as
+ * everything else at this boundary, and strictly better than the state before,
+ * where EVERY format record was refused. Raising it means raising `maxBytes` or
+ * chunking the document across several records, and neither is worth doing
+ * before something asks for it.
  *
  * A RECORD IS STILL OPAQUE. `Sort-Object Name` finds nothing, because `Name` is
  * not what it carries. It is not property-FREE, and it never was in pwsh
