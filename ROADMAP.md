@@ -5,7 +5,7 @@
 
 Turning a single-file PowerShell-flavoured web terminal into a browser workstation with a versioned PowerShell compatibility layer, a real object pipeline, durable state, a trusted package model and an audited AI surface.
 
-**69 of 105 tasks complete**, 10 partial.  `#####################///........`
+**72 of 105 tasks complete**, 8 partial.  `######################//........`
 
 Legend: `[x]` done · `[/]` partial · `[~]` in progress · `[ ]` todo · `[!]` blocked · `[-]` deferred
 
@@ -17,8 +17,8 @@ Every `done` and `partial` task cites evidence — a symbol, a passing test, a v
 | --- | --- | --- | --- |
 | **Ground truth** | Make it impossible to be wrong about upstream by accident. Nothing downstream is trustworthy until version truth is mechanised. | 1, 2, 3 | `#################/` 30/31 +1 partial |
 | **Core** | A real execution engine: one lexer, one AST, a version-aware binder, and a typed object pipeline. This is where the current site is weakest. | 4, 5, 6, 7, 8 | `###############//.` 25/31 +4 partial |
-| **State** | Durable, inspectable, recoverable virtual machine state — filesystem, providers, transactions, migrations. | 9, 10 | `###########///....` 7/11 +2 partial |
-| **Compatibility** | Prove the emulation is faithful by differential-testing against real pwsh, and express version differences as data. | 11, 12 | `###########//.....` 5/8 +1 partial |
+| **State** | Durable, inspectable, recoverable virtual machine state — filesystem, providers, transactions, migrations. | 9, 10 | `###############//.` 9/11 +1 partial |
+| **Compatibility** | Prove the emulation is faithful by differential-testing against real pwsh, and express version differences as data. | 11, 12 | `##############....` 6/8 |
 | **Declarative** | The workstation as a configuration that can be exported, diffed, tested and restored. | 13 | `..................` 0/4 |
 | **Supply chain** | Packages with identity, integrity, capabilities and trust — from the first line, not retrofitted. | 14 | `/////.............` 0/4 +1 partial |
 | **AI** | One command metadata source feeding help, completion, MCP tools and the AI planner, behind an approval gate. | 15 | `####..............` 1/5 |
@@ -41,8 +41,8 @@ Dependency-respecting. An item cannot be complete before everything it depends o
 | 7 | [Build the typed object pipeline and stream model](roadmap/pr/PR-07-object-pipeline.md) | Core | [~] in progress | 6 | 6/6 |
 | 8 | [Build one lexer, one AST and a version-aware parameter binder](roadmap/pr/PR-08-version-aware-binder.md) | Core | [~] in progress | 3, 7 | 6/7 +1 partial |
 | 9 | [OPFS-backed filesystem with overlay, WAL, snapshots and migrations](roadmap/pr/PR-09-storage-layer.md) | State | [~] in progress | 6 | 6/7 +1 partial |
-| 10 | [PowerShell provider model over the mount table](roadmap/pr/PR-10-provider-model.md) | State | [~] in progress | 9 | 1/4 +1 partial |
-| 11 | [Differential conformance against real pwsh 7.6.5](roadmap/pr/PR-11-differential-conformance.md) | Compatibility | [~] in progress | 8 | 4/5 +1 partial |
+| 10 | [PowerShell provider model over the mount table](roadmap/pr/PR-10-provider-model.md) | State | [~] in progress | 9 | 3/4 |
+| 11 | [Differential conformance against real pwsh 7.6.5](roadmap/pr/PR-11-differential-conformance.md) | Compatibility | [~] in progress | 8 | 5/5 |
 | 12 | [Ship the version-difference explorer](roadmap/pr/PR-12-behavior-delta-ui.md) | Compatibility | [~] in progress | 11 | 1/3 |
 | 13 | [DSC-style declarative workstation state](roadmap/pr/PR-13-workstation-state.md) | Declarative | [ ] todo | 10 | 0/4 |
 | 14 | [Package identity, integrity, capabilities and trust promotion](roadmap/pr/PR-14-package-trust.md) | Supply chain | [~] in progress | 10 | 0/4 +1 partial |
@@ -272,8 +272,8 @@ Every claim below was checked against a primary source on 2026-09-04. These are 
   - [x] 9.6 Surface quota via navigator.storage.estimate() and warn before the ceiling
   - [x] 9.7 Return Result<void, StorageError> instead of a rendered error row
 - [~] **10. PowerShell provider model over the mount table** — [detail](roadmap/pr/PR-10-provider-model.md)
-  - [/] 10.1 Define the provider interface (drive, item, child-item, content)
-  - [ ] 10.2 Implement FileSystem, Env, Variable, Function, Alias providers
+  - [x] 10.1 Define the provider interface (drive, item, child-item, content)
+  - [x] 10.2 Implement FileSystem, Env, Variable, Function, Alias providers
   - [ ] 10.3 Implement Portfolio, Process, Package and Browser providers
   - [x] 10.4 Move quote-stripping out of resolvePath; paths should arrive already lexed
 
@@ -284,7 +284,7 @@ Every claim below was checked against a primary source on 2026-09-04. These are 
   - [x] 11.2 Normalise machine-specific output (paths, times, pids, widths) before comparison
   - [x] 11.3 Capture Get-Command metadata from real pwsh to validate our manifests
   - [x] 11.4 Record known-differences.yml for deliberate divergences, with a reason for each
-  - [/] 11.5 Report per-profile conformance coverage as a number the site can display
+  - [x] 11.5 Report per-profile conformance coverage as a number the site can display
 - [~] **12. Ship the version-difference explorer** — [detail](roadmap/pr/PR-12-behavior-delta-ui.md)
   - [ ] 12.1 Add a command that diffs a script across two profiles
   - [x] 12.2 Show, per difference, whether BrowserShell actually emulates it or merely documents it
