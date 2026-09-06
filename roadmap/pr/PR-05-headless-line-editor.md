@@ -4,7 +4,7 @@
 
 **Phase** Core  
 **Status** [~] in progress  
-**Tasks** 3/5 +1 partial `###########////...`
+**Tasks** 5/5 `##################`
 
 ## Why
 
@@ -23,9 +23,14 @@ The editor currently owns shell state, history, completion AND rendering, and me
   - *evidence:* `src/line-editor/prediction.ts` exports `PredictionEngine`
   - *evidence:* `src/line-editor/keys.ts` exports `KeyBindingEngine`
   - *evidence:* `tests/unit/line-editor.test.mts` — test "names no browser global in any module"
-- [ ] **5.2** Keep the real textarea as an input adapter only
-  - It earns its place for IME, soft keyboards and selection; it must stop owning state. The core defines the seam (EditorKeyEvent, insertText, setComposing) but no adapter has been written, and the live textarea is still the untouched v1 one in index.html.
-  - *evidence:* nothing under `src/**/*.{ts,mts}` matches `/InputAdapter/`
+- [x] **5.2** Keep the real textarea as an input adapter only
+  - src/input/ holds TextareaInputAdapter behind an InputAdapter port. The textarea still holds the text — a drain-on-every-input design was tried and rejected, because an empty field is what breaks IME context, soft-keyboard Backspace and selection, which are the three things it is being kept for — but LineEditor is now the only authority: every event either reconciles the field into the core or replays the core onto it. STILL OPEN: index.html remains the untouched v1 page, so nothing ships until the conformance suite reaches parity and a later phase wires it.
+  - *evidence:* `src/input/textarea.ts` exports `TextareaInputAdapter`
+  - *evidence:* `src/input/textarea.ts` exports `InputAdapter`
+  - *evidence:* `src/input/textarea.ts` exports `TextareaLike`
+  - *evidence:* `tests/unit/line-editor-input.test.mts` — test "writes the core onto the surface after every handled key"
+  - *evidence:* `tests/unit/line-editor-input.test.mts` — test "takes a native edit back into the core wholesale"
+  - *evidence:* `tests/unit/line-editor-input.test.mts` — test "is satisfied by a real HTMLTextAreaElement, as lib.dom declares one"
 - [x] **5.3** Define a TerminalMetrics port so width is injected, not measured via a probe span in #out
   - *evidence:* `src/line-editor/metrics.ts` exports `TerminalMetrics`
   - *evidence:* `src/line-editor/metrics.ts` exports `monospaceMetrics`
@@ -38,11 +43,19 @@ The editor currently owns shell state, history, completion AND rendering, and me
   - *evidence:* `src/line-editor/history.ts` exports `DEFAULT_NAVIGATION_ORIGINS`
   - *evidence:* `tests/unit/line-editor-history.test.mts` — test "carries provenance on every entry"
   - *evidence:* `tests/unit/line-editor-history.test.mts` — test "leaves agent commands out by default"
-- [/] **5.5** Preserve the IME triple-guard (isComposing || composing || keyCode===229)
-  - MISSING: the third leg. The sticky `composing` state and the per-event `isComposing` flag are both in the core and tested; `keyCode === 229` occurs nowhere in src/ because the core deliberately leaves it to an input adapter that task 5.2 has not built. Two of three legs is not the guard — v1 carries all three precisely because neither of the other two was reliable alone on old Safari and Android IMEs.
+- [x] **5.5** Preserve the IME triple-guard (isComposing || composing || keyCode===229)
+  - All three legs, split across the seam: the core owns the two it can (per-event isComposing, sticky composing) and src/input/ime.ts owns keyCode === 229, which is named nowhere else in src/ and cannot be, because the headlessness gate forbids the core a DOM identifier. Each leg has a test that neutralises it and asserts the SAME keystroke then gets through, so two legs cannot pass as three. MEASURED 2026-09-06 on Chromium 148.0.7778.96 and WebKit 26.4: a keydown carrying keyCode 229 reports isComposing false and precedes compositionstart, which is the case only the sentinel catches. NOT MEASURED, and marked as such in the source: whether a real OS IME emits that keydown (CDP enters below the keyboard layer), Android/GBoard, old Safari, and Gecko.
   - *evidence:* `tests/unit/line-editor-keys.test.mts` — test "hands every key back while a composition is in progress"
   - *evidence:* `tests/unit/line-editor-keys.test.mts` — test "honours a per-event isComposing flag as well as the sticky one"
-  - *evidence:* nothing under `src/**/*.{ts,mts}` matches `/keyCode/`
+  - *evidence:* `src/input/ime.ts` exports `imeGuardLeg`
+  - *evidence:* `src/input/ime.ts` exports `IME_SENTINEL_KEYCODE`
+  - *evidence:* `tests/unit/line-editor-input.test.mts` — test "stops the keydown that starts a composition, which only the 229 sentinel sees"
+  - *evidence:* `tests/unit/line-editor-input.test.mts` — test "stops a mid-composition keydown that reports neither flag, which only the sticky leg sees"
+  - *evidence:* `tests/unit/line-editor-input.test.mts` — test "stops a keydown inside a composition this adapter never saw start, which only isComposing sees"
+  - *evidence:* `tests/unit/line-editor-input.test.mts` — test "guards a composition keystroke on every engine profile, with and without the compositionstart"
+  - *evidence:* `tests/unit/line-editor-input.test.mts` — test "survives Safari sending the confirming keydown after compositionend"
+  - *evidence:* `tests/unit/line-editor-input.test.mts` — test "hands back every key between compositionstart and compositionend"
+  - *evidence:* nothing under `src/line-editor/**/*.ts` matches `/keyCode/`
 
 ## Acceptance
 
