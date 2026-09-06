@@ -28,7 +28,7 @@ import { spawnSync } from 'node:child_process';
 import { dirname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { decideOutcome, type Refusal } from './test-gate.mts';
+import { decideOutcome, ignoreBrokenPipe, type Refusal } from './test-gate.mts';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -109,6 +109,10 @@ function explain(refusal: Refusal, files: number): string {
  * left to overtake them.
  */
 function main(argv: readonly string[]): number {
+  // Before anything is written. See ignoreBrokenPipe: without this a passing
+  // run piped to `head` crashes with an unhandled EPIPE and exits 1.
+  ignoreBrokenPipe(process.stdout, process.stderr);
+
   const summaryPath = summaryPathFrom(argv);
 
   const files: string[] = [];
