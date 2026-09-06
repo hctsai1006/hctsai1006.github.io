@@ -5,7 +5,7 @@
 
 Turning a single-file PowerShell-flavoured web terminal into a browser workstation with a versioned PowerShell compatibility layer, a real object pipeline, durable state, a trusted package model and an audited AI surface.
 
-**72 of 105 tasks complete**, 8 partial.  `######################//........`
+**77 of 105 tasks complete**, 7 partial.  `#######################//.......`
 
 Legend: `[x]` done · `[/]` partial · `[~]` in progress · `[ ]` todo · `[!]` blocked · `[-]` deferred
 
@@ -16,13 +16,13 @@ Every `done` and `partial` task cites evidence — a symbol, a passing test, a v
 | Phase | Goal | Items | Progress |
 | --- | --- | --- | --- |
 | **Ground truth** | Make it impossible to be wrong about upstream by accident. Nothing downstream is trustworthy until version truth is mechanised. | 1, 2, 3 | `#################/` 30/31 +1 partial |
-| **Core** | A real execution engine: one lexer, one AST, a version-aware binder, and a typed object pipeline. This is where the current site is weakest. | 4, 5, 6, 7, 8 | `###############//.` 25/31 +4 partial |
+| **Core** | A real execution engine: one lexer, one AST, a version-aware binder, and a typed object pipeline. This is where the current site is weakest. | 4, 5, 6, 7, 8 | `################//` 27/31 +3 partial |
 | **State** | Durable, inspectable, recoverable virtual machine state — filesystem, providers, transactions, migrations. | 9, 10 | `###############//.` 9/11 +1 partial |
 | **Compatibility** | Prove the emulation is faithful by differential-testing against real pwsh, and express version differences as data. | 11, 12 | `##############....` 6/8 |
 | **Declarative** | The workstation as a configuration that can be exported, diffed, tested and restored. | 13 | `..................` 0/4 |
 | **Supply chain** | Packages with identity, integrity, capabilities and trust — from the first line, not retrofitted. | 14 | `/////.............` 0/4 +1 partial |
 | **AI** | One command metadata source feeding help, completion, MCP tools and the AI planner, behind an approval gate. | 15 | `####..............` 1/5 |
-| **Rendering** | Optional ANSI/TUI rendering path alongside the semantic DOM terminal. | 16 | `/////.............` 0/4 +1 partial |
+| **Rendering** | Optional ANSI/TUI rendering path alongside the semantic DOM terminal. | 16 | `##############////` 3/4 +1 partial |
 | **Future runtime** | Keep the door open to a real .NET/WASM PowerShell without betting the architecture on it. | 17 | `..................` 0/3 |
 | **Desktop** | The apps that make it feel like a machine rather than a prompt. | 18 | `#####.............` 1/4 |
 
@@ -36,7 +36,7 @@ Dependency-respecting. An item cannot be complete before everything it depends o
 | 2 | [Mechanise version truth across five axes](roadmap/pr/PR-02-verify-release-truth.md) | Ground truth | [x] done | — | 17/17 |
 | 3 | [Express 7.6.5 and 7.7.0-preview.4 as compatibility profiles](roadmap/pr/PR-03-compatibility-profiles.md) | Ground truth | [~] in progress | 2 | 7/8 +1 partial |
 | 4 | [Extract portfolio data and command manifests out of index.html](roadmap/pr/PR-04-extract-data-and-manifests.md) | Core | [~] in progress | 1 | 8/9 |
-| 5 | [Extract a headless LineEditorCore behind input and render adapters](roadmap/pr/PR-05-headless-line-editor.md) | Core | [~] in progress | 4 | 3/5 +1 partial |
+| 5 | [Extract a headless LineEditorCore behind input and render adapters](roadmap/pr/PR-05-headless-line-editor.md) | Core | [~] in progress | 4 | 5/5 |
 | 6 | [Move execution into a worker behind a typed kernel protocol](roadmap/pr/PR-06-worker-kernel-protocol.md) | Core | [~] in progress | 5 | 2/4 +2 partial |
 | 7 | [Build the typed object pipeline and stream model](roadmap/pr/PR-07-object-pipeline.md) | Core | [~] in progress | 6 | 6/6 |
 | 8 | [Build one lexer, one AST and a version-aware parameter binder](roadmap/pr/PR-08-version-aware-binder.md) | Core | [~] in progress | 3, 7 | 6/7 +1 partial |
@@ -47,7 +47,7 @@ Dependency-respecting. An item cannot be complete before everything it depends o
 | 13 | [DSC-style declarative workstation state](roadmap/pr/PR-13-workstation-state.md) | Declarative | [ ] todo | 10 | 0/4 |
 | 14 | [Package identity, integrity, capabilities and trust promotion](roadmap/pr/PR-14-package-trust.md) | Supply chain | [~] in progress | 10 | 0/4 +1 partial |
 | 15 | [MCP tool schema generation and the approval gate](roadmap/pr/PR-15-mcp-and-approval.md) | AI | [~] in progress | 8, 14 | 1/5 |
-| 16 | [Optional xterm.js ANSI renderer alongside the semantic DOM terminal](roadmap/pr/PR-16-ansi-renderer.md) | Rendering | [~] in progress | 7 | 0/4 +1 partial |
+| 16 | [Optional xterm.js ANSI renderer alongside the semantic DOM terminal](roadmap/pr/PR-16-ansi-renderer.md) | Rendering | [~] in progress | 7 | 3/4 +1 partial |
 | 17 | [Research spike: real PowerShell parser via .NET WASM](roadmap/pr/PR-17-dotnet-wasm-spike.md) | Future runtime | [-] deferred | 8, 11 | 0/3 |
 | 18 | [File manager, task manager, settings and window management](roadmap/pr/PR-18-desktop-apps.md) | Desktop | [~] in progress | 10, 13 | 1/4 |
 
@@ -236,10 +236,10 @@ Every claim below was checked against a primary source on 2026-09-04. These are 
   - [ ] 4.6 Delete the dead `hidden` flag that no entry ever sets, and the unused GROUPNAME/ED.path/ED.wantCol
 - [~] **5. Extract a headless LineEditorCore behind input and render adapters** — [detail](roadmap/pr/PR-05-headless-line-editor.md)
   - [x] 5.1 Lift TextBuffer, HistoryEngine, CompletionEngine, PredictionEngine, KeyBindingEngine into pure modules
-  - [ ] 5.2 Keep the real textarea as an input adapter only
+  - [x] 5.2 Keep the real textarea as an input adapter only
   - [x] 5.3 Define a TerminalMetrics port so width is injected, not measured via a probe span in #out
   - [x] 5.4 Tag every history entry with origin (user | completion | ai | script), cwd and profile
-  - [/] 5.5 Preserve the IME triple-guard (isComposing || composing || keyCode===229)
+  - [x] 5.5 Preserve the IME triple-guard (isComposing || composing || keyCode===229)
 - [~] **6. Move execution into a worker behind a typed kernel protocol** — [detail](roadmap/pr/PR-06-worker-kernel-protocol.md)
   - [x] 6.1 Define the kernel protocol: submit, cancel, signal, event stream
   - [/] 6.2 Split run() into parse -> execute -> render with no DOM access in the middle
@@ -318,10 +318,10 @@ Every claim below was checked against a primary source on 2026-09-04. These are 
 ### Rendering
 
 - [~] **16. Optional xterm.js ANSI renderer alongside the semantic DOM terminal** — [detail](roadmap/pr/PR-16-ansi-renderer.md)
-  - [ ] 16.1 Define TerminalPort with both a semantic DOM and an xterm adapter
-  - [ ] 16.2 Separate the ANSI parser from plain-text formatting
+  - [x] 16.1 Define TerminalPort with both a semantic DOM and an xterm adapter
+  - [x] 16.2 Separate the ANSI parser from plain-text formatting
   - [/] 16.3 Use cell width rather than string length everywhere
-  - [ ] 16.4 Keep the semantic renderer the default and keep aria-live output intact
+  - [x] 16.4 Keep the semantic renderer the default and keep aria-live output intact
 
 ### Future runtime
 
