@@ -455,7 +455,14 @@ function copyPSObjectOrBag(
  * content, because the result is an object that still declares its type and
  * carries nothing, and NOTHING ANYWHERE REPORTS THAT.
  *
- * MEASURED, on a `Format-Table` record:
+ * STRUCTURAL, and it has to be. The rule is "everything this value had is in
+ * the slot the boundary drops" — a question about the value, answered from the
+ * value. It reads `typeNames[0]` only to put a name in the message. A list of
+ * types that may not cross would be the wrong shape twice over: it would refuse
+ * a value the boundary could carry perfectly well, and it would say nothing
+ * about the next type somebody writes.
+ *
+ * MEASURED, on the `Format-Table` record that found this:
  *
  *   before: isFormatRecord = true    document present = true
  *   after wire: {"typeNames":["…Format.FormatEntryData","System.Object"],
@@ -463,28 +470,27 @@ function copyPSObjectOrBag(
  *   after: document present = false  still typed as a format record = true
  *
  * A renderer on the far side would identify it, confidently, and draw nothing.
- * `src/formatting/records.ts` puts the whole `FormatDocument` in `baseObject`
- * ON PURPOSE — the empty property bag mirrors pwsh, where a downstream stage
- * can see a format record go past and learn nothing from it — and that
- * modelling is correct. What was missing is that a kernel-local representation
- * typed as if it could be sent has to fail LOUDLY when it cannot.
  *
- * This is the same defect the script block already taught, in a different
+ * That is the same defect the script block already taught, in a different
  * costume: a closure could not cross, so it became a realm-prefixed handle, and
  * the load-bearing half was that an UNRESOLVABLE handle is an ERROR rather than
- * a silent pass — without it `Where-Object` passed every object through. A
- * format record that arrives empty is the same silent pass one layer down.
+ * a silent pass — without it `Where-Object` passed every object through.
+ *
+ * THE FORMAT RECORD IS NO LONGER ONE OF THESE. `src/formatting/records.ts`
+ * serialises the `FormatDocument` into the property bag, which is what this
+ * comment used to name as the missing piece, so `Format-Table` crosses with its
+ * document intact and this rule never sees it. Nothing shipped in `src/` puts
+ * an unsendable value in `baseObject` today — the four `psWrap` call sites pass
+ * a string or a `PSValue`, and none of them passes an empty bag. So this guard
+ * currently fires for nothing, which is the right state for a guard and not a
+ * reason to delete it: `baseObject` is `unknown` by declaration, and the next
+ * command to put a File handle behind an empty bag will find an error naming
+ * the type instead of a blank line.
  *
  * THE NARROW RULE, because the general one would be wrong: an object that keeps
  * SOME of its content is still carried, with `baseObject` dropped, exactly as
  * before. Only "everything it had is gone" is refused. And `undefined` or
  * `null` in `baseObject` is not content, so nothing is lost by dropping it.
- *
- * WHAT THIS DOES NOT DO: make a format record crossable. That needs a sendable
- * representation, which belongs to whoever owns `src/formatting/` — either a
- * serialised document (a `FormatDocument` is data, unlike a closure, so this is
- * the easier case) or a realm-local handle as script blocks use. Until then the
- * failure is an error naming the type instead of a blank line.
  */
 function refuseIfEmptiedByTheDrop(
   source: object,

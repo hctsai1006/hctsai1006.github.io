@@ -30,8 +30,16 @@ import {
   formatWide,
   outString,
 } from '../../src/commands/format/index.ts';
-import { FORMAT_ENTRY_TYPE, isFormatRecord } from '../../src/formatting/records.ts';
-import { UnknownCultureError } from '../../src/formatting/culture.ts';
+import {
+  FORMAT_DOCUMENT_PROPERTY,
+  FORMAT_ENTRY_TYPE,
+  formatRecord,
+  isFormatRecord,
+  recordDocument,
+} from '../../src/formatting/records.ts';
+import { DEFAULT_CULTURE, UnknownCultureError } from '../../src/formatting/culture.ts';
+import { renderDocument } from '../../src/formatting/views.ts';
+import type { FormatDocument } from '../../src/formatting/views.ts';
 import { viewOfBehaviors } from '../../src/compatibility/profile-resolver.ts';
 
 // ---------------------------------------------------------------------------
@@ -90,16 +98,32 @@ describe('formatting is the last stage', () => {
     assert.ok(isFormatRecord(values[0] as PSValue));
   });
 
-  it('exposes NO properties, so a later stage learns nothing from it', async () => {
-    // This is what makes "formatting cannot be reached from the middle of a
-    // pipeline" structural rather than a convention: `... | Format-Table |
-    // Sort-Object Name` has no Name to sort on, which is exactly pwsh's
-    // situation with its own format records.
+  it('exposes nothing a later stage can use, and one thing the renderer can', async () => {
+    // What makes "formatting cannot be reached from the middle of a pipeline"
+    // structural rather than a convention: `... | Format-Table | Sort-Object
+    // Name` has no Name to sort on. MEASURED in pwsh 7.6.5 — `$entry.Name` on a
+    // FormatEntryData is `$null`, and sorting the five records by Name leaves
+    // them in their original order.
+    //
+    // This asserted `propertyNames(record)` was EMPTY, on the reasoning that
+    // pwsh's records carry no readable properties either. That reasoning was
+    // wrong, and the same probe says so: `[pscustomobject]@{A=1} | Format-Table`
+    // yields a FormatEntryData whose `Get-Member -MemberType Property` reports
+    //
+    //   ClassId2e4f51ef21dd47e99d3c952918aff9cd, formatEntryInfo,
+    //   outOfBand, writeStream
+    //
+    // — four internal properties, none of them the user's. The record here
+    // carries one, for the same reason pwsh carries `formatEntryInfo`: the
+    // document has to reach the renderer, and after the kernel boundary the
+    // renderer is in another realm.
     const { values } = await runChain(two, [[formatTable, {}]]);
     const record = values[0] as PSValue;
-    assert.deepEqual(propertyNames(record), []);
+    assert.deepEqual(propertyNames(record), [FORMAT_DOCUMENT_PROPERTY]);
     assert.equal(getProperty(record, 'Name'), undefined);
     assert.equal(getProperty(record, 'Size'), undefined);
+    // And the one property is the document, not something a user typed.
+    assert.notEqual(recordDocument(record), undefined);
   });
 
   it('passes directives through a second Format-*, as pwsh does', async () => {
@@ -326,5 +350,131 @@ describe('the registry', () => {
       assert.equal(property?.firstPosition, 0, module.manifest.display);
       assert.equal(property?.type, 'System.Object[]', module.manifest.display);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// the record as something that can be SENT
+// ---------------------------------------------------------------------------
+
+describe('a format record survives a structured clone with its document', () => {
+  /**
+   * The document used to ride in `baseObject`, which `src/kernel/wire.ts` drops
+   * — so a `Format-Table` at the end of a pipeline could not reach a host at
+   * all. It is serialised into the property bag instead. These assert the pair
+   * of properties that makes that a REPRESENTATION rather than a place to put
+   * it: what goes in comes back out, and what comes back out is checked.
+   */
+  const document = {
+    sections: [
+      {
+        kind: 'table' as const,
+        columns: [
+          { header: 'Name', alignment: 'left' as const },
+          { header: 'Size', alignment: 'right' as const },
+        ],
+        groups: [{ label: null, rows: [['a', '1'], ['b', '22']] }],
+        hideHeaders: false,
+        wrap: false,
+      },
+      { kind: 'raw' as const, lines: ['tail'] },
+    ],
+  };
+
+  it('round-trips through structuredClone unchanged', () => {
+    // The real transport is `postMessage`, which is this algorithm. Class
+    // identity does not survive it; a JSON string does.
+    const clone = structuredClone(formatRecord(document)) as PSValue;
+    assert.equal(isFormatRecord(clone), true);
+    assert.deepEqual(recordDocument(clone), document);
+  });
+
+  it('renders identically before and after the clone', () => {
+    // Equality of the decoded object is not quite the claim; equality of the
+    // OUTPUT is, because that is what a host renderer produces.
+    const before = renderDocument(document, { width: 40, culture: DEFAULT_CULTURE });
+    const after = renderDocument(
+      recordDocument(structuredClone(formatRecord(document)) as PSValue) as FormatDocument,
+      { width: 40, culture: DEFAULT_CULTURE },
+    );
+    assert.deepEqual(after, before);
+    assert.ok(before.length > 3, 'the fixture renders something worth comparing');
+  });
+
+  it('says nothing about a value that is not a format record', () => {
+    // `undefined` means "not one of these" and nothing else, which is what
+    // `Out-String` branches on to tell a record from an ordinary object.
+    assert.equal(recordDocument('hello'), undefined);
+    assert.equal(recordDocument(psObject({ Name: 'a' })), undefined);
+    assert.equal(recordDocument(42), undefined);
+  });
+
+  it('THROWS on a record whose payload is not a document, rather than skipping it', () => {
+    // The script block's lesson, one layer down: an unresolvable handle had to
+    // be an error rather than a silent pass. A record that says FormatEntryData
+    // and cannot produce a document would otherwise fall through Out-String's
+    // "not a record" branch and be rendered as an ordinary object.
+    const broken = (payload: PSValue): PSValue =>
+      psObject({ [FORMAT_DOCUMENT_PROPERTY]: payload }, [FORMAT_ENTRY_TYPE, 'System.Object']);
+
+    assert.throws(() => recordDocument(psObject({}, [FORMAT_ENTRY_TYPE, 'System.Object'])), {
+      name: 'FormatRecordError',
+    });
+    assert.throws(() => recordDocument(broken(42)), { name: 'FormatRecordError' });
+    assert.throws(() => recordDocument(broken('{not json')), { name: 'FormatRecordError' });
+    assert.throws(() => recordDocument(broken('null')), { name: 'FormatRecordError' });
+  });
+
+  it('refuses a document that parses but is not one, field by field', () => {
+    // The decoder is total rather than a cast: across the boundary the string
+    // came from wherever it came from, and `renderDocument` reading a number
+    // where it expects a cell would produce garbage or throw inside the
+    // renderer, naming a line of the renderer rather than the cause.
+    const rejected = [
+      '{}', // no sections
+      '{"sections":{}}', // sections is not an array
+      '{"sections":[{"kind":"nope"}]}', // unknown section kind
+      '{"sections":[{"kind":"raw","lines":[1]}]}', // a line that is not a string
+      '{"sections":[{"kind":"raw"}]}', // no lines at all
+      // a table missing its booleans
+      '{"sections":[{"kind":"table","columns":[],"groups":[]}]}',
+      // an alignment that is not one of the two
+      '{"sections":[{"kind":"table","columns":[{"header":"A","alignment":"middle"}],' +
+        '"groups":[],"hideHeaders":false,"wrap":false}]}',
+      // a group label that is neither a string nor null
+      '{"sections":[{"kind":"wide","groups":[{"label":7,"items":[]}],"columns":null,' +
+        '"autoSize":false}]}',
+    ];
+    for (const payload of rejected) {
+      assert.throws(
+        () =>
+          recordDocument(
+            psObject({ [FORMAT_DOCUMENT_PROPERTY]: payload }, [FORMAT_ENTRY_TYPE, 'System.Object']),
+          ),
+        { name: 'FormatRecordError' },
+        payload,
+      );
+    }
+  });
+
+  it('accepts every section kind the formatter can build', () => {
+    // A decoder that refused a kind would make that view unrenderable after the
+    // boundary and nowhere else, which is the hardest bug shape to find.
+    const all = {
+      sections: [
+        { kind: 'raw' as const, lines: ['x'] },
+        {
+          kind: 'table' as const,
+          columns: [{ header: 'A', alignment: 'right' as const }],
+          groups: [{ label: 'g', rows: [['1']] }],
+          hideHeaders: true,
+          wrap: true,
+        },
+        { kind: 'list' as const, groups: [{ label: null, entries: [[{ label: 'A', value: '1' }]] }] },
+        { kind: 'wide' as const, groups: [{ label: null, items: ['a'] }], columns: 3, autoSize: true },
+        { kind: 'custom' as const, groups: [{ label: null, lines: ['one'] }] },
+      ],
+    };
+    assert.deepEqual(recordDocument(structuredClone(formatRecord(all)) as PSValue), all);
   });
 });

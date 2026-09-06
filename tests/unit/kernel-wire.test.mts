@@ -350,6 +350,11 @@ describe('a value whose entire content is the thing the boundary drops', () => {
    * The same defect the script block already taught: an unresolvable handle had
    * to be an ERROR rather than a silent pass, or `Where-Object` passed every
    * object through. An emptied format record is that silent pass one layer down.
+   *
+   * The format record has since been given a sendable representation and no
+   * longer has this shape, so the rule is exercised by a value built to have
+   * it. That is the right way round: the rule is about the SHAPE, not about
+   * formatting, and nothing shipped in `src/` produces the shape today.
    */
   it('is refused, and the error names the type', () => {
     const emptied = psWrap({}, ['Some.Kernel.Local.Thing', 'System.Object'], {
@@ -364,14 +369,22 @@ describe('a value whose entire content is the thing the boundary drops', () => {
     );
   });
 
-  it('refuses the real Format-* record, which is how this was found', async () => {
-    // Imported rather than hand-rolled: what has to be refused is the shape the
-    // formatter actually emits, and a stand-in would keep passing if that shape
-    // changed. `src/formatting/` is not edited here — only read.
-    const { formatRecord, isFormatRecord } = await import('../../src/formatting/records.ts');
-    const record = formatRecord({ sections: [] } as never);
-    assert.equal(isFormatRecord(record), true);
-    assert.throws(() => sanitizePSValue(record), WireValueError);
+  it('carries the real Format-* record, which is how this rule was found', async () => {
+    // This asserted a REFUSAL until the format record became sendable. It is
+    // kept, inverted, because the record is the value that taught the rule and
+    // a stand-in would not notice if `records.ts` went back to `baseObject`.
+    //
+    // Imported rather than hand-rolled for the same reason: what must survive
+    // the wire is the shape the formatter actually emits.
+    const { formatRecord, isFormatRecord, recordDocument } = await import(
+      '../../src/formatting/records.ts'
+    );
+    const document = { sections: [{ kind: 'raw', lines: ['a', 'b'] }] } as const;
+    const safe = sanitizePSValue(formatRecord(document));
+    assert.equal(isFormatRecord(safe), true);
+    assert.deepEqual(recordDocument(safe), document);
+    // And it really is clone-safe, not merely accepted by the sanitiser.
+    assert.deepEqual(recordDocument(structuredClone(safe) as PSValue), document);
   });
 
   it('still carries an object that keeps some of its content', () => {

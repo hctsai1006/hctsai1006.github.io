@@ -1229,12 +1229,17 @@ export class Kernel {
           // succeeded here: the failure is in the kernel's consumption of what
           // it produced, not in producing it. So a pipeline whose output could
           // not be carried across the boundary wrote an error record and then
-          // reported exit 0. MEASURED, with a Format-Table record that the wire
-          // now refuses:
+          // reported exit 0. MEASURED at the time on a Format-Table record,
+          // which the wire then refused:
           //
           //   ERROR: PipelineFailed,Format-Table | value cannot cross …
           //   exit: 0
           //   exit: 0
+          //
+          // That input no longer reproduces it — a format record carries its
+          // document in the property bag now and crosses — so the reproduction
+          // lives in a test that hands the wire a value it cannot carry rather
+          // than in a command that happens to produce one.
           //
           // `signalled` is preserved because a stage that was stopped was
           // stopped, whatever went wrong afterwards.
