@@ -90,11 +90,16 @@ export const UNIMPLEMENTED_KEYWORDS: ReadonlyMap<string, { node: PwshAstNode; de
  *
  * THIS IS THE ENGINE'S OWN ANSWER, derived from the tables in this file rather
  * than declared beside them, so the list and the behaviour cannot disagree.
- * `compat/profiles/*.json` has an `engineLimits.unimplementedAstNodes` field
- * meant to carry the same information; it currently declares `[]` for both
- * profiles, which is not true of any engine that does not execute PowerShell.
- * `tests/unit/language-unimplemented.test.mts` records that gap rather than
- * papering over it.
+ *
+ * It is also the SOURCE of `engineLimits.unimplementedAstNodes` in
+ * `compat/profiles/*.json`: `tools/generate-compatibility-profile.mts` imports
+ * this function and writes what it returns. The field used to be a literal `[]`
+ * in the generator — an empty list beside `nativePowerShellEngine: false`,
+ * which reads as "every AST node is implemented". Typing the names into the
+ * generator instead would have reproduced the defect one step later, because a
+ * second copy of a list drifts the first time a keyword is added below.
+ *
+ * Sorted, so the generated profiles do not churn on Map iteration order.
  */
 export function unimplementedAstNodes(): readonly PwshAstNode[] {
   const nodes = new Set<PwshAstNode>(EXECUTION_REFUSED_NODES);
