@@ -5,7 +5,7 @@
 
 Turning a single-file PowerShell-flavoured web terminal into a browser workstation with a versioned PowerShell compatibility layer, a real object pipeline, durable state, a trusted package model and an audited AI surface.
 
-**64 of 105 tasks complete**, 12 partial.  `####################////........`
+**67 of 105 tasks complete**, 12 partial.  `####################////........`
 
 Legend: `[x]` done · `[/]` partial · `[~]` in progress · `[ ]` todo · `[!]` blocked · `[-]` deferred
 
@@ -22,7 +22,7 @@ Every `done` and `partial` task cites evidence — a symbol, a passing test, a v
 | **Declarative** | The workstation as a configuration that can be exported, diffed, tested and restored. | 13 | `..................` 0/4 |
 | **Supply chain** | Packages with identity, integrity, capabilities and trust — from the first line, not retrofitted. | 14 | `/////.............` 0/4 +1 partial |
 | **AI** | One command metadata source feeding help, completion, MCP tools and the AI planner, behind an approval gate. | 15 | `####..............` 1/5 |
-| **Rendering** | Optional ANSI/TUI rendering path alongside the semantic DOM terminal. | 16 | `/////.............` 0/4 +1 partial |
+| **Rendering** | Optional ANSI/TUI rendering path alongside the semantic DOM terminal. | 16 | `##############////` 3/4 +1 partial |
 | **Future runtime** | Keep the door open to a real .NET/WASM PowerShell without betting the architecture on it. | 17 | `..................` 0/3 |
 | **Desktop** | The apps that make it feel like a machine rather than a prompt. | 18 | `#####.............` 1/4 |
 
@@ -47,7 +47,7 @@ Dependency-respecting. An item cannot be complete before everything it depends o
 | 13 | [DSC-style declarative workstation state](roadmap/pr/PR-13-workstation-state.md) | Declarative | [ ] todo | 10 | 0/4 |
 | 14 | [Package identity, integrity, capabilities and trust promotion](roadmap/pr/PR-14-package-trust.md) | Supply chain | [~] in progress | 10 | 0/4 +1 partial |
 | 15 | [MCP tool schema generation and the approval gate](roadmap/pr/PR-15-mcp-and-approval.md) | AI | [~] in progress | 8, 14 | 1/5 |
-| 16 | [Optional xterm.js ANSI renderer alongside the semantic DOM terminal](roadmap/pr/PR-16-ansi-renderer.md) | Rendering | [~] in progress | 7 | 0/4 +1 partial |
+| 16 | [Optional xterm.js ANSI renderer alongside the semantic DOM terminal](roadmap/pr/PR-16-ansi-renderer.md) | Rendering | [~] in progress | 7 | 3/4 +1 partial |
 | 17 | [Research spike: real PowerShell parser via .NET WASM](roadmap/pr/PR-17-dotnet-wasm-spike.md) | Future runtime | [-] deferred | 8, 11 | 0/3 |
 | 18 | [File manager, task manager, settings and window management](roadmap/pr/PR-18-desktop-apps.md) | Desktop | [~] in progress | 10, 13 | 1/4 |
 
@@ -318,10 +318,10 @@ Every claim below was checked against a primary source on 2026-09-04. These are 
 ### Rendering
 
 - [~] **16. Optional xterm.js ANSI renderer alongside the semantic DOM terminal** — [detail](roadmap/pr/PR-16-ansi-renderer.md)
-  - [ ] 16.1 Define TerminalPort with both a semantic DOM and an xterm adapter
-  - [ ] 16.2 Separate the ANSI parser from plain-text formatting
+  - [x] 16.1 Define TerminalPort with both a semantic DOM and an xterm adapter
+  - [x] 16.2 Separate the ANSI parser from plain-text formatting
   - [/] 16.3 Use cell width rather than string length everywhere
-  - [ ] 16.4 Keep the semantic renderer the default and keep aria-live output intact
+  - [x] 16.4 Keep the semantic renderer the default and keep aria-live output intact
 
 ### Future runtime
 
