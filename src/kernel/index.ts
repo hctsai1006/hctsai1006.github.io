@@ -203,10 +203,4 @@ export type {
   ProtocolViolation,
 } from './client.ts';
 export { KernelClient, KernelClientError } from './client.ts';
-export {
-  EXIT_COMMAND_NOT_FOUND,
-  EXIT_FAILURE,
-  Kernel,
-  splitPipeline,
-  splitTokens,
-} from './kernel.ts';
+export { EXIT_COMMAND_NOT_FOUND, EXIT_FAILURE, Kernel } from './kernel.ts';

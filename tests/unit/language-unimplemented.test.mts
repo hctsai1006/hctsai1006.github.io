@@ -6,27 +6,27 @@
  *
  *     engineLimits: {
  *       nativePowerShellEngine: false,
- *       unimplementedAstNodes: [],
+ *       unimplementedAstNodes: [ ...37 names... ],
  *       notes: "... Recognised-but-unimplemented syntax must fail with an
  *               explicit error naming the AST node rather than silently doing
  *               something approximate."
  *     }
  *
- * The notes state the rule this project runs on. The LIST beside them is empty,
- * in both profiles, and an empty list is not true of an engine that says in the
+ * The notes state the rule this project runs on. The LIST beside them used to
+ * be `[]`, in both profiles, which is not true of an engine that says in the
  * same object that it does not execute PowerShell.
  *
- * Two things follow, and this file does both rather than choosing:
+ * THE FIX WAS NOT TO TYPE THE NAMES INTO THE PROFILES. They are generated, and
+ * `tools/generate-compatibility-profile.mts` now imports
+ * `unimplementedAstNodes()` — which is itself derived from the three tables
+ * `parseForExecution` consults — so the declaration cannot drift from the
+ * behaviour without the generator's output changing. What this file asserts:
  *
- *   1. The engine's own answer — derived from the tables in `unimplemented.ts`,
- *      so the list and the behaviour cannot disagree — is asserted to be real
- *      and non-empty.
- *   2. The gap between the engine's answer and the profile's declaration is
- *      RECORDED, with the reason it is still open: the profiles are written by
- *      `tools/generate-compatibility-profile.mts`, and regenerating them is
- *      outside the scope of this change. A test that asserted the profile is
- *      already correct would be false; a test that said nothing would let the
- *      gap close silently.
+ *   1. The engine's answer is real: every name is a node pwsh 7.6.5 has, and
+ *      every keyword in the table is genuinely refused by the parser.
+ *   2. It is DERIVED from those tables and not declared beside them.
+ *   3. The profiles declare exactly it, in both directions. A subset check
+ *      alone would pass on `[]` again, which is the state this replaced.
  */
 
 import { describe, it } from 'node:test';
@@ -141,30 +141,25 @@ describe('the profile field meant to declare the same list', () => {
     }
   });
 
-  it('RECORDS that the declaration is still empty, and why', () => {
-    // Deliberately asserting the current, wrong-looking state rather than
-    // pretending otherwise. Both profiles declare `[]` while the engine refuses
-    // a substantial list, so the field is understating by exactly that list.
+  it('declares EXACTLY what the engine refuses, in both profiles', () => {
+    // This test used to assert `[[], []]` and explain why the gap was still
+    // open: the profiles are generated, and filling the field meant changing
+    // `tools/generate-compatibility-profile.mts`. It has been changed — it
+    // imports `unimplementedAstNodes` and writes what it returns — so the
+    // assertion that stood here has become the equality its own comment said to
+    // replace it with.
     //
-    // It is not fixed here because `compat/profiles/*.json` is written by
-    // `tools/generate-compatibility-profile.mts` — regenerating is a change to
-    // that generator, which is out of scope for this work. The engine's own
-    // `unimplementedAstNodes()` is the truth in the meantime, and it is derived
-    // from the tables that drive the behaviour rather than declared beside them.
-    //
-    // WHEN THE GENERATOR IS UPDATED this test fails, which is the intended
-    // signal: replace it with an equality assertion against
-    // `unimplementedAstNodes()` and delete this comment.
-    const declared = profiles.map((p) => p.engineLimits?.unimplementedAstNodes ?? []);
-    assert.deepEqual(
-      declared,
-      [[], []],
-      'a profile now declares unimplemented AST nodes — good. Change this test to assert ' +
-        'equality with unimplementedAstNodes() instead of recording the gap.',
-    );
-    assert.ok(
-      unimplementedAstNodes().length > 0,
-      'the engine refuses nothing, which contradicts nativePowerShellEngine: false',
-    );
+    // Equality in BOTH directions, deliberately. Subset-only (the test above)
+    // would pass on an empty declaration again, which is the state this replaced.
+    const engine = [...unimplementedAstNodes()];
+    assert.ok(engine.length > 0, 'the engine refuses nothing, which contradicts nativePowerShellEngine: false');
+    for (const profile of profiles) {
+      assert.deepEqual(
+        [...(profile.engineLimits?.unimplementedAstNodes ?? [])],
+        engine,
+        `${profile.profile} declares a different set from the one the parser refuses; ` +
+          'regenerate with `npm run profiles`',
+      );
+    }
   });
 });

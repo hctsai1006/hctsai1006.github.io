@@ -20,7 +20,12 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { CapabilityDeniedError } from '../../src/commands/invocation.ts';
-import type { CommandModule, InvocationContext } from '../../src/commands/invocation.ts';
+import type {
+  BindingResult,
+  CommandModule,
+  InvocationContext,
+} from '../../src/commands/invocation.ts';
+import { STRING, SWITCH, parameter } from '../../src/commands/powershell/support.ts';
 import type { CommandManifest } from '../../src/commands/manifest.ts';
 import type { FileSystemPort } from '../../src/commands/ports.ts';
 import type { PSValue } from '../../src/pipeline/psobject.ts';
@@ -47,13 +52,7 @@ import type {
   KernelRequest,
   ObjectsEvent,
 } from '../../src/kernel/protocol.ts';
-import {
-  EXIT_COMMAND_NOT_FOUND,
-  EXIT_FAILURE,
-  Kernel,
-  splitPipeline,
-  splitTokens,
-} from '../../src/kernel/kernel.ts';
+import { EXIT_COMMAND_NOT_FOUND, EXIT_FAILURE, Kernel } from '../../src/kernel/kernel.ts';
 import { SIGNAL_EXIT_CODE } from '../../src/kernel/signals.ts';
 import { KERNEL_PID } from '../../src/kernel/ids.ts';
 import { CapabilityBroker } from '../../src/kernel/capabilities.ts';
@@ -537,28 +536,6 @@ describe('decodeKernelRequest', () => {
 });
 
 // ---------------------------------------------------------------------------
-// the placeholder splitter
-// ---------------------------------------------------------------------------
-
-describe('splitPipeline', () => {
-  it('splits on top-level pipes', () => {
-    assert.deepEqual(splitPipeline('gci | sort | select'), ['gci', 'sort', 'select']);
-  });
-
-  it('does not split inside quotes', () => {
-    // index.html's bare split('|') turns this into two commands. A splitter
-    // that is wrong on a literal is worse than no splitter.
-    assert.deepEqual(splitPipeline("Write-Output 'a|b'"), ["Write-Output 'a|b'"]);
-    assert.deepEqual(splitPipeline('Write-Output "a|b" | sort'), ['Write-Output "a|b"', 'sort']);
-  });
-
-  it('drops empty stages and trims', () => {
-    assert.deepEqual(splitPipeline('  '), []);
-    assert.deepEqual(splitTokens('  gci   -Path  /home '), ['gci', '-Path', '/home']);
-  });
-});
-
-// ---------------------------------------------------------------------------
 // the kernel
 // ---------------------------------------------------------------------------
 
@@ -571,6 +548,167 @@ function newKernel(options: ConstructorParameters<typeof Kernel>[0] = {}): {
   kernel.on((event) => events.push(event));
   return { kernel, events };
 }
+
+// ---------------------------------------------------------------------------
+// the parser, where a splitter used to be
+// ---------------------------------------------------------------------------
+
+/**
+ * `splitPipeline` and `splitTokens` are gone, so these assert through `exec`.
+ *
+ * The old pair were a quote-aware `|` splitter and `stage.split(/\s+/u)`, and
+ * the tests that stood here checked the splitter directly — which could not see
+ * the half that mattered, because what reached the BINDER was the whitespace
+ * split. `Get-ChildItem -Path "my file"` arrived as three arguments.
+ *
+ * `-Path` and `-Force` here are the shape `binding/from-ast.ts` probed against
+ * pwsh 7.6.5: `Test-Q -Force` binds the switch and `Test-Q '-Force'` binds
+ * -Path with the value `-Force`.
+ */
+const PROBE_PARAMETERS = [
+  parameter('Path', STRING, { position: 0 }),
+  parameter('Force', SWITCH),
+];
+
+/** Records what the binder produced, so the test can read it after draining. */
+function probe(bound: { current: BindingResult | null }): CommandModule {
+  return {
+    manifest: manifest({ name: 'probe-args', display: 'probe-args', parameters: PROBE_PARAMETERS }),
+    invoke: async (_context: InvocationContext, binding: BindingResult) => {
+      bound.current = binding;
+      return 0;
+    },
+  };
+}
+
+describe('the kernel runs the parser, not a splitter', () => {
+  const rejection = (events: readonly KernelEvent[]): readonly string[] =>
+    events.flatMap((event) => (event.kind === 'rejected' ? [...event.problems] : []));
+
+  it('keeps a quoted argument whole and strips its quotes', async () => {
+    // `splitTokens` produced ['-Path', '"my', 'file"'] — three arguments for one
+    // value, which is how a quoted path reached the binder in pieces.
+    const bound = { current: null as BindingResult | null };
+    const { kernel } = newKernel();
+    kernel.register(probe(bound));
+
+    kernel.send({
+      kind: 'exec',
+      requestId: 'r1',
+      terminalId: 't1',
+      source: 'probe-args -Path "my file"',
+      background: false,
+    });
+    await kernel.drain();
+
+    assert.equal(bound.current?.parameters['Path'], 'my file');
+    assert.deepEqual(bound.current?.remaining, []);
+  });
+
+  it('binds a QUOTED -Force as a value, not as the switch', async () => {
+    // Measured on pwsh 7.6.5 (see binding/from-ast.ts): `Test-Q '-Force'` binds
+    // Path=[-Force] and leaves the switch False. Reaching the binder as the
+    // string `-Force` is how a command does something the user did not ask for.
+    const bound = { current: null as BindingResult | null };
+    const { kernel } = newKernel();
+    kernel.register(probe(bound));
+
+    kernel.send({
+      kind: 'exec',
+      requestId: 'r1',
+      terminalId: 't1',
+      source: "probe-args '-Force'",
+      background: false,
+    });
+    await kernel.drain();
+
+    assert.equal(bound.current?.parameters['Path'], '-Force');
+    assert.equal(bound.current?.parameters['Force'], undefined);
+  });
+
+  it('does not split a pipe inside quotes, and keeps the stage text as written', async () => {
+    const bound = { current: null as BindingResult | null };
+    const { kernel, events } = newKernel();
+    kernel.register(probe(bound));
+
+    kernel.send({
+      kind: 'exec',
+      requestId: 'r1',
+      terminalId: 't1',
+      source: "probe-args -Path 'a|b'",
+      background: false,
+    });
+    await kernel.drain();
+
+    assert.equal(bound.current?.parameters['Path'], 'a|b');
+    const created = events.filter((e) => e.kind === 'process-changed' && e.snapshot.state === 'created');
+    assert.equal(created.length, 1, 'one stage, not two');
+    assert.equal(kernel.processes.get(1)?.commandLine, "probe-args -Path 'a|b'");
+  });
+
+  it('still splits a real pipe into one process per stage', async () => {
+    const { kernel } = newKernel();
+    kernel.register(emitter('gci', ['a']));
+    kernel.register(emitter('sort', ['b']));
+    kernel.register(emitter('select', ['c']));
+
+    kernel.send({
+      kind: 'exec',
+      requestId: 'r1',
+      terminalId: 't1',
+      source: 'gci | sort | select',
+      background: false,
+    });
+    await kernel.drain();
+
+    assert.deepEqual(
+      [1, 2, 3].map((pid) => kernel.processes.get(pid)?.commandLine),
+      ['gci', 'sort', 'select'],
+    );
+  });
+
+  it('rejects a source with no command, as it always did', async () => {
+    const { kernel, events } = newKernel();
+    kernel.send({ kind: 'exec', requestId: 'r1', terminalId: 't1', source: '   ', background: false });
+    await kernel.drain();
+    assert.deepEqual(rejection(events), ['source contains no command']);
+  });
+
+  it('refuses syntax the engine cannot run, naming the AST node', async () => {
+    // The refusal that matters most: `splitTokens` handed `$target` to the
+    // binder as four literal characters, so `Remove-Item $target` would have
+    // tried to delete a file called `$target`.
+    const cases: readonly [string, RegExp][] = [
+      ['probe-args -Path $target', /VariableExpressionAst/u],
+      ['probe-args > out.txt', /FileRedirectionAst/u],
+      ['probe-args; probe-args', /runs one per exec/u],
+      ['probe-args\nprobe-args', /runs one per exec/u],
+      ['probe-args && probe-args', /PipelineChainAst/u],
+      ['probe-args &', /background operator/u],
+      ['1 | probe-args', /CommandExpressionAst/u],
+      ['probe-args | ', /empty pipe element/iu],
+      // A quoted command name is a STRING in pwsh, not a command. Measured on
+      // 7.6.5: `'Get-Location'` yields the String "Get-Location" and parses as
+      // a CommandExpressionAst, while `& 'Get-Location'` yields a PathInfo.
+      // This mattered only once the head arrived decoded: with the whitespace
+      // split it reached `resolve` with its quotes on and was simply not found,
+      // and afterwards it would RESOLVE and run.
+      ["'probe-args'", /CommandExpressionAst/u],
+      ['"probe-args" -Path x', /CommandExpressionAst/u],
+    ];
+    for (const [source, expected] of cases) {
+      const bound = { current: null as BindingResult | null };
+      const { kernel, events } = newKernel();
+      kernel.register(probe(bound));
+      kernel.send({ kind: 'exec', requestId: 'r1', terminalId: 't1', source, background: false });
+      await kernel.drain();
+
+      assert.match(rejection(events).join('\n'), expected, source);
+      assert.equal(bound.current, null, `${source} ran anyway`);
+      assert.equal(events.some((e) => e.kind === 'exit'), false, `${source} started a process`);
+    }
+  });
+});
 
 describe('running a command end to end', () => {
   it('creates a process, emits its objects, and exits 0', async () => {

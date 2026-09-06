@@ -4,7 +4,7 @@
 
 **Phase** Ground truth  
 **Status** [~] in progress  
-**Tasks** 6/8 +2 partial `##############////`
+**Tasks** 7/8 +1 partial `################//`
 
 ## Why
 
@@ -37,11 +37,14 @@ Adding a PowerShell version must never mean forking a command. Version differenc
   - *evidence:* `tools/compat-curation.mts` exports `isEmulated`
   - *evidence:* `compat/deltas/7.6.5__7.7.0-preview.4.json` — `changes.0.implementation`
   - *evidence:* `tests/unit/native-commands.test.mts` — test "follows the newGuid.defaultVersion behaviour flag, never a version check"
-- [/] **3.6** Record engineLimits.nativePowerShellEngine=false and the unimplemented AST node list
-  - MISSING: the list. `nativePowerShellEngine: false` is genuinely recorded in both profiles, and that is the half that protects a visitor from believing a real pwsh is running. `unimplementedAstNodes` is a literal [] in the generator with nothing populating it, and an empty list reads as "every AST node is implemented" — the exact opposite of the truth, since item 8 has not written a parser at all. It cannot be filled honestly until there is an AST to enumerate.
+- [x] **3.6** Record engineLimits.nativePowerShellEngine=false and the unimplemented AST node list
+  - `nativePowerShellEngine: false` was always recorded, and that is the half that protects a visitor from believing a real pwsh is running. `unimplementedAstNodes` was a literal [] in the generator with nothing populating it, and an empty list beside it reads as "every AST node is implemented" — the exact opposite of the truth. It is now IMPORTED: the generator calls unimplementedAstNodes(), which derives 37 node names from the three tables parseForExecution consults, so the declaration cannot drift from the behaviour. Typing the names into the generator instead would have been the same defect one step later.
   - *evidence:* `compat/profiles/powershell-7.6.5-linux.json` — `engineLimits.nativePowerShellEngine`
   - *evidence:* `compat/profiles/powershell-7.6.5-linux.json` — `engineLimits.notes`
-  - *evidence:* nothing under `src/**/*.{ts,mts}` matches `/AstNodeKind/`
+  - *evidence:* `compat/profiles/powershell-7.6.5-linux.json` — `engineLimits.unimplementedAstNodes`
+  - *evidence:* `src/language/unimplemented.ts` exports `unimplementedAstNodes`
+  - *evidence:* `tests/unit/language-unimplemented.test.mts` — test "declares EXACTLY what the engine refuses, in both profiles"
+  - *evidence:* `tools/generate-compatibility-profile.mts` matches `/unimplementedAstNodes()/`
 - [x] **3.7** Record bundled module versions
   - All six modules verified from src/Modules/PSGalleryModules.csproj at each tag. PSResourceGet is the only one that differs (1.2.0 vs 1.3.0-preview1); the rest are pinned identically, so a behaviour difference cannot be blamed on a module version unless it is that one.
   - *evidence:* `compat/profiles/powershell-7.6.5-linux.json` — `bundledModules`

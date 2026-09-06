@@ -90,11 +90,29 @@ export const UNIMPLEMENTED_KEYWORDS: ReadonlyMap<string, { node: PwshAstNode; de
  *
  * THIS IS THE ENGINE'S OWN ANSWER, derived from the tables in this file rather
  * than declared beside them, so the list and the behaviour cannot disagree.
- * `compat/profiles/*.json` has an `engineLimits.unimplementedAstNodes` field
- * meant to carry the same information; it currently declares `[]` for both
- * profiles, which is not true of any engine that does not execute PowerShell.
- * `tests/unit/language-unimplemented.test.mts` records that gap rather than
- * papering over it.
+ *
+ * It is also the SOURCE of `engineLimits.unimplementedAstNodes` in
+ * `compat/profiles/*.json`: `tools/generate-compatibility-profile.mts` imports
+ * this function and writes what it returns. The field used to be a literal `[]`
+ * in the generator — an empty list beside `nativePowerShellEngine: false`,
+ * which reads as "every AST node is implemented". Typing the names into the
+ * generator instead would have reproduced the defect one step later, because a
+ * second copy of a list drifts the first time a keyword is added below.
+ *
+ * Sorted, so the generated profiles do not churn on Map iteration order.
+ *
+ * WHAT IT DOES NOT COVER, stated so the field is not read as more than it is:
+ * this is what the PARSER refuses. A HOST can refuse more. `Kernel.#exec`
+ * declines `a && b` (PipelineChainAst) and a quoted command head
+ * (CommandExpressionAst in pwsh) because one request is one process group and
+ * nothing evaluates expressions — both using `unimplementedMessage` below, so
+ * they read the same, but neither is in this list. They are deliberately not:
+ * `parseForExecution`'s refusals are what `highlight.ts` paints, so adding
+ * `PipelineChainAst` here would paint every token of `a && b` as refused while
+ * the tree itself is built correctly and a host that ran chains would want it.
+ * The consequence is that the profile field UNDERSTATES by those two, which is
+ * the safe direction — `language-unimplemented.test.mts` pins that a profile
+ * may never declare something the engine does run.
  */
 export function unimplementedAstNodes(): readonly PwshAstNode[] {
   const nodes = new Set<PwshAstNode>(EXECUTION_REFUSED_NODES);

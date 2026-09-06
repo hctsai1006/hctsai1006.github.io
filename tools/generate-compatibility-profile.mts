@@ -38,6 +38,9 @@ import ajvFormats from 'ajv-formats';
 
 import { POWERSHELL_77_CHANGES, BUNDLED_MODULES } from '../compat/deltas/powershell-77-changes.source.mts';
 import type { Change } from '../compat/deltas/powershell-77-changes.source.mts';
+// The engine's own answer to "what will you not run", read from the tables that
+// drive the refusal rather than re-typed here. See `engineLimits` below.
+import { unimplementedAstNodes } from '../src/language/unimplemented.ts';
 import {
   assertCurationIsSound,
   buildBehaviorTables,
@@ -180,7 +183,20 @@ function buildProfile(args: BuildProfileArgs): Record<string, unknown> {
       // Stated, not implied. The site must never let a visitor believe a real
       // pwsh binary is running in their browser.
       nativePowerShellEngine: false,
-      unimplementedAstNodes: [],
+      // IMPORTED, never typed out. This was a literal `[]` while the parser
+      // refused 37 node types, and an empty list beside `nativePowerShellEngine:
+      // false` reads as "every AST node is implemented" — the opposite of the
+      // truth. Writing the names here instead would have been the same defect
+      // one step later: a hand-maintained copy of a list that already exists in
+      // code, free to drift the first time a keyword is added to
+      // `UNIMPLEMENTED_KEYWORDS`. `unimplementedAstNodes()` derives it from the
+      // three tables `parseForExecution` actually consults, and returns it
+      // sorted, so this field changes only when the behaviour does.
+      //
+      // The same for both profiles, because the refusal set is a property of
+      // THIS engine and not of the pwsh version being emulated. A profile that
+      // implemented more would list less; none does yet.
+      unimplementedAstNodes: [...unimplementedAstNodes()],
       notes:
         'BrowserShell emulates observable semantics; it does not execute PowerShell. Recognised-but-unimplemented syntax must fail with an explicit error naming the AST node rather than silently doing something approximate.',
     },
