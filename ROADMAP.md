@@ -5,7 +5,7 @@
 
 Turning a single-file PowerShell-flavoured web terminal into a browser workstation with a versioned PowerShell compatibility layer, a real object pipeline, durable state, a trusted package model and an audited AI surface.
 
-**64 of 105 tasks complete**, 12 partial.  `####################////........`
+**66 of 105 tasks complete**, 11 partial.  `####################///.........`
 
 Legend: `[x]` done · `[/]` partial · `[~]` in progress · `[ ]` todo · `[!]` blocked · `[-]` deferred
 
@@ -16,7 +16,7 @@ Every `done` and `partial` task cites evidence — a symbol, a passing test, a v
 | Phase | Goal | Items | Progress |
 | --- | --- | --- | --- |
 | **Ground truth** | Make it impossible to be wrong about upstream by accident. Nothing downstream is trustworthy until version truth is mechanised. | 1, 2, 3 | `#################/` 29/31 +2 partial |
-| **Core** | A real execution engine: one lexer, one AST, a version-aware binder, and a typed object pipeline. This is where the current site is weakest. | 4, 5, 6, 7, 8 | `############///...` 21/31 +5 partial |
+| **Core** | A real execution engine: one lexer, one AST, a version-aware binder, and a typed object pipeline. This is where the current site is weakest. | 4, 5, 6, 7, 8 | `#############//...` 23/31 +4 partial |
 | **State** | Durable, inspectable, recoverable virtual machine state — filesystem, providers, transactions, migrations. | 9, 10 | `###########///....` 7/11 +2 partial |
 | **Compatibility** | Prove the emulation is faithful by differential-testing against real pwsh, and express version differences as data. | 11, 12 | `###########//.....` 5/8 +1 partial |
 | **Declarative** | The workstation as a configuration that can be exported, diffed, tested and restored. | 13 | `..................` 0/4 |
@@ -36,7 +36,7 @@ Dependency-respecting. An item cannot be complete before everything it depends o
 | 2 | [Mechanise version truth across five axes](roadmap/pr/PR-02-verify-release-truth.md) | Ground truth | [x] done | — | 17/17 |
 | 3 | [Express 7.6.5 and 7.7.0-preview.4 as compatibility profiles](roadmap/pr/PR-03-compatibility-profiles.md) | Ground truth | [~] in progress | 2 | 6/8 +2 partial |
 | 4 | [Extract portfolio data and command manifests out of index.html](roadmap/pr/PR-04-extract-data-and-manifests.md) | Core | [~] in progress | 1 | 8/9 |
-| 5 | [Extract a headless LineEditorCore behind input and render adapters](roadmap/pr/PR-05-headless-line-editor.md) | Core | [~] in progress | 4 | 3/5 +1 partial |
+| 5 | [Extract a headless LineEditorCore behind input and render adapters](roadmap/pr/PR-05-headless-line-editor.md) | Core | [~] in progress | 4 | 5/5 |
 | 6 | [Move execution into a worker behind a typed kernel protocol](roadmap/pr/PR-06-worker-kernel-protocol.md) | Core | [~] in progress | 5 | 2/4 +2 partial |
 | 7 | [Build the typed object pipeline and stream model](roadmap/pr/PR-07-object-pipeline.md) | Core | [~] in progress | 6 | 6/6 |
 | 8 | [Build one lexer, one AST and a version-aware parameter binder](roadmap/pr/PR-08-version-aware-binder.md) | Core | [~] in progress | 3, 7 | 2/7 +2 partial |
@@ -236,10 +236,10 @@ Every claim below was checked against a primary source on 2026-09-04. These are 
   - [ ] 4.6 Delete the dead `hidden` flag that no entry ever sets, and the unused GROUPNAME/ED.path/ED.wantCol
 - [~] **5. Extract a headless LineEditorCore behind input and render adapters** — [detail](roadmap/pr/PR-05-headless-line-editor.md)
   - [x] 5.1 Lift TextBuffer, HistoryEngine, CompletionEngine, PredictionEngine, KeyBindingEngine into pure modules
-  - [ ] 5.2 Keep the real textarea as an input adapter only
+  - [x] 5.2 Keep the real textarea as an input adapter only
   - [x] 5.3 Define a TerminalMetrics port so width is injected, not measured via a probe span in #out
   - [x] 5.4 Tag every history entry with origin (user | completion | ai | script), cwd and profile
-  - [/] 5.5 Preserve the IME triple-guard (isComposing || composing || keyCode===229)
+  - [x] 5.5 Preserve the IME triple-guard (isComposing || composing || keyCode===229)
 - [~] **6. Move execution into a worker behind a typed kernel protocol** — [detail](roadmap/pr/PR-06-worker-kernel-protocol.md)
   - [x] 6.1 Define the kernel protocol: submit, cancel, signal, event stream
   - [/] 6.2 Split run() into parse -> execute -> render with no DOM access in the middle
