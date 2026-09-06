@@ -36,9 +36,9 @@
  * things had to be true and all three were checked:
  *
  *   1. A `FormatDocument` is plain data — strings, numbers, booleans, nulls and
- *      arrays. No Date, no cycles, no host value. It is therefore serialisable,
- *      unlike a script block's closure, which is why records.ts got the easier
- *      of the two fixes wire.ts named.
+ *      arrays. No Date, no cycles, no host value. It is therefore serialisable
+ *      — unlike a script block's closure, which had to become an opaque handle
+ *      into the realm that made it (see commands/powershell/support.ts).
  *   2. TEXT, not the object graph. `PSObject.properties` is
  *      `Record<string, PSValue>`, and a `FormatSection` is not a `PSValue` —
  *      PSValue's object arm is `PSObject`, which has `typeNames`. Putting the
@@ -64,7 +64,6 @@
  */
 
 import { isPSObject, psObject, type PSObject, type PSValue } from '../pipeline/psobject.ts';
-import type { Alignment } from './render.ts';
 import type {
   FormatDocument,
   FormatSection,
@@ -126,7 +125,14 @@ export function isFormatRecord(value: PSValue): boolean {
  */
 export function recordDocument(value: PSValue): FormatDocument | undefined {
   if (!isFormatRecord(value) || !isPSObject(value)) return undefined;
-  const payload = value.properties[FORMAT_DOCUMENT_PROPERTY];
+  // `Object.hasOwn` first, for the reason psobject.ts's `getProperty` gives:
+  // reading a bag by index walks the prototype chain, and a bag whose prototype
+  // is `Object.prototype` answers `constructor` with the host Function. This
+  // key is not on that chain, so nothing escapes today — but "today" is how
+  // that bug got in the first time.
+  const payload = Object.hasOwn(value.properties, FORMAT_DOCUMENT_PROPERTY)
+    ? value.properties[FORMAT_DOCUMENT_PROPERTY]
+    : undefined;
   if (typeof payload !== 'string') {
     throw new FormatRecordError(
       `${FORMAT_DOCUMENT_PROPERTY} is ${payload === undefined ? 'absent' : typeof payload}, not a string`,
@@ -216,7 +222,7 @@ function asColumn(value: unknown): TableColumn | null {
   const alignment = c['alignment'];
   if (typeof header !== 'string') return null;
   if (alignment !== 'left' && alignment !== 'right') return null;
-  return { header, alignment: alignment satisfies Alignment };
+  return { header, alignment };
 }
 
 function asTableGroup(value: unknown): TableGroup | null {
@@ -279,12 +285,16 @@ function asString(value: unknown): string | null {
 }
 
 /**
- * A plain JSON object, read through `Object.hasOwn` semantics.
+ * A plain JSON object.
  *
- * `JSON.parse` never produces a prototype-poisoned object for `__proto__` — it
- * defines the key as an own property — so a plain `typeof` check is enough
- * here, and the result is indexed rather than destructured so
- * `noUncheckedIndexedAccess` keeps every field `unknown`.
+ * `Array.isArray` is checked as well as `typeof`, because an array is an object
+ * and `[]['kind']` is `undefined` rather than an error — so a document whose
+ * section list had been nested one level too deep would decode to a section
+ * with no kind rather than being refused here.
+ *
+ * `JSON.parse` DEFINES `__proto__` as an own data property rather than invoking
+ * the inherited setter, so a payload containing one cannot re-parent anything;
+ * every read below is by a fixed key regardless.
  */
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;

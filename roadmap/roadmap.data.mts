@@ -1623,7 +1623,7 @@ export const WORK = [
       {
         id: '15.3',
         title: 'Route AI plans through schema validation, AST validation, capability analysis and WhatIf preview before approval',
-        detail: 'Blocked twice over: there is no AST to validate against (8.3) and no -WhatIf to preview with (13.2).',
+        detail: 'Half unblocked: 8.3 landed, so there IS an AST and a refusal set to validate a plan against. Still blocked on -WhatIf (13.2), and on there being an AI execution path at all — nothing distinguishes an AI-issued command from a user one, so there is no plan to route.',
         status: 'todo',
         evidence: [{ kind: 'absent', glob: 'src/**/*.{ts,mts}', pattern: 'approval' }],
       },

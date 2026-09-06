@@ -830,10 +830,16 @@ export function parseForExecution(source: string): ExecutionParse {
 /**
  * The command stages of a pipeline, for a caller that only needs the shape.
  *
- * This is what replaces `kernel.ts`'s `splitPipeline` + `splitTokens`, whose
- * own comment marks them for deletion. The difference is not cosmetic: those
- * split on whitespace, so `Write-Output 'a b'` reached the binder as two
- * arguments.
+ * This is what replaced `kernel.ts`'s `splitPipeline` + `splitTokens`, now
+ * deleted. The difference was not cosmetic: those split on whitespace, so
+ * `Write-Output 'a b'` reached the binder as two arguments.
+ *
+ * SHAPE ONLY, and the kernel does not use it. It FLATTENS a chain — `a && b`
+ * comes back as two stages, which is right for the line editor asking "what
+ * commands are on this line" and wrong for anything that runs them — and it
+ * DROPS a `CommandExpressionAst`, so `1 | gci` comes back as one stage. A
+ * caller that executes has to see both of those rather than have them
+ * smoothed away, so `Kernel.#exec` walks `elements` itself and refuses.
  */
 export function pipelineStages(pipeline: PipelineAst | PipelineChainAst): readonly CommandAst[] {
   const stages: CommandAst[] = [];

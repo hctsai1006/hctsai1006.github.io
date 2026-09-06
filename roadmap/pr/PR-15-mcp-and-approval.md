@@ -27,7 +27,7 @@ Command metadata already has to exist for help, completion and the binder. MCP t
   - *evidence:* `tests/unit/kernel-capabilities.test.mts` — test "classify every risk the contract declares"
   - *evidence:* `tests/unit/kernel-capabilities.test.mts` — test "audit every write, delete, network, device and privileged simulation"
 - [ ] **15.3** Route AI plans through schema validation, AST validation, capability analysis and WhatIf preview before approval
-  - Blocked twice over: there is no AST to validate against (8.3) and no -WhatIf to preview with (13.2).
+  - Half unblocked: 8.3 landed, so there IS an AST and a refusal set to validate a plan against. Still blocked on -WhatIf (13.2), and on there being an AI execution path at all — nothing distinguishes an AI-issued command from a user one, so there is no plan to route.
   - *evidence:* nothing under `src/**/*.{ts,mts}` matches `/approval/`
 - [ ] **15.4** Deny the AI direct handles: no OPFS, clipboard, device, package token or storage key
   - The broker is generic per-session infrastructure that could carry this, but nothing distinguishes an AI-issued command from a user one at the gate, and there is no AI execution path to deny. The only place the codebase knows about an AI origin is the history tag from 5.4, which is a display concern.

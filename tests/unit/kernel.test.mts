@@ -681,11 +681,20 @@ describe('the kernel runs the parser, not a splitter', () => {
     const cases: readonly [string, RegExp][] = [
       ['probe-args -Path $target', /VariableExpressionAst/u],
       ['probe-args > out.txt', /FileRedirectionAst/u],
-      ['probe-args; probe-args', /one per command line/u],
+      ['probe-args; probe-args', /runs one per exec/u],
+      ['probe-args\nprobe-args', /runs one per exec/u],
       ['probe-args && probe-args', /PipelineChainAst/u],
       ['probe-args &', /background operator/u],
       ['1 | probe-args', /CommandExpressionAst/u],
       ['probe-args | ', /empty pipe element/iu],
+      // A quoted command name is a STRING in pwsh, not a command. Measured on
+      // 7.6.5: `'Get-Location'` yields the String "Get-Location" and parses as
+      // a CommandExpressionAst, while `& 'Get-Location'` yields a PathInfo.
+      // This mattered only once the head arrived decoded: with the whitespace
+      // split it reached `resolve` with its quotes on and was simply not found,
+      // and afterwards it would RESOLVE and run.
+      ["'probe-args'", /CommandExpressionAst/u],
+      ['"probe-args" -Path x', /CommandExpressionAst/u],
     ];
     for (const [source, expected] of cases) {
       const bound = { current: null as BindingResult | null };

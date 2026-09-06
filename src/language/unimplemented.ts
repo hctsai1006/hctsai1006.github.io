@@ -100,6 +100,19 @@ export const UNIMPLEMENTED_KEYWORDS: ReadonlyMap<string, { node: PwshAstNode; de
  * second copy of a list drifts the first time a keyword is added below.
  *
  * Sorted, so the generated profiles do not churn on Map iteration order.
+ *
+ * WHAT IT DOES NOT COVER, stated so the field is not read as more than it is:
+ * this is what the PARSER refuses. A HOST can refuse more. `Kernel.#exec`
+ * declines `a && b` (PipelineChainAst) and a quoted command head
+ * (CommandExpressionAst in pwsh) because one request is one process group and
+ * nothing evaluates expressions — both using `unimplementedMessage` below, so
+ * they read the same, but neither is in this list. They are deliberately not:
+ * `parseForExecution`'s refusals are what `highlight.ts` paints, so adding
+ * `PipelineChainAst` here would paint every token of `a && b` as refused while
+ * the tree itself is built correctly and a host that ran chains would want it.
+ * The consequence is that the profile field UNDERSTATES by those two, which is
+ * the safe direction — `language-unimplemented.test.mts` pins that a profile
+ * may never declare something the engine does run.
  */
 export function unimplementedAstNodes(): readonly PwshAstNode[] {
   const nodes = new Set<PwshAstNode>(EXECUTION_REFUSED_NODES);
