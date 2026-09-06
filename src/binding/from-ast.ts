@@ -29,11 +29,12 @@
  * nothing re-reads a dash.
  */
 
-import type {
-  CommandAst,
-  CommandElementAst,
-  ExpressionAst,
-} from '../language/ast.ts';
+import type { CommandAst, CommandElementAst } from '../language/ast.ts';
+// The decoded text of an expression, from the AST module rather than from a
+// copy here. There WAS a copy here, character for character the same as
+// `parse.ts`'s, and once the kernel stopped calling `commandArguments` the
+// other one had no production caller left to keep it honest.
+import { expressionText } from '../language/ast.ts';
 import type { CommandManifest } from '../commands/manifest.ts';
 import type { CompatibilityView } from '../commands/invocation.ts';
 
@@ -45,28 +46,6 @@ import {
   type BindingOutcome,
   type BindingSuccess,
 } from './binder.ts';
-
-/**
- * The decoded text of an expression used as an argument.
- *
- * A variable keeps its sigil because nothing here evaluates it: the binder's
- * `coerceSwitchArgument` recognises `$false` and `$true` by spelling, which is
- * how `-Switch:$false` works without a variable table.
- */
-function textOf(expression: ExpressionAst): string {
-  switch (expression.kind) {
-    case 'StringConstantExpressionAst':
-    case 'ExpandableStringExpressionAst':
-    case 'ConstantExpressionAst':
-      return expression.value;
-    case 'VariableExpressionAst':
-      return `${expression.splatted ? '@' : '$'}${expression.variablePath}`;
-    case 'ScriptBlockExpressionAst':
-      return `{${expression.body}}`;
-    default:
-      return expression.extent.text;
-  }
-}
 
 /**
  * A command's arguments, classified the way the LEXER classified them.
@@ -91,11 +70,11 @@ function argumentOf(element: CommandElementAst): BindArgument {
       // accident: the parser records MissingArgument and leaves `argument` null,
       // and a null attached is "no colon", which is a different thing. The
       // empty-string case the binder still checks comes from the string path.
-      attached: element.argument === null ? null : textOf(element.argument),
+      attached: element.argument === null ? null : expressionText(element.argument),
       text: element.extent.text,
     };
   }
-  return { kind: 'value', text: textOf(element) };
+  return { kind: 'value', text: expressionText(element) };
 }
 
 /** Bind a parsed command. Throws `ParameterBindingError` on failure. */

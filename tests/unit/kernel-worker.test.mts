@@ -55,6 +55,10 @@ import {
   scriptBlocks,
 } from '../../src/commands/powershell/support.ts';
 import { whereObject } from '../../src/commands/powershell/where-object.ts';
+import { isFormatRecord, recordDocument } from '../../src/formatting/records.ts';
+import { renderDocument } from '../../src/formatting/views.ts';
+import type { FormatDocument } from '../../src/formatting/views.ts';
+import { DEFAULT_CULTURE } from '../../src/formatting/culture.ts';
 import { collectingStreams } from '../../src/pipeline/streams.ts';
 import type { PSObject, PSValue } from '../../src/pipeline/psobject.ts';
 import { HOME } from '../../src/storage/seed.ts';
@@ -265,6 +269,7 @@ describe('a script block crosses as a handle and not as a closure', () => {
           signal: new AbortController().signal,
           requireCapability: () => undefined,
           fs: null,
+          providers: null,
           preferences: null,
           dialog: null,
         },
@@ -705,29 +710,65 @@ describe('a streaming command needs no special case', () => {
   });
 });
 
-describe('the boundary refuses a value it would have to empty', () => {
-  it('errors on a Format-* record instead of delivering a blank one', async () => {
-    // Found by the pipeline work, confirmed here across a real transport.
-    // `src/formatting/records.ts` puts the whole FormatDocument in
-    // `baseObject` — correct modelling, because pwsh's own format records
-    // carry no readable properties either — and `baseObject` is exactly what
-    // the wire drops. MEASURED before the refusal:
+describe('a Format-* record crosses the boundary with its document', () => {
+  it('renders on THIS side to the same lines the worker would have rendered', async () => {
+    // The end-to-end claim, and it did not hold until the document became
+    // sendable. `Format-Table` used to put the whole FormatDocument in
+    // `baseObject`, which the wire drops. MEASURED then:
     //
     //   after wire: {"typeNames":["…Format.FormatEntryData","System.Object"],
     //                "properties":{}}
     //   still typed as a format record = true
     //
-    // A renderer on this side would identify it and draw nothing, and no error
-    // would be raised anywhere.
+    // A renderer on this side would identify it and draw nothing. The wire
+    // grew a structural refusal for that shape, which made it loud — and left
+    // formatting unable to reach a host at all, since an error is not output.
+    //
+    // Now the record carries its document as JSON in the property bag, so the
+    // renderer runs HERE, in a realm that never saw the worker's objects.
     const h = await spawn({ withRegistry: true });
     try {
       const outcome = await h.client.run('Write-Output hello | Format-Table');
+      assert.equal(outcome.exitCode, 0);
+      assert.equal(outcome.succeeded, true);
+      assert.deepEqual(outcome.errors, []);
+      assert.equal(outcome.values.length, 1);
+
+      const received = outcome.values[0] as PSValue;
+      assert.equal(isFormatRecord(received), true, 'it arrived as a format record');
+      const document = recordDocument(received);
+      assert.notEqual(document, undefined);
+
+      // The same characters `Format-Table | Out-String` produces in the worker,
+      // which is the only definition of "the formatting works" that means
+      // anything. A scalar is a bare line, with no table skeleton around it.
+      const lines = renderDocument(document as FormatDocument, {
+        width: 120,
+        culture: DEFAULT_CULTURE,
+      });
+      assert.deepEqual(lines, ['hello']);
+
+      const inWorker = await h.client.run('Write-Output hello | Format-Table | Out-String -Stream');
+      assert.deepEqual(inWorker.values, lines);
+    } finally {
+      await h.dispose();
+    }
+  });
+
+  it('still refuses a value whose entire content is the slot the boundary drops', async () => {
+    // The guard the format record used to be the only live example of. It is
+    // structural — "everything this value had is in `baseObject`" — so a value
+    // built to have that shape exercises it exactly as the record did, and the
+    // error still names the type rather than delivering a blank object.
+    const h = await spawn();
+    try {
+      const outcome = await h.client.run('emit-emptied');
 
       assert.deepEqual(outcome.values, [], 'nothing empty was delivered');
       assert.equal(outcome.errors.length, 1);
       const error = outcome.errors[0];
-      assert.match(error?.fullyQualifiedErrorId as string, /^PipelineFailed,Format-Table$/u);
-      assert.match(error?.message as string, /FormatEntryData/u);
+      assert.match(error?.fullyQualifiedErrorId as string, /^PipelineFailed,emit-emptied$/u);
+      assert.match(error?.message as string, /Host\.Only/u);
       assert.match(error?.message as string, /baseObject, which the boundary drops/u);
 
       // And the pipeline says it failed. `??=` used to leave the stage's own

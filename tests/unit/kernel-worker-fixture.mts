@@ -123,6 +123,16 @@ const COMMANDS: readonly CommandModule[] = [
     await context.streams.success.write(psWrap({ Name: 'holder' }, ['Host'], () => 'a closure'));
     return 0;
   }),
+  // The same closure with NOTHING else on the object. Stripping `baseObject`
+  // here leaves a value that still declares its type and carries nothing, which
+  // the wire refuses rather than delivers. No shipped command produces this
+  // shape — the format record used to, and now serialises its document instead
+  // — so the guard needs a value built on purpose to stay exercised across a
+  // real transport.
+  command('emit-emptied', async (context) => {
+    await context.streams.success.write(psWrap({}, ['Host.Only', 'System.Object'], () => 'gone'));
+    return 0;
+  }),
 
   // Writes to several channels so the ONE sequence can be checked for
   // monotonicity across them after a real transport has reordered nothing.

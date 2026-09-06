@@ -200,6 +200,26 @@ export interface Change {
   /** Required when impact is script-breaking. */
   readonly migration?: string;
   readonly implementation: ImplementationStatus;
+  /**
+   * The id of the conformance corpus case that proves this, or absent.
+   *
+   * A CASE ID rather than a file path, because a path is only a string that
+   * exists. A case id is checkable end to end by tools/conformance.mts: the
+   * case is in the corpus, its source hash matches the recording, a real pwsh
+   * produced the recorded answer, and this project agreed with it. Naming a
+   * case that is missing, or that did not agree, is a build failure — so a
+   * proof cannot be deleted quietly, and cannot be faked by pointing at a
+   * case that fails.
+   *
+   * Absent on every entry today, and the reason is worth stating rather than
+   * leaving as an omission: the corpus has no case exercising any of the six
+   * emulated behaviour keys, and adding one means re-capturing the whole
+   * fixture from a real pwsh. The only capture host available runs Windows and
+   * has updatable help installed, which is known to turn three passing help.*
+   * cases into unexplained differences — so a re-capture here would trade a
+   * clean Linux recording for a worse Windows one. See ROADMAP 3.5.
+   */
+  readonly conformanceFixture?: string;
   /** Repo-relative paths proving the emulation. Checked to exist. */
   readonly evidence?: readonly string[];
   /** Required when implementation is `partial`: what is missing. */
@@ -305,7 +325,14 @@ export const POWERSHELL_77_CHANGES = [
     upstreamValue: true,
     scope: { command: 'New-Guid', parameters: ['Empty'] },
     sources: [primary(26140, 'NewGuidCommand.cs uses Empty.ToBool() instead of testing presence. -Empty is the only switch it touches.')],
-    implementation: 'verified',
+    // Was `verified`. Demoted, because `verified` is defined in
+    // src/commands/manifest.ts as "implemented AND compared against a CAPTURED
+    // reference-implementation run", and nothing was captured: the 7.6.5
+    // measurement quoted above was transcribed by hand out of a pwsh session
+    // into the header of binder-switch-scope.test.mts, where it cannot be
+    // re-checked by anything. The emulation is real and the unit test is real;
+    // the top rung of the ladder is not what either of them earns.
+    implementation: 'implemented',
     evidence: ['tests/unit/binder-switch-scope.test.mts', 'src/binding/binder.ts'],
   },
   {
@@ -320,7 +347,9 @@ export const POWERSHELL_77_CHANGES = [
     upstreamValue: true,
     scope: { command: 'Get-Random', parameters: ['Shuffle'] },
     sources: [primary(26457, 'Corrects handling of an explicit -Shuffle:$false in Get-Random.')],
-    implementation: 'verified',
+    // Demoted from `verified` for the same reason as New-Guid -Empty above: the
+    // four-seed measurement lives in a test comment, not in a capture.
+    implementation: 'implemented',
     evidence: ['tests/unit/binder-switch-scope.test.mts', 'src/binding/binder.ts'],
   },
   {

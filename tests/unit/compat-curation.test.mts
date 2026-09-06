@@ -437,11 +437,62 @@ describe('routes around the gates, closed', () => {
             behaviorKey: 'newGuid.defaultVersion',
             scope: { command: 'New-Guid' },
             implementation: 'verified',
+            // `verified` costs a conformance case as well as a test — see the
+            // two gates below. The case id is not resolved here; only the run
+            // knows whether it exists and agreed, and tools/conformance.mts
+            // owns that half.
+            conformanceFixture: 'random.maximum-is-exclusive-pair',
             evidence: ['tests/unit/native-commands.test.mts'],
           }),
         ],
         REPO,
       ),
+    );
+  });
+
+  it('refuses "verified" without a conformance case, whatever unit tests it cites', () => {
+    // src/commands/manifest.ts defines `verified` as "implemented AND compared
+    // against a captured reference-implementation run", and adds that nothing
+    // claims it yet so that `implemented` cannot quietly come to mean it. Two
+    // records claimed it anyway, resting on unit tests whose expected values
+    // had been transcribed by hand out of a pwsh session and into a comment —
+    // a real measurement, and one nothing can re-check.
+    assert.throws(
+      () =>
+        assertCurationIsSound(
+          [
+            sound({
+              behaviorKey: 'newGuid.defaultVersion',
+              scope: { command: 'New-Guid' },
+              implementation: 'verified',
+              evidence: ['tests/unit/native-commands.test.mts'],
+            }),
+          ],
+          REPO,
+        ),
+      throwsWith(/is "verified" but names no conformance case/),
+    );
+  });
+
+  it('refuses a conformance case offered for a difference nothing emulates', () => {
+    // Evidence that a real PowerShell does something, attached to a change this
+    // engine does not reproduce, is evidence about PowerShell alone. Pointing
+    // at it would put a fidelity claim on a row whose whole point is that it
+    // reaches no code path.
+    assert.throws(
+      () =>
+        assertCurationIsSound(
+          [
+            sound({
+              behaviorKey: 'newGuid.defaultVersion',
+              scope: { command: 'New-Guid' },
+              implementation: 'documented',
+              conformanceFixture: 'random.maximum-is-exclusive-pair',
+            }),
+          ],
+          REPO,
+        ),
+      throwsWith(/can only prove a difference this project emulates/),
     );
   });
 });

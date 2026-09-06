@@ -79,7 +79,12 @@ export {
   splitSegments,
   validatePath,
 } from './vfs.ts';
-export type { ResolveContext, ResolvedPath, VirtualFileSystemOptions } from './vfs.ts';
+export type {
+  ForeignDrives,
+  ResolveContext,
+  ResolvedPath,
+  VirtualFileSystemOptions,
+} from './vfs.ts';
 
 export {
   SNAPSHOT_FORMAT,

@@ -1,0 +1,712 @@
+{
+  "pwsh": "7.6.5",
+  "platform": "Win32NT",
+  "capturedBy": "tools/capture-pwsh-providers.ps1",
+  "providers": [
+    {
+      "name": "Registry",
+      "moduleName": "Microsoft.PowerShell.Core",
+      "fullName": "Microsoft.PowerShell.Core\\Registry",
+      "capabilities": [
+        "ShouldProcess"
+      ],
+      "itemSeparator": "\\"
+    },
+    {
+      "name": "Alias",
+      "moduleName": "Microsoft.PowerShell.Core",
+      "fullName": "Microsoft.PowerShell.Core\\Alias",
+      "capabilities": [
+        "ShouldProcess"
+      ],
+      "itemSeparator": "\\"
+    },
+    {
+      "name": "Environment",
+      "moduleName": "Microsoft.PowerShell.Core",
+      "fullName": "Microsoft.PowerShell.Core\\Environment",
+      "capabilities": [
+        "ShouldProcess"
+      ],
+      "itemSeparator": "\\"
+    },
+    {
+      "name": "FileSystem",
+      "moduleName": "Microsoft.PowerShell.Core",
+      "fullName": "Microsoft.PowerShell.Core\\FileSystem",
+      "capabilities": [
+        "Filter",
+        "ShouldProcess",
+        "Credentials"
+      ],
+      "itemSeparator": "\\"
+    },
+    {
+      "name": "Function",
+      "moduleName": "Microsoft.PowerShell.Core",
+      "fullName": "Microsoft.PowerShell.Core\\Function",
+      "capabilities": [
+        "ShouldProcess"
+      ],
+      "itemSeparator": "\\"
+    },
+    {
+      "name": "Variable",
+      "moduleName": "Microsoft.PowerShell.Core",
+      "fullName": "Microsoft.PowerShell.Core\\Variable",
+      "capabilities": [
+        "ShouldProcess"
+      ],
+      "itemSeparator": "\\"
+    }
+  ],
+  "drives": [
+    {
+      "name": "Env",
+      "root": "",
+      "provider": "Microsoft.PowerShell.Core\\Environment"
+    },
+    {
+      "name": "Variable",
+      "root": "",
+      "provider": "Microsoft.PowerShell.Core\\Variable"
+    },
+    {
+      "name": "Function",
+      "root": "",
+      "provider": "Microsoft.PowerShell.Core\\Function"
+    },
+    {
+      "name": "Alias",
+      "root": "",
+      "provider": "Microsoft.PowerShell.Core\\Alias"
+    }
+  ],
+  "items": [
+    {
+      "path": "Env:zzItem",
+      "typeName": "System.Collections.DictionaryEntry",
+      "psTypeNames": [
+        "System.Collections.DictionaryEntry",
+        "System.ValueType",
+        "System.Object"
+      ],
+      "properties": [
+        "PSPath",
+        "PSDrive",
+        "PSProvider",
+        "PSIsContainer",
+        "Name",
+        "Key",
+        "Value"
+      ],
+      "psPath": "Microsoft.PowerShell.Core\\Environment::zzItem",
+      "psDrive": "Env",
+      "psProvider": "Microsoft.PowerShell.Core\\Environment",
+      "psIsContainer": false,
+      "name": "zzItem"
+    },
+    {
+      "path": "Variable:zzItemV",
+      "typeName": "System.Management.Automation.PSVariable",
+      "psTypeNames": [
+        "System.Management.Automation.PSVariable",
+        "System.Object"
+      ],
+      "properties": [
+        "PSPath",
+        "PSDrive",
+        "PSProvider",
+        "PSIsContainer",
+        "Name",
+        "Description",
+        "Value",
+        "Visibility",
+        "Module",
+        "ModuleName",
+        "Options",
+        "Attributes"
+      ],
+      "psPath": "Microsoft.PowerShell.Core\\Variable::zzItemV",
+      "psDrive": "Variable",
+      "psProvider": "Microsoft.PowerShell.Core\\Variable",
+      "psIsContainer": false,
+      "name": "zzItemV"
+    },
+    {
+      "path": "Function:zzItemF",
+      "typeName": "System.Management.Automation.FunctionInfo",
+      "psTypeNames": [
+        "System.Management.Automation.FunctionInfo",
+        "System.Management.Automation.CommandInfo",
+        "System.Object"
+      ],
+      "properties": [
+        "PSPath",
+        "PSDrive",
+        "PSProvider",
+        "PSIsContainer",
+        "HelpUri",
+        "ScriptBlock",
+        "CmdletBinding",
+        "DefaultParameterSet",
+        "Definition",
+        "Options",
+        "Description",
+        "Verb",
+        "Noun",
+        "HelpFile",
+        "OutputType",
+        "Name",
+        "CommandType",
+        "Source",
+        "Version",
+        "Visibility",
+        "ModuleName",
+        "Module",
+        "RemotingCapability",
+        "Parameters",
+        "ParameterSets"
+      ],
+      "psPath": "Microsoft.PowerShell.Core\\Function::zzItemF",
+      "psDrive": "Function",
+      "psProvider": "Microsoft.PowerShell.Core\\Function",
+      "psIsContainer": false,
+      "name": "zzItemF"
+    },
+    {
+      "path": "Alias:zzItemA",
+      "typeName": "System.Management.Automation.AliasInfo",
+      "psTypeNames": [
+        "System.Management.Automation.AliasInfo",
+        "System.Management.Automation.CommandInfo",
+        "System.Object"
+      ],
+      "properties": [
+        "PSPath",
+        "PSDrive",
+        "PSProvider",
+        "PSIsContainer",
+        "HelpUri",
+        "ResolvedCommandName",
+        "DisplayName",
+        "ReferencedCommand",
+        "ResolvedCommand",
+        "Definition",
+        "Options",
+        "Description",
+        "OutputType",
+        "Name",
+        "CommandType",
+        "Source",
+        "Version",
+        "Visibility",
+        "ModuleName",
+        "Module",
+        "RemotingCapability",
+        "Parameters",
+        "ParameterSets"
+      ],
+      "psPath": "Microsoft.PowerShell.Core\\Alias::zzItemA",
+      "psDrive": "Alias",
+      "psProvider": "Microsoft.PowerShell.Core\\Alias",
+      "psIsContainer": false,
+      "name": "zzItemA"
+    }
+  ],
+  "childOrder": {
+    "inserted": [
+      "zzM",
+      "zzA",
+      "zzZ",
+      "zzB",
+      "zz_u",
+      "zz1",
+      "zz.d",
+      "zz-h",
+      "zz@a",
+      "zz#c"
+    ],
+    "Env": [
+      "zz_u",
+      "zz-h",
+      "zz.d",
+      "zz@a",
+      "zz#c",
+      "zz1",
+      "zzA",
+      "zzB",
+      "zzM",
+      "zzZ"
+    ],
+    "Variable": [
+      "zz_u",
+      "zz-h",
+      "zz.d",
+      "zz@a",
+      "zz#c",
+      "zz1",
+      "zzA",
+      "zzB",
+      "zzM",
+      "zzZ"
+    ],
+    "Alias": [
+      "zz_u",
+      "zz-h",
+      "zz.d",
+      "zz@a",
+      "zz#c",
+      "zz1",
+      "zzA",
+      "zzB",
+      "zzM",
+      "zzZ"
+    ],
+    "Function": [
+      "zz_u",
+      "zz-h",
+      "zz.d",
+      "zz@a",
+      "zz#c",
+      "zz1",
+      "zzA",
+      "zzB",
+      "zzM",
+      "zzZ"
+    ]
+  },
+  "clearSemantics": {
+    "clearItem": {
+      "Env": {
+        "survives": false,
+        "valueIsNull": null
+      },
+      "Variable": {
+        "survives": true,
+        "valueIsNull": true
+      },
+      "Function": {
+        "survives": false,
+        "valueIsNull": null
+      },
+      "Alias": {
+        "survives": false,
+        "valueIsNull": null
+      }
+    },
+    "setEmpty": {
+      "Env": {
+        "survives": true,
+        "error": null,
+        "valueLength": 0
+      },
+      "Variable": {
+        "survives": true,
+        "error": null
+      },
+      "Function": {
+        "survives": true,
+        "error": null
+      },
+      "Alias": {
+        "survives": true,
+        "error": {
+          "errorId": "Argument,Microsoft.PowerShell.Commands.SetItemCommand",
+          "exceptionType": "System.Management.Automation.PSArgumentException",
+          "category": "InvalidArgument",
+          "message": "Cannot process argument because the value of argument \"value\" is not valid. Change the value of the \"value\" argument and run the operation again."
+        }
+      }
+    },
+    "setNull": {
+      "Env": {
+        "survives": false,
+        "error": null
+      },
+      "Variable": {
+        "survives": true,
+        "error": null
+      }
+    }
+  },
+  "content": [
+    {
+      "path": "Env:zzContent",
+      "typeName": "System.String",
+      "count": 1,
+      "asString": "abc"
+    },
+    {
+      "path": "Variable:zzContentV",
+      "typeName": "System.String",
+      "count": 1,
+      "asString": "defg"
+    },
+    {
+      "path": "Function:zzContentF",
+      "typeName": "System.Management.Automation.ScriptBlock",
+      "count": 1,
+      "asString": " 'fb' "
+    },
+    {
+      "path": "Alias:zzContentA",
+      "typeName": "System.String",
+      "count": 1,
+      "asString": "Get-Process"
+    },
+    {
+      "path": "Env:zzMultiline",
+      "typeName": "System.String",
+      "count": 1,
+      "asString": "a\nb"
+    }
+  ],
+  "contentOnRoot": {
+    "errorId": "Argument,Microsoft.PowerShell.Commands.GetContentCommand",
+    "exceptionType": "System.Management.Automation.PSArgumentException",
+    "category": "InvalidArgument",
+    "message": "Cannot process argument because the value of argument \"path\" is not valid. Change the value of the \"path\" argument and run the operation again."
+  },
+  "errors": {
+    "getChildItemMissing": {
+      "errorId": "PathNotFound,Microsoft.PowerShell.Commands.GetChildItemCommand",
+      "exceptionType": "System.Management.Automation.ItemNotFoundException",
+      "category": "ObjectNotFound",
+      "message": "Cannot find path 'zzNoSuch' because it does not exist."
+    },
+    "getItemMissing": {
+      "errorId": "PathNotFound,Microsoft.PowerShell.Commands.GetItemCommand",
+      "exceptionType": "System.Management.Automation.ItemNotFoundException",
+      "category": "ObjectNotFound",
+      "message": "Cannot find path 'Env:\\zzNoSuch' because it does not exist."
+    },
+    "getContentMissing": {
+      "errorId": "PathNotFound,Microsoft.PowerShell.Commands.GetContentCommand",
+      "exceptionType": "System.Management.Automation.ItemNotFoundException",
+      "category": "ObjectNotFound",
+      "message": "Cannot find path 'Env:\\zzNoSuch' because it does not exist."
+    },
+    "getItemUnknownDrive": {
+      "errorId": "DriveNotFound,Microsoft.PowerShell.Commands.GetItemCommand",
+      "exceptionType": "System.Management.Automation.DriveNotFoundException",
+      "category": "ObjectNotFound",
+      "message": "Cannot find drive. A drive with the name 'zzNoDrive' does not exist."
+    },
+    "setLocationUnknown": {
+      "errorId": "DriveNotFound,Microsoft.PowerShell.Commands.SetLocationCommand",
+      "exceptionType": "System.Management.Automation.DriveNotFoundException",
+      "category": "ObjectNotFound",
+      "message": "Cannot find drive. A drive with the name 'zzNoDrive' does not exist."
+    },
+    "setLocationLeafTyped": {
+      "errorId": "PathNotFound,Microsoft.PowerShell.Commands.SetLocationCommand",
+      "exceptionType": "System.Management.Automation.ItemNotFoundException",
+      "category": "ObjectNotFound",
+      "message": "Cannot find path 'Env:zzLeaf' because it does not exist."
+    },
+    "getChildItemBelowLeaf": {
+      "errorId": "PathNotFound,Microsoft.PowerShell.Commands.GetChildItemCommand",
+      "exceptionType": "System.Management.Automation.ItemNotFoundException",
+      "category": "ObjectNotFound",
+      "message": "Cannot find path 'zzLeaf/more' because it does not exist."
+    },
+    "getItemMissingVar": {
+      "errorId": "PathNotFound,Microsoft.PowerShell.Commands.GetItemCommand",
+      "exceptionType": "System.Management.Automation.ItemNotFoundException",
+      "category": "ObjectNotFound",
+      "message": "Cannot find path 'Variable:\\zzNoSuch' because it does not exist."
+    },
+    "getItemMissingFn": {
+      "errorId": "PathNotFound,Microsoft.PowerShell.Commands.GetItemCommand",
+      "exceptionType": "System.Management.Automation.ItemNotFoundException",
+      "category": "ObjectNotFound",
+      "message": "Cannot find path 'Function:\\zzNoSuch' because it does not exist."
+    },
+    "getItemMissingAlias": {
+      "errorId": "PathNotFound,Microsoft.PowerShell.Commands.GetItemCommand",
+      "exceptionType": "System.Management.Automation.ItemNotFoundException",
+      "category": "ObjectNotFound",
+      "message": "Cannot find path 'Alias:\\zzNoSuch' because it does not exist."
+    },
+    "filterOnFlatProvider": {
+      "errorId": "NotSupported,Microsoft.PowerShell.Commands.GetChildItemCommand",
+      "exceptionType": "System.Management.Automation.PSNotSupportedException",
+      "category": "NotImplemented",
+      "message": "Cannot call method. The provider does not support the use of filters."
+    }
+  },
+  "testPath": [
+    {
+      "path": "Env:",
+      "pathType": "Any",
+      "result": true
+    },
+    {
+      "path": "Env:\\",
+      "pathType": "Any",
+      "result": true
+    },
+    {
+      "path": "Env:/",
+      "pathType": "Any",
+      "result": true
+    },
+    {
+      "path": "Env:zzTp",
+      "pathType": "Any",
+      "result": true
+    },
+    {
+      "path": "Env:\\zzTp",
+      "pathType": "Any",
+      "result": true
+    },
+    {
+      "path": "Env:/zzTp",
+      "pathType": "Any",
+      "result": true
+    },
+    {
+      "path": "Env:ZZTP",
+      "pathType": "Any",
+      "result": true
+    },
+    {
+      "path": "env:zzTp",
+      "pathType": "Any",
+      "result": true
+    },
+    {
+      "path": "Env:zzNoSuch",
+      "pathType": "Any",
+      "result": false
+    },
+    {
+      "path": "Env:zzTp/more",
+      "pathType": "Any",
+      "result": false
+    },
+    {
+      "path": "zzNoDrive:\\x",
+      "pathType": "Any",
+      "result": false
+    },
+    {
+      "path": "Env:",
+      "pathType": "Container",
+      "result": true
+    },
+    {
+      "path": "Env:zzTp",
+      "pathType": "Container",
+      "result": false
+    },
+    {
+      "path": "Env:zzTp",
+      "pathType": "Leaf",
+      "result": true
+    },
+    {
+      "path": "Env:",
+      "pathType": "Leaf",
+      "result": false
+    }
+  ],
+  "location": {
+    "path": "Env:\\",
+    "driveName": "Env",
+    "driveRoot": "",
+    "providerName": "Environment",
+    "providerPath": "",
+    "itemSeparator": "\\",
+    "providerHome": "",
+    "parentListingOk": true
+  },
+  "flat": {
+    "recurseIsNoOp": true,
+    "literalLeafCount": 1,
+    "wildcardItemCount": 1,
+    "literalWildcard": {
+      "errorId": "PathNotFound,Microsoft.PowerShell.Commands.GetItemCommand",
+      "exceptionType": "System.Management.Automation.ItemNotFoundException",
+      "category": "ObjectNotFound",
+      "message": "Cannot find path 'Env:zzTp*' because it does not exist."
+    },
+    "includeIsInert": 0,
+    "nameOnlyIsString": "System.String"
+  },
+  "dynamic": {
+    "getContent": {
+      "Raw": {
+        "errorId": "NamedParameterNotFound,Microsoft.PowerShell.Commands.GetContentCommand",
+        "exceptionType": "System.Management.Automation.ParameterBindingException",
+        "category": "InvalidArgument",
+        "message": "A parameter cannot be found that matches parameter name 'Raw'."
+      },
+      "AsByteStream": {
+        "errorId": "NamedParameterNotFound,Microsoft.PowerShell.Commands.GetContentCommand",
+        "exceptionType": "System.Management.Automation.ParameterBindingException",
+        "category": "InvalidArgument",
+        "message": "A parameter cannot be found that matches parameter name 'AsByteStream'."
+      },
+      "Delimiter": {
+        "errorId": "NamedParameterNotFound,Microsoft.PowerShell.Commands.GetContentCommand",
+        "exceptionType": "System.Management.Automation.ParameterBindingException",
+        "category": "InvalidArgument",
+        "message": "A parameter cannot be found that matches parameter name 'Delimiter'."
+      },
+      "Encoding": {
+        "errorId": "NamedParameterNotFound,Microsoft.PowerShell.Commands.GetContentCommand",
+        "exceptionType": "System.Management.Automation.ParameterBindingException",
+        "category": "InvalidArgument",
+        "message": "A parameter cannot be found that matches parameter name 'Encoding'."
+      },
+      "Wait": {
+        "errorId": "NamedParameterNotFound,Microsoft.PowerShell.Commands.GetContentCommand",
+        "exceptionType": "System.Management.Automation.ParameterBindingException",
+        "category": "InvalidArgument",
+        "message": "A parameter cannot be found that matches parameter name 'Wait'."
+      },
+      "ReadCount": null,
+      "TotalCount": null,
+      "Tail": {
+        "errorId": "TailNotSupported,Microsoft.PowerShell.Commands.GetContentCommand",
+        "exceptionType": "System.InvalidOperationException",
+        "category": "InvalidOperation",
+        "message": "The Tail parameter currently is supported only for the FileSystem provider."
+      },
+      "Filter": {
+        "errorId": "NotSupported,Microsoft.PowerShell.Commands.GetContentCommand",
+        "exceptionType": "System.Management.Automation.PSNotSupportedException",
+        "category": "NotImplemented",
+        "message": "Cannot call method. The provider does not support the use of filters."
+      },
+      "Include": null,
+      "Exclude": null,
+      "Force": null
+    },
+    "getChildItem": {
+      "Filter": {
+        "errorId": "NotSupported,Microsoft.PowerShell.Commands.GetChildItemCommand",
+        "exceptionType": "System.Management.Automation.PSNotSupportedException",
+        "category": "NotImplemented",
+        "message": "Cannot call method. The provider does not support the use of filters."
+      },
+      "Include": null,
+      "Exclude": null,
+      "Force": null,
+      "Recurse": null,
+      "Depth": {
+        "errorId": "NotSupported,Microsoft.PowerShell.Commands.GetChildItemCommand",
+        "exceptionType": "System.Management.Automation.PSNotSupportedException",
+        "category": "NotImplemented",
+        "message": "Provider operation stopped because the provider does not support the 'Depth' parameter."
+      },
+      "File": {
+        "errorId": "NamedParameterNotFound,Microsoft.PowerShell.Commands.GetChildItemCommand",
+        "exceptionType": "System.Management.Automation.ParameterBindingException",
+        "category": "InvalidArgument",
+        "message": "A parameter cannot be found that matches parameter name 'File'."
+      },
+      "Directory": {
+        "errorId": "NamedParameterNotFound,Microsoft.PowerShell.Commands.GetChildItemCommand",
+        "exceptionType": "System.Management.Automation.ParameterBindingException",
+        "category": "InvalidArgument",
+        "message": "A parameter cannot be found that matches parameter name 'Directory'."
+      },
+      "Hidden": {
+        "errorId": "NamedParameterNotFound,Microsoft.PowerShell.Commands.GetChildItemCommand",
+        "exceptionType": "System.Management.Automation.ParameterBindingException",
+        "category": "InvalidArgument",
+        "message": "A parameter cannot be found that matches parameter name 'Hidden'."
+      },
+      "Name": null,
+      "Attributes": {
+        "errorId": "NamedParameterNotFound,Microsoft.PowerShell.Commands.GetChildItemCommand",
+        "exceptionType": "System.Management.Automation.ParameterBindingException",
+        "category": "InvalidArgument",
+        "message": "A parameter cannot be found that matches parameter name 'Attributes'."
+      }
+    },
+    "testPath": {
+      "Filter": {
+        "errorId": "NotSupported,Microsoft.PowerShell.Commands.TestPathCommand",
+        "exceptionType": "System.Management.Automation.PSNotSupportedException",
+        "category": "NotImplemented",
+        "message": "Cannot call method. The provider does not support the use of filters."
+      },
+      "Include": null,
+      "Exclude": null,
+      "Force": {
+        "errorId": "NamedParameterNotFound,Microsoft.PowerShell.Commands.TestPathCommand",
+        "exceptionType": "System.Management.Automation.ParameterBindingException",
+        "category": "InvalidArgument",
+        "message": "A parameter cannot be found that matches parameter name 'Force'."
+      },
+      "IsValid": null,
+      "NewerThan": {
+        "errorId": "NamedParameterNotFound,Microsoft.PowerShell.Commands.TestPathCommand",
+        "exceptionType": "System.Management.Automation.ParameterBindingException",
+        "category": "InvalidArgument",
+        "message": "A parameter cannot be found that matches parameter name 'NewerThan'."
+      },
+      "OlderThan": {
+        "errorId": "NamedParameterNotFound,Microsoft.PowerShell.Commands.TestPathCommand",
+        "exceptionType": "System.Management.Automation.ParameterBindingException",
+        "category": "InvalidArgument",
+        "message": "A parameter cannot be found that matches parameter name 'OlderThan'."
+      }
+    }
+  },
+  "hiddenRule": {
+    "plainCount": 1,
+    "forceCount": 1
+  },
+  "pathSeam": {
+    "splitParentLeaf": "",
+    "splitParentRoot": "",
+    "splitLeafOfLeaf": "zzTp",
+    "joinDriveAndChild": "Env:\\zzTp",
+    "joinRootAndChild": "Env:\\zzTp",
+    "resolveBare": "Env:\\zzTp",
+    "resolveSlash": "Env:\\zzTp"
+  },
+  "capabilityRefusal": {
+    "probe": "Get-Content HKCU:\\Software",
+    "shape": {
+      "errorId": "NotSupported,Microsoft.PowerShell.Commands.GetContentCommand",
+      "exceptionType": "System.Management.Automation.PSNotSupportedException",
+      "category": "NotImplemented",
+      "message": "Cannot use interface. The IContentCmdletProvider interface is not implemented by this provider."
+    }
+  },
+  "newItem": [
+    {
+      "path": "Env:zzNewE",
+      "typeName": "System.Collections.DictionaryEntry",
+      "exists": true
+    },
+    {
+      "path": "Variable:zzNewV",
+      "typeName": "System.Management.Automation.PSVariable",
+      "exists": true
+    },
+    {
+      "path": "Alias:zzNewA",
+      "typeName": "System.Management.Automation.AliasInfo",
+      "exists": true
+    },
+    {
+      "path": "Function:zzNewF",
+      "typeName": "System.Management.Automation.FunctionInfo",
+      "exists": true
+    }
+  ],
+  "newItemExisting": {
+    "errorId": "Argument,Microsoft.PowerShell.Commands.NewItemCommand",
+    "exceptionType": "System.Management.Automation.PSArgumentException",
+    "category": "InvalidArgument",
+    "message": "The item at path 'zzNewE' already exists."
+  }
+}

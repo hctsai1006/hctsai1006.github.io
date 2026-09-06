@@ -29,6 +29,22 @@
  * cases that "pass", because a case with no implementation behind it passes
  * nothing.
  *
+ * AND IT IS REPORTED PER PROFILE, because the evidence is not the same for
+ * both. There is one capture and it is a recording of 7.6.5. Asked about
+ * 7.7.0-preview.4 the honest answer is zero, and a single site-wide percentage
+ * cannot say that -- a reader looking at the 7.7 profile would carry the 7.6.5
+ * figure across without noticing they had done it. classifyProfileCoverage
+ * expresses each profile in the ladder src/commands/manifest.ts already
+ * defines (declared / partial / implemented / verified) rather than in a
+ * second vocabulary, and awards the top rung only from a capture of that
+ * profile's own version.
+ *
+ * The same run also asks what compat/deltas records can point at.
+ * classifyDeltaProof holds every difference the engine claims to emulate to a
+ * NAMED corpus case that ran and agreed and is about the right command; the
+ * answer today is 0 of 6, which is reported rather than rounded away. See
+ * ROADMAP 3.5 and 11.5.
+ *
  * WHAT MAKES THESE NUMBERS HARD TO FORGE
  *
  * A review moved the headline figure to any value it liked and made a tampered
@@ -53,9 +69,29 @@
  *      the command, or the module implementing it references the function the
  *      probe drives. See creditFor, which also states what it cannot catch.
  *
+ *   4. NO DENOMINATOR READS THE EVIDENCE. Both populations come from the
+ *      manifest and the profile, so no fraction can be improved by deleting
+ *      what was failing: removing the case that credited a command lowers the
+ *      top and leaves the bottom alone, removing the case a delta names fails
+ *      the build outright, and removing a whole profile is caught against the
+ *      release lockfile's channels. Each of those is a test.
+ *
+ *   5. A PROOF MUST BE RELEVANT, NOT MERELY GREEN. Found by attacking the
+ *      first version of classifyDeltaProof: pointing New-Guid's UUID-version
+ *      change at `date.ticks-are-int64` -- a case that passes and has nothing
+ *      to do with it -- took the proven count from 0 to 1 with every gate
+ *      green. A named case must now hold an established credit for a command
+ *      the change is scoped to.
+ *
+ *   6. THE TOP RUNG CANNOT BE DECLARED. A manifest saying a command is
+ *      `verified` without a case behind it is a problem, not a promotion --
+ *      otherwise the relabelling attack of (2) would simply move one level up,
+ *      from the case's label to the command's own status.
+ *
  * tests/conformance/report.json is regenerated and compared by `--check`, wired
  * into `npm run verify`. It was previously a committed artifact with no gate and
- * no reader, and it had gone stale.
+ * no reader, and it had gone stale. It is also what compat/explorer.html reads
+ * to display the coverage numbers, so the page and the gate cannot disagree.
  *
  * WHY THERE IS A TINY YAML READER IN HERE
  *
@@ -828,6 +864,16 @@ interface ManifestCommand {
   readonly fidelity: string;
   readonly parameterSource: string;
   readonly parameters: readonly ManifestParameter[];
+  /**
+   * How much of the command exists HERE -- src/commands/manifest.ts's own
+   * four-state ladder. Declared optional because manifests.json is generated
+   * and a reader here must not assume a field it did not write; every command
+   * carries one today, and `coverageCommands` says what it does when one is
+   * missing rather than defaulting silently.
+   */
+  readonly implementationStatus?: string;
+  /** Set when another command takes this name in the session registry. */
+  readonly shadowedBy?: string;
 }
 
 function loadManifests(): readonly ManifestCommand[] {
@@ -838,6 +884,123 @@ function loadManifests(): readonly ManifestCommand[] {
 
 const MANIFESTS = loadManifests();
 const ERROR_CATEGORIES = readErrorCategories();
+
+// ---------------------------------------------------------------------------
+// the profiles and the recorded version differences
+// ---------------------------------------------------------------------------
+
+interface LoadedProfile {
+  readonly profile: string;
+  readonly displayVersion: string;
+  /** Keys a command can read under this profile. NOT documentedBehaviors. */
+  readonly emulatedBehaviorKeys: readonly string[];
+}
+
+/**
+ * Every published compatibility profile, read in a stable order.
+ *
+ * Deliberately reads only `profile`, `displayVersion` and the KEYS of
+ * `behaviors`. Nothing here looks at a behaviour's value, at `engineLimits`, at
+ * `commands` or at `documentedBehaviors` -- so a profile regenerated for an
+ * unrelated reason cannot move a coverage number, and this file does not have
+ * to be re-read every time the profile generator learns a new field.
+ */
+function loadProfiles(): readonly LoadedProfile[] {
+  const dir = join(REPO, 'compat/profiles');
+  const files = readdirSync(dir).filter((f) => f.endsWith('.json')).sort();
+  if (files.length === 0) fail('compat/profiles contains no profile to report coverage for');
+  return files.map((file) => {
+    const where = `compat/profiles/${file}`;
+    const doc = readJson(join(dir, file));
+    if (!isRecord(doc)) return fail(`${where}: profile must be an object`);
+    return {
+      profile: requireString(doc, 'profile', where),
+      displayVersion: requireString(doc, 'displayVersion', where),
+      emulatedBehaviorKeys: Object.keys(requireRecord(doc, 'behaviors', where)).sort(),
+    };
+  });
+}
+
+interface LoadedDeltaChange {
+  readonly where: string;
+  readonly subject: string;
+  readonly implementation: string;
+  readonly emulated: boolean;
+  readonly conformanceFixture: string | null;
+  readonly behaviorKeys: readonly string[];
+  readonly scope: DeltaProofInput['scope'];
+  /** The shipped claim, checked below against what the run can actually prove. */
+  readonly implemented: boolean;
+}
+
+/**
+ * Resolve a delta record's `scope.command` to the manifest names a conformance
+ * case could be credited to.
+ *
+ * Three shapes, all present in the data. Null is an explicit claim that the
+ * change is engine-wide. A single display name is the ordinary case. A
+ * comma-joined list is the Format-* records, which really do describe one change
+ * across three cmdlets -- so a case crediting ANY of them is on topic, and the
+ * split is here rather than in the caller because getting it wrong would either
+ * reject a fair proof or accept an unrelated one.
+ */
+function scopeOf(declared: string | null): DeltaProofInput['scope'] {
+  if (declared === null) return { declared: null, commands: [], engineWide: true };
+  const displays = declared.split(',').map((s) => s.trim()).filter((s) => s !== '');
+  const commands = displays
+    .map((display) => MANIFESTS.find((m) => m.display === display)?.name)
+    .filter((name): name is string => name !== undefined);
+  return { declared, commands, engineWide: false };
+}
+
+/**
+ * Every recorded difference between two profiles.
+ *
+ * Read as DATA from the generated delta rather than by importing the curated
+ * source. The claim under audit is the one that shipped, and the shipped file
+ * is what a reader and the explorer both see; re-deriving it from the curation
+ * would audit the generator's input instead of its output.
+ */
+function loadDeltaChanges(): readonly LoadedDeltaChange[] {
+  const dir = join(REPO, 'compat/deltas');
+  const files = readdirSync(dir).filter((f) => f.endsWith('.json')).sort();
+  const out: LoadedDeltaChange[] = [];
+  for (const file of files) {
+    const where0 = `compat/deltas/${file}`;
+    const doc = readJson(join(dir, file));
+    if (!isRecord(doc)) return fail(`${where0}: delta must be an object`);
+    for (const change of requireRecordArray(doc, 'changes', where0)) {
+      const subject = requireString(change, 'subject', `${where0}: a change`);
+      const where = `${where0}: '${subject}'`;
+      const fixture = change['conformanceFixture'];
+      if (fixture !== null && typeof fixture !== 'string') {
+        fail(`${where}: 'conformanceFixture' must be a corpus case id or null`);
+      }
+      const emulated = change['emulated'];
+      if (typeof emulated !== 'boolean') {
+        fail(`${where}: 'emulated' must be a boolean -- regenerate with npm run profiles`);
+      }
+      const declaredScope = requireRecord(change, 'scope', where)['command'];
+      if (declaredScope !== null && typeof declaredScope !== 'string') {
+        fail(`${where}: 'scope.command' must be a command name or null`);
+      }
+      const implemented = change['implemented'];
+      if (typeof implemented !== 'boolean') fail(`${where}: 'implemented' must be a boolean`);
+      out.push({
+        where,
+        subject,
+        implementation: requireString(change, 'implementation', where),
+        emulated,
+        conformanceFixture: fixture as string | null,
+        behaviorKeys: requireArray(change, 'behaviorKeys', where).map(String),
+        scope: scopeOf(declaredScope as string | null),
+        implemented,
+      });
+    }
+  }
+  if (out.length === 0) fail('compat/deltas records no change; there is nothing to hold to a fixture');
+  return out;
+}
 
 function manifestParameterField(args: Record<string, unknown>): unknown {
   const commandName = String(args['command']);
@@ -1469,10 +1632,385 @@ function matches(expected: unknown, actual: unknown): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// the run
+// per-profile coverage
 // ---------------------------------------------------------------------------
 
-type Outcome = 'match' | 'difference' | 'unimplemented' | 'error';
+/**
+ * What a case did. Exported because the coverage rules below are stated in
+ * terms of it and are tested directly.
+ */
+export type Outcome = 'match' | 'difference' | 'unimplemented' | 'error';
+
+/**
+ * The support ladder, taken WHOLE from src/commands/manifest.ts rather than
+ * invented here. `verified` is defined there as "implemented AND compared
+ * against a captured reference-implementation run", which is exactly what a
+ * conformance fixture is -- so coverage is a promotion along a ladder the
+ * repository already speaks, not a second vocabulary nobody can line up with
+ * the first. That file also says of `verified`: "Nothing claims this yet; it
+ * exists so that `implemented` cannot quietly come to mean it." This is the
+ * thing that awards it, and it is the only thing that may.
+ */
+export type SupportLevel = 'declared' | 'partial' | 'implemented' | 'verified';
+
+const SUPPORT_LEVELS: readonly string[] = ['declared', 'partial', 'implemented', 'verified'];
+
+export interface CoverageCommand {
+  readonly name: string;
+  /** What the manifest claims BEFORE any fixture is consulted. */
+  readonly declared: SupportLevel;
+  /**
+   * Reachable from a prompt right now. A command held back from the session
+   * registry cannot be promoted however much evidence exists, because the
+   * evidence is then about code no visitor can reach. `where-object` is the
+   * live case and it holds fifteen behavioural cases, which is why this is a
+   * rule and not a judgement.
+   *
+   * It stays in the POPULATION at its declared level. The predecessor of this
+   * number dropped such commands from the denominator instead, and a
+   * denominator that shrinks is the forgery this file exists to prevent --
+   * even when it shrinks for a defensible reason.
+   */
+  readonly runnable: boolean;
+}
+
+export interface ProfileCoverageInput {
+  readonly profile: string;
+  readonly displayVersion: string;
+  /**
+   * The keys THIS profile makes readable to a command -- `behaviors`, not
+   * `documentedBehaviors`. It comes from the profile rather than from the
+   * corpus, so no amount of deleting fixtures can shrink it.
+   */
+  readonly emulatedBehaviorKeys: readonly string[];
+  /** The pwsh version this run actually compared against. Null when none. */
+  readonly comparedAgainstVersion: string | null;
+  readonly commands: readonly CoverageCommand[];
+  /** Commands holding at least one CREDITED behavioural match. */
+  readonly behaviourallyEvidenced: ReadonlySet<string>;
+  /** Behaviour keys a matched fixture case proves. See classifyDeltaProof. */
+  readonly provenBehaviorKeys: ReadonlySet<string>;
+}
+
+export interface ProfileCoverage {
+  readonly profile: string;
+  readonly displayVersion: string;
+  readonly fixture: {
+    readonly comparedAgainstVersion: string | null;
+    /** Whether that capture is evidence about THIS profile's version. */
+    readonly applies: boolean;
+    readonly reason: string;
+  };
+  readonly commands: {
+    readonly population: number;
+    /** The denominator in words. A number without one is a claim. */
+    readonly populationIs: string;
+    readonly byLevel: Readonly<Record<SupportLevel, number>>;
+    readonly verifiedPercent: number;
+    /**
+     * Commands whose MANIFEST says `verified` while no case from a capture of
+     * this profile's version agrees with them. Empty, and it has to stay that
+     * way: the whole point of computing the top rung here is that declaring it
+     * is not a way to reach it. Only reported where a capture exists to
+     * adjudicate against -- under a profile nothing was captured from, the
+     * manifest's claim is neither confirmed nor refuted.
+     */
+    readonly unearnedVerified: readonly string[];
+  };
+  readonly behaviors: {
+    readonly population: number;
+    readonly populationIs: string;
+    readonly proven: number;
+    readonly provenPercent: number;
+    /** Named, so "0 proven" cannot be read as "nothing to prove". */
+    readonly unproven: readonly string[];
+  };
+}
+
+const round1 = (n: number): number => Math.round(n * 10) / 10;
+
+/** 0/0 is 0% here, not NaN: an empty population has proven nothing. */
+const percentOf = (n: number, of: number): number => (of === 0 ? 0 : round1((n / of) * 100));
+
+/**
+ * Coverage OF ONE PROFILE, as a measured number with a stated denominator.
+ *
+ * WHY PER PROFILE, WHEN BOTH PROFILES DECLARE THE SAME COMMANDS
+ *
+ * Because the evidence is not the same. There is one captured fixture, from
+ * pwsh 7.6.5, and it is evidence about 7.6.5. Asked about 7.7.0-preview.4 the
+ * honest answer is zero -- not because anyone forgot, but because no 7.7 was
+ * ever consulted, and 7.7.0-preview.4 is installed nowhere to consult. One
+ * global percentage cannot say that, and a reader looking at the 7.7 profile
+ * would carry the 7.6.5 number across without noticing they had done it.
+ *
+ * WHAT MAKES THE NUMBER HARD TO MOVE
+ *
+ * Each of these is a property of this function, and each is tested:
+ *
+ *   1. THE DENOMINATOR NEVER READS THE EVIDENCE. `population` is a function of
+ *      `commands` and `emulatedBehaviorKeys` alone. Deleting a fixture case, or
+ *      the whole fixture, cannot make the fraction smaller underneath.
+ *   2. THE NUMERATOR IS MONOTONE IN THE EVIDENCE. Removing an element from
+ *      `behaviourallyEvidenced` or `provenBehaviorKeys` can only lower the
+ *      count. There is no path where less evidence reports more coverage.
+ *   3. A CAPTURE OF THE WRONG VERSION AWARDS NOTHING. If
+ *      `comparedAgainstVersion` is not this profile's version, `verified` and
+ *      `proven` are zero whatever the evidence sets contain.
+ *   4. AN UNREACHABLE COMMAND IS NEVER PROMOTED, and never leaves the
+ *      population either.
+ *
+ * What it cannot do is decide whether a case is a GOOD test of the command it
+ * credits. creditFor establishes that the connection is real; nothing here
+ * establishes that it is thorough. This is a floor, and it is reported as one.
+ */
+export function classifyProfileCoverage(input: ProfileCoverageInput): ProfileCoverage {
+  const applies =
+    input.comparedAgainstVersion !== null && input.comparedAgainstVersion === input.displayVersion;
+  const reason = applies
+    ? `compared against a captured run of PowerShell ${String(input.comparedAgainstVersion)}`
+    : input.comparedAgainstVersion === null
+      ? 'nothing was compared: no fixture was loaded'
+      : `no fixture was captured from PowerShell ${input.displayVersion}. The only capture is from ` +
+        `${input.comparedAgainstVersion}, which is evidence about that version and not this one.`;
+
+  const byLevel: Record<SupportLevel, number> = { declared: 0, partial: 0, implemented: 0, verified: 0 };
+  const unearnedVerified: string[] = [];
+  for (const command of input.commands) {
+    // A DECLARED `verified` is capped at `implemented` before anything else
+    // happens. This is the shape of the attack this whole file is built
+    // against, one level up from the one it already knew about: relabelling a
+    // case's `command` was closed by crediting only established connections,
+    // and relabelling the COMMAND's own status would otherwise walk straight
+    // past that and hand out the top rung for a one-word edit in a manifest.
+    // Nothing declares `verified` today; this is what keeps that true.
+    const floor: SupportLevel = command.declared === 'verified' ? 'implemented' : command.declared;
+
+    // Promotion is the ONLY thing the evidence does here. It cannot demote, and
+    // it cannot reach a command that is not already `implemented`: evidence
+    // that a partial command agrees on one behaviour does not make it whole.
+    const promoted =
+      applies && command.runnable && floor === 'implemented' && input.behaviourallyEvidenced.has(command.name);
+    if (applies && command.declared === 'verified' && !promoted) unearnedVerified.push(command.name);
+    byLevel[promoted ? 'verified' : floor] += 1;
+  }
+
+  const unproven = applies
+    ? input.emulatedBehaviorKeys.filter((k) => !input.provenBehaviorKeys.has(k))
+    : [...input.emulatedBehaviorKeys];
+  const proven = input.emulatedBehaviorKeys.length - unproven.length;
+
+  return {
+    profile: input.profile,
+    displayVersion: input.displayVersion,
+    fixture: { comparedAgainstVersion: input.comparedAgainstVersion, applies, reason },
+    commands: {
+      population: input.commands.length,
+      populationIs:
+        'every command manifests.json declares native-semantic, including any held back from the ' +
+        'session registry -- those stay at their declared level and can never be promoted',
+      byLevel,
+      verifiedPercent: percentOf(byLevel.verified, input.commands.length),
+      unearnedVerified: [...unearnedVerified].sort(),
+    },
+    behaviors: {
+      population: input.emulatedBehaviorKeys.length,
+      populationIs:
+        "this profile's `behaviors` table -- the version-specific flags a command can actually read. " +
+        'Documented-but-unemulated keys are in neither half, because nothing reads them',
+      proven,
+      provenPercent: percentOf(proven, input.emulatedBehaviorKeys.length),
+      unproven: [...unproven].sort(),
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// what a fixture proves about a recorded version difference
+// ---------------------------------------------------------------------------
+
+/** What the run found out about one corpus case. */
+export interface CaseEvidence {
+  readonly outcome: Outcome;
+  /**
+   * The command this case is ALLOWED to be evidence for -- creditFor's answer,
+   * not the corpus label. Null when the connection could not be established.
+   */
+  readonly credits: string | null;
+  /** The corpus label. Null for a case about the engine rather than a command. */
+  readonly command: string | null;
+}
+
+export interface DeltaProofInput {
+  /** For the message: the delta file and the change's subject. */
+  readonly where: string;
+  /** Does the engine reproduce this difference at all? */
+  readonly emulated: boolean;
+  readonly implementation: string;
+  /**
+   * The corpus case id offered as proof, or null.
+   *
+   * A CASE ID, not a file path. A path is a string that exists; a case id is
+   * checkable end to end -- the case is in the corpus, its source hash matches
+   * the recording, a real pwsh produced the recorded answer, and this project
+   * agreed with it. "Names the fixture that proved it" has to mean the proof
+   * can be re-run, or it is a citation rather than a proof.
+   */
+  readonly conformanceFixture: string | null;
+  readonly behaviorKeys: readonly string[];
+  /**
+   * What the difference is ABOUT, so a proof can be checked for relevance and
+   * not only for existence.
+   *
+   * `commands` is the manifest name(s) the change's `scope.command` resolves
+   * to -- empty when it is engine-wide, and empty ALSO when the scope names
+   * something this project has no manifest for, which the flag below tells
+   * apart. Two different situations that must not be collapsed: an engine-wide
+   * change has no command to match, and a change about a cmdlet nobody
+   * implemented can have no evidence at all.
+   */
+  readonly scope: {
+    readonly declared: string | null;
+    readonly commands: readonly string[];
+    readonly engineWide: boolean;
+  };
+}
+
+export interface DeltaProofVerdict {
+  readonly proven: boolean;
+  /**
+   * A CI failure, and deliberately distinct from `!proven`. Not being proven is
+   * the ordinary state of every entry today and must not fail the build; making
+   * a claim nothing supports must.
+   */
+  readonly problem: string | null;
+}
+
+/**
+ * Is this recorded version difference proved by a conformance fixture?
+ *
+ * The rule PR-3 item 5 states, applied mechanically instead of by curation: an
+ * entry counts as implemented only when it names a case that RAN and AGREED.
+ *
+ * The four ways to fake it, and what happens to each:
+ *
+ *   name a case that does not exist  -> problem. Deleting the case that proved
+ *                                       an entry turns the entry into a build
+ *                                       failure, so a proof cannot be removed
+ *                                       quietly.
+ *   name a case that did not agree   -> problem. A difference, an error or an
+ *                                       unimplemented probe proves nothing, and
+ *                                       pointing at one is worse than pointing
+ *                                       at nothing because it reads as proof.
+ *   name a case for a change nothing -> problem. Evidence for a difference the
+ *   emulates                            engine does not reproduce is evidence
+ *                                       about pwsh alone.
+ *   name a passing case about        -> problem, and this is the one found by
+ *   something else                      attacking the first version of this
+ *                                       function: pointing New-Guid's UUID-
+ *                                       version change at `date.ticks-are-int64`
+ *                                       took the proven count from 0 to 1 with
+ *                                       every gate green. A proof has to be
+ *                                       relevant, not merely green.
+ *
+ * RELEVANCE, and what it can and cannot establish. The link is the same one
+ * creditFor uses for coverage: the case must hold an ESTABLISHED CREDIT for a
+ * command the change is scoped to, which is a mechanical fact about the corpus
+ * and the source rather than a label anyone can type. For an engine-wide change
+ * there is no command, so the link degrades to "the case must also be about the
+ * engine rather than about some cmdlet" -- weaker, and said out loud here
+ * instead of dressed up. What neither can establish is that the case exercises
+ * the specific BEHAVIOUR the change describes; the corpus has no field naming a
+ * behaviour key, and adding an un-notarised one would be a field anybody could
+ * edit to say anything.
+ *
+ * And `verified` -- the top of the ladder -- requires a fixture outright. Two
+ * entries claimed it with `conformanceFixture: null`, resting instead on unit
+ * tests against a synthetic behaviour view whose expected values were
+ * transcribed by hand out of a pwsh session and into a comment. That is a real
+ * measurement and a weaker claim: nothing was captured, so nothing can be
+ * re-checked.
+ */
+export function classifyDeltaProof(
+  change: DeltaProofInput,
+  cases: ReadonlyMap<string, CaseEvidence>,
+): DeltaProofVerdict {
+  const named = change.conformanceFixture;
+
+  if (named === null) {
+    if (change.implementation === 'verified') {
+      return {
+        proven: false,
+        problem:
+          `${change.where} is "verified" but names no conformance case. "verified" means compared ` +
+          'against a captured reference-implementation run; name the case, or say "implemented".',
+      };
+    }
+    return { proven: false, problem: null };
+  }
+
+  if (!change.emulated) {
+    return {
+      proven: false,
+      problem:
+        `${change.where} is "${change.implementation}" -- the engine does not reproduce it -- yet names ` +
+        `conformance case '${named}' as proof. A case can only prove a difference this project emulates.`,
+    };
+  }
+
+  const evidence = cases.get(named);
+  if (evidence === undefined) {
+    return {
+      proven: false,
+      problem:
+        `${change.where} names conformance case '${named}', which is not in the corpus. Either the case ` +
+        'was deleted, in which case the claim it supported went with it, or the id is a typo.',
+    };
+  }
+  if (evidence.outcome !== 'match') {
+    return {
+      proven: false,
+      problem:
+        `${change.where} names conformance case '${named}', which is '${evidence.outcome}'. A case that did not ` +
+        'agree with the reference implementation proves nothing.',
+    };
+  }
+
+  if (change.scope.engineWide) {
+    if (evidence.command !== null) {
+      return {
+        proven: false,
+        problem:
+          `${change.where} is engine-wide, but conformance case '${named}' is about '${evidence.command}'. ` +
+          'A case scoped to one command cannot be evidence for a change scoped to the engine.',
+      };
+    }
+    return { proven: true, problem: null };
+  }
+
+  if (change.scope.commands.length === 0) {
+    return {
+      proven: false,
+      problem:
+        `${change.where} is scoped to '${String(change.scope.declared)}', which manifests.json does not ` +
+        `declare, so no case can be evidence about it -- yet it names '${named}'.`,
+    };
+  }
+  if (evidence.credits === null || !change.scope.commands.includes(evidence.credits)) {
+    return {
+      proven: false,
+      problem:
+        `${change.where} is scoped to ${change.scope.commands.map((c) => `'${c}'`).join(' or ')}, but ` +
+        `conformance case '${named}' credits ${evidence.credits === null ? 'nothing' : `'${evidence.credits}'`}. ` +
+        'A passing case about something else is not a proof of this.',
+    };
+  }
+  return { proven: true, problem: null };
+}
+
+// ---------------------------------------------------------------------------
+// the run
+// ---------------------------------------------------------------------------
 
 interface CaseResult {
   readonly id: string;
@@ -1521,6 +2059,40 @@ export interface ConformanceReport {
     readonly metadataCoveragePercent: number;
     /** Declared native-semantic but not reachable from a prompt, so not counted. */
     readonly withheldCommands: readonly string[];
+  };
+  /**
+   * The same evidence, asked separately of each published profile -- which is a
+   * different question from `coverage` above and gives a different answer.
+   * `coverage` asks "what has this project been shown to get right?" and has one
+   * denominator. This asks "what has been shown about PowerShell 7.7.0-preview.4?"
+   * and the answer is nothing, because no 7.7 exists to capture from.
+   *
+   * Written into the report so a page can display it without running pwsh, and
+   * without recomputing a percentage of its own from parts.
+   */
+  readonly profileCoverage: readonly ProfileCoverage[];
+  /**
+   * Whether each recorded version difference names a conformance case that
+   * actually ran and agreed. `proven` is the honest count; it is 0 today and
+   * says so rather than being omitted.
+   */
+  readonly deltaProof: {
+    readonly changes: number;
+    readonly emulated: number;
+    readonly proven: number;
+    readonly provenBehaviorKeys: readonly string[];
+    /**
+     * Emulated, but no case proves it. Named, not just counted -- and named by
+     * behaviour key as well as subject, because two changes can share a subject
+     * (New-Guid has both a UUID-version change and a switch-binding one) and
+     * because the key is what ties a row here to the per-profile behaviour
+     * fraction above it.
+     */
+    readonly unproven: readonly {
+      readonly subject: string;
+      readonly implementation: string;
+      readonly behaviorKeys: readonly string[];
+    }[];
   };
   readonly perCommand: readonly {
     readonly command: string;
@@ -1794,7 +2366,120 @@ export function runConformance(): ConformanceReport {
 
   const withBehaviour = perCommand.filter((c) => c.behavioural > 0).length;
   const withMetadata = perCommand.filter((c) => c.metadata > 0).length;
-  const round1 = (n: number): number => Math.round(n * 10) / 10;
+
+  // ---- what the recorded version differences can point at -----------------
+  //
+  // Run before the per-profile numbers because it is what supplies them: a
+  // behaviour key counts as proven only through a delta entry that names a case
+  // that agreed. Nothing else can put a key in that set, so a key cannot become
+  // "proven" by anyone editing the profile.
+  const evidenceById = new Map<string, CaseEvidence>(
+    results.map((r) => [r.id, { outcome: r.outcome, credits: r.credits, command: r.command }]),
+  );
+  const deltaChanges = loadDeltaChanges();
+  const provenBehaviorKeys = new Set<string>();
+  const unprovenChanges: { subject: string; implementation: string; behaviorKeys: readonly string[] }[] = [];
+  let provenChanges = 0;
+  for (const change of deltaChanges) {
+    const verdict = classifyDeltaProof(change, evidenceById);
+    if (verdict.problem !== null) problems.push(verdict.problem);
+    // The shipped boolean is held to what the run can actually demonstrate,
+    // which is what stops `implemented` becoming a field with no reader -- the
+    // state report.json was in when it could have been rewritten to claim 100%
+    // coverage with every gate green. tools/generate-compatibility-profile.mts
+    // derives it from "does it name a case"; only the run knows whether that
+    // case exists, agreed, and is about the right command.
+    if (change.implemented !== verdict.proven) {
+      problems.push(
+        `${change.where} ships implemented: ${String(change.implemented)}, but this run ` +
+          `${verdict.proven ? 'proves' : 'cannot prove'} it. Regenerate with npm run profiles, ` +
+          'or stop claiming it.',
+      );
+    }
+    if (verdict.proven) {
+      provenChanges += 1;
+      for (const key of change.behaviorKeys) provenBehaviorKeys.add(key);
+    } else if (change.emulated) {
+      unprovenChanges.push({
+        subject: change.subject,
+        implementation: change.implementation,
+        behaviorKeys: change.behaviorKeys,
+      });
+    }
+  }
+
+  // ---- per profile --------------------------------------------------------
+  //
+  // The command population is every native-semantic manifest, withheld ones
+  // included. `runnable` decides only whether a command can be PROMOTED; the
+  // denominator does not consult it, so the shrinking-denominator move that
+  // `coverage.withheldCommands` has to apologise for is not available here.
+  //
+  // WHAT GUARDS THE DENOMINATOR, since this file does not: manifests.json is
+  // generated from the `manifest({ ... })` declarations in src/commands, and
+  // `npm run manifests -- --check` regenerates and compares it. Hand-deleting
+  // eighteen native-semantic entries here takes the fraction from 10/31 to
+  // 10/13 and this harness does not notice -- that gate does. Re-deriving the
+  // manifest here to close it independently would mean a second copy of the
+  // generator, which is the failure mode this repository is organised against.
+  const coverageCommands: CoverageCommand[] = MANIFESTS.filter((m) => m.fidelity === 'native-semantic').map(
+    (m) => {
+      const declared = m.implementationStatus;
+      if (declared === undefined || !SUPPORT_LEVELS.includes(declared as SupportLevel)) {
+        // Not defaulted. A command whose status this file cannot read would
+        // otherwise land on a rung nobody chose for it.
+        fail(
+          `manifests.json: '${m.name}' is native-semantic with implementationStatus ` +
+            `${JSON.stringify(declared)}, which is not one of ${SUPPORT_LEVELS.join(', ')}`,
+        );
+      }
+      return { name: m.name, declared: declared as SupportLevel, runnable: runnable(m) };
+    },
+  );
+  const behaviourallyEvidenced = new Set(perCommand.filter((c) => c.behavioural > 0).map((c) => c.command));
+  const profileCoverage = loadProfiles().map((p) =>
+    classifyProfileCoverage({
+      profile: p.profile,
+      displayVersion: p.displayVersion,
+      emulatedBehaviorKeys: p.emulatedBehaviorKeys,
+      comparedAgainstVersion: fixtureVersion,
+      commands: coverageCommands,
+      behaviourallyEvidenced,
+      provenBehaviorKeys,
+    }),
+  );
+  // A profile that is not reported cannot be reported badly. Deleting
+  // compat/profiles/powershell-7.7.0-preview.4-linux.json removes the row that
+  // reads 0%, and everything downstream of `loadProfiles` would then be
+  // perfectly consistent with a smaller world. So the set of profiles is
+  // checked against an INDEPENDENT source -- the release lockfile's own
+  // channels, which is what the profile generator builds from -- rather than
+  // against the directory listing that would have shrunk with it.
+  const channels = isRecord(lock['channels']) ? lock['channels'] : {};
+  const covered = new Set(profileCoverage.map((p) => p.displayVersion));
+  for (const channel of ['lts', 'preview']) {
+    const declared = channels[channel];
+    if (typeof declared !== 'string') continue;
+    const version = declared.replace(/^v/, '');
+    if (!covered.has(version)) {
+      problems.push(
+        `releases.lock.json names ${version} as the ${channel} channel, but no profile in ` +
+          'compat/profiles reports coverage for it. A version with no row is a version nobody can see ' +
+          'has never been measured.',
+      );
+    }
+  }
+
+  for (const p of profileCoverage) {
+    for (const name of p.commands.unearnedVerified) {
+      problems.push(
+        `manifests.json declares '${name}' implementationStatus "verified", but no conformance case ` +
+          `credits it against the captured PowerShell ${p.displayVersion}. src/commands/manifest.ts ` +
+          'defines that word as "compared against a captured reference-implementation run"; declaring ' +
+          'it is not a way to be it.',
+      );
+    }
+  }
 
   const compared = results.filter((r) => r.outcome === 'match' || r.outcome === 'difference').length;
   const matched = results.filter((r) => r.outcome === 'match').length;
@@ -1827,6 +2512,14 @@ export function runConformance(): ConformanceReport {
       metadataCoveragePercent: round1((withMetadata / nativeSemantic.length) * 100),
       /** Declared native-semantic but not reachable from a prompt, so not counted. */
       withheldCommands: withheld,
+    },
+    profileCoverage,
+    deltaProof: {
+      changes: deltaChanges.length,
+      emulated: deltaChanges.filter((c) => c.emulated).length,
+      proven: provenChanges,
+      provenBehaviorKeys: [...provenBehaviorKeys].sort(),
+      unproven: unprovenChanges,
     },
     perCommand,
     cultureSensitiveCases: cultureSensitive.sort(),
@@ -1867,6 +2560,38 @@ function render(report: ConformanceReport): string {
     );
   }
   lines.push(`  metadata coverage     ${c.commandsWithMetadataEvidence} / ${c.nativeSemanticCommands} = ${c.metadataCoveragePercent}%`);
+
+  for (const p of report.profileCoverage) {
+    const cmd = p.commands;
+    lines.push('');
+    lines.push(`  PROFILE ${p.profile}`);
+    lines.push(`    ${p.fixture.reason}`);
+    lines.push(
+      `    commands  ${cmd.byLevel.verified} / ${cmd.population} verified = ${cmd.verifiedPercent}%  ` +
+        `(declared ${cmd.byLevel.declared}, partial ${cmd.byLevel.partial}, implemented ${cmd.byLevel.implemented})`,
+    );
+    lines.push(`      of: ${cmd.populationIs}`);
+    lines.push(
+      `    behaviours ${p.behaviors.proven} / ${p.behaviors.population} proven by a fixture = ${p.behaviors.provenPercent}%`,
+    );
+    lines.push(`      of: ${p.behaviors.populationIs}`);
+    if (p.behaviors.unproven.length > 0) {
+      // Named rather than counted: "0 of 6" with the six unnamed reads like a
+      // rounding error instead of a list of things nobody has demonstrated.
+      for (const key of p.behaviors.unproven) lines.push(`      unproven: ${key}`);
+    }
+  }
+
+  const d = report.deltaProof;
+  lines.push('');
+  lines.push(
+    `  RECORDED DIFFERENCES  ${d.proven} / ${d.emulated} emulated changes name a conformance case that agreed ` +
+      `(${d.changes} recorded in total)`,
+  );
+  for (const u of d.unproven) {
+    lines.push(`    unproven: ${u.subject} (${u.implementation}) -- ${u.behaviorKeys.join(', ')}`);
+  }
+
   lines.push('');
   lines.push('  per command (behavioural / metadata / unimplemented / differences)');
   for (const row of report.perCommand) {

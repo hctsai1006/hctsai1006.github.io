@@ -23,10 +23,12 @@ run() is a god function: parse, history, prompt echo, pipeline policy, execution
   - *evidence:* `tests/unit/kernel.test.mts` — test "lists exactly the request kinds the protocol defines"
   - *evidence:* `tests/unit/kernel.test.mts` — test "covers every event kind and every stream"
 - [/] **6.2** Split run() into parse -> execute -> render with no DOM access in the middle
-  - MISSING: two of the three stages. Execute is real, DOM-free and heavily tested. Parse is a placeholder — splitPipeline plus a whitespace split that the kernel itself labels DELIBERATELY NOT A PARSER and marks for deletion, pending item 8. Render is not a kernel stage at all: the kernel stops at emitting events, and formatting happens inside Out-String and the Format-* commands rather than at the pipeline tail. The "no DOM in the middle" half holds, but trivially, because nothing in src/ touches the DOM yet.
+  - MISSING: render, and only render. Parse is real: Kernel.#exec runs parseForExecution and binds each CommandAst through binding/from-ast.ts, and the splitPipeline/splitTokens placeholder the kernel labelled DELIBERATELY NOT A PARSER is deleted. Nothing about the LANGUAGE is left in the kernel either: a quoted command name is refused because parse.ts builds the CommandExpressionAst pwsh builds, not because the kernel re-reads a quote character after the parse. Execute is real, DOM-free and heavily tested. Render is still not a kernel stage: the kernel stops at emitting events, and formatting happens inside Out-String and the Format-* commands rather than at the pipeline tail — though a Format-* record now carries its document across the boundary, so a host CAN render one. The "no DOM in the middle" half holds, but trivially, because nothing in src/ touches the DOM yet.
   - *evidence:* `src/kernel/kernel.ts` exports `Kernel`
-  - *evidence:* `src/kernel/kernel.ts` exports `splitPipeline`
+  - *evidence:* `src/kernel/kernel.ts` matches `/parseForExecution/`
+  - *evidence:* nothing under `src/kernel/*.ts` matches `/splitPipeline/`
   - *evidence:* `tests/unit/kernel.test.mts` — test "creates a process, emits its objects, and exits 0"
+  - *evidence:* `tests/unit/kernel-worker.test.mts` — test "renders on THIS side to the same lines the worker would have rendered"
   - *evidence:* nothing under `src/**/*.{ts,mts}` matches `/document.querySelector/`
 - [x] **6.3** Model async commands as event streams instead of the asyncOut/busy globals
   - ping/traceroute returned null and printed themselves in v1, forcing a pipeline pre-flight hack. They are ordinary commands now, writing values that the kernel turns into events and that honour cancellation between writes.

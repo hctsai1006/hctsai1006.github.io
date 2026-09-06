@@ -52,10 +52,9 @@
  * `/` IS THE ONLY SEPARATOR ON THE FILESYSTEM DRIVE. On Linux `\` is an
  *   ordinary character in a filename, so `a\b` is one file, not two segments.
  *   On a DRIVE-QUALIFIED path both `/` and `\` separate. MEASURED: pwsh 7.6.5
- *   accepts `Env:/PATH`, `Env:\PATH` and bare `Env:PATH` alike, and renders the
- *   location as `Env:\` — so a provider drive prints with backslashes while the
- *   filesystem prints POSIX-style. That looks inconsistent and is what the
- *   reference implementation does. Both halves are tested.
+ *   accepts `Env:/PATH`, `Env:\PATH` and bare `Env:PATH` alike. How it prints
+ *   the result back is PLATFORM-DEPENDENT, and this file used to claim it was
+ *   not — see `formatResolved`.
  *
  * AN EMPTY PATH IS `EINVAL`, NOT THE CWD. v1 returns `CWD` for `''`, which
  *   turns `cat ""` into `cat .` — the class of silent wrong answer this repo
@@ -317,16 +316,22 @@ export interface ResolvedPath {
 /**
  * How a resolved path is written back to the user.
  *
- * MEASURED: pwsh 7.6.5 renders a non-filesystem location with BACKSLASHES on
- * every platform — `Set-Location Env:` then `Get-Location` gives `Env:\`, and
- * `Env:/PATH`, `Env:\PATH` and `Env:PATH` are all accepted on input. So the
- * filesystem drive prints POSIX-style and a provider drive prints
- * PowerShell-style, which looks inconsistent and is what the reference
- * implementation actually does.
+ * THIS COMMENT USED TO SAY "BACKSLASHES ON EVERY PLATFORM", AND THAT WAS FALSE.
+ * It was measured on Windows only. Re-measured in the pwsh-linux:7.6.5
+ * container, `Set-Location Env:` then `Get-Location`:
+ *
+ *   Windows   Path  Env:\    (Get-Location).Provider.ItemSeparator  \
+ *   Linux     Path  Env:/    (Get-Location).Provider.ItemSeparator  /
+ *
+ * The separator a provider drive prints is the PLATFORM's, not the provider's,
+ * and the emulated machine is Ubuntu — the same premise that makes paths
+ * case-sensitive here and `/bin` a real directory. So a provider drive prints
+ * `Env:/PATH`, and `Env:/PATH`, `Env:\PATH` and `Env:PATH` are all still
+ * accepted on input, which is where the asymmetry actually lives.
  */
 export function formatResolved(drive: string, path: string): string {
   if (drive === FILESYSTEM_DRIVE) return path;
-  return `${drive}:${path.replaceAll(SEPARATOR, '\\')}`;
+  return `${drive}:${path}`;
 }
 
 function resolved(drive: string, path: string, clampedAtRoot = false): ResolvedPath {
@@ -474,6 +479,36 @@ export class MountTable {
   }
 }
 
+/**
+ * Drives this filesystem does not own — the seam `MountTable`'s docstring
+ * promised and could not itself provide.
+ *
+ * That docstring says the mount table exists so PR-10 can add `Env:`,
+ * `Variable:` and `Function:` "without rewriting path handling". It could NOT
+ * be done by mounting them. `StorageBackend` has `chmod`, `utimes`, `quota`,
+ * `readBytes` and a mutation journal; an environment variable has none of
+ * those, so nine of its methods would have had to return an invented answer.
+ * Forcing `Env:` into a filesystem interface is the same mistake as forcing it
+ * into `/proc`, which is the mistake PR-10 exists to undo.
+ *
+ * So the seam is two questions, and only two, both of which are genuinely about
+ * paths and locations rather than about storage:
+ *
+ *   - does a drive by this name exist?   (`resolvePath` needs it)
+ *   - may the session STAND here?        (`setLocation` needs it)
+ *
+ * Everything else — items, children, content — is dispatched by the provider
+ * layer and never reaches this file. The interface is declared here, next to
+ * the resolver it feeds, and implemented in `providers/registry.ts`, so the
+ * dependency points the same way the layering does.
+ */
+export interface ForeignDrives {
+  /** `'env'` -> `'Env'`, or null. Case-insensitive, as PowerShell's are. */
+  resolveDriveName(name: string): string | null;
+  /** `Set-Location`'s whole question. */
+  canEnter(target: ResolvedPath): Promise<Result<void>>;
+}
+
 // ---------------------------------------------------------------------------
 // the filesystem commands hold
 // ---------------------------------------------------------------------------
@@ -495,6 +530,7 @@ export class VirtualFileSystem {
   readonly #mounts: MountTable;
   readonly #home: string;
   #cwd: ResolvedPath;
+  #foreign: ForeignDrives | null = null;
 
   constructor(mounts: MountTable, options: VirtualFileSystemOptions) {
     this.#mounts = mounts;
@@ -504,6 +540,19 @@ export class VirtualFileSystem {
 
   get mounts(): MountTable {
     return this.#mounts;
+  }
+
+  /**
+   * Teach this view about drives that are not mounts. See `ForeignDrives`.
+   *
+   * Late rather than a constructor argument because the cycle is real: the
+   * provider registry needs the brokered port, the port wraps this view, and
+   * this view needs the registry. A view with nothing attached reports `Env:`
+   * as an unknown drive, which is the right answer for a host that has no
+   * providers.
+   */
+  attachForeignDrives(drives: ForeignDrives): void {
+    this.#foreign = drives;
   }
 
   get home(): string {
@@ -519,7 +568,11 @@ export class VirtualFileSystem {
     return {
       cwd: this.#cwd,
       home: this.#home,
-      drives: (name) => this.#mounts.resolveDriveName(name),
+      // Mounts first, then the provider drives. The two tables agree on the
+      // filesystem drive by construction — the registry gets it from the same
+      // `FILESYSTEM_DRIVE` constant — so the order only decides which one
+      // answers, never what the answer is.
+      drives: (name) => this.#mounts.resolveDriveName(name) ?? this.#foreign?.resolveDriveName(name) ?? null,
     };
   }
 
@@ -532,6 +585,19 @@ export class VirtualFileSystem {
   async setLocation(path: string): Promise<Result<ResolvedPath>> {
     const target = this.resolve(path);
     if (!target.ok) return target;
+
+    // A drive with no mount is a provider drive, and the provider layer owns
+    // the whole question of whether the session may stand there. The two
+    // measured answers it has to give are `Set-Location Env:` (yes) and
+    // `Set-Location Env:\PATH` (no, reported as a path that does not exist even
+    // though the item is plainly there).
+    if (this.#mounts.backend(target.value.drive) === null && this.#foreign !== null) {
+      const enterable = await this.#foreign.canEnter(target.value);
+      if (!enterable.ok) return enterable;
+      this.#cwd = target.value;
+      return ok(target.value);
+    }
+
     const backend = this.#backendFor(target.value, 'stat');
     if (!backend.ok) return backend;
 
@@ -560,12 +626,21 @@ export class VirtualFileSystem {
   #backendFor(target: ResolvedPath, syscall: StorageSyscall): Result<StorageBackend> {
     const backend = this.#mounts.backend(target.drive);
     if (backend === null) {
+      // Two different failures, and telling them apart matters now that
+      // `Env:` resolves. "There is no drive" sent a reader looking for a typo
+      // in a drive name that exists; the honest answer is that the drive is
+      // real and is not a filesystem, and the caller should have gone through
+      // the provider registry.
+      const known = this.#foreign?.resolveDriveName(target.drive) !== undefined
+        && this.#foreign?.resolveDriveName(target.drive) !== null;
       return err({
         code: 'EINVAL',
         path: target.full,
         syscall,
-        message: `there is no drive named '${target.drive}'`,
-        reason: 'unknown-drive',
+        message: known
+          ? `'${target.drive}:' is not a filesystem drive`
+          : `there is no drive named '${target.drive}'`,
+        reason: known ? 'not-a-filesystem-drive' : 'unknown-drive',
       });
     }
     return ok(backend);

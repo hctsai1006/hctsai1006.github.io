@@ -311,6 +311,32 @@ export function assertCurationIsSound(changes: readonly Change[], repoRoot: stri
       problems.push(`${where(c)} — is "partial" without saying what is missing`);
     }
 
+    // THE TOP RUNG COSTS A FIXTURE. src/commands/manifest.ts defines `verified`
+    // as "implemented AND compared against a captured reference-implementation
+    // run", and adds: "Nothing claims this yet; it exists so that `implemented`
+    // cannot quietly come to mean it." Two records claimed it here anyway, on
+    // the strength of unit tests whose expected values were transcribed by hand
+    // from a pwsh session into a comment — a real measurement that nothing can
+    // re-check.
+    //
+    // Checked in BOTH directions. A fixture named by a record the engine does
+    // not emulate would be evidence about the reference implementation alone,
+    // which is not what the field means. What this gate cannot see is whether
+    // the named case exists and agreed; tools/conformance.mts owns that, because
+    // only the run knows.
+    if (c.implementation === 'verified' && c.conformanceFixture === undefined) {
+      problems.push(
+        `${where(c)} — is "verified" but names no conformance case. "verified" means compared against a ` +
+          'captured reference-implementation run; name the case, or say "implemented".',
+      );
+    }
+    if (c.conformanceFixture !== undefined && !isEmulated(c)) {
+      problems.push(
+        `${where(c)} — is "${c.implementation}", so the engine reproduces nothing, yet names conformance ` +
+          `case "${c.conformanceFixture}". A case can only prove a difference this project emulates.`,
+      );
+    }
+
     if (c.impact === 'script-breaking' && (c.migration ?? '').trim().length === 0) {
       problems.push(`${where(c)} — is script-breaking with no migration guidance`);
     }

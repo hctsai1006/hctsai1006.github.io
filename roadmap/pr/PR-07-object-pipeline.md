@@ -32,12 +32,13 @@ Today every command returns pre-formatted rows, so `gci | Sort-Object` sorts ren
   - *evidence:* `src/pipeline/streams.ts` exports `ErrorRecord`
   - *evidence:* `tests/unit/kernel.test.mts` — test "preserves the true interleaving of four independent channels"
 - [x] **7.3** Move formatting to the end of the pipeline as Format-* directives
-  - STALE todo, corrected 2026-09-06. Format-Table/-List/-Wide emit one opaque record carrying a FormatDocument in baseObject and no public properties, so a later stage can learn nothing from it; only Out-String and the default renderer turn one into text.
+  - STALE todo, corrected 2026-09-06. Format-Table/-List/-Wide emit one opaque record carrying a FormatDocument, and nothing a later stage can use: `... | Sort-Object Name` has no Name to sort on, exactly as in pwsh. Only Out-String and a host renderer turn one into text. The document was serialised into the property bag by the kernel-parser integration, because it rode in baseObject and the kernel boundary drops that, so a Format-* at the end of a pipeline reached the host as an empty typed object.
   - *evidence:* `src/formatting/records.ts` exports `formatRecord`
   - *evidence:* `src/formatting/records.ts` exports `isFormatRecord`
   - *evidence:* `src/formatting/records.ts` exports `FORMAT_ENTRY_TYPE`
   - *evidence:* `tests/unit/format-cmdlets.test.mts` — test "emits ONE opaque directive, not objects"
-  - *evidence:* `tests/unit/format-cmdlets.test.mts` — test "exposes NO properties, so a later stage learns nothing from it"
+  - *evidence:* `tests/unit/format-cmdlets.test.mts` — test "exposes nothing a later stage can use, and one thing the renderer can"
+  - *evidence:* `tests/unit/format-cmdlets.test.mts` — test "round-trips through structuredClone unchanged"
 - [x] **7.4** Reimplement Get-ChildItem to emit objects, with formatting applied last
   - STALE todo, corrected 2026-09-06. Get-ChildItem emits FileInfo and DirectoryInfo PSObjects with a numeric Length and Date timestamps, and renders nothing itself.
   - *evidence:* `src/commands/fs-read/get-childitem.ts` exports `getChildItem`

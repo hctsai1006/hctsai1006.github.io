@@ -80,6 +80,7 @@ export {
   createGetLocation,
   driveInfo,
   pathInfo,
+  providerLocationOf,
   providerInfo,
 } from './get-location.ts';
 export {

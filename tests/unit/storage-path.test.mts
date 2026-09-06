@@ -158,9 +158,20 @@ describe('resolution', () => {
     assert.equal(resolved('Env:PATH', HOME, drives).path, '/PATH');
   });
 
-  it('renders a provider drive with backslashes, as PowerShell does', () => {
-    // MEASURED: `Set-Location Env:` then `Get-Location` gives `Env:\`.
-    assert.equal(resolved('Env:/PATH', HOME, ['/', 'Env']).full, 'Env:\\PATH');
+  it('renders a provider drive with the platform separator, which is / here', () => {
+    // THIS TEST USED TO ASSERT `Env:\PATH`, citing a Windows-only measurement
+    // that its comment generalised to "every platform". Re-measured in the
+    // pwsh-linux:7.6.5 container — `Set-Location Env:` then `Get-Location`:
+    //
+    //   Windows  Env:\   (Get-Location).Provider.ItemSeparator  \
+    //   Linux    Env:/   (Get-Location).Provider.ItemSeparator  /
+    //
+    // The separator is the PLATFORM's, not the provider's, and the emulated
+    // machine is Ubuntu — the same premise that makes paths case-sensitive
+    // here. INPUT is unchanged: `Env:/PATH`, `Env:\PATH` and `Env:PATH` are all
+    // still accepted, which the test above asserts.
+    assert.equal(resolved('Env:/PATH', HOME, ['/', 'Env']).full, 'Env:/PATH');
+    assert.equal(resolved('Env:\\PATH', HOME, ['/', 'Env']).full, 'Env:/PATH');
     assert.equal(resolved('/etc/hosts').full, '/etc/hosts');
   });
 
@@ -366,6 +377,6 @@ describe('the mount table', () => {
     const missing = await vfs.stat('Scratch:/nope');
     assert.ok(!missing.ok);
     // Without the relabel the user is told to look for a file called '/nope'.
-    assert.equal(missing.error.path, 'Scratch:\\nope');
+    assert.equal(missing.error.path, 'Scratch:/nope');
   });
 });

@@ -37,6 +37,128 @@
       "where-object"
     ]
   },
+  "profileCoverage": [
+    {
+      "profile": "powershell/7.6.5/linux",
+      "displayVersion": "7.6.5",
+      "fixture": {
+        "comparedAgainstVersion": "7.6.5",
+        "applies": true,
+        "reason": "compared against a captured run of PowerShell 7.6.5"
+      },
+      "commands": {
+        "population": 31,
+        "populationIs": "every command manifests.json declares native-semantic, including any held back from the session registry -- those stay at their declared level and can never be promoted",
+        "byLevel": {
+          "declared": 0,
+          "partial": 1,
+          "implemented": 20,
+          "verified": 10
+        },
+        "verifiedPercent": 32.3,
+        "unearnedVerified": []
+      },
+      "behaviors": {
+        "population": 6,
+        "populationIs": "this profile's `behaviors` table -- the version-specific flags a command can actually read. Documented-but-unemulated keys are in neither half, because nothing reads them",
+        "proven": 0,
+        "provenPercent": 0,
+        "unproven": [
+          "application.outputEncodingVariable",
+          "format.property.rejectNullOrEmpty",
+          "newGuid.defaultVersion",
+          "switchParameter.Get-Random.Shuffle.honourExplicitFalse",
+          "switchParameter.New-Guid.Empty.honourExplicitFalse",
+          "validation.throwsArgumentException"
+        ]
+      }
+    },
+    {
+      "profile": "powershell/7.7.0-preview.4/linux",
+      "displayVersion": "7.7.0-preview.4",
+      "fixture": {
+        "comparedAgainstVersion": "7.6.5",
+        "applies": false,
+        "reason": "no fixture was captured from PowerShell 7.7.0-preview.4. The only capture is from 7.6.5, which is evidence about that version and not this one."
+      },
+      "commands": {
+        "population": 31,
+        "populationIs": "every command manifests.json declares native-semantic, including any held back from the session registry -- those stay at their declared level and can never be promoted",
+        "byLevel": {
+          "declared": 0,
+          "partial": 1,
+          "implemented": 30,
+          "verified": 0
+        },
+        "verifiedPercent": 0,
+        "unearnedVerified": []
+      },
+      "behaviors": {
+        "population": 6,
+        "populationIs": "this profile's `behaviors` table -- the version-specific flags a command can actually read. Documented-but-unemulated keys are in neither half, because nothing reads them",
+        "proven": 0,
+        "provenPercent": 0,
+        "unproven": [
+          "application.outputEncodingVariable",
+          "format.property.rejectNullOrEmpty",
+          "newGuid.defaultVersion",
+          "switchParameter.Get-Random.Shuffle.honourExplicitFalse",
+          "switchParameter.New-Guid.Empty.honourExplicitFalse",
+          "validation.throwsArgumentException"
+        ]
+      }
+    }
+  ],
+  "deltaProof": {
+    "changes": 22,
+    "emulated": 6,
+    "proven": 0,
+    "provenBehaviorKeys": [],
+    "unproven": [
+      {
+        "subject": "New-Guid",
+        "implementation": "implemented",
+        "behaviorKeys": [
+          "newGuid.defaultVersion"
+        ]
+      },
+      {
+        "subject": "Format-Table, Format-List, Format-Custom",
+        "implementation": "implemented",
+        "behaviorKeys": [
+          "format.property.rejectNullOrEmpty"
+        ]
+      },
+      {
+        "subject": "argument validation",
+        "implementation": "implemented",
+        "behaviorKeys": [
+          "validation.throwsArgumentException"
+        ]
+      },
+      {
+        "subject": "New-Guid",
+        "implementation": "implemented",
+        "behaviorKeys": [
+          "switchParameter.New-Guid.Empty.honourExplicitFalse"
+        ]
+      },
+      {
+        "subject": "Get-Random",
+        "implementation": "implemented",
+        "behaviorKeys": [
+          "switchParameter.Get-Random.Shuffle.honourExplicitFalse"
+        ]
+      },
+      {
+        "subject": "$PSApplicationOutputEncoding",
+        "implementation": "implemented",
+        "behaviorKeys": [
+          "application.outputEncodingVariable"
+        ]
+      }
+    ]
+  },
   "perCommand": [
     {
       "command": "$psversiontable",

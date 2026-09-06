@@ -49,8 +49,13 @@
           "type": "integer",
           "minimum": 0
         },
+        "emulated": {
+          "description": "Changes BrowserShell reproduces: implementation is implemented or verified. What a command can read.",
+          "type": "integer",
+          "minimum": 0
+        },
         "implemented": {
-          "description": "Changes BrowserShell emulates: implementation is implemented or verified.",
+          "description": "Changes that are emulated AND name a conformance case that ran against a real pwsh and agreed. Always <= emulated, and 0 today.",
           "type": "integer",
           "minimum": 0
         },
@@ -77,7 +82,9 @@
           "title",
           "impact",
           "implementation",
+          "emulated",
           "implemented",
+          "conformanceFixture",
           "documentedValue",
           "emulatedValue",
           "sources"
@@ -234,7 +241,7 @@
             "type": "string"
           },
           "conformanceFixture": {
-            "description": "Path to the fixture proving BrowserShell reproduces this difference. A script-breaking change without a fixture is unproven.",
+            "description": "The id of the conformance corpus case proving BrowserShell reproduces this difference, or null. A CASE ID, not a path: tools/conformance.mts checks that the case exists and that it agreed with the real pwsh recording, and fails the build otherwise, so the proof can be re-run rather than merely cited. Null on every entry today — no corpus case exercises any emulated behaviour key.",
             "type": [
               "string",
               "null"
@@ -260,8 +267,12 @@
               "type": "string"
             }
           },
+          "emulated": {
+            "description": "Derived from implementation, never authored. False means documented but not emulated: the change reaches no code path, and the UI must say so rather than imply fidelity. This is the field a reader wants for 'does BrowserShell do this?'.",
+            "type": "boolean"
+          },
           "implemented": {
-            "description": "Derived from implementation, never authored. False means documented but not emulated; the UI must say so rather than imply fidelity.",
+            "description": "Derived, never authored: emulated AND conformanceFixture names a case that agreed. A strictly stronger claim than `emulated`, and false on every entry today. It used to be a synonym for `emulated`, which let a unit test written against our own behaviour view read as agreement with a real PowerShell.",
             "type": "boolean"
           }
         }

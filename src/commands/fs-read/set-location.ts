@@ -67,7 +67,7 @@
 
 import { throwIfCancelled } from '../../pipeline/pipeline.ts';
 import type { BindingResult, CommandModule, InvocationContext } from '../invocation.ts';
-import { pathInfo } from '../native/index.ts';
+import { pathInfo, providerLocationOf } from '../native/index.ts';
 import { isBound, stringValue, switchValue } from '../powershell/support.ts';
 import {
   SET_LOCATION,
@@ -140,9 +140,16 @@ export const setLocation: CommandModule = {
     // (`if(!t){ CWD=HOME; ... }`).
     const request = typed === undefined || typed === '' ? '~' : typed;
 
-    // A wildcard has to resolve to exactly one container before anything moves.
+    // A wildcard has to resolve to exactly one container before anything moves
+    // — on the FILESYSTEM. A flat provider has exactly one container, its drive
+    // root, so a wildcard there can never resolve to more than one and globbing
+    // it would mean reading every item to answer a question whose answer is
+    // fixed. The resolve is cheap and touches no storage.
     let destination = request;
-    if (literal === undefined) {
+    const registry = context.providers;
+    const target = fs.resolve(request);
+    const onFileSystem = registry === null || !target.ok || !registry.handles(target.value.drive);
+    if (literal === undefined && onFileSystem) {
       const globbed = await globPath(fs, request);
       if (!globbed.ok) {
         await context.streams.error.write(
@@ -180,6 +187,18 @@ export const setLocation: CommandModule = {
       // see the header. ENOTDIR is the storage layer's way of saying "it is
       // there, but it is a file", which is the case pwsh reports with the raw
       // argument.
+      //
+      // THE SAME SPLIT HOLDS ON A PROVIDER DRIVE, which is why nothing here
+      // changed for PR-10. MEASURED, pwsh 7.6.5:
+      //
+      //   Set-Location Env:zzLeaf             (the item EXISTS)
+      //     -> "Cannot find path 'Env:zzLeaf' because it does not exist."
+      //   Set-Location Env:zzTotallyMissing   (it does not)
+      //     -> "Cannot find path 'Env:\zzTotallyMissing' because it does not exist."
+      //
+      // raw argument for the first, resolved path for the second — exactly the
+      // filesystem's rule. `ProviderRegistry.canEnter` returns ENOTDIR for a
+      // leaf and ENOENT for a miss so that both fall out of this one line.
       const displayPath = moved.error.code === 'ENOTDIR' ? request : moved.error.path;
       await context.streams.error.write(
         storageErrorRecord(SET_LOCATION, moved.error, displayPath, IDS),
@@ -192,10 +211,13 @@ export const setLocation: CommandModule = {
     if (!switchValue(parameters, 'PassThru')) return 0;
 
     const home = fs.resolve('~');
+    const location = providerLocationOf(context.providers, moved.value);
     await emit(
       context.streams.success,
       context.signal,
-      pathInfo(moved.value.full, home.ok ? home.value.full : moved.value.full),
+      location === null
+        ? pathInfo(moved.value.full, home.ok ? home.value.full : moved.value.full)
+        : pathInfo(moved.value.full, home.ok ? home.value.full : moved.value.full, location),
     );
     return 0;
   },

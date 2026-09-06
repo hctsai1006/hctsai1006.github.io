@@ -12,6 +12,8 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 import { runConformance } from '../../tools/conformance.mts';
 
@@ -99,6 +101,92 @@ describe('differential conformance against pwsh 7.6.5', () => {
       const found = byId.get(id);
       assert.ok(found !== undefined, `${id} is missing from the corpus`);
       assert.equal(found.outcome, 'match', `${id} is '${found.outcome}', not a compared match`);
+    }
+  });
+
+  it('reports a coverage number for every published profile, not just the one with a fixture', () => {
+    // The failure this closes is silence. A per-profile number that simply
+    // omits the profile nothing has been captured from reads, to anyone
+    // skimming, as though the one number on the page covers both — which is
+    // how a 7.6.5 measurement comes to be believed about 7.7.0-preview.4.
+    const published = readdirSync(join(import.meta.dirname, '..', '..', 'compat', 'profiles'))
+      .filter((f) => f.endsWith('.json'))
+      .map((f) => JSON.parse(readFileSync(join(import.meta.dirname, '..', '..', 'compat', 'profiles', f), 'utf8')) as { profile: string })
+      .map((p) => p.profile)
+      .sort();
+    assert.ok(published.length >= 2, 'expected both compatibility profiles on disk');
+    assert.deepEqual(
+      report.profileCoverage.map((p) => p.profile).sort(),
+      published,
+      'a published profile has no coverage row',
+    );
+  });
+
+  it('awards `verified` only from a capture of that profile\'s own version', () => {
+    const fixtureVersion = String(report.engine['psVersion']);
+    for (const p of report.profileCoverage) {
+      if (p.displayVersion === fixtureVersion) continue;
+      assert.equal(
+        p.commands.byLevel.verified,
+        0,
+        `${p.profile} claims ${p.commands.byLevel.verified} verified commands, but nothing was ever captured from PowerShell ${p.displayVersion}`,
+      );
+      assert.equal(p.behaviors.proven, 0, `${p.profile} claims a proven behaviour flag it has no capture for`);
+      assert.equal(p.fixture.applies, false);
+    }
+  });
+
+  it('keeps the two coverage numbers consistent, and the denominator honest', () => {
+    const fixtureVersion = String(report.engine['psVersion']);
+    const matching = report.profileCoverage.filter((p) => p.displayVersion === fixtureVersion);
+    assert.equal(matching.length, 1, `expected exactly one profile for the captured version ${fixtureVersion}`);
+    const p = matching[0];
+    assert.ok(p !== undefined);
+    // Two numbers over the same evidence must agree, or one of them is wrong.
+    // They have different denominators on purpose -- `coverage` drops the
+    // commands held back from the session registry, the ladder keeps them at
+    // their declared rung -- so the NUMERATORS are what must match.
+    assert.equal(
+      p.commands.byLevel.verified,
+      report.coverage.commandsWithBehaviouralEvidence,
+      'the per-profile verified count disagrees with the commands that actually hold a credited match',
+    );
+    // The ladder's population must be the larger one, because it drops nothing.
+    assert.equal(
+      p.commands.population,
+      report.coverage.nativeSemanticCommands + report.coverage.withheldCommands.length,
+      'the per-profile population is not every native-semantic command',
+    );
+    assert.ok(p.commands.byLevel.verified <= p.commands.population);
+    assert.ok(p.behaviors.proven <= p.behaviors.population);
+    assert.equal(p.behaviors.proven + p.behaviors.unproven.length, p.behaviors.population);
+  });
+
+  it('proves every recorded difference it calls proven, and admits the ones it cannot', () => {
+    const byId = new Map(report.cases.map((c) => [c.id, c]));
+    // Whatever the delta claims, the keys credited as proven must trace back to
+    // a case that actually agreed. Today that set is empty, and the assertion
+    // below is the one that keeps the empty set honest rather than convenient.
+    assert.ok(report.deltaProof.proven <= report.deltaProof.emulated);
+    assert.equal(
+      report.deltaProof.proven + report.deltaProof.unproven.length,
+      report.deltaProof.emulated,
+      'an emulated change is neither proven nor listed as unproven',
+    );
+    for (const key of report.deltaProof.provenBehaviorKeys) {
+      assert.ok(key.length > 0);
+    }
+    // A proven key can only have come from a matched case, and the harness
+    // pushes a problem otherwise -- which `has no unexplained problems` above
+    // would already have caught. This checks the other half: that the report
+    // did not quietly credit a key with no case behind it at all.
+    if (report.deltaProof.proven === 0) {
+      assert.deepEqual(report.deltaProof.provenBehaviorKeys, []);
+    } else {
+      assert.ok(
+        [...byId.values()].some((c) => c.outcome === 'match'),
+        'keys are credited as proven with no matched case in the run',
+      );
     }
   });
 

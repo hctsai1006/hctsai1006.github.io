@@ -153,7 +153,7 @@ describe('the error union', () => {
 
     const crossMount = await PRODUCERS.EXDEV();
     assert.ok(hasCode(crossMount, 'EXDEV') && crossMount.from === '/a');
-    assert.ok(hasCode(crossMount, 'EXDEV') && crossMount.to === 'Scratch:\\a');
+    assert.ok(hasCode(crossMount, 'EXDEV') && crossMount.to === 'Scratch:/a');
 
     const readOnly = await PRODUCERS.EROFS();
     assert.ok(hasCode(readOnly, 'EROFS') && readOnly.mount === 'frozen');

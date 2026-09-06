@@ -16,8 +16,9 @@
  *     explicitly. pwsh lexes THREE tokens: `a`, `,`, `b`.
  *   - `2>&1` is a token to `tokenize.ts` alone. `highlightInto` splits it into
  *     `2` (number), `>` (operator) and `&1` (uncoloured).
- *   - `splitTokens` is `stage.split(/\s+/u)`, so every quoted argument
- *     containing a space became two arguments by the time it reached the binder.
+ *   - `splitTokens` was `stage.split(/\s+/u)`, so every quoted argument
+ *     containing a space became two arguments by the time it reached the
+ *     binder. That pair was the last to go: the kernel parses now.
  *
  * ── WHY IT IS MEASURED, NOT REASONED ──────────────────────────────────────
  *

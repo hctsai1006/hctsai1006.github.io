@@ -38,6 +38,9 @@ import ajvFormats from 'ajv-formats';
 
 import { POWERSHELL_77_CHANGES, BUNDLED_MODULES } from '../compat/deltas/powershell-77-changes.source.mts';
 import type { Change } from '../compat/deltas/powershell-77-changes.source.mts';
+// The engine's own answer to "what will you not run", read from the tables that
+// drive the refusal rather than re-typed here. See `engineLimits` below.
+import { unimplementedAstNodes } from '../src/language/unimplemented.ts';
 import {
   assertCurationIsSound,
   buildBehaviorTables,
@@ -180,7 +183,20 @@ function buildProfile(args: BuildProfileArgs): Record<string, unknown> {
       // Stated, not implied. The site must never let a visitor believe a real
       // pwsh binary is running in their browser.
       nativePowerShellEngine: false,
-      unimplementedAstNodes: [],
+      // IMPORTED, never typed out. This was a literal `[]` while the parser
+      // refused 40 node types, and an empty list beside `nativePowerShellEngine:
+      // false` reads as "every AST node is implemented" — the opposite of the
+      // truth. Writing the names here instead would have been the same defect
+      // one step later: a hand-maintained copy of a list that already exists in
+      // code, free to drift the first time a keyword is added to
+      // `UNIMPLEMENTED_KEYWORDS`. `unimplementedAstNodes()` derives it from the
+      // four declarations `parseForExecution` actually consults, and returns it
+      // sorted, so this field changes only when the behaviour does.
+      //
+      // The same for both profiles, because the refusal set is a property of
+      // THIS engine and not of the pwsh version being emulated. A profile that
+      // implemented more would list less; none does yet.
+      unimplementedAstNodes: [...unimplementedAstNodes()],
       notes:
         'BrowserShell emulates observable semantics; it does not execute PowerShell. Recognised-but-unimplemented syntax must fail with an explicit error naming the AST node rather than silently doing something approximate.',
     },
@@ -228,10 +244,30 @@ function buildDelta(
       upstreamPr: primaryPr(c),
       evidence: [...(c.evidence ?? [])],
       ...(c.migration !== undefined ? { migration: c.migration } : {}),
-      conformanceFixture: null,
-      // Derived, never authored. The four-state status is the truth; this is the
-      // boolean projection the explorer and the schema already speak.
-      implemented: isEmulated(c),
+      conformanceFixture: c.conformanceFixture ?? null,
+      /**
+       * Does the ENGINE reproduce this difference? Derived from the four-state
+       * status, never authored. This is the field that decides what a command
+       * can read, and it is what the explorer must use to say "documented, not
+       * emulated".
+       */
+      emulated: isEmulated(c),
+      /**
+       * Is it PROVEN? Derived, never authored, and deliberately a stricter
+       * question than `emulated`.
+       *
+       * It used to be the boolean projection of `implementation`, i.e. a synonym
+       * for `emulated` — so "implemented" meant "somebody wrote a unit test
+       * against our own behaviour view", and the delta summary reported six
+       * changes implemented while no conformance fixture had ever been asked
+       * about any of them. Splitting the two is ROADMAP 3.5: an entry is
+       * implemented only once it names a case that ran against a real pwsh and
+       * agreed, and tools/conformance.mts fails the build if the named case is
+       * missing or did not agree.
+       *
+       * Every entry is false today. That is the measurement, not a placeholder.
+       */
+      implemented: isEmulated(c) && c.conformanceFixture !== undefined,
     };
   });
 
@@ -243,7 +279,11 @@ function buildDelta(
     changed: count('changed'),
     removed: count('removed'),
     fixed: count('fixed'),
-    implemented: changes.filter(isEmulated).length,
+    // Two different facts, kept apart for the reason given on the fields above.
+    // `implemented` was this same count under the old meaning, and reporting six
+    // where the honest answer is zero is exactly the drift ROADMAP 3.5 is about.
+    emulated: changes.filter(isEmulated).length,
+    implemented: changes.filter((c) => isEmulated(c) && c.conformanceFixture !== undefined).length,
     documented: changes.filter((c) => c.implementation === 'documented').length,
     partial: changes.filter((c) => c.implementation === 'partial').length,
   };

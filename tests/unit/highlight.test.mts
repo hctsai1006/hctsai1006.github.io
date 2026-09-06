@@ -84,11 +84,31 @@ describe('the highlighter shares the real lexer', () => {
     assert.notEqual(classAt('Get-Item --Path', '--Path'), 'param');
   });
 
-  it('gives the separators a class', () => {
-    assert.equal(classAt('a && b', '&&'), 'op');
-    assert.equal(classAt('a || b', '||'), 'op');
+  it('gives the separators a class, and it is not the same class for all four', () => {
+    // v1 gave `&&`, `||` and `;` NO class at all, which is the defect this
+    // pins. What class each one gets is decided by whether the engine can run
+    // the line, exactly as for `-eq` above.
+    //
+    // `;` and `|` are `op`: `a | b` really runs, and `a ; b` is two statements
+    // the parser builds correctly — the kernel declines to run two per exec,
+    // but that is a property of exec, not of the syntax.
+    //
+    // `&&` and `||` are `refused`, and this asserted `op` for one commit. The
+    // roadmap's complaint about v1 was that it "colours `>`, `>>` and `<` that
+    // nothing implements"; nothing implements a pipeline chain either —
+    // measured, pwsh runs `b` in `a && b` only when `a` succeeded, and this
+    // engine has one process group per exec — so `op` was that same defect in a
+    // different costume. `EXECUTION_REFUSED_NODES` names PipelineChainAst now,
+    // and `compat/profiles/*.json` declares it.
     assert.equal(classAt('a ; b', ';'), 'op');
     assert.equal(classAt('a | b', '|'), 'op');
+    assert.equal(classAt('a && b', '&&'), 'refused');
+    assert.equal(classAt('a || b', '||'), 'refused');
+
+    // The colour comes WITH the reason, so a host can say why rather than only
+    // paint it red.
+    const chain = highlight('a && b').find((s) => s.text === '&&');
+    assert.match(chain?.refusal ?? '', /PipelineChainAst/u);
   });
 
   it('colours the head of every pipeline stage as a command', () => {

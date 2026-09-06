@@ -17,11 +17,13 @@
  *      `filesystem.read` is declared in manifests.json and the broker enforces
  *      it — `tests/unit/ports.test.mts` proves a reader is refused every write.
  *
- *   2. `context.fs` IS NULLABLE AND THE NULL IS REAL. Nothing in the repository
- *      supplies one yet: `src/pipeline/pipeline.ts` and `src/kernel/kernel.ts`
- *      both hard-code `fs: null`. So the null branch is the branch that
- *      currently runs in the shipped kernel, and it must produce an ErrorRecord
- *      rather than a TypeError.
+ *   2. `context.fs` IS NULLABLE AND THE NULL IS REAL. This used to say nothing
+ *      in the repository supplied one; `PipelineHost` and `KernelOptions` now
+ *      carry both a `fs` and a `providers`, and the kernel passes the session's
+ *      port through. What has NOT changed is which branch actually runs in the
+ *      shipped host: `src/kernel/browser-worker.ts` wires neither, so the null
+ *      arm is still the live one and must produce an ErrorRecord rather than a
+ *      TypeError.
  *
  *   3. A STORAGE FAILURE IS A `Result`, NOT A THROW. `storageErrorRecord` turns
  *      one into the ErrorRecord pwsh produces for the same condition, and every
@@ -39,25 +41,46 @@
 
 import manifestsJson from '../manifests.json' with { type: 'json' };
 
+import { basename, dirname, formatResolved, joinPath, ok, splitSegments } from '../../storage/index.ts';
 import {
-  basename,
-  dirname,
-  formatMode,
-  formatResolved,
-  joinPath,
-  splitSegments,
-} from '../../storage/index.ts';
+  PROVIDER_NOT_SUPPORTED,
+  compareItemNames,
+  orderChildItems,
+  providerRelativePath,
+} from '../../providers/index.ts';
+import type { ProviderItem, ProviderRegistry } from '../../providers/index.ts';
 import type { DirectoryEntry, FileStat, Result, StorageError } from '../../storage/index.ts';
 import type { ResolvedPath } from '../../storage/vfs.ts';
 import { decodeFile } from '../../pipeline/encoding.ts';
-import { compareValues, psObject } from '../../pipeline/psobject.ts';
-import type { PSObject, PSValue } from '../../pipeline/psobject.ts';
+import type { PSValue } from '../../pipeline/psobject.ts';
 import { errorRecord } from '../../pipeline/streams.ts';
 import type { ErrorCategory, ErrorRecord, Sink } from '../../pipeline/streams.ts';
 import type { InvocationContext } from '../invocation.ts';
 import type { CommandManifest } from '../manifest.ts';
 import type { FileSystemPort } from '../ports.ts';
 import { hasWildcard, wildcardPattern } from '../powershell/support.ts';
+
+/**
+ * The FileSystem provider's item shaping MOVED to `providers/filesystem.ts`.
+ *
+ * It was always that provider's answer to "what does one of my items look
+ * like" — the same question `ProviderItem.value` asks of Env:, Variable:,
+ * Function: and Alias: — and leaving it here would have meant four providers
+ * building their items in the provider layer and the fifth building its in a
+ * command directory. Re-exported so the ten readers that import it did not have
+ * to change, and so a future move of the importers is a separate diff.
+ */
+export {
+  DIRECTORY_INFO_TYPE_NAMES,
+  FILESYSTEM_PROVIDER,
+  FILE_INFO_TYPE_NAMES,
+  baseNameOf,
+  extensionOf,
+  fileSystemInfo,
+  isHidden,
+  modeString,
+} from '../../providers/filesystem.ts';
+import { isHidden } from '../../providers/filesystem.ts';
 
 // ---------------------------------------------------------------------------
 // manifests
@@ -315,6 +338,40 @@ export function storageErrorRecord(
       );
 
     case 'EINVAL':
+      if (error.reason === 'unknown-drive') {
+        // MEASURED, and it is a DIFFERENT family from every other EINVAL:
+        //   Get-Item     zzNoDrive:\x  ->  DriveNotFound,...GetItemCommand
+        //   Set-Location zzNoDrive:    ->  DriveNotFound,...SetLocationCommand
+        //   both: ObjectNotFound, System.Management.Automation.DriveNotFoundException,
+        //   "Cannot find drive. A drive with the name 'zzNoDrive' does not exist."
+        // The sentence names the DRIVE and not the path, so the drive is parsed
+        // back out of the resolver's own message rather than re-derived from
+        // the raw text — the resolver is the thing that decided what the drive
+        // was. `Test-Path` is the exception and answers False with no error at
+        // all; it handles this before reaching here.
+        const named = /'([^']*)'/u.exec(error.message)?.[1] ?? displayPath;
+        return errorRecord(
+          `Cannot find drive. A drive with the name '${named}' does not exist.`,
+          'DriveNotFound',
+          identity.dotNetType,
+          'ObjectNotFound',
+          {
+            exceptionType: 'System.Management.Automation.DriveNotFoundException',
+            targetObject: named,
+          },
+        );
+      }
+      if (error.reason.startsWith(PROVIDER_NOT_SUPPORTED)) {
+        // The reason carries the interface name after the prefix, because
+        // `StorageError` has no field for it and inventing a code would widen
+        // an exhaustive switch in eight commands. See `providerNotSupportedError`.
+        return providerNotSupportedError(
+          identity,
+          `Cannot use interface. The ${error.reason.slice(
+            PROVIDER_NOT_SUPPORTED.length + 1,
+          )} interface is not implemented by this provider.`,
+        );
+      }
       // pwsh: Get-ChildItem "bad`0name"
       //   ItemExistsArgumentError,...GetChildItemCommand
       //   InvalidArgument, System.ArgumentException,
@@ -421,10 +478,6 @@ export interface Target {
   readonly stat: FileStat;
 }
 
-/** Hidden, by the only rule this filesystem has: a leading dot. */
-export function isHidden(name: string): boolean {
-  return name.startsWith('.');
-}
 
 /**
  * PowerShell's wildcard match against a file NAME.
@@ -440,6 +493,131 @@ export function matchesAny(name: string, patterns: readonly string[]): boolean {
 }
 
 export { hasWildcard };
+
+// ---------------------------------------------------------------------------
+// non-filesystem drives
+// ---------------------------------------------------------------------------
+
+/**
+ * Expand one already-resolved path on a drive that is NOT the filesystem.
+ *
+ * ONE implementation, shared by `Get-ChildItem`, `Test-Path` and `Get-Content`,
+ * because writing "look it up, or match the wildcard against the child names"
+ * three times is the drift this repository keeps finding. `globPath` above is
+ * the filesystem's counterpart and stays separate: it walks wildcards in EVERY
+ * segment through `readdir`, which a flat provider has no segments for.
+ *
+ * MEASURED, and all three halves matter:
+ *
+ *   Get-Item      'Env:zzTp*'   ->  expands; 13 items when 13 matched
+ *   Get-Item -LiteralPath 'Env:zzTp*'
+ *                               ->  PathNotFound; the `*` is a character
+ *   Get-Item      'Env:zzQQ*'   ->  count 0, and NO error
+ *   Get-ChildItem 'Env:zzQQ*'   ->  count 0, and NO error
+ *
+ * so a wildcard that matches nothing is silence, exactly as it is on the
+ * filesystem, while a literal name that is absent is `PathNotFound`.
+ */
+export async function providerTargets(
+  registry: ProviderRegistry,
+  resolved: ResolvedPath,
+  literal: boolean,
+): Promise<Result<readonly ProviderItem[]>> {
+  const relative = providerRelativePath(resolved);
+  if (literal || !hasWildcard(relative)) {
+    const item = await registry.item(resolved);
+    if (!item.ok) return item;
+    return ok([item.value]);
+  }
+  const root: ResolvedPath = {
+    drive: resolved.drive,
+    path: '/',
+    full: formatResolved(resolved.drive, '/'),
+    clampedAtRoot: false,
+  };
+  const children = await registry.childItems(root);
+  if (!children.ok) return children;
+  return ok(children.value.filter((item) => matchesAny(item.name, [relative])));
+}
+
+/**
+ * The `NotSupported` record pwsh produces for a capability a provider does not
+ * implement.
+ *
+ * MEASURED, twice, and both are the same family rather than `PathNotFound`:
+ *
+ *   Get-Content HKCU:\Software
+ *     NotSupported,...GetContentCommand, PSNotSupportedException, NotImplemented
+ *     "Cannot use interface. The IContentCmdletProvider interface is not
+ *      implemented by this provider."
+ *   Get-ChildItem Env: -Filter 'zz*'
+ *     NotSupported,...GetChildItemCommand, PSNotSupportedException, NotImplemented
+ *     "Cannot call method. The provider does not support the use of filters."
+ *
+ * Kept out of `storageErrorRecord`'s switch because it is not a storage
+ * condition: nothing in `StorageErrorCode` describes "this provider does not
+ * implement that interface", and adding a code for it would widen an exhaustive
+ * switch in eight commands to carry an arm only this layer can reach.
+ */
+export function providerNotSupportedError(
+  identity: CommandIdentity,
+  message: string,
+): ErrorRecord {
+  return errorRecord(message, 'NotSupported', identity.dotNetType, 'NotImplemented', {
+    exceptionType: 'System.Management.Automation.PSNotSupportedException',
+  });
+}
+
+/**
+ * A parameter the FILESYSTEM supplies, used on a drive that is not one.
+ *
+ * Half of what `Get-Content`, `Get-ChildItem` and `Test-Path` accept is a
+ * FileSystem DYNAMIC parameter — the provider contributes it, so on `Env:` the
+ * parameter does not exist and binding fails. This binder is static and binds
+ * it anyway, so the refusal has to be reproduced in the command body.
+ *
+ * MEASURED, and there are THREE different refusals rather than one:
+ *
+ *   Get-Content  Env:x -Raw          NamedParameterNotFound, InvalidArgument,
+ *                                    ParameterBindingException
+ *                                    "A parameter cannot be found that matches
+ *                                     parameter name 'Raw'."
+ *   Get-Content  Env:x -Tail 1       TailNotSupported, InvalidOperation,
+ *                                    InvalidOperationException
+ *   Get-ChildItem Env: -Filter 'z*'  NotSupported, NotImplemented,
+ *                                    PSNotSupportedException
+ *   Get-ChildItem Env: -Depth 1      NotSupported, same pair, different sentence
+ *
+ * and the ones that ARE accepted are worth recording too, because refusing them
+ * would be just as wrong: `-Include`, `-Exclude`, `-Force`, `-Recurse`, `-Name`,
+ * `-ReadCount` and `-TotalCount` all bind on `Env:`.
+ */
+export function namedParameterNotFoundError(
+  identity: CommandIdentity,
+  parameter: string,
+): ErrorRecord {
+  return errorRecord(
+    `A parameter cannot be found that matches parameter name '${parameter}'.`,
+    'NamedParameterNotFound',
+    identity.dotNetType,
+    'InvalidArgument',
+    { exceptionType: 'System.Management.Automation.ParameterBindingException' },
+  );
+}
+
+/**
+ * `-Filter` where the provider does not declare the capability.
+ *
+ * The capability list is what decides, not the drive: `Get-PSProvider` reports
+ * `Filter` for FileSystem alone, and `ProviderRegistry.supports` reads the same
+ * list. MEASURED sentence, identical from Get-Content and Get-ChildItem.
+ */
+export function filterNotSupportedError(identity: CommandIdentity): ErrorRecord {
+  return providerNotSupportedError(
+    identity,
+    'Cannot call method. The provider does not support the use of filters.',
+  );
+}
 
 /**
  * Expand one path argument, globbing wildcards segment by segment.
@@ -551,34 +729,28 @@ export async function resolveTargets(
 // ---------------------------------------------------------------------------
 
 /**
- * The order `Get-ChildItem` lists a directory in: DIRECTORIES FIRST, then files,
- * each collated.
+ * The ordering rule MOVED to `providers/filesystem.ts`, where the FileSystem
+ * provider's `getChildItems` needs it.
  *
- * Both halves were measured, and the second one was the surprise. A directory
- * holding `a.txt B.txt C.txt _u.txt 1.txt a-b.txt ab.txt Z.txt` plus the
- * directories `a` and `M` lists as
- *
- *   pwsh: a | M | _u.txt | 1.txt | a-b.txt | a.txt | ab.txt | B.txt | C.txt | Z.txt
- *
- * which is neither ordinal (`1.txt` would precede `B.txt` and `_u.txt` would
- * follow `Z.txt`) nor natural (`f1 f10 f2` stays in that order, measured
- * separately). It is a CULTURE-AWARE collation, and the pinned `en` collator
- * behind `compareValues` reproduces it exactly — checked element by element.
- * Using `compareValues` rather than a local comparator is deliberate: this
- * engine has one ordering rule, and a second one here is where the two would
- * diverge.
+ * It was briefly written twice — once there for `ProviderItem`, once here for
+ * `DirectoryEntry` — which is the "one conversion implemented more than once"
+ * shape this repository has found six times. `orderChildItems` is generic over
+ * the row so both callers use it, and the measured order (directories first,
+ * then files, each collated with the pinned `en` collator) is stated in one
+ * place. These two names stay because ten call sites import them.
  */
 export function compareNames(a: string, b: string): number {
-  return compareValues(a, b);
+  return compareItemNames(a, b);
 }
 
 export function sortDirectoryEntries(
   entries: readonly DirectoryEntry[],
 ): readonly DirectoryEntry[] {
-  const directories = entries.filter((e) => e.stat.kind === 'directory');
-  const files = entries.filter((e) => e.stat.kind !== 'directory');
-  const byName = (x: DirectoryEntry, y: DirectoryEntry): number => compareNames(x.name, y.name);
-  return [...directories.sort(byName), ...files.sort(byName)];
+  return orderChildItems(
+    entries,
+    (entry) => entry.name,
+    (entry) => entry.stat.kind === 'directory',
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -616,157 +788,6 @@ export function splitOnDelimiter(text: string, delimiter: string): readonly stri
   const parts = text.split(delimiter);
   if (parts.length > 0 && parts[parts.length - 1] === '') parts.pop();
   return parts;
-}
-
-/**
- * `.NET`'s `Path.GetExtension`: everything from the LAST dot, dot included.
- *
- *   pwsh: (Get-Item zeta.md).Extension       ->  .md
- *   pwsh: (Get-Item dotted.dir).Extension    ->  .dir   (directories too)
- *   pwsh: (Get-Item .dotonly).Extension      ->  .dotonly
- */
-export function extensionOf(name: string): string {
-  const dot = name.lastIndexOf('.');
-  return dot === -1 ? '' : name.slice(dot);
-}
-
-/**
- * `BaseName`, which is NOT the same script property on the two types.
- *
- *   pwsh: (Get-Item zeta.md).BaseName        ->  zeta        (file: strip it)
- *   pwsh: (Get-Item .dotonly).BaseName       ->  <empty>     (file: strip it)
- *   pwsh: (Get-Item dotted.dir).BaseName     ->  dotted.dir  (directory: keep it)
- */
-export function baseNameOf(name: string, kind: FileStat['kind']): string {
-  if (kind === 'directory') return name;
-  const dot = name.lastIndexOf('.');
-  return dot === -1 ? name : name.slice(0, dot);
-}
-
-// ---------------------------------------------------------------------------
-// FileInfo / DirectoryInfo
-// ---------------------------------------------------------------------------
-
-export const FILE_INFO_TYPE_NAMES: readonly string[] = [
-  'System.IO.FileInfo',
-  'System.IO.FileSystemInfo',
-  'System.MarshalByRefObject',
-  'System.Object',
-];
-export const DIRECTORY_INFO_TYPE_NAMES: readonly string[] = [
-  'System.IO.DirectoryInfo',
-  'System.IO.FileSystemInfo',
-  'System.MarshalByRefObject',
-  'System.Object',
-];
-
-/** pwsh: `(Get-Item x).PSProvider` -> `Microsoft.PowerShell.Core\FileSystem`. */
-export const FILESYSTEM_PROVIDER = 'Microsoft.PowerShell.Core\\FileSystem';
-
-/**
- * `Mode`, the five-character attribute string.
- *
- * Measured on Windows, where the positions and the letters come from:
- *
- *   pwsh: a directory   ->  d----
- *   pwsh: a file        ->  -a---
- *   pwsh: a hidden file ->  -a-h-
- *
- * so the columns are `d a r h s`. WHICH of them this filesystem can set is a
- * different question, and inventing the rest would be worse than omitting them:
- *
- *   d  from `FileStat.kind`
- *   a  ARCHIVE is a Windows attribute with no POSIX bit behind it. `FileStat`
- *      has nowhere to store one, so it is always '-'. On Windows every ordinary
- *      file shows `a`; that is a property of NTFS, not of this store.
- *   r  from the owner's write bit — .NET derives IsReadOnly the same way on Unix
- *   h  from the leading dot, which is the only hidden rule this filesystem has
- *      and the rule v1's `ls` already used (`k.charAt(0) !== '.'`)
- *   s  SYSTEM, as with ARCHIVE: no bit, always '-'
- *
- * `UnixMode` below is the one that carries the whole truth, which is why the
- * default table leads with it.
- */
-export function modeString(stat: FileStat): string {
-  const readOnly = (stat.mode & 0o200) === 0;
-  return (
-    (stat.kind === 'directory' ? 'd' : '-') +
-    '-' +
-    (readOnly ? 'r' : '-') +
-    (isHidden(stat.name) ? 'h' : '-') +
-    '-'
-  );
-}
-
-/**
- * The object `Get-ChildItem` emits.
- *
- * TYPE NAMES ARE MEASURED. `(Get-Item x).PSTypeNames` is
- * `System.IO.FileInfo, System.IO.FileSystemInfo, System.MarshalByRefObject,
- * System.Object` for a file and the DirectoryInfo chain for a directory, and
- * `Get-ChildItem` really does emit two different types from one call.
- *
- * PROPERTY ORDER IS THE PS7-ON-UNIX DEFAULT TABLE, then everything else. There
- * is no format view for FileInfo in this engine yet, so `Format-Table` builds
- * its columns from the first object's properties in order; leading with
- * `UnixMode User Group LastWriteTime Length Name` is what makes the default
- * rendering resemble the reference implementation's on Linux, which is the
- * platform being emulated and the column set v1 chose for the same reason.
- * (pwsh on Linux labels the Length column `Size`; the PROPERTY is `Length`
- * there too, so the label is the formatter's business and not modelled here.)
- *
- * `Length` IS ABSENT ON A DIRECTORY, which was measured and is easy to get
- * wrong:
- *
- *   pwsh: (Get-Item sub).PSObject.Properties['Length']   ->  $null
- *   pwsh: (Get-Item sub).Length                          ->  1
- *
- * The 1 is PowerShell's intrinsic collection Count showing through, not a size,
- * and `Get-Member` on a DirectoryInfo lists no Length at all. So a directory
- * here has no Length property and its cell in the table is blank, exactly as
- * `Get-ChildItem | Format-Table` shows.
- *
- * DELIBERATELY NOT EMITTED, because this storage cannot answer them and a
- * plausible-looking wrong value is worse than a missing one: `LastAccessTime`
- * (no atime in `FileStat`), `Attributes` (a Windows flags enum), `LinkType`,
- * `LinkTarget`, `Target`, `ResolvedTarget` (there are no symbolic links —
- * `storage/types.ts` says so), `VersionInfo`, `UnixFileMode` (the .NET enum
- * rendering), `Directory`, `Parent` and `Root` (which are FileSystemInfo
- * OBJECTS in pwsh; `DirectoryName` is the string form and is emitted).
- */
-export function fileSystemInfo(stat: FileStat, resolved: ResolvedPath): PSObject {
-  const isDirectory = stat.kind === 'directory';
-  const full = resolved.full;
-  const parent = dirname(resolved.path);
-
-  const properties: Record<string, PSValue> = {
-    UnixMode: formatMode(stat.mode, stat.kind),
-    User: stat.owner,
-    Group: stat.group,
-    LastWriteTime: new Date(stat.mtime),
-  };
-  // Files only. See the note above: a DirectoryInfo has no Length member.
-  if (!isDirectory) properties['Length'] = stat.size;
-  properties['Name'] = stat.name;
-
-  properties['Mode'] = modeString(stat);
-  properties['FullName'] = full;
-  properties['PSIsContainer'] = isDirectory;
-  properties['Extension'] = extensionOf(stat.name);
-  properties['BaseName'] = baseNameOf(stat.name, stat.kind);
-  properties['CreationTime'] = new Date(stat.birthtime);
-  properties['Exists'] = true;
-  if (!isDirectory) properties['IsReadOnly'] = (stat.mode & 0o200) === 0;
-  if (!isDirectory) properties['DirectoryName'] = formatResolved(resolved.drive, parent);
-
-  // pwsh: (Get-Item x).PSPath -> Microsoft.PowerShell.Core\FileSystem::<full>
-  properties['PSPath'] = `${FILESYSTEM_PROVIDER}::${full}`;
-  properties['PSParentPath'] = `${FILESYSTEM_PROVIDER}::${formatResolved(resolved.drive, parent)}`;
-  properties['PSChildName'] = stat.name;
-  properties['PSDrive'] = resolved.drive;
-  properties['PSProvider'] = FILESYSTEM_PROVIDER;
-
-  return psObject(properties, isDirectory ? DIRECTORY_INFO_TYPE_NAMES : FILE_INFO_TYPE_NAMES);
 }
 
 // ---------------------------------------------------------------------------

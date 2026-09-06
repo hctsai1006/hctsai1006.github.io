@@ -4,7 +4,7 @@
 
 **Phase** Compatibility  
 **Status** [~] in progress  
-**Tasks** 4/5 +1 partial `##############////`
+**Tasks** 5/5 `##################`
 
 ## Why
 
@@ -37,10 +37,14 @@ Fidelity claims need evidence. pwsh 7.6.5 on .NET 10.0.11 is installed on the de
   - *evidence:* `tools/conformance.mts` exports `runConformance`
   - *evidence:* `tests/conformance/conformance.test.mts` — test "does not count a known gap as evidence of fidelity"
   - *evidence:* `tests/conformance/known-differences.yml` matches `/reason/`
-- [/] **11.5** Report per-profile conformance coverage as a number the site can display
-  - MISSING: the per-profile part, and the display. The number itself is real and hard to forge — coverage is credited only where the connection between a case and a command can be established mechanically, after relabelling twenty-four cases was shown to move it from 38.7% to 100% with zero problems reported — and `npm run conformance -- --check` gates it. But there is exactly one fixture, for 7.6.5, so "per-profile" is aspirational; and nothing renders it: the explorer page never mentions coverage, and no other page in the repository does either.
-  - *evidence:* `tests/conformance/report.json` — `coverage.behaviouralCoveragePercent`
-  - *evidence:* `tests/conformance/conformance.test.mts` — test "counts coverage from established credits, never from the corpus label"
+- [x] **11.5** Report per-profile conformance coverage as a number the site can display
+  - Both halves landed. Every published profile gets its own row from classifyProfileCoverage, expressed in the ladder src/commands/manifest.ts already defines — declared / partial / implemented / verified — where `verified` is awarded only by a case that agreed with a capture of THAT profile's own version. 7.6.5 reads 10 / 31 commands verified and 0 / 6 behaviour flags proven; 7.7.0-preview.4 reads 0 and 0, because no 7.7 exists to capture from, and showing the two separately is the point: one global percentage would have carried the 7.6.5 measurement across to a version nothing has ever been asked. Neither denominator reads the evidence, so no fraction can be improved by deleting a fixture — the property is a unit test, not a comment. compat/explorer.html renders both rows.
+  - *evidence:* `tools/conformance.mts` exports `classifyProfileCoverage`
+  - *evidence:* `tests/conformance/report.json` — `profileCoverage.1.commands.verifiedPercent`
+  - *evidence:* `tests/unit/conformance-coverage.test.mts` — test "never lets the evidence touch the denominator"
+  - *evidence:* `tests/unit/conformance-coverage.test.mts` — test "awards nothing from a capture of a different version, however much evidence there is"
+  - *evidence:* `tests/conformance/conformance.test.mts` — test "reports a coverage number for every published profile, not just the one with a fixture"
+  - *evidence:* `compat/explorer.html` matches `/How much of this has been checked against a real PowerShell/`
   - *evidence:* `tests/conformance/fixtures/pwsh-7.7*` matches no file, though `tests/conformance/**/*` does
 
 ## Acceptance

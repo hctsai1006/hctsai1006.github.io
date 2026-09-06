@@ -19,10 +19,23 @@
  * so moving execution into a Worker is a change of transport rather than a
  * change of design — which is the whole reason the protocol was written first.
  *
- * DELIBERATELY NOT A PARSER. `splitPipeline` and `splitTokens` below are the
- * smallest thing that lets a pipeline exist at all, and they are marked for
- * deletion. Lexing and the AST belong to PR-08, and every parameter rule that
- * leaks in here is one that will have to be removed from two places later.
+ * NOT A PARSER, and no longer a placeholder one either. This file used to carry
+ * `splitPipeline` and `splitTokens` — a quote-aware `|` splitter and
+ * `stage.split(/\s+/u)` — under a comment marking them for deletion. They are
+ * gone. `#exec` calls `parseForExecution`, whose own docstring says it is what
+ * replaces them, and hands each `CommandAst` to `tryBindCommand` rather than
+ * flattening it back to strings. What that buys, beyond one lexer instead of
+ * four: `-Path "my file"` is one argument rather than three, and a QUOTED
+ * `'-Force'` stays a value instead of binding the switch — measured on pwsh
+ * 7.6.5 in `binding/from-ast.ts`, which is where the AST-shaped binder lives.
+ *
+ * AND NO LANGUAGE RULES LEFT BEHIND. For one commit this file re-read
+ * `token.quote` after the parse, to refuse `'Get-Date'` — because pwsh parses a
+ * quoted command name as a STRING and the parser here was building a CommandAst
+ * for it. That is a question about the grammar answered in the host, which is
+ * the same shape as the splitter it had just replaced. `parse.ts` builds the
+ * `CommandExpressionAst` pwsh builds now, and this file refuses it by the same
+ * rule it refuses `1 | gci` by.
  *
  * NOT A SECOND ENGINE, any more. This file used to join its stages with a
  * private `ObjectQueue` whose own comment admitted the buffering was unbounded
@@ -48,6 +61,7 @@ import type {
 } from '../commands/invocation.ts';
 import { CapabilityDeniedError } from '../commands/invocation.ts';
 import type { Capability, CommandManifest, Runtime } from '../commands/manifest.ts';
+import type { ProviderRegistry } from '../providers/index.ts';
 import type { DialogPort, FileSystemPort, PreferencesPort } from '../commands/ports.ts';
 import type { PSValue } from '../pipeline/psobject.ts';
 import type {
@@ -67,8 +81,11 @@ import {
   runPipelineStages,
 } from '../pipeline/pipeline.ts';
 import type { BindOptions } from '../binding/binder.ts';
-import { tryBindParameters } from '../binding/binder.ts';
+import { tryBindCommand } from '../binding/from-ast.ts';
 import { ParameterBindingError } from '../binding/errors.ts';
+import type { CommandAst } from '../language/ast.ts';
+import { parseForExecution } from '../language/parse.ts';
+import { EXECUTION_REFUSAL_REASONS, unimplementedMessage } from '../language/unimplemented.ts';
 import type { ProcessGroupId, ProcessId, RequestId, TerminalId } from './ids.ts';
 import type { KernelEvent, KernelEventBody } from './protocol.ts';
 import {
@@ -230,6 +247,21 @@ export interface KernelOptions {
    * the kernel never reads that view back.
    */
   readonly openFileSystem?: (session: FileSystemSession) => FileSystemPort;
+  /**
+   * Which drive belongs to which provider. Built by the embedder with
+   * `installProviders`, because the registry has to be handed to the same
+   * `VirtualFileSystem` the port wraps and the kernel never sees that view.
+   *
+   * ONE REGISTRY FOR EVERY SESSION, deliberately, and the reason is the same
+   * one `fs` states above: a registry holds a `FileSystemProvider` over one
+   * port, so it inherits that port's single current directory. There is no
+   * `openProviders` counterpart to `openFileSystem` yet — pairing the two
+   * factories per session needs one factory returning BOTH, which is a change
+   * to a tested option and belongs with the embedder that first opens two
+   * panes. `src/kernel/browser-worker.ts` wires no filesystem at all today, so
+   * nothing shipped is waiting on it.
+   */
+  readonly providers?: ProviderRegistry | null;
   readonly preferences?: PreferencesPort | null;
   readonly dialog?: DialogPort | null;
   /**
@@ -405,53 +437,6 @@ ope','C:\Windows' -ErrorAction SilentlyContinue` emits one
 }
 
 // ---------------------------------------------------------------------------
-// the placeholder splitter
-// ---------------------------------------------------------------------------
-
-/**
- * Split a command line on top-level `|`.
- *
- * NOT THE PARSER. Delete this when the binder lands; PR-08 owns lexing, the
- * AST and every version-dependent rule. It exists only so a pipeline can form a
- * process group, which is what makes Ctrl+C testable at all.
- *
- * It does respect quotes, because the alternative — `index.html`'s bare
- * `split('|')` — turns `Write-Output 'a|b'` into two commands, and a splitter
- * that is wrong on a literal is worse than no splitter.
- */
-export function splitPipeline(source: string): readonly string[] {
-  const stages: string[] = [];
-  let current = '';
-  let quote: "'" | '"' | null = null;
-
-  for (const character of source) {
-    if (quote !== null) {
-      current += character;
-      if (character === quote) quote = null;
-      continue;
-    }
-    if (character === "'" || character === '"') {
-      quote = character;
-      current += character;
-      continue;
-    }
-    if (character === '|') {
-      stages.push(current);
-      current = '';
-      continue;
-    }
-    current += character;
-  }
-  stages.push(current);
-  return stages.map((s) => s.trim()).filter((s) => s.length > 0);
-}
-
-/** The command name and everything after it. Also not the parser. */
-export function splitTokens(stage: string): readonly string[] {
-  return stage.split(/\s+/u).filter((t) => t.length > 0);
-}
-
-// ---------------------------------------------------------------------------
 // the kernel
 // ---------------------------------------------------------------------------
 
@@ -485,6 +470,7 @@ export class Kernel {
   readonly #defaultCwd: string;
   readonly #fs: FileSystemPort | null;
   readonly #openFileSystem: ((session: FileSystemSession) => FileSystemPort) | null;
+  readonly #providers: ProviderRegistry | null;
   readonly #preferences: PreferencesPort | null;
   readonly #dialog: DialogPort | null;
   readonly #validateEvents: boolean;
@@ -536,6 +522,7 @@ export class Kernel {
           'supply a single shared port, or a factory that opens one view per session',
       );
     }
+    this.#providers = options.providers ?? null;
     this.#preferences = options.preferences ?? null;
     this.#dialog = options.dialog ?? null;
 
@@ -966,21 +953,118 @@ export class Kernel {
     // pipeline — so `$PWD`, `Get-Location` and relative resolution cannot
     // disagree about where the command started.
     const cwd = this.cwd(terminalId);
-    const stages = splitPipeline(source);
-    if (stages.length === 0) {
-      // NOT a silent return, which is what this was. MEASURED: an `exec` whose
-      // source was `'   '` produced zero events and left `sequence` at 0, while
-      // the requestId was already recorded in `#submitted` — so the correlation
-      // id was spent, nothing was reported against it, and anything waiting for
-      // the request to finish waited forever. Every accepted `exec` now ends in
-      // at least one `exit` or in exactly one `rejected`.
-      this.#emit({
-        kind: 'rejected',
-        requestId,
-        requestKind: 'exec',
-        problems: ['source contains no command'],
-      });
+
+    // NOT a silent return, whichever way this ends. MEASURED: an `exec` whose
+    // source was `'   '` produced zero events and left `sequence` at 0, while
+    // the requestId was already recorded in `#submitted` — so the correlation
+    // id was spent, nothing was reported against it, and anything waiting for
+    // the request to finish waited forever. Every accepted `exec` ends in at
+    // least one `exit` or in exactly one `rejected`.
+    const refuse = (...problems: readonly string[]): void => {
+      this.#emit({ kind: 'rejected', requestId, requestKind: 'exec', problems });
+    };
+
+    // THE PARSER, not a splitter. Everything the engine will not run is named
+    // here, once, by `parseForExecution`'s gate — including the things the old
+    // `splitTokens` turned into arguments and handed to a command: `>` became a
+    // positional value, `$x` bound as the four literal characters, and `{ ... }`
+    // arrived as two tokens with the body in between.
+    const parsed = parseForExecution(source);
+    if (!parsed.ok) {
+      // EVERY refusal, not the first. Measured on pwsh 7.6.5: `ParseInput` over
+      // 5,000 independent syntax errors reports 5,000 of them, with no cap.
+      //
+      // AND THE BOUND IS NOT THE SOURCE LENGTH, which is what this said. The
+      // source is capped at 64 KiB by `REQUEST_LIMITS.maxSourceLength` — checked
+      // in `decodeKernelRequest`, so it holds on `send` and not only across the
+      // worker — but the refusals are not the same size as the text that caused
+      // them. MEASURED, on 64 KiB of `$a;` repeated: 21,845 refusals, 6.6
+      // MILLION characters of message, in one `rejected` event. It clones in
+      // 23ms, so it crosses; a host that renders one line per problem is the
+      // part that will not enjoy it. Left uncapped deliberately — pwsh reports
+      // all of them, and a cap would be this engine inventing a limit — but
+      // recorded here rather than left as "bounded, therefore fine".
+      refuse(...parsed.refusals.map((refusal) => refusal.message));
       return;
+    }
+
+    // What the kernel can express is ONE pipeline of commands. Two of the four
+    // ways a line can exceed that are AST NODES, and those are refused by
+    // `EXECUTION_REFUSED_NODES` above rather than here — so the profile, the
+    // highlighter and this gate all read one list:
+    //
+    //   `a && b`   PipelineChainAst. pwsh runs `b` only if `a` succeeded —
+    //              measured, a chain whose left side is command-not-found emits
+    //              0 objects. `pipelineStages` FLATTENS a chain, which would
+    //              turn `a && b` into `a | b`.
+    //   `1 | gci`  CommandExpressionAst — a pipeline element that is not a
+    //              command, which also covers `'Get-Date'`, since pwsh parses a
+    //              quoted command name as a STRING and only `& 'Get-Date'` as a
+    //              call. Nothing evaluates expressions.
+    //
+    // The other two are not nodes at all and are refused here, because there is
+    // nothing in the tree to name:
+    //
+    //   `a; b`     pwsh runs both — measured, `@(Write-Output one; Write-Output
+    //              two).Count` is 2. One request is one process group, so
+    //              running them would need two, and running only the first
+    //              would drop the second silently.
+    //   `Get-Date &`  pwsh returns a PSRemotingJob object, State Running —
+    //              measured. This kernel's `background` is a property of the
+    //              REQUEST, decided by the caller, and it emits no job object,
+    //              so honouring `&` here would be approximate in both halves.
+    //              It is a FLAG on PipelineAst, not a node, so no name exists
+    //              for it either.
+    const [statement, ...rest] = parsed.ast.statements;
+    if (statement === undefined) {
+      refuse('source contains no command');
+      return;
+    }
+    if (rest.length > 0) {
+      refuse(
+        `BrowserShell parsed ${parsed.ast.statements.length} statements and runs one per exec. ` +
+          'Separating statements with ";" or a newline is not implemented; submit them one at a time.',
+      );
+      return;
+    }
+    // UNREACHABLE, and kept because the compiler needs the narrowing and the
+    // next change to the gate should fail loudly rather than run a chain. A
+    // cleared `ExecutableScript` cannot contain a PipelineChainAst: the parser
+    // refuses one by name, and `tests/unit/kernel.test.mts` asserts the refusal
+    // arrives with `PipelineChainAst` in it. The wording still comes from
+    // `unimplementedMessage`, so it would read like every other refusal.
+    if (statement.kind !== 'PipelineAst') {
+      refuse(
+        unimplementedMessage(
+          'PipelineChainAst',
+          EXECUTION_REFUSAL_REASONS.get('PipelineChainAst') ?? 'this construct',
+          statement.extent.text,
+        ),
+      );
+      return;
+    }
+    if (statement.background) {
+      refuse(
+        'BrowserShell recognised a background operator (&), and does not implement it. Whether a ' +
+          'command line runs in the background is decided by the caller of exec, not by the line, ' +
+          'and pwsh answers `Get-Date &` with a PSRemotingJob object this engine cannot produce.',
+      );
+      return;
+    }
+    const commands: CommandAst[] = [];
+    for (const element of statement.elements) {
+      // UNREACHABLE for the same reason, and kept for the same two.
+      if (element.kind !== 'CommandAst') {
+        refuse(
+          unimplementedMessage(
+            element.kind,
+            EXECUTION_REFUSAL_REASONS.get(element.kind) ?? 'this construct',
+            element.extent.text,
+          ),
+        );
+        return;
+      }
+      commands.push(element);
     }
 
     // Resolve every stage BEFORE starting any of them. A pipeline whose third
@@ -988,11 +1072,15 @@ export class Kernel {
     // mean side effects for a command line that was never going to work.
     // Verified in pwsh 7.6.5: `Prod | This-Command-Does-Not-Exist` leaves
     // Prod's side-effect log EMPTY.
-    const resolved = stages.map((stage) => {
-      const tokens = splitTokens(stage);
-      const name = tokens[0] ?? '';
-      return { stage, tokens, name, module: this.resolve(name) };
-    });
+    const resolved = commands.map((command) => ({
+      command,
+      // The stage as WRITTEN. `splitPipeline` returned a trimmed slice of the
+      // source and this is the command's own extent, which is the same text for
+      // everything the process table shows it for.
+      stage: command.extent.text,
+      name: command.commandName,
+      module: this.resolve(command.commandName),
+    }));
 
     const missing = resolved.find((entry) => entry.module === undefined);
     if (missing !== undefined) {
@@ -1007,6 +1095,11 @@ export class Kernel {
     // meant the binder — the component invocation.ts says is defined alongside
     // the kernel precisely so the two join up — was never called on the path
     // that actually runs.
+    //
+    // From the AST, not from strings. `tryBindParameters` on
+    // `commandArguments(...)` would re-derive "is this a parameter?" from text
+    // the lexer had already classified, and pwsh 7.6.5 says the two answers
+    // differ: `Test-Q '-Force'` binds -Path, not the switch. See from-ast.ts.
     const bound: {
       stage: string;
       module: CommandModule;
@@ -1014,8 +1107,8 @@ export class Kernel {
     }[] = [];
     for (const entry of resolved) {
       const module = entry.module as CommandModule;
-      const outcome = tryBindParameters(
-        entry.tokens.slice(1),
+      const outcome = tryBindCommand(
+        entry.command,
         module.manifest,
         this.#profile,
         this.#bindOptions(module.manifest),
@@ -1198,12 +1291,17 @@ export class Kernel {
           // succeeded here: the failure is in the kernel's consumption of what
           // it produced, not in producing it. So a pipeline whose output could
           // not be carried across the boundary wrote an error record and then
-          // reported exit 0. MEASURED, with a Format-Table record that the wire
-          // now refuses:
+          // reported exit 0. MEASURED at the time on a Format-Table record,
+          // which the wire then refused:
           //
           //   ERROR: PipelineFailed,Format-Table | value cannot cross …
           //   exit: 0
           //   exit: 0
+          //
+          // That input no longer reproduces it — a format record carries its
+          // document in the property bag now and crosses — so the reproduction
+          // lives in a test that hands the wire a value it cannot carry rather
+          // than in a command that happens to produce one.
           //
           // `signalled` is preserved because a stage that was stopped was
           // stopped, whatever went wrong afterwards.
@@ -1574,6 +1672,7 @@ export class Kernel {
       // The SESSION's view, not a kernel-wide one: which directory a relative
       // path resolves against is a property of the session that typed it.
       fs: port,
+      providers: this.#providers,
       preferences: this.#preferences,
       dialog: this.#dialog,
     };

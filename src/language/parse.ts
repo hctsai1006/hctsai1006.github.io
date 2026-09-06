@@ -51,6 +51,7 @@ import {
   type ScriptBlockAst,
   type StatementAst,
   type UnsupportedSyntaxAst,
+  expressionText,
   unsupportedNodes,
   walk,
 } from './ast.ts';
@@ -72,6 +73,27 @@ export interface ParseResult {
 
 /** Trivia the parser skips but the highlighter still wants. */
 const TRIVIA = new Set(['Comment', 'LineContinuation']);
+
+/**
+ * Token kinds that START A VALUE rather than continue an expression.
+ *
+ * The same set `#parseArgument` turns into an expression node, plus `Parameter`.
+ * Used only to name the refusal when one of them FOLLOWS a complete expression,
+ * which pwsh reports as `UnexpectedToken` rather than as an operator.
+ */
+const VALUE_TOKENS: ReadonlySet<string> = new Set([
+  'Generic',
+  'Identifier',
+  'Number',
+  'StringLiteral',
+  'StringExpandable',
+  'HereStringLiteral',
+  'HereStringExpandable',
+  'Variable',
+  'SplattedVariable',
+  'LCurly',
+  'Parameter',
+]);
 
 // ---------------------------------------------------------------------------
 // the one parser
@@ -286,15 +308,28 @@ class Parser {
     if (head.kind === 'Pipe' || head.kind === 'Semi' || head.kind === 'NewLine') return null;
     if (head.kind === 'AndAnd' || head.kind === 'OrOr') return null;
 
-    // A command HEAD is a bare word or a string. Anything else starts an
-    // expression statement, which this engine parses far enough to refuse.
-    const isCommandHead =
-      head.kind === 'Generic' ||
-      head.kind === 'Identifier' ||
-      head.kind === 'StringLiteral' ||
-      head.kind === 'StringExpandable' ||
-      head.kind === 'HereStringLiteral' ||
-      head.kind === 'HereStringExpandable';
+    // A command HEAD is a BARE WORD, and a quoted one is not a command at all.
+    // This used to accept the four string kinds as well, and pwsh 7.6.5 says
+    // that is wrong — measured, with `ParseInput` and by running it:
+    //
+    //   Get-Location        -> CommandAst           -> a PathInfo
+    //   Get-Loc"ation"      -> CommandAst, BareWord -> a PathInfo
+    //   'Get-Location'      -> CommandExpressionAst -> the String "Get-Location"
+    //   "Get-Location"      -> CommandExpressionAst -> the String "Get-Location"
+    //   & 'Get-Location'    -> CommandAst           -> a PathInfo
+    //
+    // A quote at the START of the token is what changes the answer; a quote
+    // INSIDE one does not, and the lexer already draws that line — `Get-Loc"ation"`
+    // is one `Generic` whose `quote` is null. So this reads the token kind and
+    // nothing here re-reads a quote character.
+    //
+    // It matters because the two really do run different things: `'Get-Location'`
+    // prints a string in pwsh and would have RESOLVED and run the cmdlet here.
+    // The kernel used to catch that by re-inspecting `token.quote` after the
+    // parse, which put a language rule in the host; the tree is simply the
+    // shape pwsh builds now, and `Kernel.#exec` refuses a CommandExpressionAst
+    // wherever it comes from.
+    const isCommandHead = head.kind === 'Generic' || head.kind === 'Identifier';
 
     if (!isCommandHead) return this.#parseExpressionStatement();
     return this.#parseCommand();
@@ -570,7 +605,8 @@ class Parser {
   }
 
   /**
-   * A statement that is not a command: `$x = 1`, `1 + 1`, `[int]::MaxValue`.
+   * A pipeline element that is not a command: `$x = 1`, `1 + 1`,
+   * `[int]::MaxValue` — and `'Get-Location'`, which is a STRING.
    *
    * Parsed only as far as naming what it is. Everything here is refused at
    * execution, and the naming is the whole point.
@@ -578,31 +614,18 @@ class Parser {
   #parseExpressionStatement(): CommandExpressionAst {
     const head = this.#peek() as Token;
     const start = head.start;
-    let expression: ExpressionAst;
-
-    if (head.kind === 'Variable' || head.kind === 'SplattedVariable') {
-      this.#i += 1;
-      expression = {
-        kind: 'VariableExpressionAst',
-        extent: this.#extentOf(head),
-        variablePath: head.value,
-        splatted: head.kind === 'SplattedVariable',
-      };
-    } else if (head.kind === 'Number') {
-      this.#i += 1;
-      expression = {
-        kind: 'ConstantExpressionAst',
-        extent: this.#extentOf(head),
-        value: head.value,
-      };
-    } else {
-      const syntax = UNIMPLEMENTED_SYNTAX.get(head.kind);
-      this.#i += 1;
-      expression =
-        syntax === undefined
-          ? this.#unsupported(head, 'ErrorExpressionAst', `the token "${head.text}"`)
-          : this.#unsupported(head, syntax.node, syntax.describes);
-    }
+    // ONE classification of "what expression does this token start", shared
+    // with an argument. This block used to repeat `#parseArgument`'s switch for
+    // the three kinds it expected — a variable, a number, and everything else
+    // as unsupported — which is the defect this whole item is about at the
+    // smallest possible scale: two answers to one question, free to drift.
+    //
+    // It also answered one of them WRONGLY. `{ 1 }` on its own reached the
+    // fallback arm and was refused as `ErrorExpressionAst`, "the token {";
+    // pwsh 7.6.5 builds a ScriptBlockExpressionAst, which is what
+    // `#parseArgument` builds and what `EXECUTION_REFUSED_NODES` already names.
+    // `#parseArgument` never returns null for a token that exists.
+    let expression = this.#parseArgument() as ExpressionAst;
 
     // Whatever follows a bare expression makes it a bigger expression, and this
     // engine implements none of them. One refusal for the rest of the statement.
@@ -621,10 +644,49 @@ class Parser {
       // not a BinaryExpressionAst. Letting the trailing token win would name the
       // wrong node, and a wrong name is worse than a vague one because it sends
       // the reader looking for the wrong thing.
-      const head0 = expression.kind === 'UnsupportedSyntaxAst' ? expression : null;
+      // The HEAD is already a refusal in two ways, not one: an
+      // `UnsupportedSyntaxAst`, or a node the engine refuses outright.
+      // `{ a } x` is the second — MEASURED, pwsh keeps the ScriptBlockExpressionAst
+      // and reports `UnexpectedToken` for the `x` — and it used to be renamed
+      // `BinaryExpressionAst`, "an expression operator", by the fallback below.
+      const refusedHead = EXECUTION_REFUSED_NODES.includes(expression.kind as PwshAstNode)
+        ? (expression.kind as PwshAstNode)
+        : null;
+      const head0: { nodeType: PwshAstNode; describes: string } | null =
+        expression.kind === 'UnsupportedSyntaxAst'
+          ? expression
+          : refusedHead === null
+            ? null
+            : {
+                nodeType: refusedHead,
+                describes: EXECUTION_REFUSAL_REASONS.get(refusedHead) ?? 'this construct',
+              };
       const syntax = UNIMPLEMENTED_SYNTAX.get(trailing.kind);
-      const node: PwshAstNode = head0?.nodeType ?? syntax?.node ?? 'BinaryExpressionAst';
-      const describes = head0?.describes ?? syntax?.describes ?? 'an expression operator';
+      // A VALUE after an expression is not an operator, and calling it one named
+      // the wrong node. An operator continues an expression; a value ends it and
+      // pwsh says so. MEASURED on 7.6.5, every one of
+      //
+      //   'a' 'b'   1 2   $x y   1 "s"   'a' b   $x $y   1 { }   1 -Path y
+      //     -> UnexpectedToken, over an ErrorExpressionAst
+      //   $x -eq 1   'a' + 'b'   'a'.Length   1..3   $x, $y
+      //     -> no error at all
+      //
+      // so the fallback below stays `BinaryExpressionAst` for an operator — that
+      // IS what pwsh builds — and becomes `ErrorExpressionAst` for a value.
+      //
+      // NOT COMPLETE, and saying so rather than implying otherwise: `$x [int]`
+      // and `$x (1)` are UnexpectedToken in pwsh too, and `LBracket`/`LParen`
+      // still come back as TypeExpressionAst and ParenExpressionAst from
+      // `UNIMPLEMENTED_SYNTAX` above. Those are refusals with a name that is one
+      // step too generous, not refusals that run.
+      const fallbackNode: PwshAstNode = VALUE_TOKENS.has(trailing.kind)
+        ? 'ErrorExpressionAst'
+        : 'BinaryExpressionAst';
+      const fallbackDescribes = VALUE_TOKENS.has(trailing.kind)
+        ? `the token "${trailing.text}", which pwsh reports as UnexpectedToken here`
+        : 'an expression operator';
+      const node: PwshAstNode = head0?.nodeType ?? syntax?.node ?? fallbackNode;
+      const describes = head0?.describes ?? syntax?.describes ?? fallbackDescribes;
       while (
         this.#i < this.#tokens.length &&
         !['Pipe', 'Semi', 'NewLine', 'AndAnd', 'OrOr'].includes(this.#peek()?.kind ?? '')
@@ -816,9 +878,33 @@ export function parseForExecution(source: string): ExecutionParse {
     });
   }
 
+  // 6. The WRAPPER says nothing when the thing it wraps already spoke.
+  //
+  //    `CommandExpressionAst` is "an expression stands where a command belongs"
+  //    and carries no syntax of its own, so it is worth naming only when the
+  //    expression inside it was otherwise fine: `1 | gci` and `'Get-Date'` are
+  //    refused by it and by nothing else. Without this, `$x` came back with two
+  //    messages — VariableExpressionAst and then the wrapper — and `& 'Get-Date'`
+  //    with two, the second of which told the reader nothing the first had not.
+  //
+  //    Dropping the OUTER one rather than the inner one, because the inner one
+  //    is the specific answer. The spans are equal in every case the parser can
+  //    build today (a wrapper's extent is its expression's), so nothing stops
+  //    being painted; containment rather than equality is checked so that stays
+  //    true if an expression ever grows a narrower refusal inside it.
   if (refusals.length > 0) {
-    refusals.sort((a, b) => a.start - b.start);
-    return { ok: false, refusals };
+    const informative = refusals.filter(
+      (refusal) =>
+        refusal.nodeType !== 'CommandExpressionAst' ||
+        !refusals.some(
+          (other) => other !== refusal && other.start >= refusal.start && other.end <= refusal.end,
+        ),
+    );
+    // Never NOTHING. A refusal that was found is a refusal that is reported,
+    // even if the rule above would drop every one of them; "ok" here would run
+    // a line the parser had already decided against.
+    const reported = informative.length > 0 ? informative : refusals;
+    return { ok: false, refusals: [...reported].sort((a, b) => a.start - b.start) };
   }
   // The only construction of the brand in the codebase. It is a phantom type,
   // so nothing is added to the value at runtime.
@@ -830,10 +916,16 @@ export function parseForExecution(source: string): ExecutionParse {
 /**
  * The command stages of a pipeline, for a caller that only needs the shape.
  *
- * This is what replaces `kernel.ts`'s `splitPipeline` + `splitTokens`, whose
- * own comment marks them for deletion. The difference is not cosmetic: those
- * split on whitespace, so `Write-Output 'a b'` reached the binder as two
- * arguments.
+ * This is what replaced `kernel.ts`'s `splitPipeline` + `splitTokens`, now
+ * deleted. The difference was not cosmetic: those split on whitespace, so
+ * `Write-Output 'a b'` reached the binder as two arguments.
+ *
+ * SHAPE ONLY, and the kernel does not use it. It FLATTENS a chain — `a && b`
+ * comes back as two stages, which is right for the line editor asking "what
+ * commands are on this line" and wrong for anything that runs them — and it
+ * DROPS a `CommandExpressionAst`, so `1 | gci` comes back as one stage. A
+ * caller that executes has to see both of those rather than have them
+ * smoothed away, so `Kernel.#exec` walks `elements` itself and refuses.
  */
 export function pipelineStages(pipeline: PipelineAst | PipelineChainAst): readonly CommandAst[] {
   const stages: CommandAst[] = [];
@@ -852,12 +944,19 @@ export function pipelineStages(pipeline: PipelineAst | PipelineChainAst): readon
 }
 
 /**
- * The argument tokens of a command, as the binder wants them.
+ * The argument tokens of a command, FLATTENED to strings.
  *
- * One conversion, in one place. The binder's `parseParameterToken` re-derived
- * `-Name:value` from a raw string because nothing upstream had told it; now the
- * AST has already decided, and the strings handed over are DECODED — quotes
- * stripped, escapes resolved — which `splitTokens` never did.
+ * NOT WHAT THE BINDER USES, and the distinction is the point of
+ * `binding/from-ast.ts`: flattening loses which elements the lexer classified as
+ * parameters, and pwsh 7.6.5 says that matters — `Test-Q '-Force'` binds -Path
+ * with the value `-Force`, while `Test-Q -Force` sets the switch. Nothing on
+ * the execution path calls this; it is a readable projection for tests and for
+ * a caller that wants the line back as words.
+ *
+ * The decoding itself is `ast.ts`'s `expressionText`, shared with the binder.
+ * It was a private copy here and an identical private copy there, and the
+ * kernel integration left this one with no production caller at all — a
+ * duplicate that only tests exercise is a duplicate free to drift.
  */
 export function commandArguments(command: CommandAst): readonly string[] {
   const args: string[] = [];
@@ -876,19 +975,3 @@ export function commandArguments(command: CommandAst): readonly string[] {
   return args;
 }
 
-/** The decoded text of an argument expression. */
-function expressionText(expression: ExpressionAst): string {
-  switch (expression.kind) {
-    case 'StringConstantExpressionAst':
-    case 'ExpandableStringExpressionAst':
-      return expression.value;
-    case 'ConstantExpressionAst':
-      return expression.value;
-    case 'VariableExpressionAst':
-      return `${expression.splatted ? '@' : '$'}${expression.variablePath}`;
-    case 'ScriptBlockExpressionAst':
-      return `{${expression.body}}`;
-    default:
-      return expression.extent.text;
-  }
-}
