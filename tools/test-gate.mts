@@ -155,18 +155,32 @@ export function isBrokenPipe(error: unknown): boolean {
  * then fails with EPIPE, and with no listener Node turns that into an UNCAUGHT
  * EXCEPTION.
  *
- * MEASURED on node:24 in Docker, a passing run piped to `head -c 100`:
+ * MEASURED, a passing run piped to `head -c 100`:
  *
  *     node:events:487
  *           throw er; // Unhandled 'error' event
  *     Error: write EPIPE
  *         at WriteWrap.onWriteComplete ...
  *
- * 497 bytes of stack trace and exit code 1, from a suite where every test
- * passed. The previous `process.exit(0)` never saw it, because it left before
- * the write could fail — so this arrived with the flush fix and belongs to it.
- * A runner that appears to crash when you pipe it through `head` is one people
- * learn to distrust, which is how gates get muted.
+ * A stack trace and exit code 1, from a suite where every test passed. The
+ * previous `process.exit(0)` never saw it, because it left before the write
+ * could fail — so this arrived with the flush fix and belongs to it. A runner
+ * that appears to crash when you pipe it through `head` is one people learn to
+ * distrust, which is how gates get muted.
+ *
+ * NOT a POSIX-only concern, which is the assumption to head off: the flush fix
+ * it came with is POSIX-specific, so it is natural to read this as POSIX-only
+ * too, and it is not. The same three shapes, 8 MB to a pipe closed after 100
+ * bytes, on Windows 11 and on node:24 in Docker:
+ *
+ *                                          Windows            Linux
+ *     write(big); process.exit(0)          exit 0             exit 0
+ *     write(big); process.exitCode = 0     exit 1, 1079 B     exit 1, 497 B
+ *     the same, with this listener         exit 0             exit 0
+ *
+ * Windows reports EPIPE too — errno -4047 rather than -32, same `code` — so the
+ * predicate below needs no platform branch, and neither runner may skip the
+ * listener because it happens to be running on Windows.
  *
  * Verified with the same probe once the listener is installed: exit code 0 stays
  * 0 and 1 stays 1, whether the consumer reads everything or nothing, and a
