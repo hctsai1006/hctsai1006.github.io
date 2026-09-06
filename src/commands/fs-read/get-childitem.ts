@@ -532,21 +532,25 @@ async function listProviderDrive(
   // literal path matches nothing at all.
   const includeIsInert =
     options.include !== undefined && !literal && !hasWildcard(raw) && !options.recurse;
+  if (includeIsInert) return { keepGoing: true, exitCode: 0 };
 
   for (const row of rows) {
-    if (includeIsInert) break;
-    // NO HIDDEN RULE HERE, and that is measured rather than an omission. A
+    // `accepts`, the SAME predicate the filesystem walk uses — which is why its
+    // parameter was narrowed from DirectoryEntry to a name and a container
+    // flag. Re-spelling `-Filter`/`-Include`/`-Exclude` here would be a third
+    // copy of one rule, and would silently ignore `-Filter` the day a provider
+    // declares the Filter capability.
+    //
+    // NO HIDDEN RULE, though, and that is measured rather than an omission. A
     // leading dot is the FileSystem provider's hiding rule and nothing else's:
     //
     //   pwsh: Set-Item 'Env:.zzDot' 'v'
     //         Get-ChildItem Env:          ->  .zzDot IS listed
     //         Get-ChildItem Env: -Force   ->  .zzDot, same count
     //
-    // The first version of this loop applied `isHidden` and would have made a
-    // dot-named environment variable invisible without -Force, which pwsh does
-    // not do.
-    if (options.include !== undefined && !matchesAny(row.name, options.include)) continue;
-    if (options.exclude !== undefined && matchesAny(row.name, options.exclude)) continue;
+    // The first version of this loop called `visible()` as well and would have
+    // made a dot-named environment variable invisible without -Force.
+    if (!accepts(row, options)) continue;
     const value: PSValue = options.nameOnly ? row.name : row.value;
     if (!(await emit(context.streams.success, context.signal, value))) {
       return { keepGoing: false, exitCode: 0 };
