@@ -695,12 +695,15 @@ export const WORK = [
         id: '3.6',
         title: 'Record engineLimits.nativePowerShellEngine=false and the unimplemented AST node list',
         detail:
-          'MISSING: the list. `nativePowerShellEngine: false` is genuinely recorded in both profiles, and that is the half that protects a visitor from believing a real pwsh is running. `unimplementedAstNodes` is a literal [] in the generator with nothing populating it, and an empty list reads as "every AST node is implemented" — the exact opposite of the truth, since item 8 has not written a parser at all. It cannot be filled honestly until there is an AST to enumerate.',
-        status: 'partial',
+          '`nativePowerShellEngine: false` was always recorded, and that is the half that protects a visitor from believing a real pwsh is running. `unimplementedAstNodes` was a literal [] in the generator with nothing populating it, and an empty list beside it reads as "every AST node is implemented" — the exact opposite of the truth. It is now IMPORTED: the generator calls unimplementedAstNodes(), which derives 37 node names from the three tables parseForExecution consults, so the declaration cannot drift from the behaviour. Typing the names into the generator instead would have been the same defect one step later.',
+        status: 'done',
         evidence: [
           { kind: 'json', file: 'compat/profiles/powershell-7.6.5-linux.json', path: 'engineLimits.nativePowerShellEngine' },
           { kind: 'json', file: 'compat/profiles/powershell-7.6.5-linux.json', path: 'engineLimits.notes' },
-          { kind: 'absent', glob: 'src/**/*.{ts,mts}', pattern: 'AstNodeKind' },
+          { kind: 'json', file: 'compat/profiles/powershell-7.6.5-linux.json', path: 'engineLimits.unimplementedAstNodes' },
+          { kind: 'export', file: 'src/language/unimplemented.ts', symbol: 'unimplementedAstNodes' },
+          { kind: 'test', file: 'tests/unit/language-unimplemented.test.mts', name: 'declares EXACTLY what the engine refuses, in both profiles' },
+          { kind: 'code', file: 'tools/generate-compatibility-profile.mts', pattern: 'unimplementedAstNodes\(\)' },
         ],
       },
       {
@@ -943,12 +946,14 @@ export const WORK = [
         id: '6.2',
         title: 'Split run() into parse -> execute -> render with no DOM access in the middle',
         detail:
-          'MISSING: two of the three stages. Execute is real, DOM-free and heavily tested. Parse is a placeholder — splitPipeline plus a whitespace split that the kernel itself labels DELIBERATELY NOT A PARSER and marks for deletion, pending item 8. Render is not a kernel stage at all: the kernel stops at emitting events, and formatting happens inside Out-String and the Format-* commands rather than at the pipeline tail. The "no DOM in the middle" half holds, but trivially, because nothing in src/ touches the DOM yet.',
+          'MISSING: render, and only render. Parse is real: Kernel.#exec runs parseForExecution and binds each CommandAst through binding/from-ast.ts, and the splitPipeline/splitTokens placeholder the kernel labelled DELIBERATELY NOT A PARSER is deleted. Execute is real, DOM-free and heavily tested. Render is still not a kernel stage: the kernel stops at emitting events, and formatting happens inside Out-String and the Format-* commands rather than at the pipeline tail — though a Format-* record now carries its document across the boundary, so a host CAN render one. The "no DOM in the middle" half holds, but trivially, because nothing in src/ touches the DOM yet.',
         status: 'partial',
         evidence: [
           { kind: 'export', file: 'src/kernel/kernel.ts', symbol: 'Kernel' },
-          { kind: 'export', file: 'src/kernel/kernel.ts', symbol: 'splitPipeline' },
+          { kind: 'code', file: 'src/kernel/kernel.ts', pattern: 'parseForExecution' },
+          { kind: 'absent', glob: 'src/kernel/*.ts', pattern: 'splitPipeline' },
           { kind: 'test', file: 'tests/unit/kernel.test.mts', name: 'creates a process, emits its objects, and exits 0' },
+          { kind: 'test', file: 'tests/unit/kernel-worker.test.mts', name: 'renders on THIS side to the same lines the worker would have rendered' },
           { kind: 'absent', glob: 'src/**/*.{ts,mts}', pattern: 'document.querySelector' },
         ],
       },
@@ -1019,14 +1024,15 @@ export const WORK = [
       {
         id: '7.3',
         title: 'Move formatting to the end of the pipeline as Format-* directives',
-        detail: 'STALE todo, corrected 2026-09-06. Format-Table/-List/-Wide emit one opaque record carrying a FormatDocument in baseObject and no public properties, so a later stage can learn nothing from it; only Out-String and the default renderer turn one into text.',
+        detail: 'STALE todo, corrected 2026-09-06. Format-Table/-List/-Wide emit one opaque record carrying a FormatDocument, and nothing a later stage can use: `... | Sort-Object Name` has no Name to sort on, exactly as in pwsh. Only Out-String and a host renderer turn one into text. The document was serialised into the property bag by the kernel-parser integration, because it rode in baseObject and the kernel boundary drops that, so a Format-* at the end of a pipeline reached the host as an empty typed object.',
         status: 'done',
         evidence: [
           { kind: 'export', file: 'src/formatting/records.ts', symbol: 'formatRecord' },
           { kind: 'export', file: 'src/formatting/records.ts', symbol: 'isFormatRecord' },
           { kind: 'export', file: 'src/formatting/records.ts', symbol: 'FORMAT_ENTRY_TYPE' },
           { kind: 'test', file: 'tests/unit/format-cmdlets.test.mts', name: 'emits ONE opaque directive, not objects' },
-          { kind: 'test', file: 'tests/unit/format-cmdlets.test.mts', name: 'exposes NO properties, so a later stage learns nothing from it' },
+          { kind: 'test', file: 'tests/unit/format-cmdlets.test.mts', name: 'exposes nothing a later stage can use, and one thing the renderer can' },
+          { kind: 'test', file: 'tests/unit/format-cmdlets.test.mts', name: 'round-trips through structuredClone unchanged' },
         ],
       },
       {
@@ -1102,26 +1108,40 @@ export const WORK = [
         id: '8.1',
         title: 'Write one lexer with real quote and escape handling',
         detail:
-          'MISSING: the "one". A real lexer exists — tokenize() handles quoting, doubled-quote escaping and backticks — but it only serves line-editor completion. Execution still runs on the kernel\'s splitTokens, which splits on whitespace with no quote handling at all, and the binder carries a third parameter-token classifier of its own. Three token recognisers, which is the defect item 8 was opened about, one short of v1\'s four.',
-        status: 'partial',
+          'One lexer, src/language/lexer.ts, and the last consumer wired to it was the one on the path that RUNS. Execution used to go through the kernel\'s splitTokens — a whitespace split with no quote handling — so `-Path "my file"` reached the binder as three arguments. It now goes through parseForExecution, and each CommandAst is bound from the AST rather than flattened back to strings, so a quoted `-Force` stays a value instead of binding the switch. tests/unit/lexer-single.test.mts gates this structurally AND behaviourally, and its survivor list is now empty.',
+        status: 'done',
         evidence: [
+          { kind: 'export', file: 'src/language/lexer.ts', symbol: 'lex' },
           { kind: 'export', file: 'src/line-editor/tokenize.ts', symbol: 'tokenize' },
-          { kind: 'test', file: 'tests/unit/kernel.test.mts', name: 'does not split inside quotes' },
-          { kind: 'code', file: 'src/kernel/kernel.ts', pattern: 'splitTokens' },
+          { kind: 'test', file: 'tests/unit/lexer-single.test.mts', name: 'no module under src/ carries a second quote-state machine' },
+          { kind: 'test', file: 'tests/unit/kernel.test.mts', name: 'keeps a quoted argument whole and strips its quotes' },
+          { kind: 'absent', glob: 'src/**/*.{ts,mts}', pattern: 'splitTokens' },
         ],
       },
       {
         id: '8.2',
         title: 'Separate the editing parser (incremental, error-tolerant) from the execution parser (strict)',
-        detail: 'Error-tolerant parsing must never feed the evaluator. Only the tolerant half exists; there is no strict execution parser to separate it from.',
-        status: 'todo',
+        detail:
+          'Two entry points over ONE grammar, which is the shape that matters: parseForEditing never throws and is what the highlighter and completion run on every keystroke, and parseForExecution is that same parse plus a gate. The separation is enforced by the type system rather than by convention — parseForExecution returns a branded ExecutableScript that nothing outside parse.ts can construct, so an evaluator typed against it cannot be handed the tolerant parser\'s output.',
+        status: 'done',
+        evidence: [
+          { kind: 'export', file: 'src/language/parse.ts', symbol: 'parseForEditing' },
+          { kind: 'export', file: 'src/language/parse.ts', symbol: 'parseForExecution' },
+          { kind: 'test', file: 'tests/unit/language-parse.test.mts', name: 'accepts a strict superset of what the execution parser accepts' },
+          { kind: 'test', file: 'tests/unit/language-parse.test.mts', name: 'refuses an incomplete line rather than guessing at it' },
+        ],
       },
       {
         id: '8.3',
         title: 'Refuse to execute recognised-but-unimplemented syntax with an explicit error naming the AST node',
-        detail: 'There is no AST, so there is no node to name. Both the kernel and the PowerShell command support module say so in as many words.',
-        status: 'todo',
-        evidence: [{ kind: 'absent', glob: 'src/**/*.{ts,mts}', pattern: 'AstNodeKind' }],
+        detail:
+          '37 node types are refused by name, and the names are real: PwshAstNode is the pwsh 7.6.5 hierarchy, so a typo is a compile error. The list is derived from the tables parseForExecution consults rather than declared beside them, and compat/profiles/*.json now publishes it (see 3.6) instead of declaring []. Two mappings were measured rather than guessed: `workflow W { }` is a FunctionDefinitionAst in pwsh, and ConfigurationDefinitionAst really does exist in PS 7 core.',
+        status: 'done',
+        evidence: [
+          { kind: 'export', file: 'src/language/unimplemented.ts', symbol: 'UNIMPLEMENTED_KEYWORDS' },
+          { kind: 'test', file: 'tests/unit/language-unimplemented.test.mts', name: 'every keyword in the table is genuinely refused by the parser' },
+          { kind: 'test', file: 'tests/unit/kernel.test.mts', name: 'refuses syntax the engine cannot run, naming the AST node' },
+        ],
       },
       {
         id: '8.4',
@@ -1162,12 +1182,18 @@ export const WORK = [
       {
         id: '8.7',
         title: 'Make the highlighter share the real lexer so it cannot colour syntax the engine rejects',
-        detail: 'No highlighter has been ported yet, and it is moot until 8.1 leaves one tokenizer to share.',
-        status: 'todo',
+        detail:
+          'src/language/highlight.ts is computed FROM the parser: it lexes with the one lexer and paints every span parseForExecution refuses with a `refused` class, so it cannot colour something the engine will not run. Checked over a 20,000-input generated corpus rather than on examples.',
+        status: 'done',
+        evidence: [
+          { kind: 'export', file: 'src/language/highlight.ts', symbol: 'highlight' },
+          { kind: 'test', file: 'tests/unit/lexer-single.test.mts', name: 'the highlighter is computed from the parser, not from its own regex' },
+          { kind: 'test', file: 'tests/unit/language-invariants.test.mts', name: 'INVARIANT 2: the highlighter never colours a refused span as valid' },
+        ],
       },
     ],
     acceptance: [
-      'One tokenizer in the codebase — three exist today: tokenize, splitTokens and the binder\'s parameter-token classifier',
+      'One tokenizer in the codebase — src/language/lexer.ts, with tests/unit/lexer-single.test.mts asserting that no module under src/ carries a second quote-state machine',
       'Where-Object -Not:$false behaves per the active profile',
       'Format-Table -Property "" errors on 7.7 and not on 7.6, from data alone',
     ],

@@ -4,7 +4,7 @@
 
 **Phase** Core  
 **Status** [~] in progress  
-**Tasks** 2/7 +2 partial `#####/////........`
+**Tasks** 6/7 +1 partial `###############///`
 
 ## Why
 
@@ -17,16 +17,24 @@ There are currently FOUR independent tokenizers — splitPipe, the execOne regex
 
 ## Tasks
 
-- [/] **8.1** Write one lexer with real quote and escape handling
-  - MISSING: the "one". A real lexer exists — tokenize() handles quoting, doubled-quote escaping and backticks — but it only serves line-editor completion. Execution still runs on the kernel's splitTokens, which splits on whitespace with no quote handling at all, and the binder carries a third parameter-token classifier of its own. Three token recognisers, which is the defect item 8 was opened about, one short of v1's four.
+- [x] **8.1** Write one lexer with real quote and escape handling
+  - One lexer, src/language/lexer.ts, and the last consumer wired to it was the one on the path that RUNS. Execution used to go through the kernel's splitTokens — a whitespace split with no quote handling — so `-Path "my file"` reached the binder as three arguments. It now goes through parseForExecution, and each CommandAst is bound from the AST rather than flattened back to strings, so a quoted `-Force` stays a value instead of binding the switch. tests/unit/lexer-single.test.mts gates this structurally AND behaviourally, and its survivor list is now empty.
+  - *evidence:* `src/language/lexer.ts` exports `lex`
   - *evidence:* `src/line-editor/tokenize.ts` exports `tokenize`
-  - *evidence:* `tests/unit/kernel.test.mts` — test "does not split inside quotes"
-  - *evidence:* `src/kernel/kernel.ts` matches `/splitTokens/`
-- [ ] **8.2** Separate the editing parser (incremental, error-tolerant) from the execution parser (strict)
-  - Error-tolerant parsing must never feed the evaluator. Only the tolerant half exists; there is no strict execution parser to separate it from.
-- [ ] **8.3** Refuse to execute recognised-but-unimplemented syntax with an explicit error naming the AST node
-  - There is no AST, so there is no node to name. Both the kernel and the PowerShell command support module say so in as many words.
-  - *evidence:* nothing under `src/**/*.{ts,mts}` matches `/AstNodeKind/`
+  - *evidence:* `tests/unit/lexer-single.test.mts` — test "no module under src/ carries a second quote-state machine"
+  - *evidence:* `tests/unit/kernel.test.mts` — test "keeps a quoted argument whole and strips its quotes"
+  - *evidence:* nothing under `src/**/*.{ts,mts}` matches `/splitTokens/`
+- [x] **8.2** Separate the editing parser (incremental, error-tolerant) from the execution parser (strict)
+  - Two entry points over ONE grammar, which is the shape that matters: parseForEditing never throws and is what the highlighter and completion run on every keystroke, and parseForExecution is that same parse plus a gate. The separation is enforced by the type system rather than by convention — parseForExecution returns a branded ExecutableScript that nothing outside parse.ts can construct, so an evaluator typed against it cannot be handed the tolerant parser's output.
+  - *evidence:* `src/language/parse.ts` exports `parseForEditing`
+  - *evidence:* `src/language/parse.ts` exports `parseForExecution`
+  - *evidence:* `tests/unit/language-parse.test.mts` — test "accepts a strict superset of what the execution parser accepts"
+  - *evidence:* `tests/unit/language-parse.test.mts` — test "refuses an incomplete line rather than guessing at it"
+- [x] **8.3** Refuse to execute recognised-but-unimplemented syntax with an explicit error naming the AST node
+  - 37 node types are refused by name, and the names are real: PwshAstNode is the pwsh 7.6.5 hierarchy, so a typo is a compile error. The list is derived from the tables parseForExecution consults rather than declared beside them, and compat/profiles/*.json now publishes it (see 3.6) instead of declaring []. Two mappings were measured rather than guessed: `workflow W { }` is a FunctionDefinitionAst in pwsh, and ConfigurationDefinitionAst really does exist in PS 7 core.
+  - *evidence:* `src/language/unimplemented.ts` exports `UNIMPLEMENTED_KEYWORDS`
+  - *evidence:* `tests/unit/language-unimplemented.test.mts` — test "every keyword in the table is genuinely refused by the parser"
+  - *evidence:* `tests/unit/kernel.test.mts` — test "refuses syntax the engine cannot run, naming the AST node"
 - [x] **8.4** Implement ParameterBinder with validation, parameter sets and positional binding
   - STALE todo, corrected 2026-09-06. Named and positional binding, parameter-set narrowing, mandatory checks, coercion and validation attributes are all implemented and are among the most heavily tested code in the repository.
   - *evidence:* `src/binding/binder.ts` exports `bindParameters`
@@ -44,14 +52,17 @@ There are currently FOUR independent tokenizers — splitPipe, the execOne regex
   - *evidence:* `src/compatibility/profile-resolver.ts` exports `CommandPatch`
   - *evidence:* `tests/unit/profile-resolver.test.mts` — test "lets the child override the parameter it does mention"
   - *evidence:* nothing under `compat/profiles/*.json` matches `/parameterPatches/`
-- [ ] **8.7** Make the highlighter share the real lexer so it cannot colour syntax the engine rejects
-  - No highlighter has been ported yet, and it is moot until 8.1 leaves one tokenizer to share.
+- [x] **8.7** Make the highlighter share the real lexer so it cannot colour syntax the engine rejects
+  - src/language/highlight.ts is computed FROM the parser: it lexes with the one lexer and paints every span parseForExecution refuses with a `refused` class, so it cannot colour something the engine will not run. Checked over a 20,000-input generated corpus rather than on examples.
+  - *evidence:* `src/language/highlight.ts` exports `highlight`
+  - *evidence:* `tests/unit/lexer-single.test.mts` — test "the highlighter is computed from the parser, not from its own regex"
+  - *evidence:* `tests/unit/language-invariants.test.mts` — test "INVARIANT 2: the highlighter never colours a refused span as valid"
 
 ## Acceptance
 
 Observable conditions. Not opinions — each of these can be checked.
 
-- One tokenizer in the codebase — three exist today: tokenize, splitTokens and the binder's parameter-token classifier
+- One tokenizer in the codebase — src/language/lexer.ts, with tests/unit/lexer-single.test.mts asserting that no module under src/ carries a second quote-state machine
 - Where-Object -Not:$false behaves per the active profile
 - Format-Table -Property "" errors on 7.7 and not on 7.6, from data alone
 
