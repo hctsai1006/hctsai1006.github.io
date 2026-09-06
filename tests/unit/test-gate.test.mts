@@ -36,7 +36,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { decideOutcome, reported } from '../../tools/test-gate.mts';
+import { decideOutcome, isBrokenPipe, reported } from '../../tools/test-gate.mts';
 import { stripComments } from '../../tools/roadmap-evidence.mts';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -222,6 +222,51 @@ describe('neither runner can exit early again', () => {
     ].join('\n');
     assert.deepEqual(stripComments(shipped).match(/process\.exit\(/g), ['process.exit(']);
   });
+});
+
+describe('a consumer that walked away is not a test failure', () => {
+  /**
+   * The flush fix brought this with it. Writing the whole captured output and
+   * then exiting naturally means a write is still draining when `npm test |
+   * head -20` closes the pipe; with no listener, Node turns that EPIPE into an
+   * uncaught exception.
+   *
+   * MEASURED on node:24 in Docker, a run where every test passed, piped to
+   * `head -c 100`: 497 bytes of `Error: write EPIPE` stack trace and exit code
+   * 1. The old `process.exit(0)` never saw it because it left first.
+   *
+   * The behaviour itself is measured rather than tested here — it needs a real
+   * pipe and a consumer that closes early, and it differs between platforms, so
+   * reproducing it in the hermetic suite would test the platform rather than
+   * this code. What is pinned here is the predicate that decides which errors
+   * are the consumer's, and that both runners install the listener at all.
+   */
+  it('recognises EPIPE', () => {
+    assert.equal(isBrokenPipe(Object.assign(new Error('write EPIPE'), { code: 'EPIPE' })), true);
+  });
+
+  it('does not swallow anything else', () => {
+    assert.equal(isBrokenPipe(Object.assign(new Error('no space'), { code: 'ENOSPC' })), false);
+    assert.equal(isBrokenPipe(new Error('write EPIPE')), false, 'the message is not the code');
+    assert.equal(isBrokenPipe(null), false);
+    assert.equal(isBrokenPipe(undefined), false);
+    assert.equal(isBrokenPipe('EPIPE'), false);
+  });
+
+  for (const runner of RUNNERS) {
+    it(`${runner} installs the listener before it writes anything`, () => {
+      const source = stripComments(sourceOf(runner));
+      const install = source.indexOf('ignoreBrokenPipe(');
+      assert.notEqual(install, -1, `${runner} does not ignore a broken pipe`);
+      // Ordering is the whole point: a listener added after the first write can
+      // still miss the error that write produces.
+      const firstWrite = source.indexOf('process.stdout.write(');
+      assert.ok(
+        firstWrite === -1 || install < firstWrite,
+        `${runner} writes to stdout before installing the listener`,
+      );
+    });
+  }
 });
 
 describe('the browser runner keeps the advice only it can give', () => {

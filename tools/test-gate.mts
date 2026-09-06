@@ -139,3 +139,49 @@ export function decideOutcome(status: number | null, output: string): Outcome {
 
   return { code: 0, counts: { tests, pass, fail, skipped, todo } };
 }
+
+/** The error a consumer causes by closing the pipe before we finished writing. */
+export function isBrokenPipe(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+  return (error as NodeJS.ErrnoException).code === 'EPIPE';
+}
+
+/**
+ * Stop a reader that walked away from being reported as a test failure.
+ *
+ * Both runners write the child's whole captured output and then let Node exit
+ * naturally, so a pending write is still draining when the consumer of
+ * `npm test | head -20` — or `| less`, quit early — closes the pipe. The write
+ * then fails with EPIPE, and with no listener Node turns that into an UNCAUGHT
+ * EXCEPTION.
+ *
+ * MEASURED on node:24 in Docker, a passing run piped to `head -c 100`:
+ *
+ *     node:events:487
+ *           throw er; // Unhandled 'error' event
+ *     Error: write EPIPE
+ *         at WriteWrap.onWriteComplete ...
+ *
+ * 497 bytes of stack trace and exit code 1, from a suite where every test
+ * passed. The previous `process.exit(0)` never saw it, because it left before
+ * the write could fail — so this arrived with the flush fix and belongs to it.
+ * A runner that appears to crash when you pipe it through `head` is one people
+ * learn to distrust, which is how gates get muted.
+ *
+ * Verified with the same probe once the listener is installed: exit code 0 stays
+ * 0 and 1 stays 1, whether the consumer reads everything or nothing, and a
+ * consumer that does read gets all 8,388,613 bytes.
+ *
+ * The trade-off, stated rather than hidden: swallowing EPIPE means output
+ * truncated by a consumer looks the same as output delivered in full. That is
+ * the right way round — truncation is then the consumer's own choice, and the
+ * alternative turns every early close into a failure that did not happen.
+ * Anything that is not EPIPE still surfaces.
+ */
+export function ignoreBrokenPipe(...streams: readonly NodeJS.WriteStream[]): void {
+  for (const stream of streams) {
+    stream.on('error', (error: unknown) => {
+      if (!isBrokenPipe(error)) throw error;
+    });
+  }
+}
