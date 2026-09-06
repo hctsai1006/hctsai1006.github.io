@@ -288,6 +288,11 @@ export async function rig(options: RigOptions = {}): Promise<Rig> {
         signal: abort.signal,
         requireCapability: require,
         fs,
+        // These tests drive the WRITE and DELETE commands, none of which is
+        // rewired through providers in PR-10. Null is the honest wiring, and
+        // it also keeps the "no providers" branch of the rewired readers
+        // covered by something other than a bespoke test.
+        providers: null,
         preferences,
         dialog,
       };

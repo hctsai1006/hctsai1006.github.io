@@ -19,6 +19,7 @@ import { Kernel } from '../../src/kernel/kernel.ts';
 import { MemoryStorage, MountTable, VirtualFileSystem, isOk } from '../../src/storage/index.ts';
 import { brokeredFileSystem } from '../../src/commands/ports.ts';
 import type { FileSystemPort } from '../../src/commands/ports.ts';
+import { MapSessionStateStore, installProviders } from '../../src/providers/index.ts';
 import type { CommandModule, InvocationContext } from '../../src/commands/invocation.ts';
 import type { CommandManifest } from '../../src/commands/manifest.ts';
 import { HOME } from '../../src/storage/seed.ts';
@@ -60,6 +61,78 @@ function readingCommand(seen: { path: string | null; text: string | null }): Com
     },
   };
 }
+
+describe('a command reaches the PROVIDER REGISTRY through the kernel', () => {
+  // The same gap as the one above, one layer along: `InvocationContext` grew a
+  // `providers`, and a field nothing populates is a contract that cannot be
+  // kept. Every rewired reader falls back to its filesystem-only branch when
+  // this is null, so a wiring mistake would not fail — it would just make
+  // `Get-ChildItem Env:/` report an unknown drive forever.
+  it('gets the registry the host supplied, and its drives resolve', async () => {
+    const { fs, port } = storage();
+    const providers = installProviders(fs, {
+      fs: port,
+      environment: new MapSessionStateStore([['zzKernel', 'v']]),
+    });
+
+    const seen = { drives: null as string | null, resolved: null as string | null };
+    const probe: CommandModule = {
+      manifest: {
+        ...readingCommand({ path: null, text: null }).manifest,
+        name: 'probe-providers',
+        display: 'Probe-Providers',
+      },
+      async invoke(context: InvocationContext): Promise<number> {
+        if (context.providers === null || context.fs === null) return 1;
+        seen.drives = context.providers.drives.map((d) => d.name).join(',');
+        const target = context.fs.resolve('Env:/zzKernel');
+        seen.resolved = isOk(target) ? target.value.full : `error:${target.error.code}`;
+        return 0;
+      },
+    };
+
+    const kernel = new Kernel({ clock: () => 0, grants: ['filesystem.read'], fs: port, providers });
+    kernel.register(probe);
+    kernel.send({
+      kind: 'exec',
+      requestId: 'r1',
+      terminalId: 't1',
+      source: 'probe-providers',
+      background: false,
+    });
+    await kernel.drain();
+
+    assert.equal(seen.drives, '/,Env,Variable,Function,Alias');
+    assert.equal(seen.resolved, 'Env:/zzKernel');
+  });
+
+  it('still hands null when the host wired no providers', async () => {
+    const { port } = storage();
+    let sawNull = false;
+    const probe: CommandModule = {
+      manifest: {
+        ...readingCommand({ path: null, text: null }).manifest,
+        name: 'probe-no-providers',
+        display: 'Probe-NoProviders',
+      },
+      async invoke(context: InvocationContext): Promise<number> {
+        sawNull = context.providers === null;
+        return 0;
+      },
+    };
+    const kernel = new Kernel({ clock: () => 0, grants: ['filesystem.read'], fs: port });
+    kernel.register(probe);
+    kernel.send({
+      kind: 'exec',
+      requestId: 'r1',
+      terminalId: 't1',
+      source: 'probe-no-providers',
+      background: false,
+    });
+    await kernel.drain();
+    assert.equal(sawNull, true);
+  });
+});
 
 describe('a command reaches storage through the kernel', () => {
   it('gets the filesystem the host supplied, not null', async () => {

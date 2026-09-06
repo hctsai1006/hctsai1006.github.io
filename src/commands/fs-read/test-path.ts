@@ -40,7 +40,8 @@
  */
 
 import { throwIfCancelled } from '../../pipeline/pipeline.ts';
-import type { FileStat } from '../../storage/index.ts';
+import type { FileStat, ResolvedPath } from '../../storage/index.ts';
+import type { ProviderRegistry } from '../../providers/index.ts';
 import type { BindingResult, CommandModule, InvocationContext } from '../invocation.ts';
 import type { FileSystemPort } from '../ports.ts';
 import { isBound, rawValue, stringArray, stringValue, switchValue } from '../powershell/support.ts';
@@ -50,7 +51,10 @@ import {
   emit,
   fsReadManifest,
   globPath,
+  filterNotSupportedError,
   matchesAny,
+  namedParameterNotFoundError,
+  providerTargets,
   requirePort,
   storageErrorRecord,
 } from './support.ts';
@@ -170,6 +174,14 @@ export const testPath: CommandModule = {
       }
 
       if (!resolved.ok) {
+        if (resolved.error.code === 'EINVAL' && resolved.error.reason === 'unknown-drive') {
+          // MEASURED: `Test-Path zzNoDrive:\x` is False and raises NOTHING —
+          // `$Error.Count` was 0 after it. Every other cmdlet probed reports
+          // `DriveNotFound` for the same path, so Test-Path really is the
+          // exception, and it is the one this command exists to answer.
+          if (!(await emit(context.streams.success, context.signal, false))) return 0;
+          continue;
+        }
         // pwsh: Test-Path "bad`0name"
         //   ItemExistsArgumentError,...TestPathCommand, InvalidArgument,
         //   System.ArgumentException, "Null character in path. (Parameter 'path')"
@@ -178,18 +190,59 @@ export const testPath: CommandModule = {
         continue;
       }
 
-      const stats = await statsFor(fs, raw, literal !== undefined);
-      const kept = stats.filter((stat) => {
-        if (filter !== undefined && !matchesAny(stat.name, [filter])) return false;
-        if (include !== undefined && !matchesAny(stat.name, include)) return false;
-        if (exclude !== undefined && matchesAny(stat.name, exclude)) return false;
-        if (newerThan !== undefined && stat.mtime <= newerThan) return false;
-        if (olderThan !== undefined && stat.mtime >= olderThan) return false;
+      const registry = context.providers;
+      const onProviderDrive = registry !== null && registry.handles(resolved.value.drive);
+
+      if (onProviderDrive) {
+        // Half of what Test-Path accepts is a FileSystem DYNAMIC parameter, so
+        // on a flat drive it does not exist. MEASURED on `Env:`:
+        //
+        //   -NewerThan / -OlderThan / -Force  NamedParameterNotFound
+        //   -Filter                           NotSupported, "Cannot call method.
+        //                                     The provider does not support the
+        //                                     use of filters."
+        //   -Include / -Exclude / -IsValid    accepted
+        //
+        // Answering True or False for any of the first four would be worse than
+        // refusing: a session-state item has no modification time and no hidden
+        // bit, so either answer would be made up.
+        const absent =
+          newerThan !== undefined
+            ? 'NewerThan'
+            : olderThan !== undefined
+              ? 'OlderThan'
+              : switchValue(parameters, 'Force')
+                ? 'Force'
+                : null;
+        if (absent !== null) {
+          await context.streams.error.write(namedParameterNotFoundError(TEST_PATH, absent));
+          return 1;
+        }
+        if (filter !== undefined && !registry.supports(resolved.value.drive, 'Filter')) {
+          await context.streams.error.write(filterNotSupportedError(TEST_PATH));
+          return 1;
+        }
+      }
+
+      const probes = onProviderDrive
+        ? await providerProbes(registry, resolved.value, literal !== undefined)
+        : (await statsFor(fs, raw, literal !== undefined)).map((stat) => ({
+            name: stat.name,
+            isContainer: stat.kind === 'directory',
+            mtime: stat.mtime,
+          }));
+
+      const kept = probes.filter((probe) => {
+        if (filter !== undefined && !matchesAny(probe.name, [filter])) return false;
+        if (include !== undefined && !matchesAny(probe.name, include)) return false;
+        if (exclude !== undefined && matchesAny(probe.name, exclude)) return false;
+        if (newerThan !== undefined && probe.mtime <= newerThan) return false;
+        if (olderThan !== undefined && probe.mtime >= olderThan) return false;
         return true;
       });
 
       const exists = kept.length > 0;
-      const allContainers = exists && kept.every((stat) => stat.kind === 'directory');
+      const allContainers = exists && kept.every((probe) => probe.isContainer);
       const answer =
         requested === 'Any' ? exists : requested === 'Container' ? allContainers : exists && !allContainers;
 
@@ -198,6 +251,47 @@ export const testPath: CommandModule = {
     return 0;
   },
 };
+
+/**
+ * The only two things `Test-Path` needs to know about an item, plus the time
+ * `-NewerThan` would want.
+ *
+ * A `FileStat` cannot stand in: a session-state item has no mode, no size and
+ * no owner, which is the whole reason the provider model exists. `mtime` is
+ * `Number.NaN` on a provider drive and never reaches a comparison — the
+ * `-NewerThan` arm above refuses first, as pwsh's binder does.
+ */
+interface PathProbe {
+  readonly name: string;
+  readonly isContainer: boolean;
+  readonly mtime: number;
+}
+
+/**
+ * The same question on a drive that is not the filesystem.
+ *
+ * MEASURED:
+ *   Test-Path Env:              True    Test-Path Env: -PathType Container  True
+ *   Test-Path Env:zzTp          True    Test-Path Env:zzTp -PathType Leaf   True
+ *   Test-Path Env:zzTp -PathType Container                                  False
+ *   Test-Path Env:zzTp/more     False   (a second segment, not an error)
+ *   Test-Path 'Env:zzN*'        True    Test-Path 'Env:zzQQ*'               False
+ */
+async function providerProbes(
+  registry: ProviderRegistry,
+  resolved: ResolvedPath,
+  literal: boolean,
+): Promise<readonly PathProbe[]> {
+  const targets = await providerTargets(registry, resolved, literal);
+  // A miss is "no", never an error: that is Test-Path's contract on every
+  // drive, and the filesystem branch above discards a failed stat the same way.
+  if (!targets.ok) return [];
+  return targets.value.map((item) => ({
+    name: item.name,
+    isContainer: item.isContainer,
+    mtime: Number.NaN,
+  }));
+}
 
 /** Every item the argument names, statted. A failure to stat is simply "absent". */
 async function statsFor(

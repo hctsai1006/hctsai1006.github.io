@@ -27,6 +27,7 @@
 import type { PSValue } from '../pipeline/psobject.ts';
 import type { NativeStreams, PowerShellStreams } from '../pipeline/streams.ts';
 import type { Capability, CommandManifest } from './manifest.ts';
+import type { ProviderRegistry } from '../providers/index.ts';
 import type { DialogPort, FileSystemPort, PreferencesPort } from './ports.ts';
 
 /**
@@ -93,6 +94,22 @@ export interface InvocationContext {
    * about and the filesystem commands must check rather than assume.
    */
   readonly fs: FileSystemPort | null;
+
+  /**
+   * Which drive belongs to which provider, and the dispatch for the ones that
+   * are not files.
+   *
+   * SEPARATE FROM `fs`, and not a member of it, because `Env:` is not a
+   * filesystem — that is the whole reason PR-10 exists. It is not brokered
+   * either, and the reason is worth stating rather than leaving to inference:
+   * the FileSystem provider inside it wraps the SAME `FileSystemPort` above, so
+   * every filesystem call still passes the broker; the other four read session
+   * state, which `InvocationContext.env` already hands over unguarded.
+   *
+   * Null when the host wired no providers, which is the case a rewired command
+   * has to keep handling — the filesystem-only path is the one that runs then.
+   */
+  readonly providers: ProviderRegistry | null;
 
   /** Durable settings that are not files. Gated by `preferences.write`. */
   readonly preferences: PreferencesPort | null;
