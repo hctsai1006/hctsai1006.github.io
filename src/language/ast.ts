@@ -129,6 +129,40 @@ export type ExpressionAst =
   | ScriptBlockExpressionAst
   | UnsupportedSyntaxAst;
 
+/**
+ * The DECODED text of an expression used as an argument — quotes stripped,
+ * escapes resolved, `''` collapsed.
+ *
+ * ONE of these, and there were two. `parse.ts`'s `commandArguments` and
+ * `binding/from-ast.ts`'s binder each carried a private copy of this switch,
+ * character for character, and the kernel integration removed the last
+ * production caller of the first one — leaving a duplicate that only tests
+ * exercised, free to drift from the one that runs. That is the same defect
+ * shape as the nine tokenizers, at the smallest possible scale.
+ *
+ * It lives here rather than in either caller because it is a fact about the
+ * NODE, and because `ast.ts` imports nothing: `binding/` can read it without
+ * pulling in the parser and the lexer behind it.
+ *
+ * A variable keeps its sigil, because nothing here evaluates one: the binder's
+ * `coerceSwitchArgument` recognises `$false` and `$true` by spelling, which is
+ * how `-Switch:$false` works without a variable table.
+ */
+export function expressionText(expression: ExpressionAst): string {
+  switch (expression.kind) {
+    case 'StringConstantExpressionAst':
+    case 'ExpandableStringExpressionAst':
+    case 'ConstantExpressionAst':
+      return expression.value;
+    case 'VariableExpressionAst':
+      return `${expression.splatted ? '@' : '$'}${expression.variablePath}`;
+    case 'ScriptBlockExpressionAst':
+      return `{${expression.body}}`;
+    default:
+      return expression.extent.text;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // commands
 // ---------------------------------------------------------------------------

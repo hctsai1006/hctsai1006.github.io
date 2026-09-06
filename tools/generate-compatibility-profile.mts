@@ -184,13 +184,13 @@ function buildProfile(args: BuildProfileArgs): Record<string, unknown> {
       // pwsh binary is running in their browser.
       nativePowerShellEngine: false,
       // IMPORTED, never typed out. This was a literal `[]` while the parser
-      // refused 37 node types, and an empty list beside `nativePowerShellEngine:
+      // refused 40 node types, and an empty list beside `nativePowerShellEngine:
       // false` reads as "every AST node is implemented" — the opposite of the
       // truth. Writing the names here instead would have been the same defect
       // one step later: a hand-maintained copy of a list that already exists in
       // code, free to drift the first time a keyword is added to
       // `UNIMPLEMENTED_KEYWORDS`. `unimplementedAstNodes()` derives it from the
-      // three tables `parseForExecution` actually consults, and returns it
+      // four declarations `parseForExecution` actually consults, and returns it
       // sorted, so this field changes only when the behaviour does.
       //
       // The same for both profiles, because the refusal set is a property of

@@ -6,7 +6,7 @@
  *
  *     engineLimits: {
  *       nativePowerShellEngine: false,
- *       unimplementedAstNodes: [ ...37 names... ],
+ *       unimplementedAstNodes: [ ...40 names... ],
  *       notes: "... Recognised-but-unimplemented syntax must fail with an
  *               explicit error naming the AST node rather than silently doing
  *               something approximate."
@@ -17,16 +17,27 @@
  * same object that it does not execute PowerShell.
  *
  * THE FIX WAS NOT TO TYPE THE NAMES INTO THE PROFILES. They are generated, and
- * `tools/generate-compatibility-profile.mts` now imports
- * `unimplementedAstNodes()` — which is itself derived from the three tables
- * `parseForExecution` consults — so the declaration cannot drift from the
- * behaviour without the generator's output changing. What this file asserts:
+ * `tools/generate-compatibility-profile.mts` imports `unimplementedAstNodes()`
+ * — which is itself derived from what `parseForExecution` consults — so the
+ * declaration cannot drift from the behaviour without the generator's output
+ * changing. What this file asserts:
  *
  *   1. The engine's answer is real: every name is a node pwsh 7.6.5 has, and
  *      every keyword in the table is genuinely refused by the parser.
- *   2. It is DERIVED from those tables and not declared beside them.
+ *   2. It is DERIVED from those declarations and not written beside them.
  *   3. The profiles declare exactly it, in both directions. A subset check
  *      alone would pass on `[]` again, which is the state this replaced.
+ *   4. Nothing in it appears in a tree the execution parser ACCEPTS. That is
+ *      the check that stops the list from over-claiming, and it earned its
+ *      place immediately: the first derivation published `CommandAst` as
+ *      unimplemented, because `&` is mapped to it for the message, while every
+ *      command the engine runs is one.
+ *
+ * BEING DERIVED IS NOT THE SAME AS BEING RIGHT. The first derivation read three
+ * tables and missed two refusals written in code — a variable reference and an
+ * ErrorExpressionAst — while inheriting one name that was never a limit. The
+ * profiles shipped understating by two and overstating by one, and nothing here
+ * said so, because every test compared the field against the same derivation.
  */
 
 import { describe, it } from 'node:test';
@@ -35,9 +46,11 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
-import { PWSH_AST_NODES } from '../../src/language/ast.ts';
+import { PWSH_AST_NODES, walk } from '../../src/language/ast.ts';
 import {
   EXECUTION_REFUSED_NODES,
+  MESSAGE_ONLY_NODES,
+  REFUSED_WITHOUT_A_TABLE,
   UNIMPLEMENTED_KEYWORDS,
   UNIMPLEMENTED_SYNTAX,
   unimplementedAstNodes,
@@ -46,6 +59,9 @@ import { parseForExecution } from '../../src/language/parse.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PROFILES = resolve(HERE, '../../compat/profiles');
+const corpus = JSON.parse(
+  readFileSync(resolve(HERE, 'fixtures/lexer-corpus.json'), 'utf8'),
+) as readonly string[];
 
 interface Profile {
   readonly profile: string;
@@ -71,16 +87,75 @@ describe('the engine names what it will not run', () => {
     }
   });
 
-  it('derives the list from the tables that drive the behaviour', () => {
-    // Not a hand-maintained list beside them: every entry must come from a
-    // table something actually consults, or the declaration could say one thing
-    // while the parser did another.
-    const fromTables = new Set<string>([
+  it('derives the list from the declarations that drive the behaviour', () => {
+    // Not a hand-maintained list beside them: every entry must come from
+    // something the parser actually consults, or the declaration could say one
+    // thing while the parser did another.
+    //
+    // FOUR sources. This asserted three, and the two the parser refuses from
+    // code — a variable reference, which cannot join the blanket walk because
+    // `$true` must survive it, and the ErrorExpressionAst it names for a token
+    // with no better name — were simply missing from the published profile.
+    const declared = new Set<string>([
       ...EXECUTION_REFUSED_NODES,
       ...[...UNIMPLEMENTED_KEYWORDS.values()].map((e) => e.node),
       ...[...UNIMPLEMENTED_SYNTAX.values()].map((e) => e.node),
+      ...REFUSED_WITHOUT_A_TABLE,
     ]);
-    assert.deepEqual([...unimplementedAstNodes()].sort(), [...fromTables].sort());
+    for (const node of MESSAGE_ONLY_NODES) declared.delete(node);
+    assert.deepEqual([...unimplementedAstNodes()].sort(), [...declared].sort());
+  });
+
+  it('refuses a variable reference by name, and declares that it does', () => {
+    // The one the first derivation missed. `$x` is refused as
+    // VariableExpressionAst — there is no variable table — while `$true` is a
+    // literal the binder reads by spelling, so the node cannot join the blanket
+    // walk. That exemption is why it needs its own declaration rather than a
+    // row in EXECUTION_REFUSED_NODES.
+    const refused = parseForExecution('Remove-Item $target');
+    assert.equal(refused.ok, false);
+    if (!refused.ok) {
+      assert.ok(refused.refusals.some((r) => r.nodeType === 'VariableExpressionAst'));
+    }
+    assert.ok(unimplementedAstNodes().includes('VariableExpressionAst'));
+    // And the exemption still holds, or `-Switch:$false` would stop parsing.
+    assert.equal(parseForExecution('Sort-Object -Descending:$false').ok, true);
+  });
+
+  it('never declares a node that appears in a tree the parser ACCEPTS', () => {
+    // THE CHECK THAT FOUND `CommandAst`. `UNIMPLEMENTED_SYNTAX` maps the call
+    // operator `&` to CommandAst — correctly, because that is the node pwsh
+    // builds for `& 'Get-Location'` and a message naming anything else would
+    // not be lookupable — and deriving the published list straight from the
+    // message names therefore declared that this engine does not implement
+    // CommandAst. Every command it runs is one.
+    //
+    // Derived independently of `MESSAGE_ONLY_NODES` rather than asserting it:
+    // walk every tree the execution parser accepts and take the node kinds that
+    // really occur. Nothing in that set may be published as a limit.
+    const declared = new Set<string>(unimplementedAstNodes());
+    const real = new Set<string>(PWSH_AST_NODES);
+    const executable = new Map<string, string>();
+    let accepted = 0;
+    for (const source of corpus) {
+      const parsed = parseForExecution(source);
+      if (!parsed.ok) continue;
+      accepted += 1;
+      for (const node of walk(parsed.ast)) {
+        if (real.has(node.kind) && !executable.has(node.kind)) executable.set(node.kind, source);
+      }
+    }
+    assert.ok(accepted > 50, `only ${accepted} corpus lines were accepted; the check proved nothing`);
+    for (const [kind, source] of executable) {
+      assert.ok(
+        !declared.has(kind),
+        `the profiles declare ${kind} unimplemented, but ${JSON.stringify(source)} parses to a ` +
+          'tree containing one and the execution parser accepts it',
+      );
+    }
+    // The engine really does run commands, which is the claim the exclusion
+    // rests on. If this ever stops holding, the exclusion has to go too.
+    assert.ok(executable.has('CommandAst'));
   });
 
   it('every keyword in the table is genuinely refused by the parser', () => {

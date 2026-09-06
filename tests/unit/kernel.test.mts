@@ -53,6 +53,8 @@ import type {
   ObjectsEvent,
 } from '../../src/kernel/protocol.ts';
 import { EXIT_COMMAND_NOT_FOUND, EXIT_FAILURE, Kernel } from '../../src/kernel/kernel.ts';
+import { PWSH_AST_NODES } from '../../src/language/ast.ts';
+import { unimplementedAstNodes } from '../../src/language/unimplemented.ts';
 import { SIGNAL_EXIT_CODE } from '../../src/kernel/signals.ts';
 import { KERNEL_PID } from '../../src/kernel/ids.ts';
 import { CapabilityBroker } from '../../src/kernel/capabilities.ts';
@@ -688,13 +690,24 @@ describe('the kernel runs the parser, not a splitter', () => {
       ['1 | probe-args', /CommandExpressionAst/u],
       ['probe-args | ', /empty pipe element/iu],
       // A quoted command name is a STRING in pwsh, not a command. Measured on
-      // 7.6.5: `'Get-Location'` yields the String "Get-Location" and parses as
-      // a CommandExpressionAst, while `& 'Get-Location'` yields a PathInfo.
+      // 7.6.5, by parsing and by running:
+      //
+      //   'Get-Location'     CommandExpressionAst   -> the String "Get-Location"
+      //   & 'Get-Location'   CommandAst             -> a PathInfo
+      //   Get-Loc"ation"     CommandAst, BareWord   -> a PathInfo
+      //
       // This mattered only once the head arrived decoded: with the whitespace
       // split it reached `resolve` with its quotes on and was simply not found,
-      // and afterwards it would RESOLVE and run.
+      // and afterwards it would RESOLVE and run. The kernel used to catch it by
+      // re-reading `token.quote` after the parse; `parse.ts` builds the node
+      // pwsh builds now, so the refusal comes from the same gate as the rest.
       ["'probe-args'", /CommandExpressionAst/u],
-      ['"probe-args" -Path x', /CommandExpressionAst/u],
+      // With arguments after it, pwsh does not even get that far. MEASURED:
+      // `"Get-ChildItem" -Path x` is `UnexpectedToken: Unexpected token '-Path'
+      // in expression or statement`, over an ErrorExpressionAst — never a
+      // command, and never an expression operator either.
+      ['"probe-args" -Path x', /ErrorExpressionAst/u],
+      ['probe-args { }', /ScriptBlockExpressionAst/u],
     ];
     for (const [source, expected] of cases) {
       const bound = { current: null as BindingResult | null };
@@ -707,6 +720,83 @@ describe('the kernel runs the parser, not a splitter', () => {
       assert.equal(bound.current, null, `${source} ran anyway`);
       assert.equal(events.some((e) => e.kind === 'exit'), false, `${source} started a process`);
     }
+  });
+
+  it('still runs a head with a quote INSIDE it, because pwsh does', async () => {
+    // The other side of the quoted-head rule, and the reason it is decided by
+    // the token KIND rather than by looking for a quote character. MEASURED on
+    // pwsh 7.6.5: `Get-Loc"ation"` is a CommandAst whose name is the BareWord
+    // `Get-Location`, and running it returns a PathInfo — a quote at the START
+    // of the token opens a string, a quote inside a word does not.
+    const bound = { current: null as BindingResult | null };
+    const { kernel, events } = newKernel();
+    kernel.register(probe(bound));
+
+    kernel.send({
+      kind: 'exec',
+      requestId: 'r1',
+      terminalId: 't1',
+      source: 'probe-a"rgs" -Path x',
+      background: false,
+    });
+    await kernel.drain();
+
+    assert.deepEqual(rejection(events), []);
+    assert.equal(bound.current?.parameters['Path'], 'x');
+  });
+
+  it('names no AST node the published profile does not declare', async () => {
+    // THE RATCHET this branch was missing. `engineLimits.unimplementedAstNodes`
+    // is a claim about what the ENGINE will not run, and for one commit the
+    // kernel refused two nodes — PipelineChainAst and CommandExpressionAst —
+    // that the profile did not list, because the kernel wrote its own refusal
+    // prose instead of going through `EXECUTION_REFUSED_NODES`. Nothing caught
+    // it, because the profile test compares the profile against the PARSER.
+    //
+    // This closes it from the other end: whatever the kernel says, every pwsh
+    // node name in a rejection must be one `unimplementedAstNodes()` returns —
+    // and `language-unimplemented.test.mts` asserts the profiles declare
+    // exactly that set, so this is the profile. It goes red both ways: a new
+    // kernel-only refusal that names a node, and a node dropped from the list
+    // while a refusal still names it.
+    const declared = new Set<string>(unimplementedAstNodes());
+    const sources = [
+      'probe-args -Path $target',
+      'probe-args > out.txt',
+      'probe-args 2>&1',
+      'probe-args; probe-args',
+      'probe-args && probe-args',
+      'probe-args || probe-args',
+      'probe-args &',
+      '1 | probe-args',
+      "'probe-args'",
+      'probe-args { }',
+      'if ($x) { probe-args }',
+      'probe-args -Path (1 + 1)',
+      '$x = 1',
+    ];
+    let named = 0;
+    for (const source of sources) {
+      const bound = { current: null as BindingResult | null };
+      const { kernel, events } = newKernel();
+      kernel.register(probe(bound));
+      kernel.send({ kind: 'exec', requestId: 'r1', terminalId: 't1', source, background: false });
+      await kernel.drain();
+
+      const text = rejection(events).join('\n');
+      assert.notEqual(text, '', `${source} was not refused`);
+      for (const node of PWSH_AST_NODES) {
+        // The message shape is `... (NodeName) in "..."`, so a node name only
+        // counts when it appears in that slot rather than inside the excerpt.
+        if (!text.includes(`(${node})`)) continue;
+        named += 1;
+        assert.ok(
+          declared.has(node),
+          `${source} refuses by naming ${node}, which compat/profiles/*.json does not declare`,
+        );
+      }
+    }
+    assert.ok(named >= 8, `only ${named} refusals named a node; the check proved nothing`);
   });
 });
 

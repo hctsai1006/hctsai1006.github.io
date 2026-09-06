@@ -31,7 +31,7 @@ There are currently FOUR independent tokenizers — splitPipe, the execOne regex
   - *evidence:* `tests/unit/language-parse.test.mts` — test "accepts a strict superset of what the execution parser accepts"
   - *evidence:* `tests/unit/language-parse.test.mts` — test "refuses an incomplete line rather than guessing at it"
 - [x] **8.3** Refuse to execute recognised-but-unimplemented syntax with an explicit error naming the AST node
-  - 37 node types are refused by name, and the names are real: PwshAstNode is the pwsh 7.6.5 hierarchy, so a typo is a compile error. The list is derived from the tables parseForExecution consults rather than declared beside them, and compat/profiles/*.json now publishes it (see 3.6) instead of declaring []. Two mappings were measured rather than guessed: `workflow W { }` is a FunctionDefinitionAst in pwsh, and ConfigurationDefinitionAst really does exist in PS 7 core.
+  - 40 node types are refused by name, and the names are real: PwshAstNode is the pwsh 7.6.5 hierarchy, so a typo is a compile error. The list is derived from the tables parseForExecution consults rather than declared beside them, and compat/profiles/*.json now publishes it (see 3.6) instead of declaring []. Two mappings were measured rather than guessed: `workflow W { }` is a FunctionDefinitionAst in pwsh, and ConfigurationDefinitionAst really does exist in PS 7 core.
   - *evidence:* `src/language/unimplemented.ts` exports `UNIMPLEMENTED_KEYWORDS`
   - *evidence:* `tests/unit/language-unimplemented.test.mts` — test "every keyword in the table is genuinely refused by the parser"
   - *evidence:* `tests/unit/kernel.test.mts` — test "refuses syntax the engine cannot run, naming the AST node"
@@ -53,7 +53,7 @@ There are currently FOUR independent tokenizers — splitPipe, the execOne regex
   - *evidence:* `tests/unit/profile-resolver.test.mts` — test "lets the child override the parameter it does mention"
   - *evidence:* nothing under `compat/profiles/*.json` matches `/parameterPatches/`
 - [x] **8.7** Make the highlighter share the real lexer so it cannot colour syntax the engine rejects
-  - src/language/highlight.ts is computed FROM the parser: it lexes with the one lexer and paints every span parseForExecution refuses with a `refused` class, so it cannot colour something the engine will not run. Checked over a 20,000-input generated corpus rather than on examples.
+  - src/language/highlight.ts is computed FROM the parser: it lexes with the one lexer and paints every span parseForExecution refuses with a `refused` class, so it cannot colour something the engine will not run. Checked over a 20,000-input generated corpus rather than on examples. The one place that claim did not hold was `&&`, coloured as an operator on a line the kernel refuses — the same shape as the v1 complaint that it colours redirections nothing implements — and PipelineChainAst is now in EXECUTION_REFUSED_NODES, so the parser, the profile and the colour agree.
   - *evidence:* `src/language/highlight.ts` exports `highlight`
   - *evidence:* `tests/unit/lexer-single.test.mts` — test "the highlighter is computed from the parser, not from its own regex"
   - *evidence:* `tests/unit/language-invariants.test.mts` — test "INVARIANT 2: the highlighter never colours a refused span as valid"
