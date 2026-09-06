@@ -99,27 +99,85 @@ export const UNIMPLEMENTED_KEYWORDS: ReadonlyMap<string, { node: PwshAstNode; de
  * generator instead would have reproduced the defect one step later, because a
  * second copy of a list drifts the first time a keyword is added below.
  *
+ * FOUR SOURCES, not three, and the two below the tables were the ones the first
+ * draft missed: `REFUSED_WITHOUT_A_TABLE` (a refusal written in code, because
+ * it has an exemption or no construct to key on) and `MESSAGE_ONLY_NODES`,
+ * removed rather than added — a name a MESSAGE needs is not automatically a
+ * limit the profile should publish.
+ *
  * Sorted, so the generated profiles do not churn on Map iteration order.
  *
- * WHAT IT DOES NOT COVER, stated so the field is not read as more than it is:
- * this is what the PARSER refuses. A HOST can refuse more. `Kernel.#exec`
- * declines `a && b` (PipelineChainAst) and a quoted command head
- * (CommandExpressionAst in pwsh) because one request is one process group and
- * nothing evaluates expressions — both using `unimplementedMessage` below, so
- * they read the same, but neither is in this list. They are deliberately not:
- * `parseForExecution`'s refusals are what `highlight.ts` paints, so adding
- * `PipelineChainAst` here would paint every token of `a && b` as refused while
- * the tree itself is built correctly and a host that ran chains would want it.
- * The consequence is that the profile field UNDERSTATES by those two, which is
- * the safe direction — `language-unimplemented.test.mts` pins that a profile
- * may never declare something the engine does run.
+ * IT COVERS THE HOST'S REFUSALS TOO, and for one commit it did not. The first
+ * draft left `PipelineChainAst` and `CommandExpressionAst` out on the grounds
+ * that they are refused by `Kernel.#exec` rather than by the parser, and that
+ * adding them would paint every token of `a && b` refused in the highlighter.
+ * Both halves of that were wrong:
+ *
+ *   - The FIELD is `engineLimits.unimplementedAstNodes` on a profile that says
+ *     `nativePowerShellEngine: false`. It is a claim about what the engine will
+ *     run, and the engine will not run either of them. A published limit that
+ *     understates is the one direction this project cannot take.
+ *   - The COLOUR was the roadmap's own complaint about v1, which "colours `>`,
+ *     `>>` and `<` that nothing implements". Nothing implements `&&` either, so
+ *     colouring it `op` said the line was fine when it could never run. The
+ *     same call was already made for `-eq`, in `highlight.test.mts`'s own words.
+ *
+ * So both are in `EXECUTION_REFUSED_NODES` below, the parser refuses them, and
+ * the kernel's two branches for them became unreachable narrowing. What is
+ * still refused by the host alone is not a NODE at all — several statements in
+ * one exec, and a trailing `&` — so neither can be named here.
  */
 export function unimplementedAstNodes(): readonly PwshAstNode[] {
   const nodes = new Set<PwshAstNode>(EXECUTION_REFUSED_NODES);
   for (const entry of UNIMPLEMENTED_KEYWORDS.values()) nodes.add(entry.node);
   for (const entry of UNIMPLEMENTED_SYNTAX.values()) nodes.add(entry.node);
+  for (const node of REFUSED_WITHOUT_A_TABLE) nodes.add(node);
+  for (const node of MESSAGE_ONLY_NODES) nodes.delete(node);
   return [...nodes].sort();
 }
+
+/**
+ * Nodes `parseForExecution` refuses from CODE rather than from a table above.
+ *
+ * The first draft of the derivation missed both of these, and the profiles
+ * shipped without them, which is the same understatement the empty list was —
+ * smaller, and harder to see.
+ *
+ * `VariableExpressionAst` cannot be in `EXECUTION_REFUSED_NODES`, because that
+ * list drives a blanket walk and `$true`, `$false` and `$null` must survive it:
+ * they are LITERALS recognised by spelling in `coercion.ts`, which is how
+ * `-Switch:$false` works with no variable table. The refusal is written out in
+ * `parseForExecution` step 4 with exactly that exemption. Everything else `$x`
+ * can be is refused, so the node type is unimplemented and the profile says so.
+ *
+ * `ErrorExpressionAst` is what pwsh builds where the syntax is not valid at all
+ * — measured, `'Get-ChildItem' -Path x` gives `UnexpectedToken` over one — and
+ * `#parseArgument` names it for a token with no better name. Nothing executes
+ * one, in this engine or in pwsh.
+ */
+export const REFUSED_WITHOUT_A_TABLE: readonly PwshAstNode[] = [
+  'VariableExpressionAst',
+  'ErrorExpressionAst',
+];
+
+/**
+ * Names a refusal MESSAGE uses that are NOT claims about the node type.
+ *
+ * There is one, and it was published as a limit for a commit: `CommandAst`.
+ * `UNIMPLEMENTED_SYNTAX` maps `Ampersand` to it because pwsh has no separate
+ * node for the call operator — measured, `& 'Get-Location'` is a `CommandAst`
+ * whose `InvocationOperator` is `Ampersand`, and a message that said anything
+ * else would not be lookupable. But this engine plainly DOES implement
+ * `CommandAst`: every command it runs is one, and `Write-Output 'single'`
+ * parses to a tree containing one that `parseForExecution` accepts.
+ *
+ * So the name stays in the message and leaves the published list. That is an
+ * exclusion, and an exclusion rots unless something checks it, so
+ * `language-unimplemented.test.mts` derives the same answer independently: over
+ * the measured corpus, NO node kind that appears in a tree the execution parser
+ * ACCEPTS may be declared unimplemented. That check found this entry.
+ */
+export const MESSAGE_ONLY_NODES: readonly PwshAstNode[] = ['CommandAst'];
 
 /**
  * Nodes the parser BUILDS but the engine cannot run.
@@ -136,11 +194,31 @@ export function unimplementedAstNodes(): readonly PwshAstNode[] {
  * in the realm that made it and there is no evaluator that could build one from
  * text. Refusing it is what keeps `Where-Object { $_.Length -gt 10 }` from
  * appearing to work; lifting it is one line the day an evaluator exists.
+ *
+ * `CommandExpressionAst` and `PipelineChainAst` are the two the KERNEL cannot
+ * run, and they are here rather than in `Kernel.#exec` so that the profile, the
+ * highlighter and the gate all get the same answer from one place. What each
+ * one costs, measured on pwsh 7.6.5:
+ *
+ *   `a && b`      pwsh runs `b` only if `a` succeeded — `@(Write-Output a &&
+ *                 Write-Output b)` is 2 elements, and the same chain with a
+ *                 command-not-found on the left is 0. One exec is one process
+ *                 group here, and `pipelineStages` FLATTENS a chain, so running
+ *                 one would turn `a && b` into `a | b`.
+ *   `'Get-Date'`  a quoted command name is a string: pwsh prints
+ *                 "Get-Date", and `& 'Get-Date'` is what runs the command.
+ *   `1 | gci`     an expression as a pipeline element. Nothing evaluates one.
+ *
+ * Refusing `CommandExpressionAst` refuses every expression statement at once,
+ * which is correct and is why `1` and `'hello'` are refused as well: an engine
+ * with no evaluator cannot produce a value from either.
  */
 export const EXECUTION_REFUSED_NODES: readonly PwshAstNode[] = [
   'ScriptBlockExpressionAst',
   'FileRedirectionAst',
   'MergingRedirectionAst',
+  'CommandExpressionAst',
+  'PipelineChainAst',
 ];
 
 /** Why each refused-but-built node is refused, for the error message. */
@@ -162,6 +240,15 @@ export const EXECUTION_REFUSAL_REASONS: ReadonlyMap<PwshAstNode, string> = new M
   [
     'MergingRedirectionAst' as const,
     'stream merging redirection, which this engine does not implement',
+  ],
+  [
+    'CommandExpressionAst' as const,
+    'an expression where a command belongs, which this engine cannot evaluate',
+  ],
+  [
+    'PipelineChainAst' as const,
+    'a pipeline chain (&& or ||), which this engine cannot run because one exec is one process ' +
+      'group and `b` in `a && b` depends on whether `a` succeeded',
   ],
 ]);
 

@@ -221,6 +221,78 @@ describe('the execution parser refuses, by name', () => {
     const starts = parsed.refusals.map((r) => r.start);
     assert.deepEqual([...starts].sort((a, b) => a - b), starts);
   });
+
+  it('builds a CommandExpressionAst for a QUOTED command name, as pwsh does', () => {
+    // MEASURED on pwsh 7.6.5, by parsing and by running:
+    //
+    //   Get-Location      CommandAst           -> a PathInfo
+    //   Get-Loc"ation"    CommandAst, BareWord -> a PathInfo
+    //   'Get-Location'    CommandExpressionAst -> the String "Get-Location"
+    //   "Get-Location"    CommandExpressionAst -> the String "Get-Location"
+    //   @"…"@             CommandExpressionAst -> the string
+    //   & 'Get-Location'  CommandAst           -> a PathInfo
+    //
+    // The parser accepted all four as commands for a while, so `'Get-Date'`
+    // RESOLVED and ran a command pwsh would never have run. It was patched in
+    // `Kernel.#exec` by re-reading `token.quote` after the parse — a language
+    // rule in the host — and the tree is simply pwsh's shape now.
+    const elementOf = (source: string): string | undefined => {
+      const statement = parseForEditing(source).ast.statements[0];
+      if (statement?.kind !== 'PipelineAst') return undefined;
+      return statement.elements[0]?.kind;
+    };
+    assert.equal(elementOf('Get-Location'), 'CommandAst');
+    assert.equal(elementOf('Get-Loc"ation"'), 'CommandAst');
+    assert.equal(elementOf("'Get-Location'"), 'CommandExpressionAst');
+    assert.equal(elementOf('"Get-Location"'), 'CommandExpressionAst');
+    assert.equal(elementOf('@"\nGet-Location\n"@'), 'CommandExpressionAst');
+    assert.equal(elementOf('{ 1 }'), 'CommandExpressionAst');
+
+    // A quote INSIDE the word is not a quoted head: the value is decoded and
+    // the line runs, which is what `Get-Loc"ation"` returning a PathInfo means.
+    assert.equal(stagesOf('Get-Loc"ation"')[0]?.commandName, 'Get-Location');
+    assert.equal(parseForExecution('Get-Loc"ation"').ok, true);
+  });
+
+  it('names the innermost refusal, and does not repeat the wrapper', () => {
+    // `CommandExpressionAst` is refused as a node, and it WRAPS every expression
+    // statement — so without a rule, `$x` came back with two messages saying the
+    // same thing, and `& 'Get-Date'` with two of which the second added nothing.
+    // The wrapper is worth naming only when the expression inside it was fine.
+    const nodesFor = (source: string): readonly (string | null)[] => {
+      const parsed = parseForExecution(source);
+      assert.equal(parsed.ok, false, source);
+      return parsed.ok ? [] : parsed.refusals.map((r) => r.nodeType);
+    };
+    assert.deepEqual(nodesFor('$x'), ['VariableExpressionAst']);
+    assert.deepEqual(nodesFor("& 'Get-Date'"), ['CommandAst']);
+    assert.deepEqual(nodesFor('{ 1 }'), ['ScriptBlockExpressionAst']);
+    assert.deepEqual(nodesFor('[int]::MaxValue'), ['TypeExpressionAst']);
+    // And it IS the answer when nothing inside it is refusable.
+    assert.deepEqual(nodesFor('1'), ['CommandExpressionAst']);
+    assert.deepEqual(nodesFor("'Get-Date'"), ['CommandExpressionAst']);
+    assert.deepEqual(nodesFor('Get-Date | 1'), ['CommandExpressionAst']);
+  });
+
+  it('names a trailing VALUE as an error, not as an expression operator', () => {
+    // MEASURED on pwsh 7.6.5: an operator continues an expression and a value
+    // ends it. `'a' 'b'`, `1 2`, `$x y`, `1 "s"`, `$x $y`, `1 { }` and
+    // `1 -Path y` are all UnexpectedToken over an ErrorExpressionAst;
+    // `$x -eq 1`, `'a' + 'b'`, `'a'.Length`, `1..3` and `$x, $y` are not errors
+    // at all. Calling a trailing `-Path` "an expression operator" named a node
+    // pwsh never builds there.
+    const first = (source: string): string | null => {
+      const parsed = parseForExecution(source);
+      assert.equal(parsed.ok, false, source);
+      return parsed.ok ? null : (parsed.refusals[0]?.nodeType ?? null);
+    };
+    assert.equal(first("'Get-ChildItem' -Path x"), 'ErrorExpressionAst');
+    assert.equal(first('1 2'), 'ErrorExpressionAst');
+    assert.equal(first('1 { }'), 'ErrorExpressionAst');
+    // An operator still names the operator's node.
+    assert.equal(first('1 + 1'), 'BinaryExpressionAst');
+    assert.equal(first('1 .. 3'), 'BinaryExpressionAst');
+  });
 });
 
 describe('the AST carries decoded arguments', () => {

@@ -29,6 +29,14 @@
  * `'-Force'` stays a value instead of binding the switch — measured on pwsh
  * 7.6.5 in `binding/from-ast.ts`, which is where the AST-shaped binder lives.
  *
+ * AND NO LANGUAGE RULES LEFT BEHIND. For one commit this file re-read
+ * `token.quote` after the parse, to refuse `'Get-Date'` — because pwsh parses a
+ * quoted command name as a STRING and the parser here was building a CommandAst
+ * for it. That is a question about the grammar answered in the host, which is
+ * the same shape as the splitter it had just replaced. `parse.ts` builds the
+ * `CommandExpressionAst` pwsh builds now, and this file refuses it by the same
+ * rule it refuses `1 | gci` by.
+ *
  * NOT A SECOND ENGINE, any more. This file used to join its stages with a
  * private `ObjectQueue` whose own comment admitted the buffering was unbounded
  * — so `pipeline.ts`'s backpressure, early-termination and cancellation tests
@@ -76,7 +84,7 @@ import { tryBindCommand } from '../binding/from-ast.ts';
 import { ParameterBindingError } from '../binding/errors.ts';
 import type { CommandAst } from '../language/ast.ts';
 import { parseForExecution } from '../language/parse.ts';
-import { unimplementedMessage } from '../language/unimplemented.ts';
+import { EXECUTION_REFUSAL_REASONS, unimplementedMessage } from '../language/unimplemented.ts';
 import type { ProcessGroupId, ProcessId, RequestId, TerminalId } from './ids.ts';
 import type { KernelEvent, KernelEventBody } from './protocol.ts';
 import {
@@ -946,32 +954,49 @@ export class Kernel {
     const parsed = parseForExecution(source);
     if (!parsed.ok) {
       // EVERY refusal, not the first. Measured on pwsh 7.6.5: `ParseInput` over
-      // 500 independent syntax errors reports 500 of them, with no cap. The
-      // volume is bounded by the source, which `REQUEST_LIMITS.maxSourceLength`
-      // caps at 64 KiB before `#exec` is reached.
+      // 5,000 independent syntax errors reports 5,000 of them, with no cap.
+      //
+      // AND THE BOUND IS NOT THE SOURCE LENGTH, which is what this said. The
+      // source is capped at 64 KiB by `REQUEST_LIMITS.maxSourceLength` — checked
+      // in `decodeKernelRequest`, so it holds on `send` and not only across the
+      // worker — but the refusals are not the same size as the text that caused
+      // them. MEASURED, on 64 KiB of `$a;` repeated: 21,845 refusals, 6.6
+      // MILLION characters of message, in one `rejected` event. It clones in
+      // 23ms, so it crosses; a host that renders one line per problem is the
+      // part that will not enjoy it. Left uncapped deliberately — pwsh reports
+      // all of them, and a cap would be this engine inventing a limit — but
+      // recorded here rather than left as "bounded, therefore fine".
       refuse(...parsed.refusals.map((refusal) => refusal.message));
       return;
     }
 
-    // What the kernel can express is ONE pipeline of commands. The parser
-    // accepts more than that, and the gap is refused here rather than
-    // flattened, because every flattening is a wrong answer:
+    // What the kernel can express is ONE pipeline of commands. Two of the four
+    // ways a line can exceed that are AST NODES, and those are refused by
+    // `EXECUTION_REFUSED_NODES` above rather than here — so the profile, the
+    // highlighter and this gate all read one list:
+    //
+    //   `a && b`   PipelineChainAst. pwsh runs `b` only if `a` succeeded —
+    //              measured, a chain whose left side is command-not-found emits
+    //              0 objects. `pipelineStages` FLATTENS a chain, which would
+    //              turn `a && b` into `a | b`.
+    //   `1 | gci`  CommandExpressionAst — a pipeline element that is not a
+    //              command, which also covers `'Get-Date'`, since pwsh parses a
+    //              quoted command name as a STRING and only `& 'Get-Date'` as a
+    //              call. Nothing evaluates expressions.
+    //
+    // The other two are not nodes at all and are refused here, because there is
+    // nothing in the tree to name:
     //
     //   `a; b`     pwsh runs both — measured, `@(Write-Output one; Write-Output
     //              two).Count` is 2. One request is one process group, so
     //              running them would need two, and running only the first
     //              would drop the second silently.
-    //   `a && b`   pwsh runs `b` only if `a` succeeded — measured, a chain whose
-    //              left side is command-not-found emits 0 objects. Nothing here
-    //              implements that, and `pipelineStages` flattens a chain into
-    //              a stage list, which would turn `a && b` into `a | b`.
     //   `Get-Date &`  pwsh returns a PSRemotingJob object, State Running —
     //              measured. This kernel's `background` is a property of the
     //              REQUEST, decided by the caller, and it emits no job object,
     //              so honouring `&` here would be approximate in both halves.
-    //   `1`        a pipeline element that is not a command. Nothing evaluates
-    //              expressions; `pipelineStages` drops such an element, and a
-    //              dropped element reads as "source contains no command".
+    //              It is a FLAG on PipelineAst, not a node, so no name exists
+    //              for it either.
     const [statement, ...rest] = parsed.ast.statements;
     if (statement === undefined) {
       refuse('source contains no command');
@@ -984,16 +1009,17 @@ export class Kernel {
       );
       return;
     }
-    // The wording comes from `unimplementedMessage` rather than being written
-    // again here, so a refusal reads the same whether the parser or the kernel
-    // raised it, and the 40-character excerpt cap comes with it — `statement`
-    // can be the whole 64 KiB line.
+    // UNREACHABLE, and kept because the compiler needs the narrowing and the
+    // next change to the gate should fail loudly rather than run a chain. A
+    // cleared `ExecutableScript` cannot contain a PipelineChainAst: the parser
+    // refuses one by name, and `tests/unit/kernel.test.mts` asserts the refusal
+    // arrives with `PipelineChainAst` in it. The wording still comes from
+    // `unimplementedMessage`, so it would read like every other refusal.
     if (statement.kind !== 'PipelineAst') {
       refuse(
         unimplementedMessage(
           'PipelineChainAst',
-          'a pipeline chain (&& or ||), which this kernel cannot run because it starts one process ' +
-            'group per request',
+          EXECUTION_REFUSAL_REASONS.get('PipelineChainAst') ?? 'this construct',
           statement.extent.text,
         ),
       );
@@ -1009,59 +1035,18 @@ export class Kernel {
     }
     const commands: CommandAst[] = [];
     for (const element of statement.elements) {
+      // UNREACHABLE for the same reason, and kept for the same two.
       if (element.kind !== 'CommandAst') {
         refuse(
           unimplementedMessage(
             element.kind,
-            'an expression where a command belongs, which this engine cannot evaluate',
+            EXECUTION_REFUSAL_REASONS.get(element.kind) ?? 'this construct',
             element.extent.text,
           ),
         );
         return;
       }
       commands.push(element);
-    }
-
-    // A QUOTED command name is not a command. Measured on pwsh 7.6.5:
-    //
-    //   'Get-Location'                        -> the String "Get-Location"
-    //   & 'Get-Location'                      -> a PathInfo
-    //   ParseInput("'Get-Location'")          -> CommandExpressionAst
-    //   ParseInput("Get-Location")            -> CommandAst
-    //
-    // This parser builds a CommandAst for a quoted head, which is a divergence
-    // that belongs to `parse.ts`'s `isCommandHead`. It was harmless while the
-    // kernel split on whitespace — `'Get-Date'` reached `resolve` with its
-    // quotes attached and was simply not found — and stopped being harmless the
-    // moment the head arrived decoded, because then it RESOLVES and the engine
-    // runs a command pwsh would not have run. Refused instead, naming the node
-    // pwsh builds, which is the same answer `1 | gci` already gets.
-    //
-    // `token.quote` is the LEXER's own answer to "was this quoted", so nothing
-    // here re-reads a quote character.
-    //
-    // Indexed once rather than searched per stage. `find` inside `find` is
-    // quadratic in the source, and the source may be 64 KiB: `a|a|a|…` at that
-    // length is tens of thousands of stages over tens of thousands of tokens,
-    // which is a hung UI thread rather than a slow one.
-    const tokenAt = new Map(parsed.tokens.map((token) => [token.start, token]));
-    const quoted = commands.find((command) => {
-      const head = tokenAt.get(command.extent.start);
-      // No token at the extent start cannot happen — the extent IS the head
-      // token's — and if it ever did, allowing it keeps the old behaviour
-      // rather than refusing something on the strength of a missing lookup.
-      return head !== undefined && head.quote !== null;
-    });
-    if (quoted !== undefined) {
-      refuse(
-        unimplementedMessage(
-          'CommandExpressionAst',
-          'a quoted command name, which pwsh parses as a string expression rather than a command; ' +
-            'the call operator & would invoke it and this engine does not implement that either',
-          quoted.extent.text,
-        ),
-      );
-      return;
     }
 
     // Resolve every stage BEFORE starting any of them. A pipeline whose third

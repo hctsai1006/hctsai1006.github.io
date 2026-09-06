@@ -695,7 +695,7 @@ export const WORK = [
         id: '3.6',
         title: 'Record engineLimits.nativePowerShellEngine=false and the unimplemented AST node list',
         detail:
-          '`nativePowerShellEngine: false` was always recorded, and that is the half that protects a visitor from believing a real pwsh is running. `unimplementedAstNodes` was a literal [] in the generator with nothing populating it, and an empty list beside it reads as "every AST node is implemented" — the exact opposite of the truth. It is now IMPORTED: the generator calls unimplementedAstNodes(), which derives 37 node names from the three tables parseForExecution consults, so the declaration cannot drift from the behaviour. Typing the names into the generator instead would have been the same defect one step later.',
+          '`nativePowerShellEngine: false` was always recorded, and that is the half that protects a visitor from believing a real pwsh is running. `unimplementedAstNodes` was a literal [] in the generator with nothing populating it, and an empty list beside it reads as "every AST node is implemented" — the exact opposite of the truth. It is now IMPORTED: the generator calls unimplementedAstNodes(), which derives 40 node names from what parseForExecution consults, so the declaration cannot drift from the behaviour. Typing the names into the generator instead would have been the same defect one step later. Being derived is not the same as being right: the first derivation read three tables, missed two refusals the parser writes in code (VariableExpressionAst, ErrorExpressionAst) and inherited one name that was never a limit (CommandAst, which is what the & call operator is mapped to for the message). A test that walks every tree the execution parser ACCEPTS now says the list may never name something the engine runs.',
         status: 'done',
         evidence: [
           { kind: 'json', file: 'compat/profiles/powershell-7.6.5-linux.json', path: 'engineLimits.nativePowerShellEngine' },
@@ -946,7 +946,7 @@ export const WORK = [
         id: '6.2',
         title: 'Split run() into parse -> execute -> render with no DOM access in the middle',
         detail:
-          'MISSING: render, and only render. Parse is real: Kernel.#exec runs parseForExecution and binds each CommandAst through binding/from-ast.ts, and the splitPipeline/splitTokens placeholder the kernel labelled DELIBERATELY NOT A PARSER is deleted. Execute is real, DOM-free and heavily tested. Render is still not a kernel stage: the kernel stops at emitting events, and formatting happens inside Out-String and the Format-* commands rather than at the pipeline tail — though a Format-* record now carries its document across the boundary, so a host CAN render one. The "no DOM in the middle" half holds, but trivially, because nothing in src/ touches the DOM yet.',
+          'MISSING: render, and only render. Parse is real: Kernel.#exec runs parseForExecution and binds each CommandAst through binding/from-ast.ts, and the splitPipeline/splitTokens placeholder the kernel labelled DELIBERATELY NOT A PARSER is deleted. Nothing about the LANGUAGE is left in the kernel either: a quoted command name is refused because parse.ts builds the CommandExpressionAst pwsh builds, not because the kernel re-reads a quote character after the parse. Execute is real, DOM-free and heavily tested. Render is still not a kernel stage: the kernel stops at emitting events, and formatting happens inside Out-String and the Format-* commands rather than at the pipeline tail — though a Format-* record now carries its document across the boundary, so a host CAN render one. The "no DOM in the middle" half holds, but trivially, because nothing in src/ touches the DOM yet.',
         status: 'partial',
         evidence: [
           { kind: 'export', file: 'src/kernel/kernel.ts', symbol: 'Kernel' },
@@ -1135,7 +1135,7 @@ export const WORK = [
         id: '8.3',
         title: 'Refuse to execute recognised-but-unimplemented syntax with an explicit error naming the AST node',
         detail:
-          '37 node types are refused by name, and the names are real: PwshAstNode is the pwsh 7.6.5 hierarchy, so a typo is a compile error. The list is derived from the tables parseForExecution consults rather than declared beside them, and compat/profiles/*.json now publishes it (see 3.6) instead of declaring []. Two mappings were measured rather than guessed: `workflow W { }` is a FunctionDefinitionAst in pwsh, and ConfigurationDefinitionAst really does exist in PS 7 core.',
+          '40 node types are refused by name, and the names are real: PwshAstNode is the pwsh 7.6.5 hierarchy, so a typo is a compile error. The list is derived from the tables parseForExecution consults rather than declared beside them, and compat/profiles/*.json now publishes it (see 3.6) instead of declaring []. Two mappings were measured rather than guessed: `workflow W { }` is a FunctionDefinitionAst in pwsh, and ConfigurationDefinitionAst really does exist in PS 7 core.',
         status: 'done',
         evidence: [
           { kind: 'export', file: 'src/language/unimplemented.ts', symbol: 'UNIMPLEMENTED_KEYWORDS' },
@@ -1183,7 +1183,7 @@ export const WORK = [
         id: '8.7',
         title: 'Make the highlighter share the real lexer so it cannot colour syntax the engine rejects',
         detail:
-          'src/language/highlight.ts is computed FROM the parser: it lexes with the one lexer and paints every span parseForExecution refuses with a `refused` class, so it cannot colour something the engine will not run. Checked over a 20,000-input generated corpus rather than on examples.',
+          'src/language/highlight.ts is computed FROM the parser: it lexes with the one lexer and paints every span parseForExecution refuses with a `refused` class, so it cannot colour something the engine will not run. Checked over a 20,000-input generated corpus rather than on examples. The one place that claim did not hold was `&&`, coloured as an operator on a line the kernel refuses — the same shape as the v1 complaint that it colours redirections nothing implements — and PipelineChainAst is now in EXECUTION_REFUSED_NODES, so the parser, the profile and the colour agree.',
         status: 'done',
         evidence: [
           { kind: 'export', file: 'src/language/highlight.ts', symbol: 'highlight' },

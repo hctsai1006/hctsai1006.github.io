@@ -22,6 +22,7 @@ export {
 
 export {
   PWSH_AST_NODES,
+  expressionText,
   unsupportedNodes,
   walk,
   type Ast,
@@ -64,6 +65,8 @@ export {
 export {
   EXECUTION_REFUSAL_REASONS,
   EXECUTION_REFUSED_NODES,
+  MESSAGE_ONLY_NODES,
+  REFUSED_WITHOUT_A_TABLE,
   UNIMPLEMENTED_KEYWORDS,
   UNIMPLEMENTED_SYNTAX,
   unimplementedAstNodes,
