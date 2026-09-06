@@ -166,8 +166,12 @@ export function recordDocument(value: PSValue): FormatDocument | undefined {
  * cast would turn "someone put the wrong text here" into a render of garbage,
  * or a crash inside `renderDocument` naming a line of the renderer.
  *
- * Total, therefore: every field of every section kind is checked, and anything
- * unrecognised produces `null` rather than a partially trusted document.
+ * Total on the fields it READS, therefore: every field of every section kind is
+ * checked, one bad element fails its whole array rather than being skipped, and
+ * an unknown section `kind` fails the document rather than being dropped. What
+ * it does NOT do is reject an extra field it does not know about — a document
+ * written by a newer build decodes to what this build understands, which is the
+ * direction that lets a host and a worker differ by a deploy.
  */
 function asDocument(value: unknown): FormatDocument | null {
   const record = asRecord(value);

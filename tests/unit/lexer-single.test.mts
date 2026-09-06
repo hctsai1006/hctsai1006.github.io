@@ -175,10 +175,11 @@ describe('there is exactly one lexer', () => {
     // and `Kernel.#exec` calls `parseForExecution`, so nothing under `src/`
     // lexes a command line except the lexer.
     //
-    // The list stays, at zero, because it is BIDIRECTIONAL: an entry that is
-    // still here when it should be gone fails below, and a name still listed
-    // after the thing is deleted fails too. A deleted list would only be able
-    // to catch the first of those.
+    // The list stays rather than being deleted along with its last entry,
+    // because it is what makes a NEW exemption expensive: adding a name here is
+    // also a promise, checked below, that the thing named still tokenizes. At
+    // zero that second check has nothing to do — the value of the mechanism is
+    // to the next person who is tempted to add a row.
     const KNOWN_SURVIVORS: readonly string[] = [];
     const unexpected = offenders.filter((o) => !KNOWN_SURVIVORS.includes(o));
     assert.deepEqual(unexpected, [], `a second tokenizer appeared in:\n${unexpected.join('\n')}`);
