@@ -21,6 +21,10 @@
  * They disagreed about `--Path`, about `-Path a,b`, about `2>&1`, and about
  * whether a quoted argument survives to the binder at all.
  *
+ * All nine are gone. The last two to go were the kernel's, and they were the
+ * ones on the path that RUNS: `Kernel.#exec` now calls `parseForExecution` and
+ * binds each `CommandAst` through `binding/from-ast.ts`.
+ *
  * Two kinds of check here, because either alone is escapable:
  *
  *   STRUCTURAL — every consumer imports the one lexer and none defines its own.
@@ -157,19 +161,25 @@ describe('there is exactly one lexer', () => {
       // delimiters, so `formatting/datetime.ts`, `commands/native/datetime.ts`
       // and `binding/validation.ts` all compare against both and none of them
       // is a command-line lexer. Requiring `|` or a backtick alongside is what
-      // separates "handles quotes" from "lexes a command line" — kernel.ts's
-      // splitPipeline compares against `'`, `"` and `|` in the same loop.
+      // separates "handles quotes" from "lexes a command line" — the deleted
+      // `splitPipeline` compared against `'`, `"` and `|` in one loop, which is
+      // the shape this gate was built to name.
       const bothQuotes = compared.has('"') && compared.has("'");
       const shellMetacharacter = compared.has('|') || compared.has('`');
       if (bothQuotes && shellMetacharacter) offenders.push(relative);
     }
 
-    // `src/kernel/kernel.ts` is expected here until integration deletes
-    // `splitPipeline` and `splitTokens` — its own comment already says "NOT THE
-    // PARSER. Delete this when the binder lands; PR-08 owns lexing". This gate
-    // names the survivors so the count can only go down, rather than being
-    // silent about them.
-    const KNOWN_SURVIVORS = ['kernel/kernel.ts'];
+    // EMPTY, and it got here one entry at a time. `src/kernel/kernel.ts` was
+    // the last survivor: `splitPipeline` compared against `'`, `"` and `|` in
+    // one loop, and `splitTokens` was `stage.split(/\s+/u)`. Both are deleted
+    // and `Kernel.#exec` calls `parseForExecution`, so nothing under `src/`
+    // lexes a command line except the lexer.
+    //
+    // The list stays, at zero, because it is BIDIRECTIONAL: an entry that is
+    // still here when it should be gone fails below, and a name still listed
+    // after the thing is deleted fails too. A deleted list would only be able
+    // to catch the first of those.
+    const KNOWN_SURVIVORS: readonly string[] = [];
     const unexpected = offenders.filter((o) => !KNOWN_SURVIVORS.includes(o));
     assert.deepEqual(unexpected, [], `a second tokenizer appeared in:\n${unexpected.join('\n')}`);
 
@@ -196,10 +206,12 @@ describe('there is exactly one lexer', () => {
     assert.match(text, /from '\.\/lexer\.ts'/u);
   });
 
-  it('handles the cases kernel.ts splitTokens gets wrong, so it can be deleted', () => {
-    // Forward-looking rather than an assertion about the defect: these are the
-    // inputs `stage.split(/\s+/u)` mangles, and they are what integration needs
-    // to be sure of before removing it.
+  it('handles the cases splitTokens got wrong, which is why it could be deleted', () => {
+    // These are the inputs `stage.split(/\s+/u)` mangled. They were written
+    // before the kernel was wired up, as the thing integration had to be sure
+    // of; the kernel now runs `parseForExecution` and `tests/unit/kernel.test.mts`
+    // asserts the same three shapes through `exec`. Kept here as well because
+    // this file is about the LEXER being one, and these are the spans.
 
     const quoted = stagesOf("Write-Output 'a b c'");
     assert.equal(quoted.length, 1);
