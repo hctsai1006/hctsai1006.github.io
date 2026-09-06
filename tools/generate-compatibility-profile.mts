@@ -228,10 +228,30 @@ function buildDelta(
       upstreamPr: primaryPr(c),
       evidence: [...(c.evidence ?? [])],
       ...(c.migration !== undefined ? { migration: c.migration } : {}),
-      conformanceFixture: null,
-      // Derived, never authored. The four-state status is the truth; this is the
-      // boolean projection the explorer and the schema already speak.
-      implemented: isEmulated(c),
+      conformanceFixture: c.conformanceFixture ?? null,
+      /**
+       * Does the ENGINE reproduce this difference? Derived from the four-state
+       * status, never authored. This is the field that decides what a command
+       * can read, and it is what the explorer must use to say "documented, not
+       * emulated".
+       */
+      emulated: isEmulated(c),
+      /**
+       * Is it PROVEN? Derived, never authored, and deliberately a stricter
+       * question than `emulated`.
+       *
+       * It used to be the boolean projection of `implementation`, i.e. a synonym
+       * for `emulated` — so "implemented" meant "somebody wrote a unit test
+       * against our own behaviour view", and the delta summary reported six
+       * changes implemented while no conformance fixture had ever been asked
+       * about any of them. Splitting the two is ROADMAP 3.5: an entry is
+       * implemented only once it names a case that ran against a real pwsh and
+       * agreed, and tools/conformance.mts fails the build if the named case is
+       * missing or did not agree.
+       *
+       * Every entry is false today. That is the measurement, not a placeholder.
+       */
+      implemented: isEmulated(c) && c.conformanceFixture !== undefined,
     };
   });
 
@@ -243,7 +263,11 @@ function buildDelta(
     changed: count('changed'),
     removed: count('removed'),
     fixed: count('fixed'),
-    implemented: changes.filter(isEmulated).length,
+    // Two different facts, kept apart for the reason given on the fields above.
+    // `implemented` was this same count under the old meaning, and reporting six
+    // where the honest answer is zero is exactly the drift ROADMAP 3.5 is about.
+    emulated: changes.filter(isEmulated).length,
+    implemented: changes.filter((c) => isEmulated(c) && c.conformanceFixture !== undefined).length,
     documented: changes.filter((c) => c.implementation === 'documented').length,
     partial: changes.filter((c) => c.implementation === 'partial').length,
   };

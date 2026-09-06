@@ -9,7 +9,8 @@
     "changed": 10,
     "removed": 0,
     "fixed": 3,
-    "implemented": 6,
+    "emulated": 6,
+    "implemented": 0,
     "documented": 16,
     "partial": 0
   },
@@ -46,7 +47,8 @@
       ],
       "migration": "A script that needs a fully random GUID must call `[guid]::NewGuid()` directly rather than `New-Guid`. Never use either as a security token: use a CSPRNG.",
       "conformanceFixture": null,
-      "implemented": true
+      "emulated": true,
+      "implemented": false
     },
     {
       "kind": "breaking",
@@ -82,7 +84,8 @@
       ],
       "migration": "Filter empty values out of a `-Property` list before passing it.",
       "conformanceFixture": null,
-      "implemented": true
+      "emulated": true,
+      "implemented": false
     },
     {
       "kind": "breaking",
@@ -116,7 +119,8 @@
       ],
       "migration": "Catch `System.ArgumentException`, or catch both types during a migration window.",
       "conformanceFixture": null,
-      "implemented": true
+      "emulated": true,
+      "implemented": false
     },
     {
       "kind": "breaking",
@@ -180,6 +184,7 @@
       "upstreamPr": 26485,
       "evidence": [],
       "conformanceFixture": null,
+      "emulated": false,
       "implemented": false
     },
     {
@@ -201,7 +206,7 @@
       },
       "documentedValue": true,
       "emulatedValue": true,
-      "implementation": "verified",
+      "implementation": "implemented",
       "sources": [
         {
           "pr": 26140,
@@ -215,7 +220,8 @@
         "src/binding/binder.ts"
       ],
       "conformanceFixture": null,
-      "implemented": true
+      "emulated": true,
+      "implemented": false
     },
     {
       "kind": "changed",
@@ -236,7 +242,7 @@
       },
       "documentedValue": true,
       "emulatedValue": true,
-      "implementation": "verified",
+      "implementation": "implemented",
       "sources": [
         {
           "pr": 26457,
@@ -250,7 +256,8 @@
         "src/binding/binder.ts"
       ],
       "conformanceFixture": null,
-      "implemented": true
+      "emulated": true,
+      "implemented": false
     },
     {
       "kind": "changed",
@@ -282,6 +289,7 @@
       "upstreamPr": 26460,
       "evidence": [],
       "conformanceFixture": null,
+      "emulated": false,
       "implemented": false
     },
     {
@@ -314,6 +322,7 @@
       "upstreamPr": 26463,
       "evidence": [],
       "conformanceFixture": null,
+      "emulated": false,
       "implemented": false
     },
     {
@@ -346,6 +355,7 @@
       "upstreamPr": 26141,
       "evidence": [],
       "conformanceFixture": null,
+      "emulated": false,
       "implemented": false
     },
     {
@@ -388,6 +398,7 @@
       "upstreamPr": 26469,
       "evidence": [],
       "conformanceFixture": null,
+      "emulated": false,
       "implemented": false
     },
     {
@@ -426,6 +437,7 @@
       "upstreamPr": 26474,
       "evidence": [],
       "conformanceFixture": null,
+      "emulated": false,
       "implemented": false
     },
     {
@@ -476,6 +488,7 @@
       "upstreamPr": 26479,
       "evidence": [],
       "conformanceFixture": null,
+      "emulated": false,
       "implemented": false
     },
     {
@@ -506,6 +519,7 @@
       "upstreamPr": 27549,
       "evidence": [],
       "conformanceFixture": null,
+      "emulated": false,
       "implemented": false
     },
     {
@@ -538,6 +552,7 @@
       "upstreamPr": 26514,
       "evidence": [],
       "conformanceFixture": null,
+      "emulated": false,
       "implemented": false
     },
     {
@@ -570,6 +585,7 @@
       "upstreamPr": 26482,
       "evidence": [],
       "conformanceFixture": null,
+      "emulated": false,
       "implemented": false
     },
     {
@@ -603,7 +619,8 @@
         "src/pipeline/encoding.ts"
       ],
       "conformanceFixture": null,
-      "implemented": true
+      "emulated": true,
+      "implemented": false
     },
     {
       "kind": "added",
@@ -631,6 +648,7 @@
       "upstreamPr": 26515,
       "evidence": [],
       "conformanceFixture": null,
+      "emulated": false,
       "implemented": false
     },
     {
@@ -665,6 +683,7 @@
       "evidence": [],
       "migration": "Pick one. A script passing both now fails parameter binding.",
       "conformanceFixture": null,
+      "emulated": false,
       "implemented": false
     },
     {
@@ -703,6 +722,7 @@
       "upstreamPr": 26719,
       "evidence": [],
       "conformanceFixture": null,
+      "emulated": false,
       "implemented": false
     },
     {
@@ -732,6 +752,7 @@
       "upstreamPr": 24624,
       "evidence": [],
       "conformanceFixture": null,
+      "emulated": false,
       "implemented": false
     },
     {
@@ -762,6 +783,7 @@
       "upstreamPr": 26424,
       "evidence": [],
       "conformanceFixture": null,
+      "emulated": false,
       "implemented": false
     },
     {
@@ -792,6 +814,7 @@
       "upstreamPr": 26185,
       "evidence": [],
       "conformanceFixture": null,
+      "emulated": false,
       "implemented": false
     }
   ]

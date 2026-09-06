@@ -155,8 +155,38 @@ interface Delta {
     upstreamPr: number;
     evidence: string[];
     migration?: string;
+    /** Does the engine reproduce it? What a command can read. */
+    emulated: boolean;
+    /** Emulated AND proved by a conformance case that agreed. Strictly stronger. */
     implemented: boolean;
+    conformanceFixture: string | null;
   }>;
+}
+
+/**
+ * The measured half of tests/conformance/report.json.
+ *
+ * Read rather than recomputed: the report is a pure function of the corpus, the
+ * committed pwsh recording and the project, and `npm run conformance -- --check`
+ * proves the committed copy is current. Recomputing a percentage here from parts
+ * would give this page a second opinion about its own numbers.
+ */
+interface ConformanceNumbers {
+  profileCoverage: Array<{
+    profile: string;
+    displayVersion: string;
+    fixture: { comparedAgainstVersion: string | null; applies: boolean; reason: string };
+    commands: {
+      population: number;
+      populationIs: string;
+      byLevel: { declared: number; partial: number; implemented: number; verified: number };
+      verifiedPercent: number;
+    };
+    behaviors: { population: number; populationIs: string; proven: number; provenPercent: number };
+  }>;
+  deltaProof: { changes: number; emulated: number; proven: number };
+  fixtureCapturedAt: string;
+  engine: Record<string, unknown>;
 }
 
 const read = <T,>(p: string): T => JSON.parse(readFileSync(join(REPO, p), 'utf8')) as T;
@@ -635,12 +665,24 @@ function renderDelta(lts: Profile, preview: Profile, delta: Delta): string {
           ${c.migration === undefined ? '' : `<p class="change-migration"><b>To migrate.</b> ${prose(c.migration)}</p>`}
           <p class="change-meta">
             <span class="impact">${esc(c.impact === 'none' ? 'no impact' : c.impact.replace(/-/g, ' '))}</span>
-            <span class="emulated${c.implemented ? ' is-emulated' : ''}">${esc(
-              c.implemented ? c.implementation : 'documented, not emulated',
+            <span class="emulated${c.emulated ? ' is-emulated' : ''}">${esc(
+              c.emulated ? c.implementation : 'documented, not emulated',
             )}</span>
             ${
-              c.implemented
-                ? `<span class="evidence">proved by ${c.evidence.map((e) => `<code class="mono">${esc(e)}</code>`).join(', ')}</span>`
+              c.emulated
+                ? `<span class="evidence">tested by ${c.evidence.map((e) => `<code class="mono">${esc(e)}</code>`).join(', ')}</span>`
+                : ''
+            }
+            ${
+              // Two different claims, and the badge above used to make one of
+              // them for both. A unit test says the engine does what we decided
+              // it should; a conformance case says a real PowerShell was asked
+              // and agreed. Only the second is a fidelity claim, so the absence
+              // of one is stated rather than left to the reader to notice.
+              c.emulated
+                ? c.conformanceFixture === null
+                  ? '<span class="unproven">no conformance case proves it against a real pwsh</span>'
+                  : `<span class="evidence">agreed with real pwsh in <code class="mono">${esc(c.conformanceFixture)}</code></span>`
                 : ''
             }
           </p>
@@ -658,7 +700,7 @@ function renderDelta(lts: Profile, preview: Profile, delta: Delta): string {
     )
     .join('');
 
-  const implemented = delta.summary['implemented'] ?? 0;
+  const emulated = delta.summary['emulated'] ?? 0;
   const withKey = delta.changes.filter((c) => c.behaviorKeys.length > 0).length;
   const liveKeys = Object.keys(preview.behaviors).length;
 
@@ -705,12 +747,87 @@ function renderDelta(lts: Profile, preview: Profile, delta: Delta): string {
         served as a live execution semantic, which is a claim of fidelity no test supports.</p>
 
       <div class="honesty" id="emulated">
-        <p class="honesty-n mono">${esc(implemented)} / ${esc(delta.changes.length)}</p>
+        <p class="honesty-n mono">${esc(emulated)} / ${esc(delta.changes.length)}</p>
         <p class="honesty-t">changes are emulated. The rest are recorded and cited, but the engine does not
           reproduce them yet. Nothing here claims fidelity a test has not demonstrated.</p>
       </div>
 
       <ul class="changes">${changes}</ul>
+    </div>
+  </section>`;
+}
+
+/**
+ * How much of each profile has been shown to agree with a real PowerShell.
+ *
+ * The page already said what BrowserShell CLAIMS about each version. It said
+ * nothing at all about how much of that had ever been checked against the thing
+ * being claimed, which is the one number a reader most needs and the easiest one
+ * to make up. Every figure here is read from tests/conformance/report.json,
+ * which is regenerated and compared by `npm run conformance -- --check`.
+ *
+ * The 7.7.0-preview.4 row reads zero, and that is the point of showing them
+ * separately: a single site-wide percentage would have carried the 7.6.5
+ * measurement across to a version nothing has ever been captured from.
+ */
+function renderCoverage(numbers: ConformanceNumbers): string {
+  const rows = numbers.profileCoverage
+    .map((p) => {
+      const cmd = p.commands;
+      return `
+        <tr${p.fixture.applies ? '' : ' class="not-emulated"'}>
+          <td class="mono key">${esc(p.profile)}</td>
+          <td class="mono val">${esc(cmd.byLevel.verified)} / ${esc(cmd.population)}
+            <span class="scope mono">${esc(cmd.verifiedPercent)}%</span></td>
+          <td class="mono val">${esc(p.behaviors.proven)} / ${esc(p.behaviors.population)}
+            <span class="scope mono">${esc(p.behaviors.provenPercent)}%</span></td>
+          <td class="doc">${prose(p.fixture.reason)}</td>
+        </tr>`;
+    })
+    .join('');
+
+  const lts = numbers.profileCoverage.find((p) => p.fixture.applies);
+
+  return `
+  <section class="band band-wide" aria-labelledby="h-coverage">
+    <div class="rail"><span class="rail-rank rail-word">measured</span><span class="rail-kind">against<br>real pwsh</span></div>
+    <div class="body">
+      <h2 id="h-coverage">How much of this has been checked against a real PowerShell</h2>
+      <p>A compatibility profile is a claim. These are the fractions of it that have been compared
+        against a captured run of the PowerShell it names, case by case, and agreed. They are floors:
+        a command counts once one of its behaviours has been shown to match, which is not the same as
+        the command being right.</p>
+
+      <div class="scroller" data-scroller role="region" aria-label="Conformance coverage per profile">
+        <table class="grid behaviors">
+          <thead>
+            <tr>
+              <th scope="col">profile</th>
+              <th scope="col">commands verified</th>
+              <th scope="col">behaviour flags proven</th>
+              <th scope="col">what was compared</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <p class="table-note">Commands counted: ${prose(lts?.commands.populationIs ?? 'n/a')}.
+        Behaviour flags counted: ${prose(lts?.behaviors.populationIs ?? 'n/a')}.
+        Neither denominator reads the evidence, so a fraction cannot be improved by deleting a
+        fixture — removing the case that credited a command lowers the top of the fraction and
+        leaves the bottom alone, and removing the case a recorded difference names fails the build.</p>
+
+      <div class="honesty" id="proven">
+        <p class="honesty-n mono">${esc(numbers.deltaProof.proven)} / ${esc(numbers.deltaProof.emulated)}</p>
+        <p class="honesty-t">of the version differences this engine emulates name a conformance case that
+          was put to a real PowerShell and agreed. The rest are covered by unit tests, which show the
+          engine does what this project decided it should — a weaker claim, and a different one.
+          Nothing can be recorded as proven without naming a case that ran and matched.</p>
+      </div>
+
+      <p class="table-note">Compared against PowerShell
+        ${esc(numbers.engine['psVersion'])} on ${esc(numbers.engine['framework'])}
+        (${esc(numbers.engine['platform'])}), captured ${esc(numbers.fixtureCapturedAt)}.</p>
     </div>
   </section>`;
 }
@@ -951,6 +1068,9 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
 .change-meta .impact{color:var(--ink-3)}
 .emulated{padding:.1em .5em;border:1px solid var(--flag);color:var(--flag);letter-spacing:.02em}
 .emulated.is-emulated{border-color:var(--proof);color:var(--proof)}
+/* Deliberately unstyled as a badge: this is an absence, and a bordered chip
+   would read as a third status alongside the two above it. */
+.unproven{color:var(--ink-3);font-style:italic}
 .change.impact-script-breaking .change-title{color:var(--flag)}
 .change.impact-script-breaking{border-top-color:var(--flag)}
 
@@ -1052,7 +1172,7 @@ const JS = String.raw`
 })();
 `;
 
-function renderBody(f: Facts, lts: Profile, preview: Profile, delta: Delta): string {
+function renderBody(f: Facts, lts: Profile, preview: Profile, delta: Delta, numbers: ConformanceNumbers): string {
   const { lock } = f;
   const ranks = new Set(lock.sources.map((s) => s.precedence)).size;
   return `<main class="wrap">
@@ -1061,12 +1181,15 @@ ${renderExists(f)}
 ${renderAxes(f)}
 ${renderDisagreements(f)}
 ${renderDelta(lts, preview, delta)}
+${renderCoverage(numbers)}
 </main>
 <footer class="foot">
   <div class="wrap">
     <p>Every value on this page is read from
       <span class="mono">compat/upstream/releases.lock.json</span>, the two compatibility profiles,
-      and the generated delta. The page is regenerated from them; if it drifts, the build fails.</p>
+      the generated delta, and <span class="mono">tests/conformance/report.json</span> — the
+      differential run against a real PowerShell. The page is regenerated from them; if it drifts,
+      the build fails.</p>
     <p>Lockfile generated ${esc(lock.generatedAt)} from ${esc(lock.sources.length)} sources across
       ${esc(ranks)} precedence ${pluralise(ranks, 'rank', 'ranks')}.
       Upstream declares <span class="mono">${esc(lock.channels.next ?? 'nothing')}</span> as the next
@@ -1077,7 +1200,7 @@ ${renderDelta(lts, preview, delta)}
 `;
 }
 
-function renderPage(f: Facts, lts: Profile, preview: Profile, delta: Delta): string {
+function renderPage(f: Facts, lts: Profile, preview: Profile, delta: Delta, numbers: ConformanceNumbers): string {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -1095,7 +1218,7 @@ function renderPage(f: Facts, lts: Profile, preview: Profile, delta: Delta): str
 <style>${CSS}</style>
 </head>
 <body>
-${renderBody(f, lts, preview, delta)}
+${renderBody(f, lts, preview, delta, numbers)}
 </body>
 </html>
 `;
@@ -1126,6 +1249,7 @@ function main(): void {
   const lts = read<Profile>(`compat/profiles/powershell-${ltsVersion}-linux.json`);
   const preview = read<Profile>(`compat/profiles/powershell-${previewVersion}-linux.json`);
   const delta = read<Delta>(`compat/deltas/${ltsVersion}__${previewVersion}.json`);
+  const numbers = read<ConformanceNumbers>("tests/conformance/report.json");
 
   const facts = deriveFacts(lock);
 
@@ -1135,7 +1259,7 @@ function main(): void {
     // disagree; written outside the repo rather than committed.
     const target = argv[artifactAt + 1];
     if (target === undefined) throw new Error('--artifact needs an output path');
-    const body = `<title>Version Truth</title>\n<style>${CSS}</style>\n${renderBody(facts, lts, preview, delta)}`;
+    const body = `<title>Version Truth</title>\n<style>${CSS}</style>\n${renderBody(facts, lts, preview, delta, numbers)}`;
     writeFileSync(target, body, 'utf8');
     process.stdout.write(
       `  wrote ${target} (artifact fragment, ${(body.length / 1024).toFixed(1)} KB)\n`,
@@ -1143,7 +1267,7 @@ function main(): void {
     return;
   }
 
-  const html = renderPage(facts, lts, preview, delta);
+  const html = renderPage(facts, lts, preview, delta, numbers);
 
   if (argv.includes('--check')) {
     if (!existsSync(OUT) || readFileSync(OUT, 'utf8').replace(/\r\n/g, '\n') !== html) {

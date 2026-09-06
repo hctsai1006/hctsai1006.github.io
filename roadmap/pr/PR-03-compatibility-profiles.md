@@ -33,10 +33,14 @@ Adding a PowerShell version must never mean forking a command. Version differenc
   - *evidence:* `compat/deltas/7.6.5__7.7.0-preview.4.json` — `changes.0.upstreamPr`
   - *evidence:* `npm run profiles`
 - [/] **3.5** Mark each delta entry implemented:false until a conformance fixture proves it
-  - MISSING: the fixture link, which is the whole mechanism. `implemented` is derived from a hand-curated four-state `implementation` field (isEmulated in tools/compat-curation.mts), and `conformanceFixture` is hardcoded null on all 22 entries. Five are implemented:true with no fixture behind any of them — proven instead by unit tests against a synthetic behaviour view, which is a different and weaker claim than agreement with a real pwsh. The reason is real (7.7.0-preview.4 is installed nowhere to capture from) and the honest half is delivered: unemulated changes are labelled "documented, not emulated" in the explorer and cannot reach execution. But the rule this task states is not the rule the code applies.
-  - *evidence:* `tools/compat-curation.mts` exports `isEmulated`
-  - *evidence:* `compat/deltas/7.6.5__7.7.0-preview.4.json` — `changes.0.implementation`
-  - *evidence:* `tests/unit/native-commands.test.mts` — test "follows the newGuid.defaultVersion behaviour flag, never a version check"
+  - The rule is now the rule the code applies, and the answer it gives is zero. `implemented` used to be a synonym for `emulated` — the boolean projection of the curated four-state `implementation` — so six entries read as implemented on the strength of unit tests written against this project's own behaviour view. The two fields are now separate: `emulated` is what a command can read, `implemented` is `emulated` AND naming a conformance case, and classifyDeltaProof in tools/conformance.mts fails the build if a named case is missing, did not agree, or belongs to a change nothing emulates. `verified` costs a fixture outright, so the two entries claiming it (New-Guid -Empty:$false, Get-Random -Shuffle:$false) were demoted to `implemented`. MISSING: any entry that can name one — 0 of 6 emulated changes are proven. No corpus case exercises any of the six emulated behaviour keys, and adding one means re-capturing the whole fixture: 7.7.0-preview.4 is installed nowhere, and the one host available for a 7.6.5 re-capture runs Windows with updatable help installed, which is recorded in tests/conformance/conformance.test.mts as turning three passing help.* cases into unexplained differences. So the honest move was to make the claim cheap to check and expensive to fake, and let it report 0.
+  - *evidence:* `tools/conformance.mts` exports `classifyDeltaProof`
+  - *evidence:* `tests/unit/conformance-coverage.test.mts` — test "fails the build when the named case is gone"
+  - *evidence:* `tests/unit/conformance-coverage.test.mts` — test "fails the build when "verified" names nothing"
+  - *evidence:* `compat/deltas/7.6.5__7.7.0-preview.4.json` — `changes.0.emulated`
+  - *evidence:* `compat/deltas/7.6.5__7.7.0-preview.4.json` — `summary.emulated`
+  - *evidence:* `tests/conformance/report.json` — `deltaProof.proven`
+  - *evidence:* `tools/compat-curation.mts` matches `/is "verified" but names no conformance case/`
 - [/] **3.6** Record engineLimits.nativePowerShellEngine=false and the unimplemented AST node list
   - MISSING: the list. `nativePowerShellEngine: false` is genuinely recorded in both profiles, and that is the half that protects a visitor from believing a real pwsh is running. `unimplementedAstNodes` is a literal [] in the generator with nothing populating it, and an empty list reads as "every AST node is implemented" — the exact opposite of the truth, since item 8 has not written a parser at all. It cannot be filled honestly until there is an AST to enumerate.
   - *evidence:* `compat/profiles/powershell-7.6.5-linux.json` — `engineLimits.nativePowerShellEngine`
@@ -60,7 +64,7 @@ Observable conditions. Not opinions — each of these can be checked.
 - Both profiles validate against compatibility-profile.schema.json
 - Every behavior key has a behaviorDocs entry with an upstream PR number
 - Profiles are generated from the lockfile, with no hand-typed version strings
-- Every delta entry marked implemented names the fixture that proved it (3.5 — not yet true)
+- Every delta entry marked implemented names the fixture that proved it (3.5 — enforced by classifyDeltaProof, and vacuous today: 0 of 6 emulated changes can name one)
 - engineLimits enumerates the AST nodes the engine will refuse (3.6 — not yet true)
 
 ---
