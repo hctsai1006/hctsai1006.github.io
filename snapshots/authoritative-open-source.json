@@ -1,9 +1,9 @@
 {
   "capturedFrom": "C:/Users/thc1006/Desktop/MAY/personal-homepage/open-source/index.html",
-  "capturedAt": "2026-09-05",
+  "capturedAt": "2026-09-06",
   "metrics": {
-    "merged": 282,
-    "projects": 83,
+    "merged": 283,
+    "projects": 84,
     "foundations": 8
   },
   "cncfRepositories": [
@@ -24,6 +24,7 @@
     "kedacore/keda-docs",
     "keycloak/keycloak",
     "kgateway-dev/kgateway",
+    "koordinator-sh/koordinator",
     "kptdev/porch",
     "kube-vip/kube-vip",
     "kubeflow/pipelines",
