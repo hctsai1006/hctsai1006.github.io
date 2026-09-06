@@ -244,6 +244,9 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
 .change-meta .impact{color:var(--ink-3)}
 .emulated{padding:.1em .5em;border:1px solid var(--flag);color:var(--flag);letter-spacing:.02em}
 .emulated.is-emulated{border-color:var(--proof);color:var(--proof)}
+/* Deliberately unstyled as a badge: this is an absence, and a bordered chip
+   would read as a third status alongside the two above it. */
+.unproven{color:var(--ink-3);font-style:italic}
 .change.impact-script-breaking .change-title{color:var(--flag)}
 .change.impact-script-breaking{border-top-color:var(--flag)}
 
@@ -496,14 +499,14 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
         <tr>
           <td class="mono key">switchParameter.Get-Random.Shuffle.honourExplicitFalse<br><span class="scope mono">Get-Random -Shuffle</span></td>
           <td class="mono val" data-lts="false" data-preview="true">false</td>
-          <td class="mark-cell"><span class="emu-mark is-emulated">verified</span></td>
+          <td class="mark-cell"><span class="emu-mark is-emulated">implemented</span></td>
           <td class="doc">Explicit <span class="mono">-Shuffle:$false</span> is honoured rather than treated as present</td>
           <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26457">#26457</a></td>
         </tr>
         <tr>
           <td class="mono key">switchParameter.New-Guid.Empty.honourExplicitFalse<br><span class="scope mono">New-Guid -Empty</span></td>
           <td class="mono val" data-lts="false" data-preview="true">false</td>
-          <td class="mark-cell"><span class="emu-mark is-emulated">verified</span></td>
+          <td class="mark-cell"><span class="emu-mark is-emulated">implemented</span></td>
           <td class="doc">Explicit <span class="mono">-Empty:$false</span> is honoured rather than treated as present</td>
           <td class="pr"><a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26140">#26140</a></td>
         </tr>
@@ -874,7 +877,8 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
           <p class="change-meta">
             <span class="impact">script breaking</span>
             <span class="emulated is-emulated">implemented</span>
-            <span class="evidence">proved by <code class="mono">tests/unit/native-commands.test.mts</code>, <code class="mono">src/commands/native/new-guid.ts</code></span>
+            <span class="evidence">tested by <code class="mono">tests/unit/native-commands.test.mts</code>, <code class="mono">src/commands/native/new-guid.ts</code></span>
+            <span class="unproven">no conformance case proves it against a real pwsh</span>
           </p>
           
         </li>
@@ -886,7 +890,8 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
           <p class="change-meta">
             <span class="impact">script breaking</span>
             <span class="emulated is-emulated">implemented</span>
-            <span class="evidence">proved by <code class="mono">tests/unit/binder-validation.test.mts</code>, <code class="mono">src/binding/validation.ts</code></span>
+            <span class="evidence">tested by <code class="mono">tests/unit/binder-validation.test.mts</code>, <code class="mono">src/binding/validation.ts</code></span>
+            <span class="unproven">no conformance case proves it against a real pwsh</span>
           </p>
           
         </li>
@@ -898,7 +903,8 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
           <p class="change-meta">
             <span class="impact">script breaking</span>
             <span class="emulated is-emulated">implemented</span>
-            <span class="evidence">proved by <code class="mono">tests/unit/binder-validation.test.mts</code>, <code class="mono">src/binding/validation.ts</code></span>
+            <span class="evidence">tested by <code class="mono">tests/unit/binder-validation.test.mts</code>, <code class="mono">src/binding/validation.ts</code></span>
+            <span class="unproven">no conformance case proves it against a real pwsh</span>
           </p>
           
         </li>
@@ -911,6 +917,7 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
             <span class="impact">observable</span>
             <span class="emulated">documented, not emulated</span>
             
+            
           </p>
           
         </li>
@@ -921,8 +928,9 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
           
           <p class="change-meta">
             <span class="impact">observable</span>
-            <span class="emulated is-emulated">verified</span>
-            <span class="evidence">proved by <code class="mono">tests/unit/binder-switch-scope.test.mts</code>, <code class="mono">src/binding/binder.ts</code></span>
+            <span class="emulated is-emulated">implemented</span>
+            <span class="evidence">tested by <code class="mono">tests/unit/binder-switch-scope.test.mts</code>, <code class="mono">src/binding/binder.ts</code></span>
+            <span class="unproven">no conformance case proves it against a real pwsh</span>
           </p>
           
         </li>
@@ -933,8 +941,9 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
           
           <p class="change-meta">
             <span class="impact">observable</span>
-            <span class="emulated is-emulated">verified</span>
-            <span class="evidence">proved by <code class="mono">tests/unit/binder-switch-scope.test.mts</code>, <code class="mono">src/binding/binder.ts</code></span>
+            <span class="emulated is-emulated">implemented</span>
+            <span class="evidence">tested by <code class="mono">tests/unit/binder-switch-scope.test.mts</code>, <code class="mono">src/binding/binder.ts</code></span>
+            <span class="unproven">no conformance case proves it against a real pwsh</span>
           </p>
           
         </li>
@@ -946,6 +955,7 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
           <p class="change-meta">
             <span class="impact">observable</span>
             <span class="emulated">documented, not emulated</span>
+            
             
           </p>
           
@@ -959,6 +969,7 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
             <span class="impact">observable</span>
             <span class="emulated">documented, not emulated</span>
             
+            
           </p>
           
         </li>
@@ -970,6 +981,7 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
           <p class="change-meta">
             <span class="impact">observable</span>
             <span class="emulated">documented, not emulated</span>
+            
             
           </p>
           
@@ -983,6 +995,7 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
             <span class="impact">observable</span>
             <span class="emulated">documented, not emulated</span>
             
+            
           </p>
           
         </li>
@@ -994,6 +1007,7 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
           <p class="change-meta">
             <span class="impact">observable</span>
             <span class="emulated">documented, not emulated</span>
+            
             
           </p>
           
@@ -1007,6 +1021,7 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
             <span class="impact">observable</span>
             <span class="emulated">documented, not emulated</span>
             
+            
           </p>
           
         </li>
@@ -1018,6 +1033,7 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
           <p class="change-meta">
             <span class="impact">no impact</span>
             <span class="emulated">documented, not emulated</span>
+            
             
           </p>
           
@@ -1031,6 +1047,7 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
             <span class="impact">no impact</span>
             <span class="emulated">documented, not emulated</span>
             
+            
           </p>
           
         </li>
@@ -1043,6 +1060,7 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
             <span class="impact">no impact</span>
             <span class="emulated">documented, not emulated</span>
             
+            
           </p>
           
         </li>
@@ -1054,7 +1072,8 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
           <p class="change-meta">
             <span class="impact">observable</span>
             <span class="emulated is-emulated">implemented</span>
-            <span class="evidence">proved by <code class="mono">tests/unit/encoding.test.mts</code>, <code class="mono">src/pipeline/encoding.ts</code></span>
+            <span class="evidence">tested by <code class="mono">tests/unit/encoding.test.mts</code>, <code class="mono">src/pipeline/encoding.ts</code></span>
+            <span class="unproven">no conformance case proves it against a real pwsh</span>
           </p>
           
         </li>
@@ -1066,6 +1085,7 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
           <p class="change-meta">
             <span class="impact">no impact</span>
             <span class="emulated">documented, not emulated</span>
+            
             
           </p>
           
@@ -1079,6 +1099,7 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
             <span class="impact">script breaking</span>
             <span class="emulated">documented, not emulated</span>
             
+            
           </p>
           
         </li>
@@ -1090,6 +1111,7 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
           <p class="change-meta">
             <span class="impact">observable</span>
             <span class="emulated">documented, not emulated</span>
+            
             
           </p>
           <ul class="sources"><li><span class="src-role">primary</span> <a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26719">#26719</a> Changes exactly CsvCommands.cs, CsvCommandStrings.resx and the ConvertTo-Csv/Export-Csv tests. CsvCommands.cs holds BaseCsvWritingCommand, ConvertToCsvCommand and ExportCsvCommand.</li><li><span class="src-role">docs</span> <a class="mono pr-link" href="https://github.com/PowerShell/PowerShell/pull/26719">#26719</a> The What's-New document lists ConvertFrom-Csv and Import-Csv under this PR as well. NOT SUPPORTED by the diff, which touches neither, and refuted by probe: in 7.6.5 the only switches Import-Csv and ConvertFrom-Csv declare are UseCulture, Verbose and Debug — there is no type-information switch on either to fix. The claim is narrowed here to the two cmdlets the PR changes.</li></ul>
@@ -1103,6 +1125,7 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
             <span class="impact">cosmetic</span>
             <span class="emulated">documented, not emulated</span>
             
+            
           </p>
           
         </li>
@@ -1114,6 +1137,7 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
           <p class="change-meta">
             <span class="impact">cosmetic</span>
             <span class="emulated">documented, not emulated</span>
+            
             
           </p>
           
@@ -1127,9 +1151,68 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
             <span class="impact">cosmetic</span>
             <span class="emulated">documented, not emulated</span>
             
+            
           </p>
           
         </li></ul>
+    </div>
+  </section>
+
+  <section class="band band-wide" aria-labelledby="h-coverage">
+    <div class="rail"><span class="rail-rank rail-word">measured</span><span class="rail-kind">against<br>real pwsh</span></div>
+    <div class="body">
+      <h2 id="h-coverage">How much of this has been checked against a real PowerShell</h2>
+      <p>A compatibility profile is a claim. These are the fractions of it that have been compared
+        against a captured run of the PowerShell it names, case by case, and agreed. They are floors:
+        a command counts once one of its behaviours has been shown to match, which is not the same as
+        the command being right.</p>
+
+      <div class="scroller" data-scroller role="region" aria-label="Conformance coverage per profile">
+        <table class="grid behaviors">
+          <thead>
+            <tr>
+              <th scope="col">profile</th>
+              <th scope="col">commands verified</th>
+              <th scope="col">behaviour flags proven</th>
+              <th scope="col">what was compared</th>
+            </tr>
+          </thead>
+          <tbody>
+        <tr>
+          <td class="mono key">powershell/7.6.5/linux</td>
+          <td class="mono val">10 / 31
+            <span class="scope mono">32.3%</span></td>
+          <td class="mono val">0 / 6
+            <span class="scope mono">0%</span></td>
+          <td class="doc">compared against a captured run of PowerShell 7.6.5</td>
+        </tr>
+        <tr class="not-emulated">
+          <td class="mono key">powershell/7.7.0-preview.4/linux</td>
+          <td class="mono val">0 / 31
+            <span class="scope mono">0%</span></td>
+          <td class="mono val">0 / 6
+            <span class="scope mono">0%</span></td>
+          <td class="doc">no fixture was captured from PowerShell 7.7.0-preview.4. The only capture is from 7.6.5, which is evidence about that version and not this one.</td>
+        </tr></tbody>
+        </table>
+      </div>
+      <p class="table-note">Commands counted: every command manifests.json declares native-semantic, including any held back from the session registry -- those stay at their declared level and can never be promoted.
+        Behaviour flags counted: this profile's <span class="mono">behaviors</span> table -- the version-specific flags a command can actually read. Documented-but-unemulated keys are in neither half, because nothing reads them.
+        Neither denominator reads the evidence, so a fraction cannot be improved by deleting a
+        fixture — removing the case that credited a command lowers the top of the fraction and
+        leaves the bottom alone, and removing the case a recorded difference names fails the build.</p>
+
+      <div class="honesty" id="proven">
+        <p class="honesty-n mono">0 / 6</p>
+        <p class="honesty-t">of the version differences this engine emulates name a conformance case that
+          was put to a real PowerShell and agreed. The rest are covered by unit tests, which show the
+          engine does what this project decided it should — a weaker claim, and a different one.
+          Nothing can be recorded as proven without naming a case that ran and matched.</p>
+      </div>
+
+      <p class="table-note">Compared against PowerShell
+        7.6.5 on .NET 10.0.11
+        (Unix), captured 2026-09-05T01:30:19.6549806Z.</p>
     </div>
   </section>
 </main>
@@ -1137,7 +1220,9 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
   <div class="wrap">
     <p>Every value on this page is read from
       <span class="mono">compat/upstream/releases.lock.json</span>, the two compatibility profiles,
-      and the generated delta. The page is regenerated from them; if it drifts, the build fails.</p>
+      the generated delta, and <span class="mono">tests/conformance/report.json</span> — the
+      differential run against a real PowerShell. The page is regenerated from them; if it drifts,
+      the build fails.</p>
     <p>Lockfile generated 2026-09-05T16:14:25.512Z from 41 sources across
       5 precedence ranks.
       Upstream declares <span class="mono">v7.7.0-preview.5</span> as the next
