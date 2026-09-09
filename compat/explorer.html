@@ -285,7 +285,7 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
     <h1 class="sr-only">Version truth</h1>
     <p class="hero-source">Microsoft Learn,
       <a href="https://raw.githubusercontent.com/MicrosoftDocs/PowerShell-Docs/main/reference/docs-conceptual/whats-new/What-s-New-in-PowerShell-74.md">What&rsquo;s New in PowerShell</a>,
-      recorded 2026-09-05</p>
+      recorded 2026-09-09</p>
 
     <blockquote class="hero-sentence">PowerShell <span class="mark mark-ok">7.7.0-preview.4</span> is built on the .NET <span class="mark mark-bad">11.0.100-preview.6</span> <span class="mark mark-bad">runtime</span>.</blockquote>
 
@@ -306,7 +306,7 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
     <p class="hero-lede">One sentence, three claims, two of them imprecise. It is not a careless sentence &mdash;
       it is what happens when one string has to carry facts that move independently. So this workstation does
       not store a version. It stores where every version came from, and what disagrees &mdash; and of the
-      four differences it currently records,
+      11 differences it currently records,
       <a href="#emulated">none are emulated yet</a>.</p>
   </header>
 
@@ -342,7 +342,7 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
           <td><span class="mono tag tag-lts">lts</span></td>
           <td class="mono quiet">2026-08-14</td>
           <td class="mono">2026-11-10</td>
-          <td class="flagged plain">65 days left</td>
+          <td class="flagged plain">62 days left</td>
           <td><a class="mono sha" href="https://github.com/PowerShell/PowerShell/commit/b3d5b858eba508785484768b4b3e318742416b83" title="b3d5b858eba508785484768b4b3e318742416b83">b3d5b858eba5</a></td>
         </tr>
         <tr>
@@ -385,20 +385,20 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
         
         <div class="align-row">
           <span class="align-label">runtime it ships</span>
-          <span class="mono align-value"><span class="shared">11.0.0-preview.</span><span class="diverge">6.26359.118</span></span>
+          <span class="mono align-value"><span class="shared">11.0.0-</span><span class="diverge">preview.6.26359.118</span></span>
         </div>
         
         <div class="align-row">
           <span class="align-label">latest in .NET 11.0</span>
-          <span class="mono align-value"><span class="shared">11.0.0-preview.</span><span class="diverge">7.26381.103</span></span>
+          <span class="mono align-value"><span class="shared">11.0.0-</span><span class="diverge">rc.1.26425.128</span></span>
         </div>
-        <p class="align-note">.NET 11.0 has moved on. The preview is one drop behind, which is normal and must still be visible.</p>
+        <p class="align-note">.NET 11.0 has moved on. The preview is behind, which is normal and must still be visible.</p>
       </div>
       <dl class="facts">
         <div><dt>SDK feature band</dt><dd class="mono">1xx</dd></div>
         <div><dt>.NET channel</dt><dd class="mono">11.0</dd></div>
         <div><dt>release type</dt><dd class="mono">sts</dd></div>
-        <div><dt>support phase</dt><dd class="mono">preview</dd></div>
+        <div><dt>support phase</dt><dd class="mono">go-live</dd></div>
       </dl>
       <p class="aside">Because .NET 11.0 is a
         standard-term
@@ -423,21 +423,56 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
              </div>
         </li>
         <li class="finding sev-warning">
+          <p class="finding-head"><span class="sev-word">warning</span><span class="mono finding-code">docs-dotnet-mismatch</span></p>
+          <p class="finding-msg">Docs say 7.4.19 is built on .NET 8.0.31, but v7.4.19 pins SDK 8.0.424 (runtime 8.0.30).</p>
+          
+        </li>
+        <li class="finding sev-warning">
+          <p class="finding-head"><span class="sev-word">warning</span><span class="mono finding-code">docs-dotnet-mismatch</span></p>
+          <p class="finding-msg">Docs say 7.6.5 is built on .NET 10.0.12, but v7.6.5 pins SDK 10.0.303 (runtime 10.0.11).</p>
+          
+        </li>
+        <li class="finding sev-error">
+          <p class="finding-head"><span class="sev-word">error</span><span class="mono finding-code">docs-version-ahead-of-release</span></p>
+          <p class="finding-msg">Docs describe PowerShell 7.4.20, but no such release exists — newest is 7.4.19. Documentation is not evidence that a release shipped.</p>
+          
+        </li>
+        <li class="finding sev-error">
+          <p class="finding-head"><span class="sev-word">error</span><span class="mono finding-code">docs-version-ahead-of-release</span></p>
+          <p class="finding-msg">Docs describe PowerShell 7.6.6, but no such release exists — newest is 7.6.5. Documentation is not evidence that a release shipped.</p>
+          
+        </li>
+        <li class="finding sev-warning">
           <p class="finding-head"><span class="sev-word">warning</span><span class="mono finding-code">lts-approaching-eol</span></p>
           <p class="finding-msg">v7.4.19 loses support on 2026-11-10 (.NET 8.0 is in maintenance). Plan the profile's retirement before then.</p>
           
         </li>
         <li class="finding sev-warning">
+          <p class="finding-head"><span class="sev-word">warning</span><span class="mono finding-code">metadata-latest-stable-mismatch</span></p>
+          <p class="finding-msg">metadata.json names v7.6.5 as its stable release tag, but the highest-versioned published stable is v7.6.6.</p>
+          
+        </li>
+        <li class="finding sev-warning">
           <p class="finding-head"><span class="sev-word">warning</span><span class="mono finding-code">preview-runtime-lags-dotnet</span></p>
-          <p class="finding-msg">v7.7.0-preview.4 is built on .NET runtime 11.0.0-preview.6.26359.118, but .NET 11.0 has shipped 11.0.0-preview.7.26381.103. The preview is one or more .NET drops behind — do not describe it as being on the newest .NET.</p>
+          <p class="finding-msg">v7.7.0-preview.4 is built on .NET runtime 11.0.0-preview.6.26359.118, but .NET 11.0 has shipped 11.0.0-rc.1.26425.128. The preview is one or more .NET drops behind — do not describe it as being on the newest .NET.</p>
           <div class="sides">
-               <div><span class="side-label">latest in the .NET channel</span><span class="mono neutral">11.0.0-preview.7.26381.103</span></div>
+               <div><span class="side-label">latest in the .NET channel</span><span class="mono neutral">11.0.0-rc.1.26425.128</span></div>
                <div><span class="side-label">pinned by the tag</span><span class="mono neutral">11.0.0-preview.6.26359.118</span></div>
              </div>
         </li>
         <li class="finding sev-info">
           <p class="finding-head"><span class="sev-word">info</span><span class="mono finding-code">sdk-feature-band-differs</span></p>
-          <p class="finding-msg">v7.6.5 builds with the 3xx SDK band (10.0.303) while .NET 10.0 currently leads with 4xx (10.0.400). Bands are parallel trains of the same runtime, not newer/older.</p>
+          <p class="finding-msg">v7.6.5 builds with the 3xx SDK band (10.0.303) while .NET 10.0 currently leads with 4xx (10.0.401). Bands are parallel trains of the same runtime, not newer/older.</p>
+          
+        </li>
+        <li class="finding sev-info">
+          <p class="finding-head"><span class="sev-word">info</span><span class="mono finding-code">stable-pinned-at-build-time</span></p>
+          <p class="finding-msg">v7.4.19 is pinned to .NET runtime 8.0.30 from its build date; .NET 8.0 has since shipped 8.0.31. Expected for a shipped release.</p>
+          
+        </li>
+        <li class="finding sev-info">
+          <p class="finding-head"><span class="sev-word">info</span><span class="mono finding-code">stable-pinned-at-build-time</span></p>
+          <p class="finding-msg">v7.6.5 is pinned to .NET runtime 10.0.11 from its build date; .NET 10.0 has since shipped 10.0.12. Expected for a shipped release.</p>
           
         </li></ul>
     </div>
@@ -1223,7 +1258,7 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
       the generated delta, and <span class="mono">tests/conformance/report.json</span> — the
       differential run against a real PowerShell. The page is regenerated from them; if it drifts,
       the build fails.</p>
-    <p>Lockfile generated 2026-09-05T16:14:25.512Z from 41 sources across
+    <p>Lockfile generated 2026-09-09T06:39:59.457Z from 41 sources across
       5 precedence ranks.
       Upstream declares <span class="mono">v7.7.0-preview.5</span> as the next
       release, which does not exist yet.</p>

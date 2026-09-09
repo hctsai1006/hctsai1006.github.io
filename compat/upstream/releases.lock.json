@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-05T16:14:25.512Z",
+  "generatedAt": "2026-09-09T06:39:59.457Z",
   "generator": {
     "tool": "verify-release-truth.mts",
     "version": "3.0.0"
@@ -10,287 +10,287 @@
       "precedence": 1,
       "kind": "github-pull-request",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/pulls/21219",
-      "fetchedAt": "2026-09-05T16:14:11.791Z",
+      "fetchedAt": "2026-09-09T06:39:49.237Z",
       "digest": "sha256:e2715bb0c327c7ce9b53a042d9770a41a246074922860d992c5aa802f0e2c5ae"
     },
     {
       "precedence": 1,
       "kind": "github-pull-request",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/pulls/24624",
-      "fetchedAt": "2026-09-05T16:14:12.532Z",
+      "fetchedAt": "2026-09-09T06:39:49.733Z",
       "digest": "sha256:a1e3975d58fbc3f2a7856e5bdd899a27e58c2c586257079f8bd1f6a1bf9e02bb"
     },
     {
       "precedence": 1,
       "kind": "github-pull-request",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/pulls/26140",
-      "fetchedAt": "2026-09-05T16:14:13.124Z",
+      "fetchedAt": "2026-09-09T06:39:50.194Z",
       "digest": "sha256:da7b8c1994f8009ddca1172fac07dfe8cb2438b2c8eb1996b623248d5fec06f4"
     },
     {
       "precedence": 1,
       "kind": "github-pull-request",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/pulls/26141",
-      "fetchedAt": "2026-09-05T16:14:13.865Z",
+      "fetchedAt": "2026-09-09T06:39:50.700Z",
       "digest": "sha256:c335723ebef1e84e9603ddc891d6a717cd2aadf0c37c6ab5f38999e63d5f3a0d"
     },
     {
       "precedence": 1,
       "kind": "github-pull-request",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/pulls/26185",
-      "fetchedAt": "2026-09-05T16:14:14.447Z",
+      "fetchedAt": "2026-09-09T06:39:51.265Z",
       "digest": "sha256:eb67123210450ce10137e9034fbe89f64b919402a11659dbd8f7083f1fd4b563"
     },
     {
       "precedence": 1,
       "kind": "github-pull-request",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/pulls/26424",
-      "fetchedAt": "2026-09-05T16:14:15.066Z",
+      "fetchedAt": "2026-09-09T06:39:51.742Z",
       "digest": "sha256:5893c39229be65629b263d736cb3f0d32ccdfb9a1ea44f727896a0d8e42de36a"
     },
     {
       "precedence": 1,
       "kind": "github-pull-request",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/pulls/26457",
-      "fetchedAt": "2026-09-05T16:14:15.648Z",
+      "fetchedAt": "2026-09-09T06:39:52.183Z",
       "digest": "sha256:214894bbb1c75db0ed2cc2970e96cae1fb17d0732b475d016a5d56a066c5010d"
     },
     {
       "precedence": 1,
       "kind": "github-pull-request",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/pulls/26460",
-      "fetchedAt": "2026-09-05T16:14:16.671Z",
+      "fetchedAt": "2026-09-09T06:39:52.729Z",
       "digest": "sha256:4cb1db0250eea76f0e8c11149950cfa91936dadc9fa35a9b600a2c9312b84009"
     },
     {
       "precedence": 1,
       "kind": "github-pull-request",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/pulls/26463",
-      "fetchedAt": "2026-09-05T16:14:17.195Z",
+      "fetchedAt": "2026-09-09T06:39:53.167Z",
       "digest": "sha256:0e071bba3a48d87a75a5f697789d374cdc6c595912de6fb98e4179bc8892f334"
     },
     {
       "precedence": 1,
       "kind": "github-pull-request",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/pulls/26469",
-      "fetchedAt": "2026-09-05T16:14:17.777Z",
+      "fetchedAt": "2026-09-09T06:39:53.667Z",
       "digest": "sha256:837c9c310795b01140242f5c2ed5dbf4d08ad152f45eebb016fdb20fc18aa7f2"
     },
     {
       "precedence": 1,
       "kind": "github-pull-request",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/pulls/26472",
-      "fetchedAt": "2026-09-05T16:14:18.324Z",
+      "fetchedAt": "2026-09-09T06:39:54.150Z",
       "digest": "sha256:b917af90865232c6cbeff16f253a3fa400f77ec81584ba570bc9da0767d0834b"
     },
     {
       "precedence": 1,
       "kind": "github-pull-request",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/pulls/26474",
-      "fetchedAt": "2026-09-05T16:14:19.399Z",
+      "fetchedAt": "2026-09-09T06:39:54.556Z",
       "digest": "sha256:f736b255b14a3c6a8ad7488973adae8c763d8aa2c612a32364668b488d4c8e24"
     },
     {
       "precedence": 1,
       "kind": "github-pull-request",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/pulls/26479",
-      "fetchedAt": "2026-09-05T16:14:20.102Z",
+      "fetchedAt": "2026-09-09T06:39:55.053Z",
       "digest": "sha256:37defbd8d24f6e575feb03e66ba9fc3b5b64f274fd9af57edb79bd32fc30dcb6"
     },
     {
       "precedence": 1,
       "kind": "github-pull-request",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/pulls/26482",
-      "fetchedAt": "2026-09-05T16:14:20.695Z",
+      "fetchedAt": "2026-09-09T06:39:55.571Z",
       "digest": "sha256:68ef9c454913dfdfe6e4d1751ce091bfb2f57111c125ed268cc5020fa4bdd2a5"
     },
     {
       "precedence": 1,
       "kind": "github-pull-request",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/pulls/26485",
-      "fetchedAt": "2026-09-05T16:14:21.275Z",
+      "fetchedAt": "2026-09-09T06:39:56.003Z",
       "digest": "sha256:2e309bc54978b8fc890ba848fa862be8130706b889d097c677740245dd53242b"
     },
     {
       "precedence": 1,
       "kind": "github-pull-request",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/pulls/26514",
-      "fetchedAt": "2026-09-05T16:14:22.019Z",
+      "fetchedAt": "2026-09-09T06:39:56.468Z",
       "digest": "sha256:42ca8b578fb3f810d5a1e3dcf97a8d806349d6cf4f1767342b422e7772aab265"
     },
     {
       "precedence": 1,
       "kind": "github-pull-request",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/pulls/26515",
-      "fetchedAt": "2026-09-05T16:14:22.680Z",
+      "fetchedAt": "2026-09-09T06:39:56.912Z",
       "digest": "sha256:2a974ec83c4f493769dac9a0f827491b1ec79cad08bf957ea6dc32dc3b2ce8b7"
     },
     {
       "precedence": 1,
       "kind": "github-pull-request",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/pulls/26552",
-      "fetchedAt": "2026-09-05T16:14:23.235Z",
+      "fetchedAt": "2026-09-09T06:39:57.426Z",
       "digest": "sha256:219b11a648a9a10a627d09d78c25fc55d31b3c70720a10ebfb57d2774ff712ee"
     },
     {
       "precedence": 1,
       "kind": "github-pull-request",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/pulls/26668",
-      "fetchedAt": "2026-09-05T16:14:23.769Z",
+      "fetchedAt": "2026-09-09T06:39:57.939Z",
       "digest": "sha256:daa2bbd8c581834a06d7ad92ef842269b617e8918cbc175cf8c84a83c1ef213e"
     },
     {
       "precedence": 1,
       "kind": "github-pull-request",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/pulls/26719",
-      "fetchedAt": "2026-09-05T16:14:24.324Z",
+      "fetchedAt": "2026-09-09T06:39:58.467Z",
       "digest": "sha256:5e6b51b31341c2e48c773c74da009a5a69cac3a85e65d19c797b89c7e2e0a674"
     },
     {
       "precedence": 1,
       "kind": "github-pull-request",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/pulls/27033",
-      "fetchedAt": "2026-09-05T16:14:24.925Z",
+      "fetchedAt": "2026-09-09T06:39:58.865Z",
       "digest": "sha256:32a5337c9c8d2e04e224f57321f2afac852a3940fe8271afa8ffcf9a3b481dbd"
     },
     {
       "precedence": 1,
       "kind": "github-pull-request",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/pulls/27549",
-      "fetchedAt": "2026-09-05T16:14:25.512Z",
+      "fetchedAt": "2026-09-09T06:39:59.457Z",
       "digest": "sha256:037a717f61f0a33e31719aa1b0d948adca6507c338b63e3804ca919ab148bf4c"
     },
     {
       "precedence": 1,
       "kind": "github-release-api",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/releases?per_page=100",
-      "fetchedAt": "2026-09-05T16:14:08.288Z",
-      "digest": "sha256:d18e95018925a9dd726a16ab4e9b4bf6a0ba9cca1bcb53e56e8784a95917663a"
+      "fetchedAt": "2026-09-09T06:39:46.294Z",
+      "digest": "sha256:7ad07292700a7dc93ba159d86aab47581be33e992e5550927ba0a3b202ecebc8"
     },
     {
       "precedence": 1,
       "kind": "github-metadata",
       "url": "https://raw.githubusercontent.com/PowerShell/PowerShell/master/tools/metadata.json",
-      "fetchedAt": "2026-09-05T16:14:08.426Z",
+      "fetchedAt": "2026-09-09T06:39:46.428Z",
       "digest": "sha256:c30bab2c630f3eca950fcecddd3b3fb88927c2301020df90babd56cf93258878"
     },
     {
       "precedence": 2,
       "kind": "github-tag-object",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/git/ref/tags/v7.4.19",
-      "fetchedAt": "2026-09-05T16:14:09.729Z",
+      "fetchedAt": "2026-09-09T06:39:47.286Z",
       "digest": "sha256:68a52b9726dcbe145c29cb221b76d6bf512b4c610154d7c8b850104008019aec"
     },
     {
       "precedence": 2,
       "kind": "github-tag-object",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/git/ref/tags/v7.6.5",
-      "fetchedAt": "2026-09-05T16:14:08.835Z",
+      "fetchedAt": "2026-09-09T06:39:46.619Z",
       "digest": "sha256:9ff3e570e818fc43b66c63c6b0141f271b95d95d3e8e105511f26665c16d60cb"
     },
     {
       "precedence": 2,
       "kind": "github-tag-object",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/git/ref/tags/v7.7.0-preview.4",
-      "fetchedAt": "2026-09-05T16:14:10.616Z",
+      "fetchedAt": "2026-09-09T06:39:47.872Z",
       "digest": "sha256:941be1bea3fc6e1559cea2b468b5f6500c9b8e9737b8edc4f222bb561f4c5837"
     },
     {
       "precedence": 2,
       "kind": "github-tag-object",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/git/tags/7ce820e548d815d49f9660a968f3096692b432a3",
-      "fetchedAt": "2026-09-05T16:14:10.115Z",
+      "fetchedAt": "2026-09-09T06:39:47.474Z",
       "digest": "sha256:30d5cdfd78c808cd3a081eca80d1f4787a511bb9f51ead35bc7a41711446a94b"
     },
     {
       "precedence": 2,
       "kind": "github-tag-object",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/git/tags/8d7d14a86bf05f45ed163b1b1fbfde1ac4682bac",
-      "fetchedAt": "2026-09-05T16:14:09.280Z",
+      "fetchedAt": "2026-09-09T06:39:46.856Z",
       "digest": "sha256:498604eaf8ab0a27e894d7fbb6a013c370c2b67a988fd17f99ac83cb2c3c5c38"
     },
     {
       "precedence": 2,
       "kind": "github-tag-object",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/git/tags/a1387fec4795bf9870e2658025b742d2b16e4f0e",
-      "fetchedAt": "2026-09-05T16:14:10.997Z",
+      "fetchedAt": "2026-09-09T06:39:48.122Z",
       "digest": "sha256:42efb36fdc16a34a782eb96f0c69a5131a42ac28e7943bc6eedc2f4c399bf8b9"
     },
     {
       "precedence": 3,
       "kind": "github-tag-file",
       "url": "https://raw.githubusercontent.com/PowerShell/PowerShell/v7.4.19/global.json",
-      "fetchedAt": "2026-09-05T16:14:10.154Z",
+      "fetchedAt": "2026-09-09T06:39:47.686Z",
       "digest": "sha256:41444c76123f9ce2a3822347d0a6bd6852e0b48fc97ec7bfed76c1b77ffc5e3b"
     },
     {
       "precedence": 3,
       "kind": "github-tag-file",
       "url": "https://raw.githubusercontent.com/PowerShell/PowerShell/v7.6.5/global.json",
-      "fetchedAt": "2026-09-05T16:14:09.319Z",
+      "fetchedAt": "2026-09-09T06:39:47.008Z",
       "digest": "sha256:9fd15310b34b66edc15b505efe7b66c6ff984af79d831aa7d9a7d15ad9e20003"
     },
     {
       "precedence": 3,
       "kind": "github-tag-file",
       "url": "https://raw.githubusercontent.com/PowerShell/PowerShell/v7.7.0-preview.4/global.json",
-      "fetchedAt": "2026-09-05T16:14:11.036Z",
+      "fetchedAt": "2026-09-09T06:39:48.235Z",
       "digest": "sha256:2c5301f1eea0119009b9aaaa6d3fed7eac4881c813d5cf0dc7ddb9bd2dff5cd4"
     },
     {
       "precedence": 4,
       "kind": "dotnet-channel-releases",
       "url": "https://builds.dotnet.microsoft.com/dotnet/release-metadata/10.0/releases.json",
-      "fetchedAt": "2026-09-05T16:14:09.351Z",
-      "digest": "sha256:ceb05782c4acea87222157bd80a136e2e7bf8da99cc89f004d6e83a7e917c2b7"
+      "fetchedAt": "2026-09-09T06:39:47.021Z",
+      "digest": "sha256:7d4eb01acac5378060cbfa1869e4350a555134956bceb2e76d6347e5195cb76a"
     },
     {
       "precedence": 4,
       "kind": "dotnet-channel-releases",
       "url": "https://builds.dotnet.microsoft.com/dotnet/release-metadata/11.0/releases.json",
-      "fetchedAt": "2026-09-05T16:14:11.054Z",
-      "digest": "sha256:01d58c6970aea54c355c0982e4d149a227abb4be184411b0b1ddea188a31e2f2"
+      "fetchedAt": "2026-09-09T06:39:48.246Z",
+      "digest": "sha256:2a3b5fd487301562873a8a3612a2b4472563b59b71b04e169ac918f48c5b119c"
     },
     {
       "precedence": 4,
       "kind": "dotnet-channel-releases",
       "url": "https://builds.dotnet.microsoft.com/dotnet/release-metadata/8.0/releases.json",
-      "fetchedAt": "2026-09-05T16:14:10.183Z",
-      "digest": "sha256:ca60deb2db2fb72c2ffcf15de40dbe3f03d1dba4738db3f22ce5bcc276a566ae"
+      "fetchedAt": "2026-09-09T06:39:47.705Z",
+      "digest": "sha256:f248ea19663a8e24f41febb3a0624f9e1572d8e4e1ff60bd90d3ed16493ba5da"
     },
     {
       "precedence": 4,
       "kind": "dotnet-release-index",
       "url": "https://builds.dotnet.microsoft.com/dotnet/release-metadata/releases-index.json",
-      "fetchedAt": "2026-09-05T16:14:05.892Z",
-      "digest": "sha256:e894da3717749381608200c0fbfdf609604ee6d32616e8fb36069f56e43ac3ec"
+      "fetchedAt": "2026-09-09T06:39:44.669Z",
+      "digest": "sha256:26aa97fbb3a3714d6b17d67e5d844c1526e91c8e607bbc4437501879d5c7f9a3"
     },
     {
       "precedence": 5,
       "kind": "microsoft-learn-docs",
       "url": "https://raw.githubusercontent.com/MicrosoftDocs/PowerShell-Docs/main/reference/docs-conceptual/install/PowerShell-Support-Lifecycle.md",
-      "fetchedAt": "2026-09-05T16:14:11.218Z",
+      "fetchedAt": "2026-09-09T06:39:48.750Z",
       "digest": "sha256:9d9e642d896ed5b19c8443fb85fe842e2b68e43f2a6e409fc7d0c7ba07d4379e"
     },
     {
       "precedence": 5,
       "kind": "microsoft-learn-docs",
       "url": "https://raw.githubusercontent.com/MicrosoftDocs/PowerShell-Docs/main/reference/docs-conceptual/whats-new/What-s-New-in-PowerShell-74.md",
-      "fetchedAt": "2026-09-05T16:14:11.139Z",
-      "digest": "sha256:b84ffbab2108a525613d726a2d50990433c1295b6b489ac1b531467c6f5e96ed"
+      "fetchedAt": "2026-09-09T06:39:48.517Z",
+      "digest": "sha256:91f03234119cf745433b15a8506013dde16a260b6916b2c8a33e3f3485536e37"
     },
     {
       "precedence": 5,
       "kind": "microsoft-learn-docs",
       "url": "https://raw.githubusercontent.com/MicrosoftDocs/PowerShell-Docs/main/reference/docs-conceptual/whats-new/What-s-New-in-PowerShell-76.md",
-      "fetchedAt": "2026-09-05T16:14:11.096Z",
-      "digest": "sha256:9d9bbab7824329b59aa127a5170215ca6cd053edf64c1773730d2153eaa70f24"
+      "fetchedAt": "2026-09-09T06:39:48.412Z",
+      "digest": "sha256:cef87c5d398c7a400929fa3ed30bbd93e8635e350c774bdba9a2dc2494e1b9db"
     },
     {
       "precedence": 5,
       "kind": "microsoft-learn-docs",
       "url": "https://raw.githubusercontent.com/MicrosoftDocs/PowerShell-Docs/main/reference/docs-conceptual/whats-new/What-s-New-in-PowerShell-77.md",
-      "fetchedAt": "2026-09-05T16:14:11.178Z",
+      "fetchedAt": "2026-09-09T06:39:48.631Z",
       "digest": "sha256:e9058b91ef0449ccf1b1d2ba3ea04bea2d85dbf1fc84bf1dd9b140c276fb472b"
     }
   ],
@@ -495,47 +495,47 @@
         "featureBand": "1xx",
         "channelVersion": "11.0",
         "releaseType": "sts",
-        "supportPhase": "preview",
+        "supportPhase": "go-live",
         "eolDate": null
       },
       "supportedUntil": null,
-      "snapshotDigest": "sha256:a828af31a3c946f1e1321fc082acff249528d54027265e47effd8ba64d773bff"
+      "snapshotDigest": "sha256:7e4667fbf72582f7eb01d2378f279594b0d81661ad5633366d6a60c754f7a19f"
     }
   ],
   "dotnet": {
     "channels": [
       {
         "channelVersion": "11.0",
-        "latestRelease": "11.0.0-preview.7",
-        "latestRuntime": "11.0.0-preview.7.26381.103",
-        "latestSdk": "11.0.100-preview.7.26381.103",
+        "latestRelease": "11.0.0-rc.1",
+        "latestRuntime": "11.0.0-rc.1.26425.128",
+        "latestSdk": "11.0.100-rc.1.26425.128",
         "releaseType": "sts",
-        "supportPhase": "preview",
+        "supportPhase": "go-live",
         "eolDate": null
       },
       {
         "channelVersion": "10.0",
-        "latestRelease": "10.0.11",
-        "latestRuntime": "10.0.11",
-        "latestSdk": "10.0.400",
+        "latestRelease": "10.0.12",
+        "latestRuntime": "10.0.12",
+        "latestSdk": "10.0.401",
         "releaseType": "lts",
         "supportPhase": "active",
         "eolDate": "2028-11-14"
       },
       {
         "channelVersion": "9.0",
-        "latestRelease": "9.0.19",
-        "latestRuntime": "9.0.19",
-        "latestSdk": "9.0.317",
+        "latestRelease": "9.0.20",
+        "latestRuntime": "9.0.20",
+        "latestSdk": "9.0.318",
         "releaseType": "sts",
         "supportPhase": "maintenance",
         "eolDate": "2026-11-10"
       },
       {
         "channelVersion": "8.0",
-        "latestRelease": "8.0.30",
-        "latestRuntime": "8.0.30",
-        "latestSdk": "8.0.424",
+        "latestRelease": "8.0.31",
+        "latestRuntime": "8.0.31",
+        "latestSdk": "8.0.425",
         "releaseType": "lts",
         "supportPhase": "maintenance",
         "eolDate": "2026-11-10"
@@ -556,6 +556,50 @@
     },
     {
       "severity": "warning",
+      "code": "docs-dotnet-mismatch",
+      "message": "Docs say 7.4.19 is built on .NET 8.0.31, but v7.4.19 pins SDK 8.0.424 (runtime 8.0.30).",
+      "expected": "8.0.30",
+      "actual": "8.0.31",
+      "sources": [
+        "https://raw.githubusercontent.com/MicrosoftDocs/PowerShell-Docs/main/reference/docs-conceptual/whats-new/What-s-New-in-PowerShell-74.md",
+        "https://raw.githubusercontent.com/PowerShell/PowerShell/v7.4.19/global.json"
+      ]
+    },
+    {
+      "severity": "warning",
+      "code": "docs-dotnet-mismatch",
+      "message": "Docs say 7.6.5 is built on .NET 10.0.12, but v7.6.5 pins SDK 10.0.303 (runtime 10.0.11).",
+      "expected": "10.0.11",
+      "actual": "10.0.12",
+      "sources": [
+        "https://raw.githubusercontent.com/MicrosoftDocs/PowerShell-Docs/main/reference/docs-conceptual/whats-new/What-s-New-in-PowerShell-76.md",
+        "https://raw.githubusercontent.com/PowerShell/PowerShell/v7.6.5/global.json"
+      ]
+    },
+    {
+      "severity": "error",
+      "code": "docs-version-ahead-of-release",
+      "message": "Docs describe PowerShell 7.4.20, but no such release exists — newest is 7.4.19. Documentation is not evidence that a release shipped.",
+      "expected": "7.4.19",
+      "actual": "7.4.20",
+      "sources": [
+        "https://raw.githubusercontent.com/MicrosoftDocs/PowerShell-Docs/main/reference/docs-conceptual/whats-new/What-s-New-in-PowerShell-74.md",
+        "https://api.github.com/repos/PowerShell/PowerShell/releases"
+      ]
+    },
+    {
+      "severity": "error",
+      "code": "docs-version-ahead-of-release",
+      "message": "Docs describe PowerShell 7.6.6, but no such release exists — newest is 7.6.5. Documentation is not evidence that a release shipped.",
+      "expected": "7.6.5",
+      "actual": "7.6.6",
+      "sources": [
+        "https://raw.githubusercontent.com/MicrosoftDocs/PowerShell-Docs/main/reference/docs-conceptual/whats-new/What-s-New-in-PowerShell-76.md",
+        "https://api.github.com/repos/PowerShell/PowerShell/releases"
+      ]
+    },
+    {
+      "severity": "warning",
       "code": "lts-approaching-eol",
       "message": "v7.4.19 loses support on 2026-11-10 (.NET 8.0 is in maintenance). Plan the profile's retirement before then.",
       "actual": "2026-11-10",
@@ -566,9 +610,20 @@
     },
     {
       "severity": "warning",
+      "code": "metadata-latest-stable-mismatch",
+      "message": "metadata.json names v7.6.5 as its stable release tag, but the highest-versioned published stable is v7.6.6.",
+      "expected": "v7.6.6",
+      "actual": "v7.6.5",
+      "sources": [
+        "https://raw.githubusercontent.com/PowerShell/PowerShell/master/tools/metadata.json",
+        "https://api.github.com/repos/PowerShell/PowerShell/releases"
+      ]
+    },
+    {
+      "severity": "warning",
       "code": "preview-runtime-lags-dotnet",
-      "message": "v7.7.0-preview.4 is built on .NET runtime 11.0.0-preview.6.26359.118, but .NET 11.0 has shipped 11.0.0-preview.7.26381.103. The preview is one or more .NET drops behind — do not describe it as being on the newest .NET.",
-      "expected": "11.0.0-preview.7.26381.103",
+      "message": "v7.7.0-preview.4 is built on .NET runtime 11.0.0-preview.6.26359.118, but .NET 11.0 has shipped 11.0.0-rc.1.26425.128. The preview is one or more .NET drops behind — do not describe it as being on the newest .NET.",
+      "expected": "11.0.0-rc.1.26425.128",
       "actual": "11.0.0-preview.6.26359.118",
       "sources": [
         "https://builds.dotnet.microsoft.com/dotnet/release-metadata/releases-index.json",
@@ -578,9 +633,31 @@
     {
       "severity": "info",
       "code": "sdk-feature-band-differs",
-      "message": "v7.6.5 builds with the 3xx SDK band (10.0.303) while .NET 10.0 currently leads with 4xx (10.0.400). Bands are parallel trains of the same runtime, not newer/older.",
+      "message": "v7.6.5 builds with the 3xx SDK band (10.0.303) while .NET 10.0 currently leads with 4xx (10.0.401). Bands are parallel trains of the same runtime, not newer/older.",
       "sources": [
         "https://builds.dotnet.microsoft.com/dotnet/release-metadata/releases-index.json"
+      ]
+    },
+    {
+      "severity": "info",
+      "code": "stable-pinned-at-build-time",
+      "message": "v7.4.19 is pinned to .NET runtime 8.0.30 from its build date; .NET 8.0 has since shipped 8.0.31. Expected for a shipped release.",
+      "expected": "8.0.31",
+      "actual": "8.0.30",
+      "sources": [
+        "https://builds.dotnet.microsoft.com/dotnet/release-metadata/releases-index.json",
+        "https://raw.githubusercontent.com/PowerShell/PowerShell/v7.4.19/global.json"
+      ]
+    },
+    {
+      "severity": "info",
+      "code": "stable-pinned-at-build-time",
+      "message": "v7.6.5 is pinned to .NET runtime 10.0.11 from its build date; .NET 10.0 has since shipped 10.0.12. Expected for a shipped release.",
+      "expected": "10.0.12",
+      "actual": "10.0.11",
+      "sources": [
+        "https://builds.dotnet.microsoft.com/dotnet/release-metadata/releases-index.json",
+        "https://raw.githubusercontent.com/PowerShell/PowerShell/v7.6.5/global.json"
       ]
     }
   ]
