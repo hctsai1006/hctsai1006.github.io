@@ -149,14 +149,15 @@
 <noscript>
   <section class="noscript">
     <h2>蔡秀吉 Hsiu-Chi Tsai (thc1006)</h2>
-    <p>國立陽明交通大學 資訊工程。CNCF Ambassador;Nephio (Linux Foundation Networking)
-       Technical Steering Committee member;Zephyr RTOS 與 M5Stack platforms maintainer。</p>
+    <p>國立陽明交通大學 資訊工程。CNCF Ambassador；Nephio (Linux Foundation Networking)
+       Technical Steering Committee member；Kubernetes v1.38 Release Team（Signal Shadow）；
+       Zephyr RTOS 與 M5Stack platforms maintainer。</p>
     <!-- ⚠️ 下面這行是 SEO/無 JS 用的靜態文字,不能由 JS 產生,所以是唯一還要手動同步的計數。
          改 D.stats 時記得一起改,tools/check-numbers.js 會比對兩邊。 -->
-    <p>283 個已合併的上游 pull request,橫跨 84 個專案與 8 個基金會。</p>
+    <p>400 個已合併的上游 pull request,橫跨 102 個專案與 10 個基金會。</p>
     <ul>
       <li>著作:IEEE SCC 2026、IEEE WF-PST 2026、ICAIMS 2026 (IEEE) 已接受,另有預印本。ORCID 0000-0001-7421-8027</li>
-      <li>獲獎:2023 總統教育獎 · 奮發向上獎;2026 國科會大專學生研究創作獎;2026 Make NTU 強茂企業獎第一名;2026 臺灣太空事務青年人才選訓計畫入選</li>
+      <li>獲獎:2023 總統教育獎 · 奮發向上獎;2026 國科會大專學生研究創作獎;2026 Make NTU 強茂企業獎第一名;2026 臺灣太空事務青年人才選訓計畫入選;2025 梅竹黑客松第一名</li>
       <li>專案:Nephio TSC 治理、Kubernetes DRA 正確性稽核、O-RAN × LEO NTN</li>
       <li>安全:istio GHSA-qm8v-g4f9-qhjx 與 volcano GHSA-j38h-7pfq-cxmw 兩則已發佈的 advisory,皆具名為回報者</li>
     </ul>
@@ -217,28 +218,34 @@ const D={
      現在 profile / README 種子 / timeline / Get-Contribution 全部從這裡算,改一次就好。
      唯一還要手動改的是 <noscript> 那段(SEO 用、不能靠 JS 產生)——tools/check-numbers.js 會盯著它。
      權威來源:people.cs.nycu.edu.tw/~hctsai1006/open-source/ 的 os-metrics。 */
-  stats:{merged:283, projects:84, foundations:8, asOf:'2026-09-06'},
+  stats:{merged:400, projects:102, foundations:10, asOf:'2026-10-02'},
   profile:[['head','thc1006  (蔡秀吉 · Hsiu-Chi Tsai)'],
     ['','CNCF Ambassador'],
     ['','Nephio (Linux Foundation Networking) Technical Steering Committee Member'],
+    ['','Kubernetes v1.38 Release Team · Signal Shadow'],
     ['','Zephyr RTOS · M5Stack Platforms Maintainer'],
     ['accent','__STATS__'],
-    ['muted','National Yang Ming Chiao Tung University — Computer Science']],
+    ['muted','National Yang Ming Chiao Tung University — Computer Science'],
+    ['muted','NYCU CS WinLab · Research Assistant']],
   /* contribTop 只記已合併的 PR,而且是 **top 清單不是全集**,逐列加總本來就不等於 stats.merged,別去「修正」。
      審查中的一律寫進 buildSeed 的 in-review.md。
-     數字全部來自 NYCU CS /open-source/ 的 Ledger 逐 repo 實際計數(2026-08-27 對帳過)。 */
+     數字全部來自 NYCU CS /open-source/ 的 Ledger 逐 repo 實際計數(2026-10-02 對帳過,收合併數 3 以上的 repo)。 */
   /* 第三欄 1 = 該 repo 屬 CNCF（Sandbox/Incubating/Graduated 都算），-Foundation CNCF 依它過濾。
      以前這裡靠一條寫死的關鍵字 regex 判斷，換 repo 就會判錯 —— 2026-08-27 實測 argo-workflows
      與 community-operators 明明是 CNCF 卻被漏掉。分桶以 /open-source/ 的 Ledger 為準，
      tools/check-numbers.js 會拿權威頁的 CNCF section 逐列核對這個旗標。 */
-  contribTop:[['kubernetes-sigs/kueue',49,1],['open-telemetry/opentelemetry-cpp',37,1],
-    ['RocketPy-Team/RocketPy',18,0],['kubernetes/kubernetes',22,1],['zephyrproject-rtos/zephyr',10,0],
-    ['ocudu/ocudu',10,0],['kubernetes-sigs/dra-driver-cpu',9,1],['kubernetes-sigs/dranet',6,1],
-    ['sysprog21/muxleq',6,0],['llm-d/llm-d-router',6,1],['jaegertracing/jaeger-ui',6,1],
-    ['ROCm/k8s-gpu-dra-driver',4,0],['kptdev/porch',4,1],['volcano-sh/volcano',3,1],
-    ['argoproj/argo-workflows',3,1],['k8s-operatorhub/community-operators',3,1],
-    ['nephio-project/test-infra',3,0],['AverageMarcus/devstats-viewer',3,0]],
-  cncf:['CNCF',191,46],
+  contribTop:[['kubernetes-sigs/kueue',65,1],['kubernetes/kubernetes',48,1],
+    ['open-telemetry/opentelemetry-cpp',42,1],['RocketPy-Team/RocketPy',24,0],
+    ['zephyrproject-rtos/zephyr',20,0],['ocudu/ocudu',14,0],['kubernetes-sigs/dra-driver-cpu',10,1],
+    ['nephio-project/nephio',8,0],['jaegertracing/jaeger-ui',6,1],['kubernetes-sigs/dranet',6,1],
+    ['llm-d/llm-d-router',6,1],['sysprog21/muxleq',6,0],['volcano-sh/volcano',5,1],
+    ['AcademySoftwareFoundation/rawtoaces',4,0],['cncf/prow-github-actions',4,1],
+    ['Gthulhu/Gthulhu',4,0],['kptdev/porch',4,1],['ROCm/k8s-gpu-dra-driver',4,0],
+    ['shadow-maint/shadow',4,0],['argoproj/argo-workflows',3,1],['AverageMarcus/devstats-viewer',3,0],
+    ['cert-manager/cert-manager',3,1],['k8s-operatorhub/community-operators',3,1],
+    ['kagent-dev/website',3,1],['kubernetes-sigs/kernel-module-management',3,1],
+    ['nephio-project/catalog',3,0],['nephio-project/test-infra',3,0],['prometheus/prometheus',3,1]],
+  cncf:['CNCF',261,55],
   /* 已發佈且在 credits 欄具名的安全 advisory。⚠️ 兩則都還沒有 CVE、也都還沒進 GitHub 全域
      advisory DB 與 OSV(repo 已發佈 != 全域收錄)——Get-Advisory 會照實講,別擅自拿掉那兩句。
      狀態查法:gh api repos/<repo>/security-advisories,或跑 personal-homepage/tools/security-watch.sh。 */
@@ -252,14 +259,14 @@ const D={
      fdn:'CNCF Incubating', fix:'v1.15.2 (2026-08-29 已發布)',
      what:'DRA 容量會計的迭代量隨租戶可控的數字成長,已驗證的租戶可用可控的 device count 吃光 scheduler CPU,癱瘓整個叢集的排程(CWE-400 經由 CWE-834)。',
      href:'https://github.com/volcano-sh/volcano/security/advisories/GHSA-j38h-7pfq-cxmw', bul:''}],
-  /* 資料來源:people.cs.nycu.edu.tw/~hctsai1006/publications/(ORCID 同步),13 篇。
+  /* 資料來源:people.cs.nycu.edu.tw/~hctsai1006/publications/(ORCID 同步),15 篇(2026-10-02 對過)。
      摘要表只放前 5 筆,完整清單見 pubsFull(Get-Publication -Full)。 */
   publications:[['IEEE SCC 2026','Ground-Side Mission Plan Compilation','Accepted'],
     ['IEEE WF-PST 2026','OOBWatch-S3: Zephyr Cold-Boot Race','Accepted'],
     ['ICAIMS 2026 (IEEE)','Band-as-Modality Learning','Accepted'],
-    ['arXiv:2607.09992','Trusted Floors Under Untrusted Learners','preprint'],
-    ['engrXiv 7541','Physics-Grounded DRL for LEO NTN','preprint']],
-  pubTotal:13,
+    ['SSRN 7448003','No Capacity Resurrection: Kubernetes DRA','preprint'],
+    ['SSRN 7467639','Conformal Risk Control under Sentinel-2 Shift','preprint']],
+  pubTotal:15,
   pubsFull:[
     {y:'2026',st:'Accepted',venue:'IEEE SCC 2026 (Space Computing Conference)',
      title:'Ground-Side Mission Plan Compilation with Policy-as-Code Guardrails for Cloud-Native Satellite Platforms',
@@ -270,6 +277,12 @@ const D={
     {y:'2026',st:'Accepted',venue:'IEEE ICAIMS 2026',
      title:'Band-as-Modality Learning for Multispectral and Hyperspectral Segmentation: Spectral Group Masked Pretraining and Cross-Band Attention for Missing-Band Robustness',
      id:'',au:'Chia-Tung Chung, Hsiu-Chi Tsai'},
+    {y:'2026',st:'preprint',venue:'SSRN',
+     title:'No Capacity Resurrection: Committed-effect Continuity for Kubernetes Dynamic Resource Allocation',
+     id:'10.2139/ssrn.7448003',au:'Hsiu-Chi Tsai'},
+    {y:'2026',st:'preprint',venue:'SSRN',
+     title:'Conformal Risk Control under Sentinel-2 Product Shift',
+     id:'10.2139/ssrn.7467639',au:'Hsiu-Chi Tsai, Chia-Tung Chung'},
     {y:'2026',st:'preprint',venue:'arXiv (cs.DC)',
      title:'Trusted Floors Under Untrusted Learners: A Runtime Assured-SLO Guard for ML Serving',
      id:'arXiv:2607.09992',au:'Hsiu-Chi Tsai'},
@@ -302,6 +315,7 @@ const D={
      id:'10.13140/RG.2.2.12387.02085',au:'Hsiu-Chi Tsai, Chi-Hsuan Wang, Yu-Tang You, An-Tai Yeh'}],
   awards:[['2023','總統教育獎 · 奮發向上獎 (教育部)'],['2026','國科會 大專學生研究創作獎 (NSTC)'],
     ['2026','Make NTU · 強茂企業獎 第一名'],['2026','臺灣太空事務青年人才選訓計畫 · 入選 (TASA)'],
+    ['2025','梅竹黑客松 MeiZhu Hackathon · 第一名 (新竹市政府創客組)'],
     ['2023','臺灣海洋治理國際研討會 · 海洋工程組 第三名']],
   projects:[['Nephio (LFN)','TSC 治理 + Intent-based O-RAN 自動化'],
     ['DRA correctness audit','Kubernetes 動態資源配置的端到端正確性稽核'],
@@ -309,9 +323,9 @@ const D={
     ['O-RAN × NTN','LEO 衛星地面段 · 3GPP R17 NTN 參數驗證'],
     ['COSCUP 2026','體驗火箭導控 Balloon Popping Challenge workshop']],
   timeline:[['2023','總統教育獎 · 捷克進修 · 首次 COSCUP 講者'],
-    ['2024','Nephio TSC · CTU GDSC Lead · O-RAN organizer'],
-    ['2025','IEEE R10 ACEI · O-RAN × NTN 研究'],
-    ['2026','CNCF Ambassador · 國科會研究創作獎 (114) · TASA 青年人才 · DRA 稽核']],
+    ['2024','Nephio TSC · CTU GDG on Campus Lead · COSCUP O-RAN track organizer'],
+    ['2025','IEEE R10 ACEI · 梅竹黑客松第一名 · O-RAN × NTN 研究'],
+    ['2026','CNCF Ambassador · Kubernetes v1.38 Release Team · 國科會研究創作獎 (114) · TASA 青年人才 · DRA 稽核']],
 };
 /* 計數字串只在這裡組一次；profile / README 種子 / Get-Contribution 全部用它。
    要改數字只改 D.stats，不要再去各處手改。 */
@@ -373,7 +387,7 @@ const SITE='https://people.cs.nycu.edu.tw/~hctsai1006';
 const SRC={ home:SITE+'/', pubs:SITE+'/publications/', oss:SITE+'/open-source/',
   honors:SITE+'/honors/', exp:SITE+'/experience/', contact:SITE+'/contact/',
   medical:SITE+'/medical/', teaching:SITE+'/teaching/', blog:SITE+'/blog/',
-  cv:SITE+'/cv.pdf', orcid:'https://orcid.org/0000-0001-7421-8027',
+  orcid:'https://orcid.org/0000-0001-7421-8027',
   github:'https://github.com/thc1006' };
 function srcRow(label,href,prefix){ const p=(prefix==null?'  來源: ':prefix);
   return {parts:[['muted',p],['a',label,href]], txt:p+label}; }
@@ -519,6 +533,7 @@ function buildSeed(){
     line('','National Yang Ming Chiao Tung University — Computer Science'),
     line('','CNCF Ambassador'),
     line('','Nephio (LFN) Technical Steering Committee member'),
+    line('','Kubernetes v1.38 Release Team · Signal Shadow'),
     line('','Zephyr RTOS / M5Stack platforms maintainer'),line(''),
     line('accent',STATSLINE),line(''),
     line('muted','whoami / Get-Contribution / Get-Advisory / Get-Publication / Get-Award'),line(''),
@@ -554,20 +569,24 @@ function buildSeed(){
     put(HOME+'/contributions', r[0].split('/')[1]+'.md', [
       line('head',r[0]),line(''),
       line('accent',r[1]+' merged pull requests'),
-      line('muted','https://github.com/'+r[0])]); });
+      line('muted',(r[0]==='ocudu/ocudu'?'https://gitlab.com/':'https://github.com/')+r[0])]); });
   /* ⚠️ 這份是「代表性」清單,不是全集——長清單一定會爛(2026-07-22 那版到 8 月已有三分之二失效:
      keda #7918、keda-docs #1811、yunikorn #1053、u-root/uio #28 都 closed 未合併,DOFA #31/#32 早已合併)。
-     所以只留 7 筆、把日期戳寫在最上面,完整且即時的清單一律指向 /open-source/ 的進行中區。 */
+     所以只留少數幾筆(2026-10-02 照 Overview 的進行中重點挑),把日期戳寫在最上面,完整且即時的清單一律指向 /open-source/ 的進行中區。 */
   put(HOME+'/contributions','in-review.md',[
     line('head','# 審查中的上游 PR(代表性,非全集)'),line(''),
     line('muted','狀態擷取於 '+D.stats.asOf+'。下列全部尚未合併,不計入 Get-Contribution。'),line(''),
     line('accent','kubernetes/kubernetes  ·  CNCF Graduated'),
-    line('','  PR    #141626  新增 image_exclude_regex,精確排除 -cgroupsv1 image 而不誤傷正常名稱'),line(''),
-    line('accent','kubernetes-sigs/external-dns  ·  CNCF Sandbox'),
-    line('','  PR    #6679    明確空 parentRef.group 必須代表 core API group,不得誤對同名 Gateway'),
-    line('','  PR    #6640    Route 53 stub + 完整 registry/provider reconcile-loop regression tests'),line(''),
-    line('accent','kubernetes/test-infra  ·  CNCF'),
-    line('','  PR    #37777   KRTE cgroup contract probe,量 outer wrapper、nested Docker 與 kind node'),line(''),
+    line('','  PR    #142355  ResourceSlice 的分數容量以值比對、不比字串，也修掉 semx 回報的 #142489'),
+    line('','  PR    #141327  kubelet 的 CPU 換算在 int64 邊界不再 wrap'),
+    line('','  PR    #141328  scheduler NodeInfo 的加總飽和而不 wrap'),
+    line('','  PR    #141971  getent 不在 PATH 時退回 os/user'),line(''),
+    line('accent','kubernetes-sigs/kueue  ·  CNCF'),
+    line('','  PR    #13904   每次 reconcile 只解析一次 WorkloadPriorityClass'),line(''),
+    line('accent','open-telemetry/opentelemetry-cpp  ·  CNCF Incubating'),
+    line('','  PR    #4502    Elasticsearch async export 的結果只回報一次，修自報的 #4338'),line(''),
+    line('accent','zephyrproject-rtos/zephyr  ·  Linux Foundation'),
+    line('','  PR    #120492  esp32 legacy 路徑先數 descriptor 再串'),line(''),
     line('accent','insomniacslk/dhcp  ·  Go networking · 非 CNCF'),
     line('','  PR    #588     BroadcastRawUDPConn.ReadFrom fuzz target + 獨立 reference model'),
     line('','  PR    #589     回傳 DHCP payload 前驗 UDP length'),
@@ -584,7 +603,7 @@ function buildSeed(){
       line('muted',p.au),line(''),
       srcRow('/publications/', SRC.pubs)]); });
   let awardFiles=['2023-presidential-education-award.md','2026-nstc-research-award.md',
-    '2026-make-ntu.md','2026-tasa-space-talent.md','2023-ocean-governance.md'];
+    '2026-make-ntu.md','2026-tasa-space-talent.md','2025-meizhu-hackathon.md','2023-ocean-governance.md'];
   D.awards.forEach(function(w,i){
     put(HOME+'/awards', awardFiles[i]||('award-'+(i+1)+'.md'), [
       line('head',w[1]),line(''),line('accent',w[0])]); });
@@ -735,7 +754,7 @@ const CMDLETS={
       ['榮譽','/honors/',SRC.honors],['經歷','/experience/',SRC.exp],
       ['醫學','/medical/',SRC.medical],['教學','/teaching/',SRC.teaching],
       ['部落格','/blog/',SRC.blog],['聯絡','/contact/',SRC.contact],
-      ['CV','cv.pdf',SRC.cv],['ORCID','0000-0001-7421-8027',SRC.orcid],
+      ['ORCID','0000-0001-7421-8027',SRC.orcid],
       ['GitHub','@thc1006',SRC.github],['舊版終端機','classic.html','classic.html']];
     const w=Math.max.apply(null,rows.map(function(r){return dw(r[0]);}));
     const o=[line('banner','這個終端機是次要展示面。所有內容以個人網站為準,'),
@@ -1015,9 +1034,9 @@ const CMDLETS={
       line('cmd','  sudo apt install net-tools')];}},
   'hostname':{type:'Application',params:[],help:'show the system\'s host name',run:function(){return [line('',HOSTN)];}},
   '$psversiontable':{disp:'$PSVersionTable',type:'Variable',params:[],help:'PowerShell version information',run:function(){
-    return table(['Name','Value'],[['PSVersion','7.6.5'],['PSEdition','Core'],
+    return table(['Name','Value'],[['PSVersion','7.6.6'],['PSEdition','Core'],
       ['OS','Linux 6.8.0-51-generic #52-Ubuntu SMP PREEMPT_DYNAMIC'],
-      ['Platform','Unix'],['GitCommitId','7.6.5']]);}},
+      ['Platform','Unix'],['GitCommitId','7.6.6']]);}},
   'git':{type:'Application',params:[],help:'the stupid content tracker',run:function(a,raw){
     let sub=String(raw[1]||'').toLowerCase();
     if(sub==='status') return [line('','On branch main'),line('','Your branch is up to date with \'origin/main\'.'),line(''),
@@ -2098,7 +2117,7 @@ function boot(){
   fsInit(); updatePrompt();
   try{ const t=localStorage.getItem('thc1006.theme'); if(t) setTheme(t); }catch(e){}   // 記住上次的主題
   print([
-    {parts:[['banner','PowerShell 7.6.5']]},
+    {parts:[['banner','PowerShell 7.6.6']]},
     line(''),
     {parts:[['banner','Type '],['yellow','help'],['banner',' to explore, or try '],
             ['yellow','whoami'],['banner',' / '],['yellow','Get-Contribution -Foundation CNCF']]},

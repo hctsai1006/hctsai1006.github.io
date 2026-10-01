@@ -38,7 +38,6 @@ export const SOURCES: readonly SourceRow[] = [
   { label: '教學', reference: '/teaching/', url: `${SITE}/teaching/` },
   { label: '部落格', reference: '/blog/', url: `${SITE}/blog/` },
   { label: '聯絡', reference: '/contact/', url: `${SITE}/contact/` },
-  { label: 'CV', reference: 'cv.pdf', url: `${SITE}/cv.pdf` },
   { label: 'ORCID', reference: '0000-0001-7421-8027', url: 'https://orcid.org/0000-0001-7421-8027' },
   { label: 'GitHub', reference: '@thc1006', url: 'https://github.com/thc1006' },
   { label: '舊版終端機', reference: 'classic.html', url: 'classic.html' },
