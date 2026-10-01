@@ -3,48 +3,63 @@
   "foundations": {
     "cncf": {
       "label": "CNCF",
-      "merged": 191,
-      "repositories": 46
+      "merged": 261,
+      "repositories": 55
     }
   },
   "top": [
     {
       "repository": "kubernetes-sigs/kueue",
-      "merged": 49,
+      "merged": 65,
+      "cncf": true
+    },
+    {
+      "repository": "kubernetes/kubernetes",
+      "merged": 48,
       "cncf": true
     },
     {
       "repository": "open-telemetry/opentelemetry-cpp",
-      "merged": 37,
+      "merged": 42,
       "cncf": true
     },
     {
       "repository": "RocketPy-Team/RocketPy",
-      "merged": 18,
+      "merged": 24,
       "cncf": false
     },
     {
-      "repository": "kubernetes/kubernetes",
-      "merged": 22,
-      "cncf": true
-    },
-    {
       "repository": "zephyrproject-rtos/zephyr",
-      "merged": 10,
+      "merged": 20,
       "cncf": false
     },
     {
       "repository": "ocudu/ocudu",
-      "merged": 10,
+      "merged": 14,
       "cncf": false
     },
     {
       "repository": "kubernetes-sigs/dra-driver-cpu",
-      "merged": 9,
+      "merged": 10,
+      "cncf": true
+    },
+    {
+      "repository": "nephio-project/nephio",
+      "merged": 8,
+      "cncf": false
+    },
+    {
+      "repository": "jaegertracing/jaeger-ui",
+      "merged": 6,
       "cncf": true
     },
     {
       "repository": "kubernetes-sigs/dranet",
+      "merged": 6,
+      "cncf": true
+    },
+    {
+      "repository": "llm-d/llm-d-router",
       "merged": 6,
       "cncf": true
     },
@@ -54,17 +69,22 @@
       "cncf": false
     },
     {
-      "repository": "llm-d/llm-d-router",
-      "merged": 6,
+      "repository": "volcano-sh/volcano",
+      "merged": 5,
       "cncf": true
     },
     {
-      "repository": "jaegertracing/jaeger-ui",
-      "merged": 6,
+      "repository": "AcademySoftwareFoundation/rawtoaces",
+      "merged": 4,
+      "cncf": false
+    },
+    {
+      "repository": "cncf/prow-github-actions",
+      "merged": 4,
       "cncf": true
     },
     {
-      "repository": "ROCm/k8s-gpu-dra-driver",
+      "repository": "Gthulhu/Gthulhu",
       "merged": 4,
       "cncf": false
     },
@@ -74,12 +94,27 @@
       "cncf": true
     },
     {
-      "repository": "volcano-sh/volcano",
+      "repository": "ROCm/k8s-gpu-dra-driver",
+      "merged": 4,
+      "cncf": false
+    },
+    {
+      "repository": "shadow-maint/shadow",
+      "merged": 4,
+      "cncf": false
+    },
+    {
+      "repository": "argoproj/argo-workflows",
       "merged": 3,
       "cncf": true
     },
     {
-      "repository": "argoproj/argo-workflows",
+      "repository": "AverageMarcus/devstats-viewer",
+      "merged": 3,
+      "cncf": false
+    },
+    {
+      "repository": "cert-manager/cert-manager",
       "merged": 3,
       "cncf": true
     },
@@ -89,14 +124,29 @@
       "cncf": true
     },
     {
+      "repository": "kagent-dev/website",
+      "merged": 3,
+      "cncf": true
+    },
+    {
+      "repository": "kubernetes-sigs/kernel-module-management",
+      "merged": 3,
+      "cncf": true
+    },
+    {
+      "repository": "nephio-project/catalog",
+      "merged": 3,
+      "cncf": false
+    },
+    {
       "repository": "nephio-project/test-infra",
       "merged": 3,
       "cncf": false
     },
     {
-      "repository": "AverageMarcus/devstats-viewer",
+      "repository": "prometheus/prometheus",
       "merged": 3,
-      "cncf": false
+      "cncf": true
     }
   ]
 }

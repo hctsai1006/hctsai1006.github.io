@@ -180,6 +180,14 @@ export interface V1Options {
   readonly randoms?: readonly number[];
   /** Epoch milliseconds `new Date()` will report. */
   readonly now?: number;
+  /**
+   * Render with this timeline instead of the archive's. What the archive pins is
+   * the CODE that turns a timeline into `git log` lines; the timeline itself is
+   * portfolio content and moves with the page. Comparing against the archive's
+   * own entries froze the content: the first timeline edit after the archive was
+   * taken failed a test that had nothing to do with rendering.
+   */
+  readonly timeline?: readonly (readonly [string, string])[];
 }
 
 interface RawLine {
@@ -282,6 +290,7 @@ function evaluate(body: string, options: V1Options): V1Run {
     let netToolsInstalled = __state.netToolsInstalled;
     let ifconfigFail = __state.ifconfigFailures;
     ${PRELUDE}
+    ${options.timeline === undefined ? '' : `D.timeline = ${JSON.stringify(options.timeline)};`}
     const __result = (function(){ ${body} })();
     __state.netToolsInstalled = netToolsInstalled;
     __state.ifconfigFailures = ifconfigFail;

@@ -26,6 +26,8 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { createContext, runInContext } from 'node:vm';
+import { readNamedLiteralFromHtml } from '../../tools/js-literal.mts';
 
 import { isPSObject } from '../../src/pipeline/psobject.ts';
 import type { PSObject, PSValue } from '../../src/pipeline/psobject.ts';
@@ -613,18 +615,34 @@ describe('git', () => {
   }
 
   it('log renders the portfolio timeline as commits, and matches v1', async () => {
-    const result = await compare('git', ['log'], cmdlet('git', ['log']));
-    assert.equal(result.lines.length, 4);
+    // The archive's code renders the CURRENT timeline: what is compared is how a
+    // timeline becomes `git log`, not which years the portfolio lists today.
+    const timeline = TIMELINE.map((entry) => [entry.year, entry.highlights] as const);
+    const result = await compare('git', ['log'], cmdlet('git', ['log'], { timeline }));
+    assert.equal(result.lines.length, timeline.length);
     assert.ok(result.lines.every((line) => line.startsWith('* ')));
   });
 
-  it('the extracted timeline still says what the archive said', () => {
+  it('the extracted timeline is the one index.html holds, in the shape the archive used', () => {
     // `git log` reads src/data/projects.json; v1 held the array inline. If the
     // extractor ever drifts, this is where it shows up rather than in the page.
+    // The entries are compared with the page as it is now, read by the same
+    // parser the extractor uses; the archive still pins the shape of an entry.
+    const page = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
+    const literal = readNamedLiteralFromHtml(page, 'D').text;
+    const current = runInContext(`(${literal})`, createContext(Object.create(null))) as {
+      timeline: readonly (readonly [string, string])[];
+    };
     assert.deepEqual(
       TIMELINE.map((entry) => [entry.year, entry.highlights]),
-      v1Timeline().map((entry) => [entry[0], entry[1]]),
+      // Array.from builds the arrays in this realm; the literal's own come from the
+      // vm context and differ in prototype, which deepStrictEqual compares.
+      Array.from(current.timeline, (entry) => [entry[0], entry[1]]),
     );
+    for (const entry of v1Timeline()) {
+      assert.equal(entry.length, 2);
+      assert.match(entry[0], /^\d{4}$/u);
+    }
   });
 
   it('asks for portfolio.read only where it reads the portfolio', async () => {
