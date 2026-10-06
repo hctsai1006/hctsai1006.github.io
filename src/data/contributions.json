@@ -3,19 +3,19 @@
   "foundations": {
     "cncf": {
       "label": "CNCF",
-      "merged": 263,
+      "merged": 274,
       "repositories": 55
     }
   },
   "top": [
     {
       "repository": "kubernetes-sigs/kueue",
-      "merged": 66,
+      "merged": 74,
       "cncf": true
     },
     {
       "repository": "kubernetes/kubernetes",
-      "merged": 49,
+      "merged": 50,
       "cncf": true
     },
     {
@@ -94,6 +94,11 @@
       "cncf": true
     },
     {
+      "repository": "kubernetes-sigs/kernel-module-management",
+      "merged": 4,
+      "cncf": true
+    },
+    {
       "repository": "ROCm/k8s-gpu-dra-driver",
       "merged": 4,
       "cncf": false
@@ -124,12 +129,12 @@
       "cncf": true
     },
     {
-      "repository": "kagent-dev/website",
+      "repository": "k8snetworkplumbingwg/dra-driver-sriov",
       "merged": 3,
-      "cncf": true
+      "cncf": false
     },
     {
-      "repository": "kubernetes-sigs/kernel-module-management",
+      "repository": "kagent-dev/website",
       "merged": 3,
       "cncf": true
     },
