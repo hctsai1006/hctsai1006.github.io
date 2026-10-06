@@ -154,9 +154,9 @@
        Zephyr RTOS 與 M5Stack platforms maintainer。</p>
     <!-- ⚠️ 下面這行是 SEO/無 JS 用的靜態文字,不能由 JS 產生,所以是唯一還要手動同步的計數。
          改 D.stats 時記得一起改,tools/check-numbers.js 會比對兩邊。 -->
-    <p>414 個已合併的上游 pull request,橫跨 102 個專案與 10 個基金會。</p>
+    <p>416 個已合併的上游 pull request,橫跨 102 個專案與 10 個基金會。</p>
     <ul>
-      <li>著作:IEEE SCC 2026、IEEE WF-PST 2026、ICAIMS 2026 (IEEE) 已接受,另有預印本。ORCID 0000-0001-7421-8027</li>
+      <li>著作:IEEE SCC 2026、IEEE WF-PST 2026、ICAIMS 2026 (IEEE) 已接受,TASTI 2026 口頭發表,另有預印本。ORCID 0000-0001-7421-8027</li>
       <li>獲獎:2023 總統教育獎 · 奮發向上獎;2026 國科會大專學生研究創作獎;2026 Make NTU 強茂企業獎第一名;2026 臺灣太空事務青年人才選訓計畫入選;2025 梅竹黑客松第一名</li>
       <li>專案:Nephio TSC 治理、Kubernetes DRA 正確性稽核、O-RAN × LEO NTN</li>
       <li>安全:istio GHSA-qm8v-g4f9-qhjx 與 volcano GHSA-j38h-7pfq-cxmw 兩則已發佈的 advisory,皆具名為回報者</li>
@@ -218,7 +218,7 @@ const D={
      現在 profile / README 種子 / timeline / Get-Contribution 全部從這裡算,改一次就好。
      唯一還要手動改的是 <noscript> 那段(SEO 用、不能靠 JS 產生)——tools/check-numbers.js 會盯著它。
      權威來源:people.cs.nycu.edu.tw/~hctsai1006/open-source/ 的 os-metrics。 */
-  stats:{merged:414, projects:102, foundations:10, asOf:'2026-10-06'},
+  stats:{merged:416, projects:102, foundations:10, asOf:'2026-10-07'},
   profile:[['head','thc1006  (蔡秀吉 · Hsiu-Chi Tsai)'],
     ['','CNCF Ambassador'],
     ['','Nephio (Linux Foundation Networking) Technical Steering Committee Member'],
@@ -234,7 +234,7 @@ const D={
      以前這裡靠一條寫死的關鍵字 regex 判斷，換 repo 就會判錯 —— 2026-08-27 實測 argo-workflows
      與 community-operators 明明是 CNCF 卻被漏掉。分桶以 /open-source/ 的 Ledger 為準，
      tools/check-numbers.js 會拿權威頁的 CNCF section 逐列核對這個旗標。 */
-  contribTop:[['kubernetes-sigs/kueue',74,1],['kubernetes/kubernetes',50,1],
+  contribTop:[['kubernetes-sigs/kueue',76,1],['kubernetes/kubernetes',50,1],
     ['open-telemetry/opentelemetry-cpp',42,1],['RocketPy-Team/RocketPy',24,0],
     ['zephyrproject-rtos/zephyr',20,0],['ocudu/ocudu',14,0],['kubernetes-sigs/dra-driver-cpu',10,1],
     ['nephio-project/nephio',8,0],['jaegertracing/jaeger-ui',6,1],['kubernetes-sigs/dranet',6,1],
@@ -246,7 +246,7 @@ const D={
     ['k8s-operatorhub/community-operators',3,1],['k8snetworkplumbingwg/dra-driver-sriov',3,0],
     ['kagent-dev/website',3,1],['nephio-project/catalog',3,0],['nephio-project/test-infra',3,0],
     ['prometheus/prometheus',3,1]],
-  cncf:['CNCF',274,55],
+  cncf:['CNCF',276,55],
   /* 已發佈且在 credits 欄具名的安全 advisory。⚠️ 兩則都還沒有 CVE、也都還沒進 GitHub 全域
      advisory DB 與 OSV(repo 已發佈 != 全域收錄)——Get-Advisory 會照實講,別擅自拿掉那兩句。
      狀態查法:gh api repos/<repo>/security-advisories,或跑 personal-homepage/tools/security-watch.sh。 */
@@ -260,13 +260,13 @@ const D={
      fdn:'CNCF Incubating', fix:'v1.15.2 (2026-08-29 已發布)',
      what:'DRA 容量會計的迭代量隨租戶可控的數字成長,已驗證的租戶可用可控的 device count 吃光 scheduler CPU,癱瘓整個叢集的排程(CWE-400 經由 CWE-834)。',
      href:'https://github.com/volcano-sh/volcano/security/advisories/GHSA-j38h-7pfq-cxmw', bul:''}],
-  /* 資料來源:people.cs.nycu.edu.tw/~hctsai1006/publications/(ORCID 同步),15 篇(2026-10-02 對過)。
+  /* 資料來源:people.cs.nycu.edu.tw/~hctsai1006/publications/(ORCID 同步),15 篇(2026-10-07 對過)。
      摘要表只放前 5 筆,完整清單見 pubsFull(Get-Publication -Full)。 */
   publications:[['IEEE SCC 2026','Ground-Side Mission Plan Compilation','Accepted'],
     ['IEEE WF-PST 2026','OOBWatch-S3: Zephyr Cold-Boot Race','Accepted'],
     ['ICAIMS 2026 (IEEE)','Band-as-Modality Learning','Accepted'],
-    ['SSRN 7448003','No Capacity Resurrection: Kubernetes DRA','preprint'],
-    ['SSRN 7467639','Conformal Risk Control under Sentinel-2 Shift','preprint']],
+    ['TASTI 2026','Reliability of Sentinel-2 Cloud Segmentation','Accepted'],
+    ['SSRN 7448003','No Capacity Resurrection: Kubernetes DRA','preprint']],
   pubTotal:15,
   pubsFull:[
     {y:'2026',st:'Accepted',venue:'IEEE SCC 2026 (Space Computing Conference)',
@@ -278,12 +278,12 @@ const D={
     {y:'2026',st:'Accepted',venue:'IEEE ICAIMS 2026',
      title:'Band-as-Modality Learning for Multispectral and Hyperspectral Segmentation: Spectral Group Masked Pretraining and Cross-Band Attention for Missing-Band Robustness',
      id:'',au:'Chia-Tung Chung, Hsiu-Chi Tsai'},
+    {y:'2026',st:'Accepted',venue:'TASTI 2026 (Taiwan International Assembly of Space Science, Technology, and Industry), abstract accepted for oral presentation',
+     title:'Reliability of Sentinel-2 Cloud Segmentation Under Product-Level Shift',
+     id:'10.2139/ssrn.7467639',au:'Hsiu-Chi Tsai, Chia-Tung Chung'},
     {y:'2026',st:'preprint',venue:'SSRN',
      title:'No Capacity Resurrection: Committed-effect Continuity for Kubernetes Dynamic Resource Allocation',
      id:'10.2139/ssrn.7448003',au:'Hsiu-Chi Tsai'},
-    {y:'2026',st:'preprint',venue:'SSRN',
-     title:'Conformal Risk Control under Sentinel-2 Product Shift',
-     id:'10.2139/ssrn.7467639',au:'Hsiu-Chi Tsai, Chia-Tung Chung'},
     {y:'2026',st:'preprint',venue:'arXiv (cs.DC)',
      title:'Trusted Floors Under Untrusted Learners: A Runtime Assured-SLO Guard for ML Serving',
      id:'arXiv:2607.09992',au:'Hsiu-Chi Tsai'},

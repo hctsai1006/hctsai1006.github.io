@@ -28,19 +28,19 @@
     },
     {
       "year": "2026",
-      "status": "preprint",
-      "venue": "SSRN",
-      "title": "No Capacity Resurrection: Committed-effect Continuity for Kubernetes Dynamic Resource Allocation",
-      "identifier": "10.2139/ssrn.7448003",
-      "authors": "Hsiu-Chi Tsai"
+      "status": "Accepted",
+      "venue": "TASTI 2026 (Taiwan International Assembly of Space Science, Technology, and Industry), abstract accepted for oral presentation",
+      "title": "Reliability of Sentinel-2 Cloud Segmentation Under Product-Level Shift",
+      "identifier": "10.2139/ssrn.7467639",
+      "authors": "Hsiu-Chi Tsai, Chia-Tung Chung"
     },
     {
       "year": "2026",
       "status": "preprint",
       "venue": "SSRN",
-      "title": "Conformal Risk Control under Sentinel-2 Product Shift",
-      "identifier": "10.2139/ssrn.7467639",
-      "authors": "Hsiu-Chi Tsai, Chia-Tung Chung"
+      "title": "No Capacity Resurrection: Committed-effect Continuity for Kubernetes Dynamic Resource Allocation",
+      "identifier": "10.2139/ssrn.7448003",
+      "authors": "Hsiu-Chi Tsai"
     },
     {
       "year": "2026",
@@ -140,13 +140,13 @@
       "status": "Accepted"
     },
     {
-      "venue": "SSRN 7448003",
-      "title": "No Capacity Resurrection: Kubernetes DRA",
-      "status": "preprint"
+      "venue": "TASTI 2026",
+      "title": "Reliability of Sentinel-2 Cloud Segmentation",
+      "status": "Accepted"
     },
     {
-      "venue": "SSRN 7467639",
-      "title": "Conformal Risk Control under Sentinel-2 Shift",
+      "venue": "SSRN 7448003",
+      "title": "No Capacity Resurrection: Kubernetes DRA",
       "status": "preprint"
     }
   ]
