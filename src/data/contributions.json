@@ -3,19 +3,19 @@
   "foundations": {
     "cncf": {
       "label": "CNCF",
-      "merged": 276,
-      "repositories": 55
+      "merged": 285,
+      "repositories": 56
     }
   },
   "top": [
     {
       "repository": "kubernetes-sigs/kueue",
-      "merged": 76,
+      "merged": 79,
       "cncf": true
     },
     {
       "repository": "kubernetes/kubernetes",
-      "merged": 50,
+      "merged": 51,
       "cncf": true
     },
     {
@@ -30,7 +30,7 @@
     },
     {
       "repository": "zephyrproject-rtos/zephyr",
-      "merged": 20,
+      "merged": 21,
       "cncf": false
     },
     {
@@ -69,6 +69,11 @@
       "cncf": false
     },
     {
+      "repository": "kubernetes-sigs/kernel-module-management",
+      "merged": 5,
+      "cncf": true
+    },
+    {
       "repository": "volcano-sh/volcano",
       "merged": 5,
       "cncf": true
@@ -94,7 +99,7 @@
       "cncf": true
     },
     {
-      "repository": "kubernetes-sigs/kernel-module-management",
+      "repository": "kubernetes/test-infra",
       "merged": 4,
       "cncf": true
     },
