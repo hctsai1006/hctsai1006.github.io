@@ -38,6 +38,7 @@ export interface Advisory {
   readonly severity: string;
   readonly role: string;
   readonly published: string;
+  readonly cve: string | null;
   readonly foundation: string;
   readonly fixedIn: string;
   readonly summary: string;

@@ -69,7 +69,7 @@ interface RawData {
   contribTop: Array<[string, number, 0 | 1]>;
   cncf: [string, number, number];
   advisories: Array<{
-    id: string; repo: string; sev: string; role: string; pub: string;
+    id: string; repo: string; sev: string; role: string; pub: string; cve?: string;
     fdn: string; fix: string; what: string; href: string; bul: string;
   }>;
   publications: Array<[string, string, string]>;
@@ -207,13 +207,14 @@ function reshape(d: RawData): Artifact[] {
     {
       path: 'advisories.json',
       value: {
-        $comment: 'Published security advisories where the reporter is credited by name.',
+        $comment: 'Published security advisories that credit me by name.',
         advisories: d.advisories.map((a) => ({
           id: a.id,
           repository: a.repo,
           severity: a.sev,
           role: a.role,
           published: a.pub,
+          cve: a.cve ?? null,
           foundation: a.fdn,
           fixedIn: a.fix,
           summary: a.what,

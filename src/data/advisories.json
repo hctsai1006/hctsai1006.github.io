@@ -1,12 +1,26 @@
 {
-  "$comment": "Published security advisories where the reporter is credited by name.",
+  "$comment": "Published security advisories that credit me by name.",
   "advisories": [
+    {
+      "id": "GHSA-5g9q-h8wq-rrf3",
+      "repository": "zephyrproject-rtos/zephyr",
+      "severity": "5.5 medium",
+      "role": "remediation developer",
+      "published": "2026-10-11",
+      "cve": "CVE-2026-19737",
+      "foundation": "Linux Foundation",
+      "fixedIn": "main / v4.4-branch / v4.3-branch(4.5.0 尚未發佈)",
+      "summary": "ESP32 的 I2S 驅動觸發沒接線的方向時解參考空指標;開了 userspace 的 ESP32-C6 上,獲准使用 I2S 裝置的使用者執行緒一次呼叫就能讓系統停機(CWE-476)。我回報 #115719 並寫了修正 #115721。",
+      "url": "https://github.com/zephyrproject-rtos/zephyr/security/advisories/GHSA-5g9q-h8wq-rrf3",
+      "bulletin": null
+    },
     {
       "id": "GHSA-qm8v-g4f9-qhjx",
       "repository": "istio/istio",
       "severity": "6.8 medium",
       "role": "reporter",
       "published": "2026-08-27",
+      "cve": null,
       "foundation": "CNCF Graduated",
       "fixedIn": "1.30.4 / 1.29.7",
       "summary": "BackendTLSPolicy 的 caCertificateRefs 解不出來時,sidecar 丟掉 upstream 的 TLS socket 改送明文,加密與 CA 驗證同時失效且無聲;gateway 則 fail closed 不受影響。",
@@ -19,6 +33,7 @@
       "severity": "medium",
       "role": "finder",
       "published": "2026-08-26",
+      "cve": null,
       "foundation": "CNCF Incubating",
       "fixedIn": "v1.15.2 (2026-08-29 已發布)",
       "summary": "DRA 容量會計的迭代量隨租戶可控的數字成長,已驗證的租戶可用可控的 device count 吃光 scheduler CPU,癱瘓整個叢集的排程(CWE-400 經由 CWE-834)。",

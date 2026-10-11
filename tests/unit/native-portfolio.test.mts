@@ -203,15 +203,18 @@ describe('Get-Award, Get-Project, Get-Timeline', () => {
 });
 
 describe('Get-Advisory', () => {
-  it('carries the "no CVE, not in the global database" caveat on the ROW', async () => {
-    // v1 printed it as a trailing note. A note does not survive
+  it('carries the CVE and "not in the global database" caveats on the ROW', async () => {
+    // v1 printed them as a trailing note. A note does not survive
     // `Get-Advisory | Export-Csv`; a property does.
     const result = await run(need('get-advisory'));
-    assert.ok(result.values.length >= 2);
+    assert.ok(result.values.length >= 3);
     for (const row of result.values) {
-      assert.equal(prop(row, 'HasCve'), false);
+      assert.equal(prop(row, 'HasCve'), String(prop(row, 'Cve')) !== '');
       assert.equal(prop(row, 'InGlobalDatabase'), false);
     }
+    const byId = new Map(result.values.map((row) => [String(prop(row, 'Id')), row]));
+    assert.equal(prop(byId.get('GHSA-5g9q-h8wq-rrf3'), 'Cve'), 'CVE-2026-19737');
+    assert.equal(prop(byId.get('GHSA-qm8v-g4f9-qhjx'), 'HasCve'), false);
   });
 
   it('emits the id, repository, severity and links', async () => {

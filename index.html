@@ -154,12 +154,12 @@
        Zephyr RTOS 與 M5Stack platforms maintainer。</p>
     <!-- ⚠️ 下面這行是 SEO/無 JS 用的靜態文字,不能由 JS 產生,所以是唯一還要手動同步的計數。
          改 D.stats 時記得一起改,tools/check-numbers.js 會比對兩邊。 -->
-    <p>427 個已合併的上游 pull request,橫跨 104 個專案與 11 個基金會。</p>
+    <p>428 個已合併的上游 pull request,橫跨 105 個專案與 11 個基金會。</p>
     <ul>
       <li>著作:IEEE SCC 2026、IEEE WF-PST 2026、ICAIMS 2026 (IEEE) 已接受,TASTI 2026 口頭發表,另有預印本。ORCID 0000-0001-7421-8027</li>
       <li>獲獎:2023 總統教育獎 · 奮發向上獎;2026 國科會大專學生研究創作獎;2026 Make NTU 強茂企業獎第一名;2026 臺灣太空事務青年人才選訓計畫入選;2025 梅竹黑客松第一名</li>
       <li>專案:Nephio TSC 治理、Kubernetes DRA 正確性稽核、O-RAN × LEO NTN</li>
-      <li>安全:istio GHSA-qm8v-g4f9-qhjx 與 volcano GHSA-j38h-7pfq-cxmw 兩則已發佈的 advisory,皆具名為回報者</li>
+      <li>安全:zephyr GHSA-5g9q-h8wq-rrf3(CVE-2026-19737)、istio GHSA-qm8v-g4f9-qhjx 與 volcano GHSA-j38h-7pfq-cxmw 三則已發佈的 advisory,皆在 credits 具名</li>
     </ul>
     <p>權威來源(所有內容以個人網站為準):
        <a href="https://people.cs.nycu.edu.tw/~hctsai1006/">個人網站</a> ·
@@ -218,7 +218,7 @@ const D={
      現在 profile / README 種子 / timeline / Get-Contribution 全部從這裡算,改一次就好。
      唯一還要手動改的是 <noscript> 那段(SEO 用、不能靠 JS 產生)——tools/check-numbers.js 會盯著它。
      權威來源:people.cs.nycu.edu.tw/~hctsai1006/open-source/ 的 os-metrics。 */
-  stats:{merged:427, projects:104, foundations:11, asOf:'2026-10-09'},
+  stats:{merged:428, projects:105, foundations:11, asOf:'2026-10-11'},
   profile:[['head','thc1006  (蔡秀吉 · Hsiu-Chi Tsai)'],
     ['','CNCF Ambassador'],
     ['','Nephio (Linux Foundation Networking) Technical Steering Committee Member'],
@@ -247,10 +247,14 @@ const D={
     ['kagent-dev/website',3,1],['nephio-project/catalog',3,0],['nephio-project/test-infra',3,0],
     ['prometheus/prometheus',3,1]],
   cncf:['CNCF',285,56],
-  /* 已發佈且在 credits 欄具名的安全 advisory。⚠️ 兩則都還沒有 CVE、也都還沒進 GitHub 全域
-     advisory DB 與 OSV(repo 已發佈 != 全域收錄)——Get-Advisory 會照實講,別擅自拿掉那兩句。
+  /* 已發佈且在 credits 欄具名的安全 advisory。⚠️ 只有 zephyr 那則有 CVE(CVE-2026-19737,CVE.org 紀錄仍保留中),
+     三則都還沒進 GitHub 全域 advisory DB 與 OSV(repo 已發佈 != 全域收錄)——Get-Advisory 會照實講,別擅自拿掉那幾句。
      狀態查法:gh api repos/<repo>/security-advisories,或跑 personal-homepage/tools/security-watch.sh。 */
   advisories:[
+    {id:'GHSA-5g9q-h8wq-rrf3', repo:'zephyrproject-rtos/zephyr', sev:'5.5 medium', role:'remediation developer', pub:'2026-10-11',
+     cve:'CVE-2026-19737', fdn:'Linux Foundation', fix:'main / v4.4-branch / v4.3-branch(4.5.0 尚未發佈)',
+     what:'ESP32 的 I2S 驅動觸發沒接線的方向時解參考空指標;開了 userspace 的 ESP32-C6 上,獲准使用 I2S 裝置的使用者執行緒一次呼叫就能讓系統停機(CWE-476)。我回報 #115719 並寫了修正 #115721。',
+     href:'https://github.com/zephyrproject-rtos/zephyr/security/advisories/GHSA-5g9q-h8wq-rrf3', bul:''},
     {id:'GHSA-qm8v-g4f9-qhjx', repo:'istio/istio', sev:'6.8 medium', role:'reporter', pub:'2026-08-27',
      fdn:'CNCF Graduated', fix:'1.30.4 / 1.29.7',
      what:'BackendTLSPolicy 的 caCertificateRefs 解不出來時,sidecar 丟掉 upstream 的 TLS socket 改送明文,加密與 CA 驗證同時失效且無聲;gateway 則 fail closed 不受影響。',
@@ -737,12 +741,13 @@ const CMDLETS={
       o.push(line(''));
       o.push({parts:[['accent',v.id+'  '],['a',v.repo,v.href]], txt:v.id+'  '+v.repo});
       o.push(line('','  '+v.what));
-      o.push(line('muted','  '+v.fdn+'  ·  fixed in '+v.fix));
+      o.push(line('muted','  '+v.fdn+'  ·  fixed in '+v.fix+(v.cve?'  ·  '+v.cve:'')));
       if(v.bul) o.push({parts:[['muted','  bulletin: '],['a',v.bul.replace('https://',''),v.bul]], txt:'  bulletin: '+v.bul});
     });
     o.push(line(''));
-    o.push(line('muted','兩則都在 advisory 的 credits 欄具名、狀態 accepted。'));
-    o.push(line('muted','兩則目前都還沒有 CVE,也都還沒進 GitHub 全域 advisory 資料庫與 OSV。'));
+    o.push(line('muted','三則都在 advisory 的 credits 欄具名、狀態 accepted。'));
+    o.push(line('muted','zephyr 那則有 CVE-2026-19737,CVE.org 紀錄仍保留中;istio 與 volcano 兩則還沒有 CVE。'));
+    o.push(line('muted','三則都還沒進 GitHub 全域 advisory 資料庫與 OSV。'));
     return o.concat([line(''), srcRow('/open-source/#advisories', SRC.oss+'#advisories')]);}},
   'get-project':{params:[],help:'List representative projects',run:function(){
     return table(['Project','Focus'],D.projects).concat([line(''), srcRow('/experience/', SRC.exp)]);}},
