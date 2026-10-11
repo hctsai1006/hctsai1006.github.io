@@ -313,10 +313,11 @@ const GET_ADVISORY_MANIFEST = manifest({
   display: 'Get-Advisory',
   synopsis: 'List published security advisories that credit me.',
   notes:
-    'Both entries are named in the advisory credits with status accepted. Neither has a CVE ' +
-    'yet, and neither is in the GitHub global advisory database or OSV yet — that is carried on ' +
-    'each row as HasCve and InGlobalDatabase rather than left to a footnote, because a reader ' +
-    'filtering these objects should see it too.',
+    'Every entry is named in the advisory credits with status accepted. The Zephyr entry ' +
+    'carries CVE-2026-19737, whose CVE.org record is still reserved; the Istio and Volcano ' +
+    'entries have no CVE yet. None is in the GitHub global advisory database or OSV yet — that ' +
+    'is carried on each row as HasCve, Cve and InGlobalDatabase rather than left to a footnote, ' +
+    'because a reader filtering these objects should see it too.',
   capabilities: ['portfolio.read'],
   parameters: [parameter('Severity', STRING), parameter('Foundation', STRING)],
   outputTypeNames: ['BrowserShell.Portfolio.Advisory'],
@@ -350,7 +351,8 @@ export function advisoryRows(filters: {
         Bulletin: a.bulletin ?? '',
         // Stated on the row, not in a trailing note: an object that is filtered
         // or exported must carry the caveat with it.
-        HasCve: false,
+        HasCve: a.cve !== null,
+        Cve: a.cve ?? '',
         InGlobalDatabase: false,
       },
       T('Advisory'),
