@@ -314,7 +314,7 @@ const GET_ADVISORY_MANIFEST = manifest({
   synopsis: 'List published security advisories that credit me.',
   notes:
     'Every entry is named in the advisory credits with status accepted. The Zephyr entry ' +
-    'carries CVE-2026-19737, whose CVE.org record is still reserved; the Istio and Volcano ' +
+    'carries CVE-2026-19737, issued by Zephyr as its own CNA and published on CVE.org; the Istio and Volcano ' +
     'entries have no CVE yet. None is in the GitHub global advisory database or OSV yet — that ' +
     'is carried on each row as HasCve, Cve and InGlobalDatabase rather than left to a footnote, ' +
     'because a reader filtering these objects should see it too.',
