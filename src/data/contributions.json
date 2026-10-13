@@ -3,14 +3,14 @@
   "foundations": {
     "cncf": {
       "label": "CNCF",
-      "merged": 285,
+      "merged": 289,
       "repositories": 56
     }
   },
   "top": [
     {
       "repository": "kubernetes-sigs/kueue",
-      "merged": 79,
+      "merged": 80,
       "cncf": true
     },
     {
@@ -74,6 +74,11 @@
       "cncf": true
     },
     {
+      "repository": "kubernetes/test-infra",
+      "merged": 5,
+      "cncf": true
+    },
+    {
       "repository": "volcano-sh/volcano",
       "merged": 5,
       "cncf": true
@@ -95,11 +100,6 @@
     },
     {
       "repository": "kptdev/porch",
-      "merged": 4,
-      "cncf": true
-    },
-    {
-      "repository": "kubernetes/test-infra",
       "merged": 4,
       "cncf": true
     },
@@ -152,6 +152,11 @@
       "repository": "nephio-project/test-infra",
       "merged": 3,
       "cncf": false
+    },
+    {
+      "repository": "open-telemetry/opentelemetry-collector-contrib",
+      "merged": 3,
+      "cncf": true
     },
     {
       "repository": "prometheus/prometheus",
