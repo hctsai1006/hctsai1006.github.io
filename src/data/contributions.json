@@ -3,19 +3,19 @@
   "foundations": {
     "cncf": {
       "label": "CNCF",
-      "merged": 289,
+      "merged": 303,
       "repositories": 56
     }
   },
   "top": [
     {
       "repository": "kubernetes-sigs/kueue",
-      "merged": 80,
+      "merged": 85,
       "cncf": true
     },
     {
       "repository": "kubernetes/kubernetes",
-      "merged": 51,
+      "merged": 55,
       "cncf": true
     },
     {
@@ -49,6 +49,11 @@
       "cncf": false
     },
     {
+      "repository": "kubernetes/test-infra",
+      "merged": 7,
+      "cncf": true
+    },
+    {
       "repository": "jaegertracing/jaeger-ui",
       "merged": 6,
       "cncf": true
@@ -74,7 +79,7 @@
       "cncf": true
     },
     {
-      "repository": "kubernetes/test-infra",
+      "repository": "open-telemetry/opentelemetry-collector-contrib",
       "merged": 5,
       "cncf": true
     },
@@ -154,9 +159,9 @@
       "cncf": false
     },
     {
-      "repository": "open-telemetry/opentelemetry-collector-contrib",
+      "repository": "openwrt/openwrt",
       "merged": 3,
-      "cncf": true
+      "cncf": false
     },
     {
       "repository": "prometheus/prometheus",
