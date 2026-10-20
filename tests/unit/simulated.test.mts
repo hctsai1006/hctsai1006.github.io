@@ -709,7 +709,7 @@ describe('sudo', () => {
  * parameter is called and where it sits. `Get-Process pwsh` has to reach
  * `-Name` by position, and it does so through the same binder the kernel uses.
  *
- * The default parameter sets are read off `compat/upstream/v7.6.5/`, not
+ * The default parameter sets are read off `compat/upstream/v7.6.7/`, not
  * guessed: `CommandManifest` has no field for them, which `BindOptions` says in
  * so many words.
  */
@@ -717,7 +717,7 @@ describe('binding, from the tokens a user types', () => {
   const PROFILE: CompatibilityView = viewOfBehaviors('7.6.5', {});
 
   const capture = JSON.parse(
-    readFileSync(new URL('../../compat/upstream/v7.6.5/command-metadata.json', import.meta.url), 'utf8'),
+    readFileSync(new URL('../../compat/upstream/v7.6.7/command-metadata.json', import.meta.url), 'utf8'),
   ) as { commands: Record<string, { defaultParameterSet?: string }> };
 
   const bindFor = (module: CommandModule, args: readonly string[]): RunOptions => {

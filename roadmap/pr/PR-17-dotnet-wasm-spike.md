@@ -13,7 +13,7 @@ The honest sequencing is to use real pwsh in CI to generate golden ASTs first, a
 ## Depends on
 
 - [~] **8. Build one lexer, one AST and a version-aware parameter binder** — [detail](PR-08-version-aware-binder.md)
-- [~] **11. Differential conformance against real pwsh 7.6.5** — [detail](PR-11-differential-conformance.md)
+- [~] **11. Differential conformance against real pwsh 7.6.7** — [detail](PR-11-differential-conformance.md)
 
 ## Tasks
 

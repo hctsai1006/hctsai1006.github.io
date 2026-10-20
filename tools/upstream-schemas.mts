@@ -59,8 +59,9 @@ export interface GhRelease {
  * PowerShell/PowerShell master:tools/metadata.json — the project's own statement
  * of which tags occupy which channel.
  *
- * LTSReleaseTag is an ARRAY: more than one LTS is supported concurrently (today
- * v7.4.19 and v7.6.5). It is typed as array-or-string because a single-LTS
+ * LTSReleaseTag is an ARRAY: more than one LTS is supported concurrently
+ * (v7.4.19 and v7.6.5 on 2026-09-05, v7.4.21 and v7.6.7 on 2026-10-20). It is
+ * typed as array-or-string because a single-LTS
  * period is plausible and must not crash the tool.
  *
  * NextReleaseTag names a tag that does NOT yet exist. This file is the richest

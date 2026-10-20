@@ -1,7 +1,7 @@
 {
   "$comment": "Differential conformance corpus. Hand-written INPUT, not generated. tools/generate-conformance-fixtures.ps1 runs every `source` against a real pwsh and records the result under fixtures/; tools/conformance.mts runs every `probe` against this project and compares the two. A case whose probe kind is `none` is an honest admission that the project has nothing to compare yet -- it is counted and reported as unimplemented, never silently passed.",
   "schemaVersion": 1,
-  "targetVersion": "7.6.5",
+  "targetVersion": "7.6.7",
   "cases": [
     {
       "id": "pipeline.measure-nested-array",
@@ -1087,7 +1087,7 @@
       "why": "The key ORDER is what the Name/Value table renders, and PSVersion is first rather than alphabetical. Nine keys, and none of them invented: OS and Platform describe the simulated machine, and the version comes from the resolved profile.",
       "source": "($PSVersionTable.Keys) -join ','",
       "observe": "values",
-      "probe": { "kind": "version-table-keys", "args": { "version": "7.6.5" } }
+      "probe": { "kind": "version-table-keys", "args": { "version": "7.6.7" } }
     }
   ]
 }

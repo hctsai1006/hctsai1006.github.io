@@ -60,7 +60,7 @@
 
 .NOTES
     The compatibility profiles this project publishes target
-    powershell-7.6.5-LINUX, so the Linux capture is the one culture.ts reads.
+    powershell-7.6.7-LINUX, so the Linux capture is the one culture.ts reads.
     Run it on Windows too and diff: where the two platforms disagree, the file
     that ships must be the Linux one.
 #>

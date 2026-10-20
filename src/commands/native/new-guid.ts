@@ -9,8 +9,8 @@
  * classifies it `breaking` / `script-breaking` for that reason.
  *
  * So the version is NOT a version check. It is the behaviour flag the profiles
- * already declare — `newGuid.defaultVersion`, 4 in powershell/7.6.5/linux and 7
- * in powershell/7.7.0-preview.4/linux — read through `CompatibilityView`. A
+ * already declare — `newGuid.defaultVersion`, 4 in powershell/7.6.7/linux and 7
+ * in powershell/7.7.0-preview.5/linux — read through `CompatibilityView`. A
  * command asking "am I 7.7?" is the thing the whole profile system exists to
  * replace, and this is the command that would tempt someone to write one.
  *
@@ -53,7 +53,7 @@ export const NEW_GUID_MANIFEST = manifest({
   synopsis: 'Creates a GUID.',
   notes:
     'The UUID version comes from the `newGuid.defaultVersion` behaviour flag: 4 under the ' +
-    '7.6.5 profile, 7 under 7.7.0-preview.4 (upstream PR 27033, classified script-breaking ' +
+    '7.6.7 profile, 7 under 7.7.0-preview.5 (upstream PR 27033, classified script-breaking ' +
     'because the shape is identical and only the predictability changes). Backed by the ' +
     'injected PRNG, so it is deterministic in tests and must never be used as a secret — ' +
     "the same warning the upstream migration note gives about the real cmdlet. -Empty and " +

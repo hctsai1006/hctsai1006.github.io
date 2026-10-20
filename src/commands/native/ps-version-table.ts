@@ -136,9 +136,10 @@ export function gitCommitIdFor(displayVersion: string): string {
     return `(no release for ${displayVersion} in releases.lock.json)`;
   }
   // Official builds report the version string, not the sha — measured: pwsh
-  // 7.6.5 reports GitCommitId 7.6.5, while the lock's commitSha for that tag is
-  // 7acb29279dd64e646d821f75d1cc8ad59455a9a6. The lock is consulted so that an
-  // unknown version cannot pass unnoticed, not to substitute a different value.
+  // 7.6.7 reports GitCommitId 7.6.7, while the lock's commitSha for that tag is
+  // c10ef6d557c0d6fe661836f78dbd6fc355261326 (7.6.5 did the same). The lock is
+  // consulted so that an unknown version cannot pass unnoticed, not to
+  // substitute a different value.
   return release.version;
 }
 

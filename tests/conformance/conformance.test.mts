@@ -3,7 +3,7 @@
  *
  * tools/conformance.mts is a CLI, and a CLI that nobody runs proves nothing.
  * This makes the comparison part of `npm test`, so a change to the object model
- * that disagrees with the recorded pwsh 7.6.5 behaviour fails the suite rather
+ * that disagrees with the recorded pwsh 7.6.7 behaviour fails the suite rather
  * than waiting for someone to remember the tool exists.
  *
  * It does NOT need pwsh: it compares against the committed fixture. Capturing a
@@ -19,7 +19,7 @@ import { runConformance } from '../../tools/conformance.mts';
 
 const report = runConformance();
 
-describe('differential conformance against pwsh 7.6.5', () => {
+describe('differential conformance against pwsh 7.6.7', () => {
   it('has no unexplained problems', () => {
     // The message is the report itself: a failure here should say which case
     // diverged, not just that something did.
@@ -27,7 +27,7 @@ describe('differential conformance against pwsh 7.6.5', () => {
   });
 
   it('compared against a fixture from the version the corpus targets', () => {
-    assert.equal(report.engine['psVersion'], '7.6.5');
+    assert.equal(report.engine['psVersion'], '7.6.7');
     assert.equal(report.engine['psEdition'], 'Core');
     assert.equal(report.capture['pinnedCulture'], 'en-US');
     // Rendering must have been pinned, or the fixture could contain ANSI escapes

@@ -6,11 +6,11 @@
  * a corpus of values through `.ToString(format, culture)` in a real PowerShell
  * and writes what came back, and this file replays it.
  *
- *   compat/upstream/v7.6.5/culture-samples-linux.json
- *     pwsh 7.6.5, .NET 10.0.11, Ubuntu 24.04, UTC, ICU with CLDR 42+
+ *   compat/upstream/v7.6.7/culture-samples-linux.json
+ *     pwsh 7.6.7, .NET 10.0.13, Ubuntu 24.04, UTC, ICU with CLDR 42+
  *
  * The LINUX capture, because the compatibility profiles this project publishes
- * are `powershell-7.6.5-linux`. The Windows capture is committed beside it and
+ * are `powershell-7.6.7-linux`. The Windows capture is committed beside it and
  * differs in two places, both asserted at the bottom of this file so the
  * divergence is a fact under test rather than a remark in a comment.
  *
@@ -88,7 +88,7 @@ interface Capture {
 const load = (platform: string): Capture =>
   JSON.parse(
     readFileSync(
-      new URL(`../../compat/upstream/v7.6.5/culture-samples-${platform}.json`, import.meta.url),
+      new URL(`../../compat/upstream/v7.6.7/culture-samples-${platform}.json`, import.meta.url),
       'utf8',
     ),
   ) as Capture;
@@ -146,8 +146,8 @@ const skipReason = (bucket: string, key: string, format: string): string | undef
 // ---------------------------------------------------------------------------
 
 describe('the capture this suite replays', () => {
-  it('came from pwsh 7.6.5 on Linux, not in invariant globalization mode', () => {
-    assert.equal(linux.engine.psVersion, '7.6.5');
+  it('came from pwsh 7.6.7 on Linux, not in invariant globalization mode', () => {
+    assert.equal(linux.engine.psVersion, '7.6.7');
     assert.equal(linux.engine.osPlatform, 'linux');
     // In invariant globalization mode every culture collapses onto the
     // invariant one and the file would look plausible while describing nothing.
@@ -301,7 +301,7 @@ describe('Windows and Linux disagree, and Linux is the one loaded', () => {
   const metadata = (platform: string): CulturePatterns =>
     JSON.parse(
       readFileSync(
-        new URL(`../../compat/upstream/v7.6.5/culture-metadata-${platform}.json`, import.meta.url),
+        new URL(`../../compat/upstream/v7.6.7/culture-metadata-${platform}.json`, import.meta.url),
         'utf8',
       ),
     ) as CulturePatterns;

@@ -1,4 +1,4 @@
-# 11. Differential conformance against real pwsh 7.6.5
+# 11. Differential conformance against real pwsh 7.6.7
 
 > Generated from `roadmap/roadmap.data.mts`. Do not edit; edit the data.
 
@@ -8,7 +8,7 @@
 
 ## Why
 
-Fidelity claims need evidence. pwsh 7.6.5 on .NET 10.0.11 is installed on the dev machine, so the LTS track can be differential-tested today without CI or Docker.
+Fidelity claims need evidence. pwsh 7.6.7 on .NET 10.0.13 is installed on the dev machine, so the LTS track can be differential-tested today without CI or Docker.
 
 ## Depends on
 
@@ -18,16 +18,16 @@ Fidelity claims need evidence. pwsh 7.6.5 on .NET 10.0.11 is installed on the de
 
 - [x] **11.1** Write generate-conformance-fixtures.ps1 to capture real pwsh output for a command corpus
   - STALE todo, corrected 2026-09-06. It captures the 115-case corpus against real pwsh, runs each case twice to prove determinism, and seals every case and the document with a sha256 over a canonical projection so an edited recording is reported as tampering rather than as a defect in the project.
-  - *evidence:* `tests/conformance/fixtures/pwsh-7.6.5.json` — `cases`
-  - *evidence:* `tests/conformance/fixtures/pwsh-7.6.5.json` — `integrity`
+  - *evidence:* `tests/conformance/fixtures/pwsh-7.6.7.json` — `cases`
+  - *evidence:* `tests/conformance/fixtures/pwsh-7.6.7.json` — `integrity`
   - *evidence:* `npm run capture:conformance`
   - *evidence:* `tests/conformance/conformance.test.mts` — test "actually compared something"
 - [x] **11.2** Normalise machine-specific output (paths, times, pids, widths) before comparison
   - STALE todo, corrected 2026-09-06. Nine normalisation rules cover line endings, machine paths, username, hostname, pid, guid, ISO timestamp, clock time and trailing space, with residue detectors for what normalisation cannot fix.
-  - *evidence:* `tests/conformance/fixtures/pwsh-7.6.5.json` — `normalisation`
+  - *evidence:* `tests/conformance/fixtures/pwsh-7.6.7.json` — `normalisation`
   - *evidence:* `tools/generate-conformance-fixtures.ps1` matches `/NormalisationRules/`
 - [x] **11.3** Capture Get-Command metadata from real pwsh to validate our manifests
-  - Done for 7.6.5 via tools/capture-pwsh-metadata.ps1: 43 commands, 398 declared parameters, with types, parameter sets, positions, pipeline binding and validation attributes. It already proves four 7.7 deltas against the reference implementation — Format-Table -Property carries no attributes in 7.6.5, and -ExcludeProperty and Join-Path -Extension do not exist there.
+  - Done for 7.6.5 via tools/capture-pwsh-metadata.ps1: 43 commands, 398 declared parameters, with types, parameter sets, positions, pipeline binding and validation attributes. It already proves four 7.7 deltas against the reference implementation — Format-Table -Property carries no attributes in 7.6.5, and -ExcludeProperty and Join-Path -Extension do not exist there. Captured again from 7.6.7 on 2026-10-20: the two files differ only in their version fields.
   - *evidence:* `compat/upstream/v7.6.5/command-metadata.json` — `commands`
   - *evidence:* `compat/upstream/v7.6.5/command-metadata.json` — `requested`
   - *evidence:* `npm run capture:metadata`
@@ -38,7 +38,7 @@ Fidelity claims need evidence. pwsh 7.6.5 on .NET 10.0.11 is installed on the de
   - *evidence:* `tests/conformance/conformance.test.mts` — test "does not count a known gap as evidence of fidelity"
   - *evidence:* `tests/conformance/known-differences.yml` matches `/reason/`
 - [x] **11.5** Report per-profile conformance coverage as a number the site can display
-  - Both halves landed. Every published profile gets its own row from classifyProfileCoverage, expressed in the ladder src/commands/manifest.ts already defines — declared / partial / implemented / verified — where `verified` is awarded only by a case that agreed with a capture of THAT profile's own version. 7.6.5 reads 10 / 31 commands verified and 0 / 6 behaviour flags proven; 7.7.0-preview.4 reads 0 and 0, because no 7.7 exists to capture from, and showing the two separately is the point: one global percentage would have carried the 7.6.5 measurement across to a version nothing has ever been asked. Neither denominator reads the evidence, so no fraction can be improved by deleting a fixture — the property is a unit test, not a comment. compat/explorer.html renders both rows.
+  - Both halves landed. Every published profile gets its own row from classifyProfileCoverage, expressed in the ladder src/commands/manifest.ts already defines — declared / partial / implemented / verified — where `verified` is awarded only by a case that agreed with a capture of THAT profile's own version. 7.6.7 reads 10 / 31 commands verified and 0 / 6 behaviour flags proven; 7.7.0-preview.5 reads 0 and 0, because no 7.7 exists to capture from, and showing the two separately is the point: one global percentage would have carried the 7.6.7 measurement across to a version nothing has ever been asked. Neither denominator reads the evidence, so no fraction can be improved by deleting a fixture — the property is a unit test, not a comment. compat/explorer.html renders both rows.
   - *evidence:* `tools/conformance.mts` exports `classifyProfileCoverage`
   - *evidence:* `tests/conformance/report.json` — `profileCoverage.1.commands.verifiedPercent`
   - *evidence:* `tests/unit/conformance-coverage.test.mts` — test "never lets the evidence touch the denominator"
@@ -57,7 +57,7 @@ Observable conditions. Not opinions — each of these can be checked.
 
 ## Risks
 
-- 7.7-preview.4 needs a side-by-side install or CI container; the 7.6.5 track works locally today
+- 7.7-preview.5 needs a side-by-side install or CI container; the 7.6.7 track works locally today
 
 ---
 

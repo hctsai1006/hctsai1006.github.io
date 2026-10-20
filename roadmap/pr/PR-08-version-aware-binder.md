@@ -12,7 +12,7 @@ There are currently FOUR independent tokenizers — splitPipe, the execOne regex
 
 ## Depends on
 
-- [~] **3. Express 7.6.5 and 7.7.0-preview.4 as compatibility profiles** — [detail](PR-03-compatibility-profiles.md)
+- [~] **3. Express 7.6.7 and 7.7.0-preview.5 as compatibility profiles** — [detail](PR-03-compatibility-profiles.md)
 - [~] **7. Build the typed object pipeline and stream model** — [detail](PR-07-object-pipeline.md)
 
 ## Tasks
@@ -45,7 +45,7 @@ There are currently FOUR independent tokenizers — splitPipe, the execOne regex
 - [x] **8.5** Support switchSemantics so -Switch:$false differs from -Switch absent
   - STALE todo, corrected 2026-09-06. The mechanism is not named switchSemantics — it is honourExplicitFalse, a per-command, per-parameter behaviour key resolved from the active profile — but it is exactly this, and thirty-odd command/parameter pairs declare it.
   - *evidence:* `src/compatibility/behavior-keys.ts` exports `switchBehaviorKey`
-  - *evidence:* `compat/profiles/powershell-7.7.0-preview.4-linux.json` — `behaviors`
+  - *evidence:* `compat/profiles/powershell-7.7.0-preview.5-linux.json` — `behaviors`
   - *evidence:* `tests/unit/binder-switch-scope.test.mts` — test "binds New-Guid -Empty:$false as PRESENT under 7.6 and as FALSE under 7.7"
 - [/] **8.6** Apply profile parameterPatches over base metadata rather than forking commands
   - MISSING: the applying. The merge machinery is real and tested — CommandPatch.parameterPatches deep-merges parent-first — but nothing uses it. No shipped profile declares a single parameterPatches entry, and CompatibilityView, the interface the binder and commands actually consume, exposes only behaviour lookups, so no code path reads a patch and overrides parameter metadata before binding.

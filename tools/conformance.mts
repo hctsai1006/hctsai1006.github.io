@@ -25,14 +25,14 @@
  *
  * Coverage is therefore a floor, not a ceiling: it is the share of
  * native-semantic commands for which at least one behaviour has been shown to
- * agree with pwsh 7.6.5 on this machine. It is deliberately not the share of
+ * agree with pwsh 7.6.7 on this machine. It is deliberately not the share of
  * cases that "pass", because a case with no implementation behind it passes
  * nothing.
  *
  * AND IT IS REPORTED PER PROFILE, because the evidence is not the same for
- * both. There is one capture and it is a recording of 7.6.5. Asked about
- * 7.7.0-preview.4 the honest answer is zero, and a single site-wide percentage
- * cannot say that -- a reader looking at the 7.7 profile would carry the 7.6.5
+ * both. There is one capture and it is a recording of 7.6.7. Asked about
+ * 7.7.0-preview.5 the honest answer is zero, and a single site-wide percentage
+ * cannot say that -- a reader looking at the 7.7 profile would carry the 7.6.7
  * figure across without noticing they had done it. classifyProfileCoverage
  * expresses each profile in the ladder src/commands/manifest.ts already
  * defines (declared / partial / implemented / verified) rather than in a
@@ -1238,7 +1238,7 @@ const PROBES: Record<string, Probe> = {
     commandTypeNames(String(args['commandType']) as CommandTypeName).join(','),
 
   'version-table-keys': (args) =>
-    Object.keys(psVersionTable(String(args['version'] ?? '7.6.5'), SIMULATED_MACHINE).properties).join(','),
+    Object.keys(psVersionTable(String(args['version'] ?? '7.6.7'), SIMULATED_MACHINE).properties).join(','),
 
   'error-id': (args) =>
     // Checks the composition rule in streams.ts, `<ErrorId>,<CommandName>`,
@@ -1738,11 +1738,11 @@ const percentOf = (n: number, of: number): number => (of === 0 ? 0 : round1((n /
  * WHY PER PROFILE, WHEN BOTH PROFILES DECLARE THE SAME COMMANDS
  *
  * Because the evidence is not the same. There is one captured fixture, from
- * pwsh 7.6.5, and it is evidence about 7.6.5. Asked about 7.7.0-preview.4 the
+ * pwsh 7.6.7, and it is evidence about 7.6.7. Asked about 7.7.0-preview.5 the
  * honest answer is zero -- not because anyone forgot, but because no 7.7 was
- * ever consulted, and 7.7.0-preview.4 is installed nowhere to consult. One
+ * ever consulted, and 7.7.0-preview.5 is installed nowhere to consult. One
  * global percentage cannot say that, and a reader looking at the 7.7 profile
- * would carry the 7.6.5 number across without noticing they had done it.
+ * would carry the 7.6.7 number across without noticing they had done it.
  *
  * WHAT MAKES THE NUMBER HARD TO MOVE
  *
@@ -2064,7 +2064,7 @@ export interface ConformanceReport {
    * The same evidence, asked separately of each published profile -- which is a
    * different question from `coverage` above and gives a different answer.
    * `coverage` asks "what has this project been shown to get right?" and has one
-   * denominator. This asks "what has been shown about PowerShell 7.7.0-preview.4?"
+   * denominator. This asks "what has been shown about PowerShell 7.7.0-preview.5?"
    * and the answer is nothing, because no 7.7 exists to capture from.
    *
    * Written into the report so a page can display it without running pwsh, and
@@ -2449,7 +2449,7 @@ export function runConformance(): ConformanceReport {
     }),
   );
   // A profile that is not reported cannot be reported badly. Deleting
-  // compat/profiles/powershell-7.7.0-preview.4-linux.json removes the row that
+  // compat/profiles/powershell-7.7.0-preview.5-linux.json removes the row that
   // reads 0%, and everything downstream of `loadProfiles` would then be
   // perfectly consistent with a smaller world. So the set of profiles is
   // checked against an INDEPENDENT source -- the release lockfile's own

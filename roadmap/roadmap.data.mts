@@ -183,7 +183,7 @@ export const CORRECTIONS = [
     claim: 'Hardcoding which PowerShell version is LTS is unavoidable.',
     verdict: 'wrong',
     correction:
-      'PowerShell publishes master:tools/metadata.json with LTSReleaseTag as an array (currently ["v7.4.19","v7.6.5"]), plus Stable/Preview/Next release tags. First-party and machine-readable.',
+      'PowerShell publishes master:tools/metadata.json with LTSReleaseTag as an array (["v7.4.19","v7.6.5"] on 2026-09-05), plus Stable/Preview/Next release tags. First-party and machine-readable.',
     source: 'raw.githubusercontent.com/PowerShell/PowerShell/master/tools/metadata.json',
     impact:
       'The verifier reads this instead of hardcoding. TRAP: aka.ms/pwsh-buildinfo-lts looks authoritative but returns v7.4.19 — it tracks an install channel, not LTS membership, and would be wrong by a full cycle.',
@@ -633,7 +633,7 @@ export const WORK = [
     n: 3,
     phase: 'Ground truth',
     slug: 'compatibility-profiles',
-    title: 'Express 7.6.5 and 7.7.0-preview.4 as compatibility profiles',
+    title: 'Express 7.6.7 and 7.7.0-preview.5 as compatibility profiles',
     why:
       'Adding a PowerShell version must never mean forking a command. Version differences belong in data that commands read, not in branches commands contain.',
     status: 'in-progress',
@@ -641,21 +641,21 @@ export const WORK = [
     tasks: [
       {
         id: '3.1',
-        title: 'Author compat/profiles/powershell-7.6.5-linux.json from the lockfile',
-        detail: 'Generated from the release lockfile plus the metadata captured from real pwsh 7.6.5. No version string is typed by hand.',
+        title: 'Author compat/profiles/powershell-7.6.7-linux.json from the lockfile',
+        detail: 'Generated from the release lockfile plus the metadata captured from real pwsh 7.6.7. No version string is typed by hand.',
         status: 'done',
         evidence: [
-          { kind: 'json', file: 'compat/profiles/powershell-7.6.5-linux.json', path: 'displayVersion' },
+          { kind: 'json', file: 'compat/profiles/powershell-7.6.7-linux.json', path: 'displayVersion' },
           { kind: 'script', name: 'profiles' },
         ],
       },
       {
         id: '3.2',
-        title: 'Author powershell-7.7.0-preview.4-linux.json inheriting from it',
+        title: 'Author powershell-7.7.0-preview.5-linux.json inheriting from it',
         detail: 'Baseline values are derived as the inverse of the 7.7 values rather than written separately, so the two profiles cannot silently agree and turn the compatibility layer into a no-op.',
         status: 'done',
         evidence: [
-          { kind: 'json', file: 'compat/profiles/powershell-7.7.0-preview.4-linux.json', path: 'inherits' },
+          { kind: 'json', file: 'compat/profiles/powershell-7.7.0-preview.5-linux.json', path: 'inherits' },
           { kind: 'export', file: 'tools/compat-curation.mts', symbol: 'buildBehaviorTables' },
         ],
       },
@@ -665,17 +665,17 @@ export const WORK = [
         detail: 'CI rejects a behavior key with no doc entry: an undocumented flag is a guess.',
         status: 'done',
         evidence: [
-          { kind: 'json', file: 'compat/profiles/powershell-7.7.0-preview.4-linux.json', path: 'behaviorDocs' },
+          { kind: 'json', file: 'compat/profiles/powershell-7.7.0-preview.5-linux.json', path: 'behaviorDocs' },
           { kind: 'export', file: 'tools/compat-curation.mts', symbol: 'primaryPr' },
           { kind: 'code', file: 'tools/generate-compatibility-profile.mts', pattern: 'assertBehaviorsDocumented' },
         ],
       },
       {
         id: '3.4',
-        title: 'Generate compat/deltas/7.6.5__7.7.0-preview.4.json',
+        title: 'Generate compat/deltas/7.6.7__7.7.0-preview.5.json',
         status: 'done',
         evidence: [
-          { kind: 'json', file: 'compat/deltas/7.6.5__7.7.0-preview.4.json', path: 'changes.0.upstreamPr' },
+          { kind: 'json', file: 'compat/deltas/7.6.7__7.7.0-preview.5.json', path: 'changes.0.upstreamPr' },
           { kind: 'script', name: 'profiles' },
         ],
       },
@@ -689,8 +689,8 @@ export const WORK = [
           { kind: 'export', file: 'tools/conformance.mts', symbol: 'classifyDeltaProof' },
           { kind: 'test', file: 'tests/unit/conformance-coverage.test.mts', name: 'fails the build when the named case is gone' },
           { kind: 'test', file: 'tests/unit/conformance-coverage.test.mts', name: 'fails the build when "verified" names nothing' },
-          { kind: 'json', file: 'compat/deltas/7.6.5__7.7.0-preview.4.json', path: 'changes.0.emulated' },
-          { kind: 'json', file: 'compat/deltas/7.6.5__7.7.0-preview.4.json', path: 'summary.emulated' },
+          { kind: 'json', file: 'compat/deltas/7.6.7__7.7.0-preview.5.json', path: 'changes.0.emulated' },
+          { kind: 'json', file: 'compat/deltas/7.6.7__7.7.0-preview.5.json', path: 'summary.emulated' },
           { kind: 'json', file: 'tests/conformance/report.json', path: 'deltaProof.proven' },
           { kind: 'code', file: 'tools/compat-curation.mts', pattern: 'is "verified" but names no conformance case' },
         ],
@@ -702,9 +702,9 @@ export const WORK = [
           '`nativePowerShellEngine: false` was always recorded, and that is the half that protects a visitor from believing a real pwsh is running. `unimplementedAstNodes` was a literal [] in the generator with nothing populating it, and an empty list beside it reads as "every AST node is implemented" — the exact opposite of the truth. It is now IMPORTED: the generator calls unimplementedAstNodes(), which derives 40 node names from what parseForExecution consults, so the declaration cannot drift from the behaviour. Typing the names into the generator instead would have been the same defect one step later. Being derived is not the same as being right: the first derivation read three tables, missed two refusals the parser writes in code (VariableExpressionAst, ErrorExpressionAst) and inherited one name that was never a limit (CommandAst, which is what the & call operator is mapped to for the message). A test that walks every tree the execution parser ACCEPTS now says the list may never name something the engine runs.',
         status: 'done',
         evidence: [
-          { kind: 'json', file: 'compat/profiles/powershell-7.6.5-linux.json', path: 'engineLimits.nativePowerShellEngine' },
-          { kind: 'json', file: 'compat/profiles/powershell-7.6.5-linux.json', path: 'engineLimits.notes' },
-          { kind: 'json', file: 'compat/profiles/powershell-7.6.5-linux.json', path: 'engineLimits.unimplementedAstNodes' },
+          { kind: 'json', file: 'compat/profiles/powershell-7.6.7-linux.json', path: 'engineLimits.nativePowerShellEngine' },
+          { kind: 'json', file: 'compat/profiles/powershell-7.6.7-linux.json', path: 'engineLimits.notes' },
+          { kind: 'json', file: 'compat/profiles/powershell-7.6.7-linux.json', path: 'engineLimits.unimplementedAstNodes' },
           { kind: 'export', file: 'src/language/unimplemented.ts', symbol: 'unimplementedAstNodes' },
           { kind: 'test', file: 'tests/unit/language-unimplemented.test.mts', name: 'declares EXACTLY what the engine refuses, in both profiles' },
           { kind: 'code', file: 'tools/generate-compatibility-profile.mts', pattern: 'unimplementedAstNodes\(\)' },
@@ -713,10 +713,10 @@ export const WORK = [
       {
         id: '3.7',
         title: 'Record bundled module versions',
-        detail: 'All six modules verified from src/Modules/PSGalleryModules.csproj at each tag. PSResourceGet is the only one that differs (1.2.0 vs 1.3.0-preview1); the rest are pinned identically, so a behaviour difference cannot be blamed on a module version unless it is that one.',
+        detail: 'All six modules verified from src/Modules/PSGalleryModules.csproj at each tag. PSResourceGet is the only one that differs (1.2.0 vs 1.3.0-preview2; preview.4 shipped 1.3.0-preview1); the rest are pinned identically, so a behaviour difference cannot be blamed on a module version unless it is that one.',
         status: 'done',
         evidence: [
-          { kind: 'json', file: 'compat/profiles/powershell-7.6.5-linux.json', path: 'bundledModules' },
+          { kind: 'json', file: 'compat/profiles/powershell-7.6.7-linux.json', path: 'bundledModules' },
           { kind: 'export', file: 'compat/deltas/powershell-77-changes.source.mts', symbol: 'BUNDLED_MODULES' },
         ],
       },
@@ -1182,7 +1182,7 @@ export const WORK = [
         status: 'done',
         evidence: [
           { kind: 'export', file: 'src/compatibility/behavior-keys.ts', symbol: 'switchBehaviorKey' },
-          { kind: 'json', file: 'compat/profiles/powershell-7.7.0-preview.4-linux.json', path: 'behaviors' },
+          { kind: 'json', file: 'compat/profiles/powershell-7.7.0-preview.5-linux.json', path: 'behaviors' },
           { kind: 'test', file: 'tests/unit/binder-switch-scope.test.mts', name: 'binds New-Guid -Empty:$false as PRESENT under 7.6 and as FALSE under 7.7' },
         ],
       },
@@ -1430,9 +1430,9 @@ export const WORK = [
     n: 11,
     phase: 'Compatibility',
     slug: 'differential-conformance',
-    title: 'Differential conformance against real pwsh 7.6.5',
+    title: 'Differential conformance against real pwsh 7.6.7',
     why:
-      'Fidelity claims need evidence. pwsh 7.6.5 on .NET 10.0.11 is installed on the dev machine, so the LTS track can be differential-tested today without CI or Docker.',
+      'Fidelity claims need evidence. pwsh 7.6.7 on .NET 10.0.13 is installed on the dev machine, so the LTS track can be differential-tested today without CI or Docker.',
     status: 'in-progress',
     dependsOn: [8],
     tasks: [
@@ -1442,8 +1442,8 @@ export const WORK = [
         detail: 'STALE todo, corrected 2026-09-06. It captures the 115-case corpus against real pwsh, runs each case twice to prove determinism, and seals every case and the document with a sha256 over a canonical projection so an edited recording is reported as tampering rather than as a defect in the project.',
         status: 'done',
         evidence: [
-          { kind: 'json', file: 'tests/conformance/fixtures/pwsh-7.6.5.json', path: 'cases' },
-          { kind: 'json', file: 'tests/conformance/fixtures/pwsh-7.6.5.json', path: 'integrity' },
+          { kind: 'json', file: 'tests/conformance/fixtures/pwsh-7.6.7.json', path: 'cases' },
+          { kind: 'json', file: 'tests/conformance/fixtures/pwsh-7.6.7.json', path: 'integrity' },
           { kind: 'script', name: 'capture:conformance' },
           { kind: 'test', file: 'tests/conformance/conformance.test.mts', name: 'actually compared something' },
         ],
@@ -1454,14 +1454,14 @@ export const WORK = [
         detail: 'STALE todo, corrected 2026-09-06. Nine normalisation rules cover line endings, machine paths, username, hostname, pid, guid, ISO timestamp, clock time and trailing space, with residue detectors for what normalisation cannot fix.',
         status: 'done',
         evidence: [
-          { kind: 'json', file: 'tests/conformance/fixtures/pwsh-7.6.5.json', path: 'normalisation' },
+          { kind: 'json', file: 'tests/conformance/fixtures/pwsh-7.6.7.json', path: 'normalisation' },
           { kind: 'code', file: 'tools/generate-conformance-fixtures.ps1', pattern: 'NormalisationRules' },
         ],
       },
       {
         id: '11.3',
         title: 'Capture Get-Command metadata from real pwsh to validate our manifests',
-        detail: 'Done for 7.6.5 via tools/capture-pwsh-metadata.ps1: 43 commands, 398 declared parameters, with types, parameter sets, positions, pipeline binding and validation attributes. It already proves four 7.7 deltas against the reference implementation — Format-Table -Property carries no attributes in 7.6.5, and -ExcludeProperty and Join-Path -Extension do not exist there.',
+        detail: 'Done for 7.6.5 via tools/capture-pwsh-metadata.ps1: 43 commands, 398 declared parameters, with types, parameter sets, positions, pipeline binding and validation attributes. It already proves four 7.7 deltas against the reference implementation — Format-Table -Property carries no attributes in 7.6.5, and -ExcludeProperty and Join-Path -Extension do not exist there. Captured again from 7.6.7 on 2026-10-20: the two files differ only in their version fields.',
         status: 'done',
         evidence: [
           { kind: 'json', file: 'compat/upstream/v7.6.5/command-metadata.json', path: 'commands' },
@@ -1485,7 +1485,7 @@ export const WORK = [
         id: '11.5',
         title: 'Report per-profile conformance coverage as a number the site can display',
         detail:
-          'Both halves landed. Every published profile gets its own row from classifyProfileCoverage, expressed in the ladder src/commands/manifest.ts already defines — declared / partial / implemented / verified — where `verified` is awarded only by a case that agreed with a capture of THAT profile\'s own version. 7.6.5 reads 10 / 31 commands verified and 0 / 6 behaviour flags proven; 7.7.0-preview.4 reads 0 and 0, because no 7.7 exists to capture from, and showing the two separately is the point: one global percentage would have carried the 7.6.5 measurement across to a version nothing has ever been asked. Neither denominator reads the evidence, so no fraction can be improved by deleting a fixture — the property is a unit test, not a comment. compat/explorer.html renders both rows.',
+          'Both halves landed. Every published profile gets its own row from classifyProfileCoverage, expressed in the ladder src/commands/manifest.ts already defines — declared / partial / implemented / verified — where `verified` is awarded only by a case that agreed with a capture of THAT profile\'s own version. 7.6.7 reads 10 / 31 commands verified and 0 / 6 behaviour flags proven; 7.7.0-preview.5 reads 0 and 0, because no 7.7 exists to capture from, and showing the two separately is the point: one global percentage would have carried the 7.6.7 measurement across to a version nothing has ever been asked. Neither denominator reads the evidence, so no fraction can be improved by deleting a fixture — the property is a unit test, not a comment. compat/explorer.html renders both rows.',
         status: 'done',
         evidence: [
           { kind: 'export', file: 'tools/conformance.mts', symbol: 'classifyProfileCoverage' },
@@ -1499,7 +1499,7 @@ export const WORK = [
       },
     ],
     acceptance: ['A fixture mismatch fails CI', 'Every divergence is either fixed or listed with a reason', 'Coverage is a measured number, not a claim'],
-    risks: ['7.7-preview.4 needs a side-by-side install or CI container; the 7.6.5 track works locally today'],
+    risks: ['7.7-preview.5 needs a side-by-side install or CI container; the 7.6.7 track works locally today'],
   },
   {
     n: 12,
@@ -1523,7 +1523,7 @@ export const WORK = [
         detail: 'STALE todo, corrected 2026-09-06. The generated explorer page labels every documented difference either emulated or "documented, not emulated", sorts the emulated ones first, and prints the ratio. Delivered as a generated static page rather than as in-session UI, which is what 12.1 and 12.3 would add.',
         status: 'done',
         evidence: [
-          { kind: 'json', file: 'compat/deltas/7.6.5__7.7.0-preview.4.json', path: 'summary' },
+          { kind: 'json', file: 'compat/deltas/7.6.7__7.7.0-preview.5.json', path: 'summary' },
           { kind: 'code', file: 'tools/generate-compat-explorer.mts', pattern: 'documented, not emulated' },
           { kind: 'script', name: 'explorer' },
         ],

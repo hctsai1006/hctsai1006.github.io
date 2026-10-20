@@ -38,8 +38,8 @@ function profileView(file: string): CompatibilityView {
   return viewOfBehaviors(raw.displayVersion ?? '?', raw.behaviors ?? {});
 }
 
-const V76 = profileView('powershell-7.6.5-linux.json');
-const V77 = profileView('powershell-7.7.0-preview.4-linux.json');
+const V76 = profileView('powershell-7.6.7-linux.json');
+const V77 = profileView('powershell-7.7.0-preview.5-linux.json');
 
 const MANIFESTS = (read('../../src/commands/manifests.json') as { commands: CommandManifest[] })
   .commands;
@@ -62,7 +62,7 @@ interface CapturedCommand {
 }
 
 const CAPTURE = (
-  read('../../compat/upstream/v7.6.5/command-metadata.json') as {
+  read('../../compat/upstream/v7.6.7/command-metadata.json') as {
     commands: Record<string, CapturedCommand>;
   }
 ).commands;

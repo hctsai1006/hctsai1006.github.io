@@ -56,8 +56,8 @@ function profileView(file: string): CompatibilityView {
   return viewOfBehaviors(displayVersion, behaviors);
 }
 
-const V76 = profileView('powershell-7.6.5-linux.json');
-const V77 = profileView('powershell-7.7.0-preview.4-linux.json');
+const V76 = profileView('powershell-7.6.7-linux.json');
+const V77 = profileView('powershell-7.7.0-preview.5-linux.json');
 
 const ALL = '__AllParameterSets';
 const anySet = (over: Partial<ParameterSetBinding> = {}): Record<string, ParameterSetBinding> => ({

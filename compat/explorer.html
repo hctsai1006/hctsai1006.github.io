@@ -283,31 +283,10 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
 
   <header class="hero">
     <h1 class="sr-only">Version truth</h1>
-    <p class="hero-source">Microsoft Learn,
-      <a href="https://raw.githubusercontent.com/MicrosoftDocs/PowerShell-Docs/main/reference/docs-conceptual/whats-new/What-s-New-in-PowerShell-74.md">What&rsquo;s New in PowerShell</a>,
-      recorded 2026-09-05</p>
-
-    <blockquote class="hero-sentence">PowerShell <span class="mark mark-ok">7.7.0-preview.4</span> is built on the .NET <span class="mark mark-bad">11.0.100-preview.6</span> <span class="mark mark-bad">runtime</span>.</blockquote>
-
-    <ul class="apparatus">
-        <li class="gloss gloss-ok">
-          <p class="gloss-frag mono">7.7.0-preview.4</p>
-          <p class="gloss-text"><b>A release.</b> Confirmed against the Releases API, and against the commit its annotated tag actually dereferences to.</p>
-        </li>
-        <li class="gloss gloss-bad">
-          <p class="gloss-frag mono">11.0.100-preview.6</p>
-          <p class="gloss-text"><b>Not a runtime.</b> This is the SDK version. The runtime that SDK ships is <span class="mono">11.0.0-preview.6.26359.118</span> — the two differ in the third component, the SDK feature-band level, which a runtime version does not have.</p>
-        </li>
-        <li class="gloss gloss-bad">
-          <p class="gloss-frag">&ldquo;runtime&rdquo;</p>
-          <p class="gloss-text"><b>Wrong noun.</b> SDK and runtime are separate version spaces. No string edit converts one into the other; only the .NET release metadata relates them.</p>
-        </li></ul>
-
-    <p class="hero-lede">One sentence, three claims, two of them imprecise. It is not a careless sentence &mdash;
-      it is what happens when one string has to carry facts that move independently. So this workstation does
-      not store a version. It stores where every version came from, and what disagrees &mdash; and of the
-      four differences it currently records,
-      <a href="#emulated">none are emulated yet</a>.</p>
+    <p class="hero-source">Microsoft Learn, What&rsquo;s New in PowerShell 7.7.0-preview.5</p>
+    <blockquote class="hero-sentence">The documentation and the release metadata currently agree.</blockquote>
+    <p class="hero-lede">That is worth recording, because they have not always. This workstation does not
+      store a version; it stores where every version came from, and what disagrees.</p>
   </header>
 
   <section class="band" aria-labelledby="h-exists">
@@ -330,28 +309,28 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
           </thead>
           <tbody>
         <tr>
-          <td class="mono strong">v7.6.5</td>
+          <td class="mono strong">v7.6.7</td>
           <td><span class="mono tag tag-lts">lts</span></td>
-          <td class="mono quiet">2026-08-14</td>
+          <td class="mono quiet">2026-10-13</td>
           <td class="mono">2028-11-14</td>
           <td class="quiet plain"></td>
-          <td><a class="mono sha" href="https://github.com/PowerShell/PowerShell/commit/7acb29279dd64e646d821f75d1cc8ad59455a9a6" title="7acb29279dd64e646d821f75d1cc8ad59455a9a6">7acb29279dd6</a></td>
+          <td><a class="mono sha" href="https://github.com/PowerShell/PowerShell/commit/c10ef6d557c0d6fe661836f78dbd6fc355261326" title="c10ef6d557c0d6fe661836f78dbd6fc355261326">c10ef6d557c0</a></td>
         </tr>
         <tr>
-          <td class="mono strong">v7.4.19</td>
+          <td class="mono strong">v7.4.21</td>
           <td><span class="mono tag tag-lts">lts</span></td>
-          <td class="mono quiet">2026-08-14</td>
+          <td class="mono quiet">2026-10-13</td>
           <td class="mono">2026-11-10</td>
-          <td class="flagged plain">65 days left</td>
-          <td><a class="mono sha" href="https://github.com/PowerShell/PowerShell/commit/b3d5b858eba508785484768b4b3e318742416b83" title="b3d5b858eba508785484768b4b3e318742416b83">b3d5b858eba5</a></td>
+          <td class="flagged plain">21 days left</td>
+          <td><a class="mono sha" href="https://github.com/PowerShell/PowerShell/commit/1a2b5578f6dd2d4f5bb1dfa9bb57639bacdbe883" title="1a2b5578f6dd2d4f5bb1dfa9bb57639bacdbe883">1a2b5578f6dd</a></td>
         </tr>
         <tr>
-          <td class="mono strong">v7.7.0-preview.4</td>
+          <td class="mono strong">v7.7.0-preview.5</td>
           <td><span class="mono tag tag-preview">preview</span></td>
-          <td class="mono quiet">2026-09-01</td>
+          <td class="mono quiet">2026-09-23</td>
           <td class="mono"><span class="quiet plain">not a supported channel</span></td>
           <td class="quiet plain"></td>
-          <td><a class="mono sha" href="https://github.com/PowerShell/PowerShell/commit/1481b98f0079f979f658e49a7281024cc754049b" title="1481b98f0079f979f658e49a7281024cc754049b">1481b98f0079</a></td>
+          <td><a class="mono sha" href="https://github.com/PowerShell/PowerShell/commit/149ab5cd6cad34869177f86ef9a3da8414f85dc6" title="149ab5cd6cad34869177f86ef9a3da8414f85dc6">149ab5cd6cad</a></td>
         </tr></tbody>
         </table>
       </div>
@@ -371,11 +350,11 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
         <div class="map-rows">
           <div class="align-row">
             <span class="align-label">SDK pinned by the tag</span>
-            <span class="mono align-value">11.0.100-preview.6.26359.118</span>
+            <span class="mono align-value">11.0.100-rc.1.26425.128</span>
           </div>
           <div class="align-row">
             <span class="align-label">the runtime it ships</span>
-            <span class="mono align-value">11.0.0-preview.6.26359.118</span>
+            <span class="mono align-value">11.0.0-rc.1.26425.128</span>
           </div>
         </div>
         <p class="align-note">A lookup, not a comparison. The SDK feature-band level (100) and the runtime patch (0) are unrelated numbers, and only the .NET release metadata connects the two.</p>
@@ -385,12 +364,12 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
         
         <div class="align-row">
           <span class="align-label">runtime it ships</span>
-          <span class="mono align-value"><span class="shared">11.0.0-preview.</span><span class="diverge">6.26359.118</span></span>
+          <span class="mono align-value"><span class="shared">11.0.0-rc.</span><span class="diverge">1.26425.128</span></span>
         </div>
         
         <div class="align-row">
           <span class="align-label">latest in .NET 11.0</span>
-          <span class="mono align-value"><span class="shared">11.0.0-preview.</span><span class="diverge">7.26381.103</span></span>
+          <span class="mono align-value"><span class="shared">11.0.0-rc.</span><span class="diverge">2.26504.105</span></span>
         </div>
         <p class="align-note">.NET 11.0 has moved on. The preview is one drop behind, which is normal and must still be visible.</p>
       </div>
@@ -398,7 +377,7 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
         <div><dt>SDK feature band</dt><dd class="mono">1xx</dd></div>
         <div><dt>.NET channel</dt><dd class="mono">11.0</dd></div>
         <div><dt>release type</dt><dd class="mono">sts</dd></div>
-        <div><dt>support phase</dt><dd class="mono">preview</dd></div>
+        <div><dt>support phase</dt><dd class="mono">go-live</dd></div>
       </dl>
       <p class="aside">Because .NET 11.0 is a
         standard-term
@@ -415,30 +394,37 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
         A disagreement is recorded with both sides intact so a person can decide which is right.</p>
       <ul class="findings">
         <li class="finding sev-warning">
-          <p class="finding-head"><span class="sev-word">warning</span><span class="mono finding-code">docs-axis-confusion</span></p>
-          <p class="finding-msg">Docs call .NET 11.0.100-preview.6 the “runtime” of 7.7.0-preview.4, but that is the SDK version. The runtime is 11.0.0-preview.6.26359.118. SDK and runtime are different version spaces.</p>
-          <div class="sides">
-               <div><span class="side-label">the runtime, per .NET metadata</span><span class="mono proof">11.0.0-preview.6.26359.118</span></div>
-               <div><span class="side-label">what the documentation calls it</span><span class="mono flagged">11.0.100-preview.6</span></div>
-             </div>
+          <p class="finding-head"><span class="sev-word">warning</span><span class="mono finding-code">docs-dotnet-mismatch</span></p>
+          <p class="finding-msg">Docs say 7.4.21 is built on .NET 8.0.31, but v7.4.21 pins SDK 8.0.426 (runtime 8.0.32).</p>
+          
+        </li>
+        <li class="finding sev-warning">
+          <p class="finding-head"><span class="sev-word">warning</span><span class="mono finding-code">docs-dotnet-mismatch</span></p>
+          <p class="finding-msg">Docs say 7.6.7 is built on .NET 10.0.12, but v7.6.7 pins SDK 10.0.402 (runtime 10.0.13).</p>
+          
+        </li>
+        <li class="finding sev-warning">
+          <p class="finding-head"><span class="sev-word">warning</span><span class="mono finding-code">docs-version-behind-release</span></p>
+          <p class="finding-msg">Docs still describe PowerShell 7.4.20 while 7.4.21 has shipped.</p>
+          
+        </li>
+        <li class="finding sev-warning">
+          <p class="finding-head"><span class="sev-word">warning</span><span class="mono finding-code">docs-version-behind-release</span></p>
+          <p class="finding-msg">Docs still describe PowerShell 7.6.6 while 7.6.7 has shipped.</p>
+          
         </li>
         <li class="finding sev-warning">
           <p class="finding-head"><span class="sev-word">warning</span><span class="mono finding-code">lts-approaching-eol</span></p>
-          <p class="finding-msg">v7.4.19 loses support on 2026-11-10 (.NET 8.0 is in maintenance). Plan the profile's retirement before then.</p>
+          <p class="finding-msg">v7.4.21 loses support on 2026-11-10 (.NET 8.0 is in maintenance). Plan the profile's retirement before then.</p>
           
         </li>
         <li class="finding sev-warning">
           <p class="finding-head"><span class="sev-word">warning</span><span class="mono finding-code">preview-runtime-lags-dotnet</span></p>
-          <p class="finding-msg">v7.7.0-preview.4 is built on .NET runtime 11.0.0-preview.6.26359.118, but .NET 11.0 has shipped 11.0.0-preview.7.26381.103. The preview is one or more .NET drops behind — do not describe it as being on the newest .NET.</p>
+          <p class="finding-msg">v7.7.0-preview.5 is built on .NET runtime 11.0.0-rc.1.26425.128, but .NET 11.0 has shipped 11.0.0-rc.2.26504.105. The preview is one or more .NET drops behind — do not describe it as being on the newest .NET.</p>
           <div class="sides">
-               <div><span class="side-label">latest in the .NET channel</span><span class="mono neutral">11.0.0-preview.7.26381.103</span></div>
-               <div><span class="side-label">pinned by the tag</span><span class="mono neutral">11.0.0-preview.6.26359.118</span></div>
+               <div><span class="side-label">latest in the .NET channel</span><span class="mono neutral">11.0.0-rc.2.26504.105</span></div>
+               <div><span class="side-label">pinned by the tag</span><span class="mono neutral">11.0.0-rc.1.26425.128</span></div>
              </div>
-        </li>
-        <li class="finding sev-info">
-          <p class="finding-head"><span class="sev-word">info</span><span class="mono finding-code">sdk-feature-band-differs</span></p>
-          <p class="finding-msg">v7.6.5 builds with the 3xx SDK band (10.0.303) while .NET 10.0 currently leads with 4xx (10.0.400). Bands are parallel trains of the same runtime, not newer/older.</p>
-          
         </li></ul>
     </div>
   </section>
@@ -452,11 +438,11 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
 
       <div class="switcher" role="radiogroup" aria-label="Compatibility profile">
         <button type="button" class="switch is-on" data-profile="lts" role="radio" aria-checked="true" tabindex="0">
-          <span class="switch-v mono">7.6.5</span>
+          <span class="switch-v mono">7.6.7</span>
           <span class="switch-k">long-term support</span>
         </button>
         <button type="button" class="switch" data-profile="preview" role="radio" aria-checked="false" tabindex="-1">
-          <span class="switch-v mono">7.7.0-preview.4</span>
+          <span class="switch-v mono">7.7.0-preview.5</span>
           <span class="switch-k">preview</span>
         </button>
       </div>
@@ -470,7 +456,7 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
               <th scope="col">behavior</th>
               <th scope="col">value in this profile</th>
               <th scope="col">breaking</th>
-              <th scope="col">what changes in 7.7.0-preview.4</th>
+              <th scope="col">what changes in 7.7.0-preview.5</th>
               <th scope="col">upstream</th>
             </tr>
           </thead>
@@ -1179,20 +1165,20 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
           </thead>
           <tbody>
         <tr>
-          <td class="mono key">powershell/7.6.5/linux</td>
+          <td class="mono key">powershell/7.6.7/linux</td>
           <td class="mono val">10 / 31
             <span class="scope mono">32.3%</span></td>
           <td class="mono val">0 / 6
             <span class="scope mono">0%</span></td>
-          <td class="doc">compared against a captured run of PowerShell 7.6.5</td>
+          <td class="doc">compared against a captured run of PowerShell 7.6.7</td>
         </tr>
         <tr class="not-emulated">
-          <td class="mono key">powershell/7.7.0-preview.4/linux</td>
+          <td class="mono key">powershell/7.7.0-preview.5/linux</td>
           <td class="mono val">0 / 31
             <span class="scope mono">0%</span></td>
           <td class="mono val">0 / 6
             <span class="scope mono">0%</span></td>
-          <td class="doc">no fixture was captured from PowerShell 7.7.0-preview.4. The only capture is from 7.6.5, which is evidence about that version and not this one.</td>
+          <td class="doc">no fixture was captured from PowerShell 7.7.0-preview.5. The only capture is from 7.6.7, which is evidence about that version and not this one.</td>
         </tr></tbody>
         </table>
       </div>
@@ -1211,8 +1197,8 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
       </div>
 
       <p class="table-note">Compared against PowerShell
-        7.6.5 on .NET 10.0.11
-        (Unix), captured 2026-09-05T01:30:19.6549806Z.</p>
+        7.6.7 on .NET 10.0.13
+        (Unix), captured 2026-10-20T09:13:50.6356308Z.</p>
     </div>
   </section>
 </main>
@@ -1223,9 +1209,9 @@ a:focus-visible,.switch:focus-visible,[data-scroller]:focus-visible{
       the generated delta, and <span class="mono">tests/conformance/report.json</span> — the
       differential run against a real PowerShell. The page is regenerated from them; if it drifts,
       the build fails.</p>
-    <p>Lockfile generated 2026-09-05T16:14:25.512Z from 41 sources across
+    <p>Lockfile generated 2026-10-20T07:26:47.206Z from 41 sources across
       5 precedence ranks.
-      Upstream declares <span class="mono">v7.7.0-preview.5</span> as the next
+      Upstream declares <span class="mono">v7.7.0-preview.6</span> as the next
       release, which does not exist yet.</p>
   </div>
 </footer>
