@@ -48,6 +48,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { parseVersion, byCodepoint } from './version.mts';
+import { supportCountdown } from './verify-release-truth.mts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..');
@@ -449,18 +450,18 @@ function renderExists(f: Facts): string {
   const rows = lock.releases
     .map((r) => {
       const eol = r.supportedUntil;
-      const days =
-        eol === null
-          ? null
-          : Math.round((Date.parse(`${eol}T00:00:00Z`) - Date.parse(lock.generatedAt)) / 86_400_000);
-      const soon = days !== null && days <= 180;
+      // As of the lockfile's generation, so one lockfile always renders the
+      // same page. The verifier decides when support ends; within its 180-day
+      // horizon the cell counts down, and after the date it says "ended".
+      const countdown =
+        eol === null ? null : supportCountdown(eol, Date.parse(lock.generatedAt), 180);
       return `
         <tr>
           <td class="mono strong">${esc(r.tag)}</td>
           <td><span class="mono tag tag-${esc(r.channel)}">${esc(r.channel)}</span></td>
           <td class="mono quiet">${esc(r.publishedAt.slice(0, 10))}</td>
           <td class="mono">${eol === null ? '<span class="quiet plain">not a supported channel</span>' : esc(eol)}</td>
-          <td class="${soon ? 'flagged' : 'quiet'} plain">${days === null ? '' : soon ? `${days} days left` : ''}</td>
+          <td class="${countdown === null ? 'quiet' : 'flagged'} plain">${countdown === null ? '' : esc(countdown)}</td>
           <td>${commitLink(r.commitSha)}</td>
         </tr>`;
     })

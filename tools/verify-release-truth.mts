@@ -220,7 +220,7 @@ interface ReleaseRecord {
   snapshotDigest: string;
 }
 
-interface Discrepancy {
+export interface Discrepancy {
   severity: Severity;
   code: string;
   message: string;
@@ -523,6 +523,181 @@ const canonicaliseReleases: Canonicaliser = (body) => {
 };
 
 /**
+ * Is this release still supported, and how close is the edge?
+ *
+ * Extracted as a pure function so the BOUNDARY can be tested. It used to be
+ * three lines inline behind `Date.now()`, and the bug it carried was invisible
+ * for exactly that reason: nothing could ask it about a specific instant.
+ *
+ * `expired` is a timestamp comparison. `daysLeft` is a rounded number for the
+ * horizon test, and is deliberately NOT what decides support — a display
+ * rounding deciding a support question is what reported a release out of
+ * support up to twelve hours early. People read supportCountdown instead.
+ *
+ * The end-of-support date is the LAST day of support, so the deadline is the
+ * end of that day (UTC), not its start. The lifecycle doc says 7.4 "is still
+ * supported until 10-Nov-2026"; the .NET team says .NET 8 and 9 "may each
+ * receive one final update on that day"; and .NET 6 shipped its last update,
+ * 6.0.36, on its end-of-support date, 2024-11-12. Expiring at the start of the
+ * day called 7.4 unsupported on the day its final update could still ship.
+ */
+export function classifySupport(
+  supportedUntil: string,
+  now: number,
+  horizonDays: number,
+): { expired: boolean; approaching: boolean; daysLeft: number; remainingMs: number } | null {
+  const deadline = Date.parse(`${supportedUntil}T00:00:00Z`) + 86_400_000;
+  if (!Number.isFinite(deadline)) return null;
+  const remainingMs = deadline - now;
+  const expired = remainingMs <= 0;
+  const daysLeft = Math.round(remainingMs / 86_400_000);
+  return { expired, approaching: !expired && daysLeft <= horizonDays, daysLeft, remainingMs };
+}
+
+/**
+ * A countdown to an end-of-support date as of `now`, for people to read.
+ *
+ * Whether support has ended is classifySupport's answer, and this defers to it,
+ * so a page and the verifier cannot disagree about the last day. Days are
+ * counted to the date itself, the way "loses support on 2026-11-10" reads: on
+ * 2026-10-20 that is 21 days away, and on the date it is the last day. The
+ * explorer used to subtract dates on its own and would have shown
+ * "-1 days left" the day after.
+ *
+ * Null when the date does not parse or is beyond `horizonDays`.
+ */
+export function supportCountdown(
+  supportedUntil: string,
+  now: number,
+  horizonDays: number,
+): string | null {
+  const support = classifySupport(supportedUntil, now, horizonDays);
+  if (support === null) return null;
+  if (support.expired) return 'ended';
+  if (!support.approaching) return null;
+  const days = Math.ceil((Date.parse(`${supportedUntil}T00:00:00Z`) - now) / 86_400_000);
+  return days <= 0 ? 'last day' : days === 1 ? '1 day left' : `${days} days left`;
+}
+
+/**
+ * The declared LTS tags that the releases feed has, newest first: the first is
+ * the current LTS line and the rest are previous ones.
+ *
+ * metadata.json promises no order for LTSReleaseTag (it read
+ * ["v7.4.21", "v7.6.7"] on 2026-10-20), so the order comes from the versions.
+ * Two lines are declared only while one LTS overlaps the next, from 7.6.0 on
+ * 2026-03-18 until upstream drops 7.4. This is a function a test can call
+ * because the lockfile stops showing the two-line case on that day.
+ *
+ * A declared tag the feed lacks comes back in `missing` for the caller to
+ * report. One that cannot be ranked comes back in `unrankable` and is not
+ * reported here: ranking the whole feed already raised
+ * `unrankable-release-tag` for it.
+ */
+export function rankDeclaredLts<R extends { tag_name: string }>(
+  ltsTags: readonly string[],
+  published: readonly R[],
+): { ranked: R[]; missing: string[]; unrankable: string[] } {
+  const rankable: Array<{ release: R; parsed: ParsedVersion }> = [];
+  const missing: string[] = [];
+  const unrankable: string[] = [];
+  for (const tag of ltsTags) {
+    const release = published.find((r) => r.tag_name === tag);
+    if (release === undefined) {
+      missing.push(tag);
+      continue;
+    }
+    const parsed = parseVersion(tag.replace(/^v/, ''));
+    if (parsed === null) unrankable.push(tag);
+    else rankable.push({ release, parsed });
+  }
+  return {
+    ranked: rankable.sort((a, b) => -compareVersions(a.parsed, b.parsed)).map((x) => x.release),
+    missing,
+    unrankable,
+  };
+}
+
+/** What classifyLtsSupport reads from a release record. */
+export interface SupportLine {
+  tag: string;
+  supportedUntil: string | null;
+  dotnet: { channelVersion: string | null; supportPhase: string | null };
+}
+
+/**
+ * End of support for the declared LTS lines, as findings.
+ *
+ * The CURRENT line is the one the LTS profile and the command manifests are
+ * built from, so its expiry is an error: the site would be emulating an
+ * unsupported release as its baseline, and a human has to move it.
+ *
+ * A PREVIOUS line feeds nothing here, and upstream keeps declaring it for a
+ * while after it ends: metadata.json listed v7.2.24 in LTSReleaseTag from
+ * 7.2's end of support on 2024-11-08 until 2025-01-24. As an error, a window
+ * like that fails every sync pull request at its own `truth:verify` gate,
+ * with real updates such as the next 7.6 patch stuck in the same pull
+ * request. So an expired previous line is a warning, and its tag comes back
+ * in `retired` so the caller can stop cross-checking docs about it.
+ *
+ * NO COUNTDOWN IN ANY MESSAGE. These messages are stored in the lockfile and
+ * compared, so embedding a countdown made the lockfile drift EVERY DAY -- "in
+ * 66 days" becoming "in 65 days" was the entire diff on the first live check
+ * after merge. A scheduled job that reports drift daily, forever, for the
+ * passage of time is a job whose pull request everyone learns to ignore,
+ * which costs exactly the signal it exists to provide. The date is the
+ * upstream fact and it is what gets recorded; `report` and the explorer
+ * render the countdown live with supportCountdown. Severity and code still
+ * depend on `now`, and that is fine: they change once, when support ends.
+ */
+export function classifyLtsSupport(
+  current: SupportLine,
+  previous: readonly SupportLine[],
+  now: number,
+  horizonDays: number,
+): { findings: Discrepancy[]; retired: string[] } {
+  const findings: Discrepancy[] = [];
+  const retired: string[] = [];
+  for (const [index, line] of [current, ...previous].entries()) {
+    if (line.supportedUntil === null) continue;
+    const support = classifySupport(line.supportedUntil, now, horizonDays);
+    if (support === null) continue;
+    const isCurrent = index === 0;
+    if (support.expired && isCurrent) {
+      findings.push({
+        severity: 'error',
+        code: 'lts-out-of-support',
+        message: `${line.tag} reached end of support on ${line.supportedUntil}. It must not be offered as a supported profile.`,
+        actual: line.supportedUntil,
+        sources: [DOTNET_INDEX, LIFECYCLE_URL],
+      });
+    } else if (support.expired) {
+      retired.push(line.tag);
+      findings.push({
+        severity: 'warning',
+        code: 'previous-lts-out-of-support',
+        message: `${line.tag} reached end of support on ${line.supportedUntil}, but metadata.json still declares it as LTS. No profile is built from it, so nothing here needs to change; its record leaves this lockfile when upstream stops declaring it.`,
+        actual: line.supportedUntil,
+        sources: [METADATA_URL, DOTNET_INDEX, LIFECYCLE_URL],
+      });
+    } else if (support.approaching) {
+      findings.push({
+        severity: 'warning',
+        code: 'lts-approaching-eol',
+        message:
+          `${line.tag} loses support on ${line.supportedUntil} (.NET ${line.dotnet.channelVersion} is in ${line.dotnet.supportPhase}). ` +
+          (isCurrent
+            ? 'The LTS profile is built from it, so move the profile to the next LTS before then.'
+            : 'It is the previous LTS line and no profile is built from it, so nothing here needs to change.'),
+        actual: line.supportedUntil,
+        sources: [DOTNET_INDEX, LIFECYCLE_URL],
+      });
+    }
+  }
+  return { findings, retired };
+}
+
+/**
  * Newest first, by version. Never by feed order (TRAP E).
  *
  * Unrankable tags are EXCLUDED, not sorted by some fallback. A comparator that
@@ -532,31 +707,6 @@ const canonicaliseReleases: Canonicaliser = (body) => {
  * Excluding them keeps the comparator a total order over what remains, and the
  * exclusion is reported rather than silent (TRAP F).
  */
-/**
- * Is this release still supported, and how close is the edge?
- *
- * Extracted as a pure function so the BOUNDARY can be tested. It used to be
- * three lines inline behind `Date.now()`, and the bug it carried was invisible
- * for exactly that reason: nothing could ask it about a specific instant.
- *
- * `expired` is a timestamp comparison. `daysLeft` is a rounded number for
- * humans and for the horizon test, and is deliberately NOT what decides
- * support — a display rounding deciding a support question is what reported a
- * release out of support up to twelve hours early.
- */
-export function classifySupport(
-  supportedUntil: string,
-  now: number,
-  horizonDays: number,
-): { expired: boolean; approaching: boolean; daysLeft: number; remainingMs: number } | null {
-  const deadline = Date.parse(`${supportedUntil}T00:00:00Z`);
-  if (!Number.isFinite(deadline)) return null;
-  const remainingMs = deadline - now;
-  const expired = remainingMs <= 0;
-  const daysLeft = Math.round(remainingMs / 86_400_000);
-  return { expired, approaching: !expired && daysLeft <= horizonDays, daysLeft, remainingMs };
-}
-
 function newestFirst(releases: readonly GhRelease[]): GhRelease[] {
   const rankable: Array<{ release: GhRelease; parsed: ParsedVersion }> = [];
   const unrankable: string[] = [];
@@ -1083,36 +1233,31 @@ async function build(): Promise<Lockfile> {
   // concurrently (v7.4.19 and v7.6.5 on 2026-09-05, v7.4.21 and v7.6.7 on
   // 2026-10-20), and discarding one leaves the
   // lockfile unable to answer "is 7.4 still supported?".
-  const declaredPresent: GhRelease[] = [];
-  for (const tag of ltsTags) {
-    const found = published.find((r) => r.tag_name === tag);
-    if (found === undefined) {
-      // A first-party claim we cannot corroborate is a finding, not something to
-      // silently drop.
-      note({
-        severity: 'warning',
-        code: 'declared-lts-not-in-feed',
-        message: `metadata.json declares ${tag} as LTS, but it does not appear in the newest 100 published releases. It cannot be corroborated.`,
-        actual: tag,
-        sources: [METADATA_URL, `${GH}/releases`],
-      });
-      continue;
-    }
-    declaredPresent.push(found);
+  const declared = rankDeclaredLts(ltsTags, published);
+  for (const tag of declared.missing) {
+    // A first-party claim we cannot corroborate is a finding, not something to
+    // silently drop.
+    note({
+      severity: 'warning',
+      code: 'declared-lts-not-in-feed',
+      message: `metadata.json declares ${tag} as LTS, but it does not appear in the newest 100 published releases. It cannot be corroborated.`,
+      actual: tag,
+      sources: [METADATA_URL, `${GH}/releases`],
+    });
   }
-  if (declaredPresent.length === 0) {
+
+  const [currentLtsRelease, ...previousLtsReleases] = declared.ranked;
+  if (currentLtsRelease === undefined) {
     throw new ToolFailure(
-      `metadata.json declares LTS ${ltsTags.join(', ')} but none appear in the published releases feed`,
+      declared.unrankable.length === 0
+        ? `metadata.json declares LTS ${ltsTags.join(', ')} but none appear in the published releases feed`
+        : 'failed to select an LTS release',
     );
   }
 
-  const ltsOrdered = newestFirst(declaredPresent);
-  const currentLtsRelease = ltsOrdered[0];
-  if (currentLtsRelease === undefined) throw new ToolFailure('failed to select an LTS release');
-
   const ltsRecord = await describeRelease(currentLtsRelease, dotnet);
   const previousLts: ReleaseRecord[] = [];
-  for (const r of ltsOrdered.slice(1)) previousLts.push(await describeRelease(r, dotnet));
+  for (const r of previousLtsReleases) previousLts.push(await describeRelease(r, dotnet));
   const previewRecord = await describeRelease(newestPreview, dotnet);
 
   const releases = [ltsRecord, ...previousLts, previewRecord];
@@ -1124,49 +1269,15 @@ async function build(): Promise<Lockfile> {
   // lets a run that straddles midnight classify two releases against two
   // different days, which is a disagreement with no correct answer and is
   // invisible in the output.
+  //
+  // Expiry is a timestamp comparison, made in classifySupport. It used to be
+  // `Math.round(...) <= 0`, a DISPLAY rounding deciding a support question,
+  // which declared a release out of support up to twelve hours early; the
+  // measurements are in tests/unit/release-truth-eol.test.mts.
   const now = Date.now();
-  for (const rec of [ltsRecord, ...previousLts]) {
-    if (rec.supportedUntil === null) continue;
-    // EXPIRY IS A TIMESTAMP COMPARISON. It used to be `Math.round(...) <= 0`,
-    // which is a DISPLAY rounding deciding a support question, and it declared
-    // a release out of support up to twelve hours early. MEASURED against the
-    // deadline this same line computes, 2026-11-10T00:00:00Z:
-    //
-    //   2026-11-09T12:00:00.000Z   43,200,000 ms left   daysLeft 1   supported
-    //   2026-11-09T12:00:00.001Z   43,199,999 ms left   daysLeft 0   EXPIRED  <- wrong
-    //   2026-11-09T23:59:59.999Z            1 ms left   daysLeft 0   EXPIRED  <- wrong
-    //
-    // `lts-out-of-support` is severity `error`, so being early by half a day is
-    // a red required gate for a profile that is still supported. Rounded days
-    // are kept, but only for the horizon test and the human-readable countdown.
-    const support = classifySupport(rec.supportedUntil, now, HORIZON_DAYS);
-    if (support === null) continue;
-    const { expired } = support;
-    if (expired || support.approaching) {
-      note({
-        severity: expired ? 'error' : 'warning',
-        code: expired ? 'lts-out-of-support' : 'lts-approaching-eol',
-        message:
-          expired
-            ? `${rec.tag} reached end of support on ${rec.supportedUntil}. It must not be offered as a supported profile.`
-            : // NO COUNTDOWN IN HERE. `daysLeft` is derived from Date.now(), and this
-              // message is stored in the lockfile and compared, so embedding it made
-              // the lockfile drift EVERY DAY -- "in 66 days" becoming "in 65 days" was
-              // the entire diff on the first live check after merge. A scheduled job
-              // that reports drift daily, forever, for the passage of time is a job
-              // whose pull request everyone learns to ignore, which costs exactly the
-              // signal it exists to provide.
-              //
-              // The date is the upstream fact and it is what gets recorded. The
-              // countdown is a rendering of it against today, so `render` computes it
-              // live from `actual`. Severity and code still turn on daysLeft, and that
-              // is fine: those change once, when it actually expires.
-              `${rec.tag} loses support on ${rec.supportedUntil} (.NET ${rec.dotnet.channelVersion} is in ${rec.dotnet.supportPhase}). Plan the profile's retirement before then.`,
-        actual: rec.supportedUntil,
-        sources: [DOTNET_INDEX, LIFECYCLE_URL],
-      });
-    }
-  }
+  const support = classifyLtsSupport(ltsRecord, previousLts, now, HORIZON_DAYS);
+  for (const finding of support.findings) note(finding);
+  const retired = new Set(support.retired);
 
   // Cross-check: the declared LTS must sit on a .NET LTS channel. This is the
   // documented rule, so a disagreement means one of two first-party sources is
@@ -1268,6 +1379,13 @@ async function build(): Promise<Lockfile> {
 
   // --- axis 5: documentation ----------------------------------------------
   for (const rel of releases) {
+    // Not for a previous LTS line past its end of support. The What's-New docs
+    // of retired lines name no patch release: the 7.2 and 7.3 pages open with
+    // "PowerShell 7.2 includes the following features", which parseDocsClaim
+    // cannot read and reports as docs-parse-failed, an error. If the 7.4 page
+    // goes the same way while metadata.json still declares 7.4, that error
+    // would fail the sync for a line nothing here is built from.
+    if (retired.has(rel.tag)) continue;
     const p = parseVersion(rel.version);
     if (p === null) continue;
     // Docs use the undotted minor, e.g. What-s-New-in-PowerShell-76.md. At 7.10
@@ -1496,13 +1614,14 @@ function report(lock: Lockfile): void {
     line(`  [${d.severity}] ${d.code}`);
     for (const chunk of wrap(d.message, 66)) line(`     ${chunk}`);
     // Computed here, never stored: a countdown against today is not an upstream
-    // fact, and putting one in the lockfile made it drift every day. See the
-    // note that raises lts-approaching-eol.
-    const until = typeof d.actual === 'string' ? Date.parse(`${d.actual}T00:00:00Z`) : Number.NaN;
-    if (d.code === 'lts-approaching-eol' && Number.isFinite(until)) {
-      const days = Math.round((until - Date.now()) / 86_400_000);
-      line(`     (${String(days)} days from today)`);
-    }
+    // fact, and putting one in the lockfile made it drift every day. See
+    // classifyLtsSupport. A lockfile read after the date says "ended", not a
+    // negative count.
+    const countdown =
+      d.code === 'lts-approaching-eol' && typeof d.actual === 'string'
+        ? supportCountdown(d.actual, Date.now(), Number.POSITIVE_INFINITY)
+        : null;
+    if (countdown !== null) line(`     (${countdown})`);
   }
   line();
 }
