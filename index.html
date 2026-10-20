@@ -156,7 +156,7 @@
        Zephyr RTOS 與 M5Stack platforms maintainer。</p>
     <!-- ⚠️ 下面這行是 SEO/無 JS 用的靜態文字,不能由 JS 產生,所以是唯一還要手動同步的計數。
          改 D.stats 時記得一起改,tools/check-numbers.js 會比對兩邊。 -->
-    <p>460 個已合併的上游 pull request,橫跨 108 個專案與 11 個基金會。</p>
+    <p>463 個已合併的上游 pull request,橫跨 108 個專案與 11 個基金會。</p>
     <ul>
       <li>著作:IEEE SCC 2026、IEEE WF-PST 2026、ICAIMS 2026 (IEEE) 已接受,TASTI 2026 口頭發表,另有預印本。ORCID 0000-0001-7421-8027</li>
       <li>獲獎:2023 總統教育獎 · 奮發向上獎;2026 國科會大專學生研究創作獎;2026 Make NTU 強茂企業獎第一名;2026 臺灣太空事務青年人才選訓計畫入選;2025 梅竹黑客松第一名</li>
@@ -220,7 +220,7 @@ const D={
      現在 profile / README 種子 / timeline / Get-Contribution 全部從這裡算,改一次就好。
      唯一還要手動改的是 <noscript> 那段(SEO 用、不能靠 JS 產生)——tools/check-numbers.js 會盯著它。
      權威來源:people.cs.nycu.edu.tw/~hctsai1006/open-source/ 的 os-metrics。 */
-  stats:{merged:460, projects:108, foundations:11, asOf:'2026-10-20'},
+  stats:{merged:463, projects:108, foundations:11, asOf:'2026-10-21'},
   profile:[['head','thc1006  (蔡秀吉 · Hsiu-Chi Tsai)'],
     ['','CNCF Ambassador'],
     ['','Nephio (Linux Foundation Networking) Technical Steering Committee Member'],
@@ -238,8 +238,8 @@ const D={
      tools/check-numbers.js 會拿權威頁的 CNCF section 逐列核對這個旗標。 */
   contribTop:[['kubernetes-sigs/kueue',85,1],['kubernetes/kubernetes',55,1],
     ['open-telemetry/opentelemetry-cpp',42,1],['RocketPy-Team/RocketPy',24,0],
-    ['zephyrproject-rtos/zephyr',21,0],['ocudu/ocudu',14,0],['kubernetes-sigs/dra-driver-cpu',10,1],
-    ['kubernetes/test-infra',10,1],['nephio-project/nephio',8,0],['jaegertracing/jaeger-ui',6,1],['kubernetes-sigs/dranet',6,1],
+    ['zephyrproject-rtos/zephyr',22,0],['ocudu/ocudu',14,0],['kubernetes/test-infra',12,1],
+    ['kubernetes-sigs/dra-driver-cpu',10,1],['nephio-project/nephio',8,0],['jaegertracing/jaeger-ui',6,1],['kubernetes-sigs/dranet',6,1],
     ['kubernetes-sigs/kernel-module-management',6,1],['llm-d/llm-d-router',6,1],['sysprog21/muxleq',6,0],['open-telemetry/opentelemetry-collector-contrib',5,1],['volcano-sh/volcano',5,1],
     ['AcademySoftwareFoundation/rawtoaces',4,0],['cloud-native-taiwan/infra-labs-docs',4,0],['cncf/prow-github-actions',4,1],
     ['Gthulhu/Gthulhu',4,0],['kptdev/porch',4,1],
@@ -248,7 +248,7 @@ const D={
     ['k8s-operatorhub/community-operators',3,1],['k8snetworkplumbingwg/dra-driver-sriov',3,0],
     ['kagent-dev/website',3,1],['kubernetes-sigs/signalhound',3,1],['nephio-project/catalog',3,0],['nephio-project/test-infra',3,0],
     ['openwrt/openwrt',3,0],['prometheus/prometheus',3,1]],
-  cncf:['CNCF',309,56],
+  cncf:['CNCF',311,56],
   /* 已發佈且在 credits 欄具名的安全 advisory。⚠️ 只有 zephyr 那則有 CVE(CVE-2026-19737,Zephyr 自己的 CNA 發的,CVE.org 已公開但沒列 credits),
      三則都還沒進 GitHub 全域 advisory DB 與 OSV(repo 已發佈 != 全域收錄)——Get-Advisory 會照實講,別擅自拿掉那幾句。
      狀態查法:gh api repos/<repo>/security-advisories,或跑 personal-homepage/tools/security-watch.sh。 */
@@ -658,7 +658,7 @@ function buildSeed(){
     line('accent','open-telemetry/opentelemetry-cpp  ·  CNCF Incubating'),
     line('','  PR    #4502    Elasticsearch async export 的結果只回報一次，修自報的 #4338'),line(''),
     line('accent','zephyrproject-rtos/zephyr  ·  Linux Foundation'),
-    line('','  PR    #120492  esp32 legacy DMA 拒收超過 descriptor 容量的區塊'),line(''),
+    line('','  PR    #120491  nrfx 配不到 RX buffer 時歸還 TX block'),line(''),
     line('accent','insomniacslk/dhcp  ·  Go networking · 非 CNCF'),
     line('','  PR    #588     BroadcastRawUDPConn.ReadFrom fuzz target + 獨立 reference model (draft)'),
     line('','  PR    #589     回傳 DHCP payload 前驗 UDP length'),
