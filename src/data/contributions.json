@@ -3,8 +3,8 @@
   "foundations": {
     "cncf": {
       "label": "CNCF",
-      "merged": 309,
-      "repositories": 56
+      "merged": 312,
+      "repositories": 57
     }
   },
   "top": [
@@ -30,7 +30,7 @@
     },
     {
       "repository": "zephyrproject-rtos/zephyr",
-      "merged": 21,
+      "merged": 22,
       "cncf": false
     },
     {
@@ -39,12 +39,12 @@
       "cncf": false
     },
     {
-      "repository": "kubernetes-sigs/dra-driver-cpu",
-      "merged": 10,
+      "repository": "kubernetes/test-infra",
+      "merged": 12,
       "cncf": true
     },
     {
-      "repository": "kubernetes/test-infra",
+      "repository": "kubernetes-sigs/dra-driver-cpu",
       "merged": 10,
       "cncf": true
     },
