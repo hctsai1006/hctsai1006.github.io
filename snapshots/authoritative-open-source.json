@@ -2,8 +2,8 @@
   "capturedFrom": "C:/Users/thc1006/Desktop/MAY/personal-homepage/open-source/index.html",
   "capturedAt": "2026-10-20",
   "metrics": {
-    "merged": 463,
-    "projects": 108,
+    "merged": 464,
+    "projects": 109,
     "foundations": 11
   },
   "cncfRepositories": [
@@ -47,6 +47,7 @@
     "kubernetes/website",
     "kubestellar/kubestellar",
     "kubevirt/kubevirt",
+    "lima-vm/lima",
     "llm-d/llm-d-router",
     "meshery/meshery",
     "microcks/microcks.io",
