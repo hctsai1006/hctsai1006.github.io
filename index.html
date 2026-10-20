@@ -59,11 +59,13 @@
   .console::-webkit-scrollbar{width:12px}
   .console::-webkit-scrollbar-thumb{background:var(--ghost);border-radius:6px}
 
-  /* content-visibility:auto —— 累積上千行後,螢幕外的舊行跳過 layout/paint,
-     大量輸出與捲動在行動裝置上才不會隨歷史長度變慢;contain-intrinsic-size 提供
-     未渲染時的高度估計(auto 前綴會記住實際渲染過的尺寸),避免捲動條跳動。 */
-  .row{white-space:pre-wrap;word-break:break-word;min-height:1.25em;
-    content-visibility:auto;contain-intrinsic-size:auto 1.25em}
+  /* content-visibility:auto 掛在每 64 行一塊的 .blk 上,不掛在每一行。
+     螢幕外的區塊跳過 layout/paint,轉向或縮放視窗時只重排看得到的部分。
+     以前每一行各掛一個:滿 1500 行時,每一影格都要替 1500 個元素判斷是否接近可視範圍,
+     打字和捲動反而比完全不用還慢。contain-intrinsic-size 的 auto 會記住實際渲染過的高度,
+     80em(64 行 x 1.25em)只是還沒渲染過時的估計。 */
+  .blk{content-visibility:auto;contain-intrinsic-size:auto 80em}
+  .row{white-space:pre-wrap;word-break:break-word;min-height:1.25em}
   .banner{color:var(--fg)} .banner b{color:var(--head);font-weight:600}
   .ok{color:var(--ok)} .err{color:var(--err)} .muted{color:var(--ghost)}
   .head{color:var(--head);font-weight:600} .rule{color:var(--ghost)}
@@ -200,7 +202,7 @@
 "use strict";
 const con=document.getElementById('con'), out=document.getElementById('out'),
     edit=document.getElementById('edit'), ghost=document.getElementById('ghost'), mirror=document.getElementById('mirror'),
-    ez=document.getElementById('ez'), mk=document.getElementById('mk'),
+    mk=document.getElementById('mk'),
     cmdmenu=document.getElementById('cmdmenu');
 /* mirror 內是「文字節點 + 零寬標記」,標記的位置就是游標所在的視覺座標 */
 const mirrorText=document.createTextNode('');
@@ -1517,13 +1519,23 @@ function highlightInto(parent,s){
 function codeLine(s){ return {code:s, txt:s}; }
 
 /* ---------- 輸出(進 role=log)---------- */
-/* 所有輸出都必須經過這裡才會受上限保護 */
-function trimOutput(){ while(out.childElementCount>MAXROWS) out.removeChild(out.firstChild); }
-/* 批次插入:整批 rows 在記憶體組裝,只觸發一次 reflow。
+/* 所有輸出都必須經過 appendRow,才會受上限保護。
+   列放進每 BLKROWS 行一塊的 .blk(content-visibility 的單位,見 CSS)。上限以整塊修剪:
+   最舊的一塊拿掉後仍剩至少 MAXROWS 行才拿,所以總列數落在 MAXROWS 到 MAXROWS+BLKROWS 之間。
+   整塊移除比逐行移除便宜得多,而且不會改到還留著的區塊。 */
+const BLKROWS=64;
+let curBlk=null, curBlkRows=0, nRows=0;
+function appendRow(d){
+  if(!curBlk||curBlkRows>=BLKROWS){
+    curBlk=document.createElement('div'); curBlk.className='blk'; out.appendChild(curBlk); curBlkRows=0; }
+  curBlk.appendChild(d); curBlkRows++; nRows++; }
+function trimOutput(){ let f=out.firstElementChild;
+  while(f&&f!==curBlk&&nRows-f.childElementCount>=MAXROWS){
+    nRows-=f.childElementCount; out.removeChild(f); f=out.firstElementChild; } }
+/* 逐列放進區塊,中間不讀任何幾何,所以整批仍只排版一次。
    整份檔案沒有任何 innerHTML —— 全部以 textContent / DOM 節點建立,不存在 injection sink。
    row 的形態:{cls,txt} 純文字 · {code} 語法高亮 · {kv} 清單欄位 · {parts} 多段樣式(可含連結)。 */
 function print(rows){ if(!rows) return; if(!Array.isArray(rows)) rows=[rows];
-  const frag=document.createDocumentFragment();
   for(let i=0;i<rows.length;i++){ const r=rows[i]; if(!r) continue;
     const d=document.createElement('div'); d.className='row';
     if(r.kv){ const s=document.createElement('span'); s.className='head'; s.textContent=r.kv[0];
@@ -1539,8 +1551,7 @@ function print(rows){ if(!rows) return; if(!Array.isArray(rows)) rows=[rows];
     else if(r.cls){ const s=document.createElement('span'); s.className=r.cls;
       s.textContent=(r.txt!=null?r.txt:''); d.appendChild(s); }
     else { d.textContent=(r.txt!=null?r.txt:''); }
-    frag.appendChild(d); }
-  out.appendChild(frag);
+    appendRow(d); }
   trimOutput(); }
 function updatePrompt(){ const el=document.querySelector('#iw .prompt .path'); if(el) el.textContent=CWD; }
 function printPrompt(cmd){
@@ -1551,13 +1562,21 @@ function printPrompt(cmd){
   p.appendChild(pa); p.appendChild(document.createTextNode('> '));
   d.appendChild(p);
   highlightInto(d,cmd);                       // 使用者輸入:純節點,不進 parser
-  out.appendChild(d); trimOutput(); }         // 提示行也要計入上限,否則空 Enter 可以繞過
-function scrollBottom(){ con.scrollTop=con.scrollHeight; }
+  appendRow(d); trimOutput(); }               // 提示行也要計入上限,否則空 Enter 可以繞過
+/* 新區塊第一次真正渲染前,高度是 contain-intrinsic-size 的估計值。窄螢幕上長行會折行,
+   渲染後比估計高,剛捲到底的位置就停在半途,命令列落到畫面外。ResizeObserver 在排版之後、
+   繪製之前通知:使用者本來就在底部,就再捲一次;使用者自己往上捲時 pinned 是 false,不去動它。
+   主控台本身變矮(例如把視窗拉矮)時捲動位置不變,命令列一樣會被切到畫面外,所以兩個都觀察。 */
+let pinned=true;
+function scrollBottom(){ pinned=true; con.scrollTop=con.scrollHeight; }
+con.addEventListener('scroll',function(){ pinned=con.scrollTop+con.clientHeight>=con.scrollHeight-2; },{passive:true});
+if(window.ResizeObserver){ const ro=new ResizeObserver(function(){ if(pinned) scrollBottom(); });
+  ro.observe(out); ro.observe(con); }
 /* 清屏會遞增 outGen;正在串流的非同步輸出發現世代已變就整批放棄,
    否則清屏後殘留的 setTimeout 會把舊輸出「復活」印回畫面。 */
 let outGen=0;
 const reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-function clearOut(){ outGen++; busy=false;
+function clearOut(){ outGen++; busy=false; curBlk=null; curBlkRows=0; nRows=0;
   if(out.replaceChildren) out.replaceChildren();
   else while(out.firstChild) out.removeChild(out.firstChild); }
 function asyncPrint(rows,gap,done){
@@ -1587,27 +1606,38 @@ function predict(v){ if(!v)return''; let low=v.toLowerCase(),i,h;
   for(i=0;i<CORPUS.length;i++){ if(CORPUS[i].length>v.length && CORPUS[i].toLowerCase().indexOf(low)===0) return CORPUS[i]; }
   return ''; }
 /* sync 拆成兩段:文字更新同步做(輸入不能延遲),
-   會強制重排的幾何量測(scrollHeight / offsetWidth)交給 rAF 批次,
-   同一影格內多次 sync 只量測一次,避免 layout thrashing。 */
+   會強制重排的幾何量測交給 rAF 批次,同一影格內多次 sync 只量測一次。
+   每次按鍵 input 與 selectionchange 各會呼叫一次 sync,所以值和灰字沒變就不碰 DOM。 */
 const raf = window.requestAnimationFrame ? window.requestAnimationFrame.bind(window)
                                          : function(fn){ return setTimeout(fn,16); };
-let syncPending=false;
+let syncPending=false, lastVal=null, lastGhost=null, remeasure=true, ghostX=null, ghostY=null;
 function syncGeometry(){
   syncPending=false;
-  edit.style.height='auto';
-  edit.style.height=edit.scrollHeight+'px';   // 長指令換行時自動長高,不裁切
-  /* 用標記的實際座標定位 ghost:指令換行後,游標 X 是「最後一行的位置」,
-     不是整個 mirror 的寬度(那會等於整區寬,把灰字推到右邊)。 */
-  const zr=ez.getBoundingClientRect(), mr=mk.getBoundingClientRect();
-  ghost.style.left=Math.round(mr.left-zr.left)+'px';
-  ghost.style.top =Math.round(mr.top -zr.top )+'px';
-  scrollBottom();
+  /* 先讀後寫,一個影格只強制排版一次。
+     textarea 內容超出時 scrollHeight 比 clientHeight 大,讀到的就是要長到的高度。
+     變矮只能先設 auto 再量,會多排版一次,所以只在可能變矮時做:不是在尾端加字的修改,
+     或視窗大小變了。不拿 mirror 的高度推算:WebKit 的 textarea 折行和 mirror 不一定一樣,
+     推算出來的高度會裁掉最後幾行。
+     用標記的實際座標定位 ghost:指令換行後,游標 X 是「最後一行的位置」,
+     不是整個 mirror 的寬度(那會等於整區寬,把灰字推到右邊)。
+     捲動位置也趁同一次排版讀:本來就在最底下、高度又沒變,就不必再捲。 */
+  const gx=mk.offsetLeft, gy=mk.offsetTop, h=edit.clientHeight, sh=edit.scrollHeight,
+        atBottom=con.scrollTop+con.clientHeight>=con.scrollHeight-2;
+  let nh=sh>h+1?sh:0;                     // Firefox 的 scrollHeight 會進位,只差 1px 不算超出
+  if(!nh&&remeasure){ edit.style.height='auto'; nh=edit.scrollHeight; }
+  remeasure=false;
+  if(nh) edit.style.height=nh+'px';       // 長指令換行時自動長高,不裁切
+  if(gx!==ghostX||gy!==ghostY){ ghostX=gx; ghostY=gy; ghost.style.left=gx+'px'; ghost.style.top=gy+'px'; }
+  if((nh&&nh!==h)||!atBottom) scrollBottom();
 }
 function sync(){
   const v=val();
-  mirrorText.nodeValue=v;
+  if(v!==lastVal){
+    if(lastVal===null||v.slice(0,lastVal.length)!==lastVal) remeasure=true;   // 尾端加字只會變高
+    mirrorText.nodeValue=v; lastVal=v; }
   const p=(!composing && atEnd() && !menu.open)?predict(v):'';   // 組字中不顯示灰字建議
-  ghost.textContent=p?p.slice(v.length):'';
+  const g=p?p.slice(v.length):'';
+  if(g!==lastGhost){ ghost.textContent=g; lastGhost=g; }
   if(!syncPending){ syncPending=true; raf(syncGeometry); }
 }
 
@@ -2141,7 +2171,7 @@ edit.addEventListener('keyup',function(e){ if(['ArrowLeft','ArrowRight','Home','
 edit.addEventListener('focus',function(){ con.classList.add('focused'); });
 edit.addEventListener('blur',function(){ con.classList.remove('focused'); });
 document.addEventListener('selectionchange',function(){ if(document.activeElement===edit) sync(); });
-window.addEventListener('resize',function(){ charW=0; });   // 字元寬度快取作廢(轉向 / 字級改變)
+window.addEventListener('resize',function(){ charW=0; remeasure=true; });   // 字元寬度快取作廢、輸入框高度重量(轉向 / 字級改變)
 con.addEventListener('click',function(e){
   if(!(e.target.closest && e.target.closest('.menu')) && !String(getSelection())) focusEdit(); });
 
