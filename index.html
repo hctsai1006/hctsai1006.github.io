@@ -375,6 +375,49 @@ function lsColumns(names,across){
       s+=next?padw(names[f],w[c]):names[f]; }
     out.push(s); }
   return out; }
+/* GNU ls 在終端機上顯示檔名的引號(coreutils 8.25 起預設 --quoting-style=shell-escape),
+   照 gnulib quotearg.c 的 shell 系列:只含安全字元就原樣輸出,否則整個包進 '...';
+   名稱裡的 ' 寫成 '\'',控制字元寫成 $'\n'、$'\302\205' 這種跳脫;
+   含 ' 而其餘字元放進雙引號都不用跳脫時,改用 "it's"。
+   always=true 是錯誤訊息用的 quoteaf:一律加引號。
+   哪些字元算不可列印,對過 glibc 2.39 的 iswprint(C.UTF-8):Cc、Cn、Cs、Zl、Zp。
+   對照組是 Ubuntu 24.04 真機 ls 9.4 印出的 4125 個檔名,逐字相同。 */
+const SHQ_NP=(function(){ try{ return new RegExp('[\\p{Cc}\\p{Cn}\\p{Cs}\\p{Zl}\\p{Zp}]','u'); }
+  catch(e){ return /[\x00-\x1f\x7f-\x9f]/; } })();
+const SHQ_ESC={'\x07':'a','\b':'b','\f':'f','\n':'n','\r':'r','\t':'t','\v':'v'};
+function shqBytes(c){ return c<0x80?[c]:c<0x800?[0xc0|c>>6,0x80|c&63]:c<0x10000?[0xe0|c>>12,0x80|c>>6&63,0x80|c&63]
+  :[0xf0|c>>18,0x80|c>>12&63,0x80|c>>6&63,0x80|c&63]; }
+/* 不加引號也安全的字元(# ~ 只在開頭以外,{ } 只在不是單獨一個字時) */
+function shqPlain(ch,i,n){
+  return /[A-Za-z0-9%+,\-.\/:\]_@]/.test(ch) || ((ch==='#'||ch==='~')&&i>0)
+    || ((ch==='{'||ch==='}')&&n>1) || (ch.charCodeAt(0)>0x7f&&!SHQ_NP.test(ch)); }
+/* 放進雙引號也不必跳脫的字元(quotearg.c 的 c_and_shell_quote_compat) */
+function shqCompat(ch,i,n){
+  if(/[A-Za-z0-9%+,\-.\/:\]_ '@]/.test(ch)) return true;
+  if(ch==='#'||ch==='~') return i===0;
+  if(ch==='{'||ch==='}') return n===1;
+  return ch.charCodeAt(0)>0x7f && !SHQ_NP.test(ch); }
+function shqPass(cs,pend){
+  let o="'",sq=false,all=true;
+  for(let i=0;i<cs.length;i++){ const ch=cs[i];
+    if(SHQ_ESC[ch]||SHQ_NP.test(ch)){
+      const u=SHQ_ESC[ch]?[SHQ_ESC[ch]]:shqBytes(ch.codePointAt(0)).map(function(b){return ('00'+b.toString(8)).slice(-3);});
+      u.forEach(function(x){ if(!pend){ o+="'$'"; pend=true; } o+='\\'+x; });
+      all=false; continue; }
+    if(ch==="'"){ sq=true; o+="'\\'"; pend=false; }
+    if(pend){ o+="''"; pend=false; }
+    o+=ch;
+    if(!shqCompat(ch,i,cs.length)) all=false; }
+  return {o:o,pend:pend,sq:sq,all:all}; }
+function shq(s,always){
+  s=String(s); const cs=Array.from(s);
+  if(!always && cs.length && cs.every(function(ch,i){ return shqPlain(ch,i,cs.length); })) return s;
+  const p=shqPass(cs,false);
+  if(!p.sq) return p.o+"'";
+  if(p.all) return '"'+s+'"';
+  /* quotearg.c 遇到 ' 會先空跑一遍再重寫,第二遍沿用第一遍結尾的 $'...' 狀態:
+     最後一個字元是跳脫時,第二遍一開頭就多出 '',真機印出來就是這樣 */
+  return shqPass(cs,p.pend).o+"'"; }
 /* 放不下就改用清單格式(等同 PowerShell 的 Format-List),欄位才不會因換行而錯位 */
 function listFormat(headers,rows){
   const hw=Math.max.apply(null,headers.map(dw));
@@ -1106,41 +1149,54 @@ const CMDLETS={
     /* 版面跟 GNU ls 一樣由最後一個格式旗標決定:-l 長格式,-1 每行一個(在 -l 之後無效),
        -C 分欄由上往下,-x 分欄由左往右。沒給的話,輸出到終端機用 -C,接管線就每行一個,
        所以 ls | Measure-Object 數到的是檔案數。 */
-    let fmt=toPipe?'one':'cols',all=false,almostAll=false,human=false,target='';
+    let fmt=toPipe?'one':'cols',all=false,almostAll=false,human=false,literal=false,target='',targetTok='';
     for(let i=1;i<raw.length;i++){
       const t=stripQ(raw[i]);
       if(/^--/.test(t)){ if(t==='--all')all=true; else if(t==='--almost-all'){all=true;almostAll=true;}
-        else if(t==='--human-readable')human=true; continue; }
+        else if(t==='--human-readable')human=true; else if(t==='--literal')literal=true; continue; }
       if(t.charAt(0)==='-'&&t.length>1){
         for(let j=1;j<t.length;j++){ const c=t.charAt(j);
           if(c==='l')fmt='long'; else if(c==='a')all=true; else if(c==='A'){all=true;almostAll=true;}
           else if(c==='h')human=true; else if(c==='1'){ if(fmt!=='long') fmt='one'; }
-          else if(c==='C')fmt='cols'; else if(c==='x')fmt='across'; }
+          else if(c==='C')fmt='cols'; else if(c==='x')fmt='across'; else if(c==='N')literal=true; }
         continue; }
-      target=t; }
+      target=t; targetTok=String(raw[i]); }
     const long=fmt==='long';
+    /* 檔名照 GNU ls 的引號規則顯示(shq)。接管線時原樣輸出,GNU 只在終端機上加引號;
+       -N 也原樣,但印到終端機時控制字元換成 ?(GNU 的 -q 在終端機上預設開著) */
+    const qn=function(s){ return toPipe?s:literal?Array.from(s).map(function(ch){ return SHQ_NP.test(ch)?'?':ch; }).join(''):shq(s); };
+    /* ls 收到的參數:沒加引號的 ~ 會先被 pwsh 展開成家目錄(真機對照 7.6.7),
+       錯誤訊息和 ls <檔案> 印的都是這個字串,不是正規化後的路徑 */
+    const arg=/^~(\/|$)/.test(targetTok)?HOME+targetTok.slice(1):target;
     const p=target?resolvePath(target):CWD, n=fsGet(p);
-    if(!n) return [line('err',"ls: cannot access '"+(target||p)+"': No such file or directory")];
+    if(!n) return [line('err','ls: cannot access '+shq(arg||p,true)+': No such file or directory')];
     const humanSize=function(node){ const s=fsSize(node);
       if(!human) return String(s);
       if(s>=1048576) return (s/1048576).toFixed(1)+'M';
       if(s>=1024) return (s/1024).toFixed(1)+'K';
       return String(s); };
     if(n.t==='f'){                       /* ls -l <file> 要給該檔的長格式,不是只印檔名 */
-      if(!long) return [line('',baseOf(p))];
+      if(!long) return [line('',qn(arg))];   /* ls /etc/os-release 印 /etc/os-release */
       return [line('', modeStr(n)+' 1 '+ownerOf(n)+' '+ownerOf(n)+' '
-        +humanSize(n)+' '+lsTime(n.mt)+' '+baseOf(p))]; }
+        +humanSize(n)+' '+lsTime(n.mt)+' '+qn(arg))]; }
     let names=Object.keys(n.ch).sort();
+    /* -A 保留隱藏檔,但不列出 . 與 ..。-a 的 . 與 .. 跟其他名稱一起排序,
+       所以 #hash 這種名稱排在它們前面(真機 C.UTF-8 也是) */
     if(!all) names=names.filter(function(k){return k.charAt(0)!=='.';});
-    else if(!almostAll) names=['.','..'].concat(names);   /* -A 保留隱藏檔,但不列出 . 與 .. */
+    else if(!almostAll) names=['.','..'].concat(names).sort();
     if(!names.length) return [];
     const nodeOf=function(name){ return name==='.'?n:(name==='..'?(fsParent(p)||n):n.ch[name]); };
     const nlink=function(node){ return node.t!=='d'?1:
       2+Object.keys(node.ch).filter(function(k){return node.ch[k].t==='d';}).length; };
-    if(fmt==='one') return names.map(function(x){return line('',x);});
-    if(!long) return lsColumns(names,fmt==='across').map(function(x){return line('',x);});
-    const rows=names.map(function(name){ const node=nodeOf(name);
-      return [modeStr(node),String(nlink(node)),ownerOf(node),ownerOf(node),humanSize(node),lsTime(node.mt),name]; });
+    if(fmt==='one') return names.map(function(x){return line('',qn(x));});
+    /* -C、-x、-l 只要有一個名稱加了引號,沒加的前面就補一格空白,名稱才會對齊
+       (coreutils 的 align_variable_outer_quotes);-1 不補 */
+    let shown=names.map(qn);
+    if(!toPipe&&!literal&&shown.some(function(s,i){ return s!==names[i]; }))
+      shown=shown.map(function(s,i){ return s===names[i]?' '+s:s; });
+    if(!long) return lsColumns(shown,fmt==='across').map(function(x){return line('',x);});
+    const rows=names.map(function(name,i){ const node=nodeOf(name);
+      return [modeStr(node),String(nlink(node)),ownerOf(node),ownerOf(node),humanSize(node),lsTime(node.mt),shown[i]]; });
     const wN=Math.max.apply(null,rows.map(function(r){return r[1].length;}));
     const wU=Math.max.apply(null,rows.map(function(r){return dw(r[2]);}));
     const wG=Math.max.apply(null,rows.map(function(r){return dw(r[3]);}));
