@@ -3,7 +3,7 @@
   "foundations": {
     "cncf": {
       "label": "CNCF",
-      "merged": 303,
+      "merged": 309,
       "repositories": 56
     }
   },
@@ -44,14 +44,14 @@
       "cncf": true
     },
     {
+      "repository": "kubernetes/test-infra",
+      "merged": 10,
+      "cncf": true
+    },
+    {
       "repository": "nephio-project/nephio",
       "merged": 8,
       "cncf": false
-    },
-    {
-      "repository": "kubernetes/test-infra",
-      "merged": 7,
-      "cncf": true
     },
     {
       "repository": "jaegertracing/jaeger-ui",
@@ -60,6 +60,11 @@
     },
     {
       "repository": "kubernetes-sigs/dranet",
+      "merged": 6,
+      "cncf": true
+    },
+    {
+      "repository": "kubernetes-sigs/kernel-module-management",
       "merged": 6,
       "cncf": true
     },
@@ -74,11 +79,6 @@
       "cncf": false
     },
     {
-      "repository": "kubernetes-sigs/kernel-module-management",
-      "merged": 5,
-      "cncf": true
-    },
-    {
       "repository": "open-telemetry/opentelemetry-collector-contrib",
       "merged": 5,
       "cncf": true
@@ -90,6 +90,11 @@
     },
     {
       "repository": "AcademySoftwareFoundation/rawtoaces",
+      "merged": 4,
+      "cncf": false
+    },
+    {
+      "repository": "cloud-native-taiwan/infra-labs-docs",
       "merged": 4,
       "cncf": false
     },
@@ -145,6 +150,11 @@
     },
     {
       "repository": "kagent-dev/website",
+      "merged": 3,
+      "cncf": true
+    },
+    {
+      "repository": "kubernetes-sigs/signalhound",
       "merged": 3,
       "cncf": true
     },
