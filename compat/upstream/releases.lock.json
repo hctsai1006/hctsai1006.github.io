@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-20T07:26:47.206Z",
+  "generatedAt": "2026-10-20T11:38:42.438Z",
   "generator": {
     "tool": "verify-release-truth.mts",
     "version": "3.0.0"
@@ -10,287 +10,287 @@
       "precedence": 1,
       "kind": "github-pull-request",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/pulls/21219",
-      "fetchedAt": "2026-10-20T07:26:37.508Z",
+      "fetchedAt": "2026-10-20T11:38:33.276Z",
       "digest": "sha256:e2715bb0c327c7ce9b53a042d9770a41a246074922860d992c5aa802f0e2c5ae"
     },
     {
       "precedence": 1,
       "kind": "github-pull-request",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/pulls/24624",
-      "fetchedAt": "2026-10-20T07:26:38.069Z",
+      "fetchedAt": "2026-10-20T11:38:33.795Z",
       "digest": "sha256:a1e3975d58fbc3f2a7856e5bdd899a27e58c2c586257079f8bd1f6a1bf9e02bb"
     },
     {
       "precedence": 1,
       "kind": "github-pull-request",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/pulls/26140",
-      "fetchedAt": "2026-10-20T07:26:38.541Z",
+      "fetchedAt": "2026-10-20T11:38:34.191Z",
       "digest": "sha256:da7b8c1994f8009ddca1172fac07dfe8cb2438b2c8eb1996b623248d5fec06f4"
     },
     {
       "precedence": 1,
       "kind": "github-pull-request",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/pulls/26141",
-      "fetchedAt": "2026-10-20T07:26:38.966Z",
+      "fetchedAt": "2026-10-20T11:38:34.611Z",
       "digest": "sha256:c335723ebef1e84e9603ddc891d6a717cd2aadf0c37c6ab5f38999e63d5f3a0d"
     },
     {
       "precedence": 1,
       "kind": "github-pull-request",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/pulls/26185",
-      "fetchedAt": "2026-10-20T07:26:39.519Z",
+      "fetchedAt": "2026-10-20T11:38:35.040Z",
       "digest": "sha256:eb67123210450ce10137e9034fbe89f64b919402a11659dbd8f7083f1fd4b563"
     },
     {
       "precedence": 1,
       "kind": "github-pull-request",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/pulls/26424",
-      "fetchedAt": "2026-10-20T07:26:39.926Z",
+      "fetchedAt": "2026-10-20T11:38:35.451Z",
       "digest": "sha256:5893c39229be65629b263d736cb3f0d32ccdfb9a1ea44f727896a0d8e42de36a"
     },
     {
       "precedence": 1,
       "kind": "github-pull-request",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/pulls/26457",
-      "fetchedAt": "2026-10-20T07:26:40.495Z",
+      "fetchedAt": "2026-10-20T11:38:35.851Z",
       "digest": "sha256:214894bbb1c75db0ed2cc2970e96cae1fb17d0732b475d016a5d56a066c5010d"
     },
     {
       "precedence": 1,
       "kind": "github-pull-request",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/pulls/26460",
-      "fetchedAt": "2026-10-20T07:26:40.931Z",
+      "fetchedAt": "2026-10-20T11:38:36.265Z",
       "digest": "sha256:4cb1db0250eea76f0e8c11149950cfa91936dadc9fa35a9b600a2c9312b84009"
     },
     {
       "precedence": 1,
       "kind": "github-pull-request",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/pulls/26463",
-      "fetchedAt": "2026-10-20T07:26:41.477Z",
+      "fetchedAt": "2026-10-20T11:38:36.745Z",
       "digest": "sha256:0e071bba3a48d87a75a5f697789d374cdc6c595912de6fb98e4179bc8892f334"
     },
     {
       "precedence": 1,
       "kind": "github-pull-request",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/pulls/26469",
-      "fetchedAt": "2026-10-20T07:26:41.872Z",
+      "fetchedAt": "2026-10-20T11:38:37.122Z",
       "digest": "sha256:837c9c310795b01140242f5c2ed5dbf4d08ad152f45eebb016fdb20fc18aa7f2"
     },
     {
       "precedence": 1,
       "kind": "github-pull-request",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/pulls/26472",
-      "fetchedAt": "2026-10-20T07:26:42.337Z",
+      "fetchedAt": "2026-10-20T11:38:37.538Z",
       "digest": "sha256:b917af90865232c6cbeff16f253a3fa400f77ec81584ba570bc9da0767d0834b"
     },
     {
       "precedence": 1,
       "kind": "github-pull-request",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/pulls/26474",
-      "fetchedAt": "2026-10-20T07:26:42.831Z",
+      "fetchedAt": "2026-10-20T11:38:38.093Z",
       "digest": "sha256:f736b255b14a3c6a8ad7488973adae8c763d8aa2c612a32364668b488d4c8e24"
     },
     {
       "precedence": 1,
       "kind": "github-pull-request",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/pulls/26479",
-      "fetchedAt": "2026-10-20T07:26:43.239Z",
+      "fetchedAt": "2026-10-20T11:38:38.492Z",
       "digest": "sha256:37defbd8d24f6e575feb03e66ba9fc3b5b64f274fd9af57edb79bd32fc30dcb6"
     },
     {
       "precedence": 1,
       "kind": "github-pull-request",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/pulls/26482",
-      "fetchedAt": "2026-10-20T07:26:43.685Z",
+      "fetchedAt": "2026-10-20T11:38:38.888Z",
       "digest": "sha256:68ef9c454913dfdfe6e4d1751ce091bfb2f57111c125ed268cc5020fa4bdd2a5"
     },
     {
       "precedence": 1,
       "kind": "github-pull-request",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/pulls/26485",
-      "fetchedAt": "2026-10-20T07:26:44.126Z",
+      "fetchedAt": "2026-10-20T11:38:39.358Z",
       "digest": "sha256:2e309bc54978b8fc890ba848fa862be8130706b889d097c677740245dd53242b"
     },
     {
       "precedence": 1,
       "kind": "github-pull-request",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/pulls/26514",
-      "fetchedAt": "2026-10-20T07:26:44.548Z",
+      "fetchedAt": "2026-10-20T11:38:39.771Z",
       "digest": "sha256:42ca8b578fb3f810d5a1e3dcf97a8d806349d6cf4f1767342b422e7772aab265"
     },
     {
       "precedence": 1,
       "kind": "github-pull-request",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/pulls/26515",
-      "fetchedAt": "2026-10-20T07:26:44.972Z",
+      "fetchedAt": "2026-10-20T11:38:40.215Z",
       "digest": "sha256:2a974ec83c4f493769dac9a0f827491b1ec79cad08bf957ea6dc32dc3b2ce8b7"
     },
     {
       "precedence": 1,
       "kind": "github-pull-request",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/pulls/26552",
-      "fetchedAt": "2026-10-20T07:26:45.379Z",
+      "fetchedAt": "2026-10-20T11:38:40.613Z",
       "digest": "sha256:219b11a648a9a10a627d09d78c25fc55d31b3c70720a10ebfb57d2774ff712ee"
     },
     {
       "precedence": 1,
       "kind": "github-pull-request",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/pulls/26668",
-      "fetchedAt": "2026-10-20T07:26:45.798Z",
+      "fetchedAt": "2026-10-20T11:38:41.066Z",
       "digest": "sha256:daa2bbd8c581834a06d7ad92ef842269b617e8918cbc175cf8c84a83c1ef213e"
     },
     {
       "precedence": 1,
       "kind": "github-pull-request",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/pulls/26719",
-      "fetchedAt": "2026-10-20T07:26:46.221Z",
+      "fetchedAt": "2026-10-20T11:38:41.591Z",
       "digest": "sha256:5e6b51b31341c2e48c773c74da009a5a69cac3a85e65d19c797b89c7e2e0a674"
     },
     {
       "precedence": 1,
       "kind": "github-pull-request",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/pulls/27033",
-      "fetchedAt": "2026-10-20T07:26:46.784Z",
+      "fetchedAt": "2026-10-20T11:38:42.000Z",
       "digest": "sha256:32a5337c9c8d2e04e224f57321f2afac852a3940fe8271afa8ffcf9a3b481dbd"
     },
     {
       "precedence": 1,
       "kind": "github-pull-request",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/pulls/27549",
-      "fetchedAt": "2026-10-20T07:26:47.206Z",
+      "fetchedAt": "2026-10-20T11:38:42.438Z",
       "digest": "sha256:037a717f61f0a33e31719aa1b0d948adca6507c338b63e3804ca919ab148bf4c"
     },
     {
       "precedence": 1,
       "kind": "github-release-api",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/releases?per_page=100",
-      "fetchedAt": "2026-10-20T07:26:32.701Z",
+      "fetchedAt": "2026-10-20T11:38:27.959Z",
       "digest": "sha256:008701eab0602840ea94e7bb0956a3a275084042efc7b6f372b31134864522a4"
     },
     {
       "precedence": 1,
       "kind": "github-metadata",
       "url": "https://raw.githubusercontent.com/PowerShell/PowerShell/master/tools/metadata.json",
-      "fetchedAt": "2026-10-20T07:26:32.832Z",
+      "fetchedAt": "2026-10-20T11:38:28.253Z",
       "digest": "sha256:75652177a0a48c0e9e4174f5948c6c5df63d4ca3232462c9dce629c4a7fb6a44"
     },
     {
       "precedence": 2,
       "kind": "github-tag-object",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/git/ref/tags/v7.4.21",
-      "fetchedAt": "2026-10-20T07:26:34.162Z",
+      "fetchedAt": "2026-10-20T11:38:29.719Z",
       "digest": "sha256:071d1d33a1412bde14cea8ebf817294dfbeb88c5cedeaf19306cb0989ac0d1a8"
     },
     {
       "precedence": 2,
       "kind": "github-tag-object",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/git/ref/tags/v7.6.7",
-      "fetchedAt": "2026-10-20T07:26:33.182Z",
+      "fetchedAt": "2026-10-20T11:38:28.676Z",
       "digest": "sha256:ea0a6a51acbc465965a7a04e2d585ff395ba417f3c984f9a1142bc6faf8d49b5"
     },
     {
       "precedence": 2,
       "kind": "github-tag-object",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/git/ref/tags/v7.7.0-preview.5",
-      "fetchedAt": "2026-10-20T07:26:35.145Z",
+      "fetchedAt": "2026-10-20T11:38:30.662Z",
       "digest": "sha256:65e105df22510c3b15ca3c3f139b4497b2228c6f278077ce8d2e5b60fe9448b2"
     },
     {
       "precedence": 2,
       "kind": "github-tag-object",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/git/tags/64df22ef66f1758f7721cf0f846c263d88050f0d",
-      "fetchedAt": "2026-10-20T07:26:35.486Z",
+      "fetchedAt": "2026-10-20T11:38:31.026Z",
       "digest": "sha256:201a9f58bb38bfa36a78f576b119a28efc6e1492e5dcbfaad8493fc875e1bdd4"
     },
     {
       "precedence": 2,
       "kind": "github-tag-object",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/git/tags/9b49306ff8b4e3eb8508893ecef870627777dbba",
-      "fetchedAt": "2026-10-20T07:26:33.529Z",
+      "fetchedAt": "2026-10-20T11:38:29.070Z",
       "digest": "sha256:051f5cbf0d3cdf4a432f052fdd52361ce52f4c118907b139db7fdd1e3b0c3cad"
     },
     {
       "precedence": 2,
       "kind": "github-tag-object",
       "url": "https://api.github.com/repos/PowerShell/PowerShell/git/tags/c057a6bb47f57a56c6b5af16e015daa9db7a463a",
-      "fetchedAt": "2026-10-20T07:26:34.511Z",
+      "fetchedAt": "2026-10-20T11:38:30.058Z",
       "digest": "sha256:bc7b32b83e1ddb9ec9a469137e92f63764a5dc7570965f9e682fe86e3c942774"
     },
     {
       "precedence": 3,
       "kind": "github-tag-file",
       "url": "https://raw.githubusercontent.com/PowerShell/PowerShell/v7.4.21/global.json",
-      "fetchedAt": "2026-10-20T07:26:34.749Z",
+      "fetchedAt": "2026-10-20T11:38:30.259Z",
       "digest": "sha256:c1c24e0d3395e90379c42f32863798d41e33f71cf7940d060ff088dc1a57c8da"
     },
     {
       "precedence": 3,
       "kind": "github-tag-file",
       "url": "https://raw.githubusercontent.com/PowerShell/PowerShell/v7.6.7/global.json",
-      "fetchedAt": "2026-10-20T07:26:33.755Z",
+      "fetchedAt": "2026-10-20T11:38:29.291Z",
       "digest": "sha256:b5c9fb77f6dd6d5cdf637d4239f8b6629c35abeaca328657249778b51bcfa061"
     },
     {
       "precedence": 3,
       "kind": "github-tag-file",
       "url": "https://raw.githubusercontent.com/PowerShell/PowerShell/v7.7.0-preview.5/global.json",
-      "fetchedAt": "2026-10-20T07:26:35.724Z",
+      "fetchedAt": "2026-10-20T11:38:31.227Z",
       "digest": "sha256:ffb3c8cd6cd132cbe871ed958bb4eae92eb9ca29d1eadabc310221270f9cafb3"
     },
     {
       "precedence": 4,
       "kind": "dotnet-channel-releases",
       "url": "https://builds.dotnet.microsoft.com/dotnet/release-metadata/10.0/releases.json",
-      "fetchedAt": "2026-10-20T07:26:33.788Z",
+      "fetchedAt": "2026-10-20T11:38:29.317Z",
       "digest": "sha256:b43a1c75334d42a46511a525956d6e0df08af6cb669a330b4993826bce0c1aa1"
     },
     {
       "precedence": 4,
       "kind": "dotnet-channel-releases",
       "url": "https://builds.dotnet.microsoft.com/dotnet/release-metadata/11.0/releases.json",
-      "fetchedAt": "2026-10-20T07:26:35.768Z",
+      "fetchedAt": "2026-10-20T11:38:31.958Z",
       "digest": "sha256:87cb5c37e52ad9a12517a24cb12dc2570f805d9e9d0c6dffb930a5301d0ba8ca"
     },
     {
       "precedence": 4,
       "kind": "dotnet-channel-releases",
       "url": "https://builds.dotnet.microsoft.com/dotnet/release-metadata/8.0/releases.json",
-      "fetchedAt": "2026-10-20T07:26:34.777Z",
+      "fetchedAt": "2026-10-20T11:38:30.312Z",
       "digest": "sha256:bde4d282c82672236301e2654418218cb1c3af1a700e2147f4c9e0d8077192ab"
     },
     {
       "precedence": 4,
       "kind": "dotnet-release-index",
       "url": "https://builds.dotnet.microsoft.com/dotnet/release-metadata/releases-index.json",
-      "fetchedAt": "2026-10-20T07:26:30.653Z",
+      "fetchedAt": "2026-10-20T11:38:26.013Z",
       "digest": "sha256:817fc71c2dad5ec4b8844df49d1c81837167b0b57844e34b4767c24e8813cd32"
     },
     {
       "precedence": 5,
       "kind": "microsoft-learn-docs",
       "url": "https://raw.githubusercontent.com/MicrosoftDocs/PowerShell-Docs/main/reference/docs-conceptual/install/PowerShell-Support-Lifecycle.md",
-      "fetchedAt": "2026-10-20T07:26:36.966Z",
+      "fetchedAt": "2026-10-20T11:38:32.826Z",
       "digest": "sha256:9d9e642d896ed5b19c8443fb85fe842e2b68e43f2a6e409fc7d0c7ba07d4379e"
     },
     {
       "precedence": 5,
       "kind": "microsoft-learn-docs",
       "url": "https://raw.githubusercontent.com/MicrosoftDocs/PowerShell-Docs/main/reference/docs-conceptual/whats-new/What-s-New-in-PowerShell-74.md",
-      "fetchedAt": "2026-10-20T07:26:36.291Z",
+      "fetchedAt": "2026-10-20T11:38:32.400Z",
       "digest": "sha256:91f03234119cf745433b15a8506013dde16a260b6916b2c8a33e3f3485536e37"
     },
     {
       "precedence": 5,
       "kind": "microsoft-learn-docs",
       "url": "https://raw.githubusercontent.com/MicrosoftDocs/PowerShell-Docs/main/reference/docs-conceptual/whats-new/What-s-New-in-PowerShell-76.md",
-      "fetchedAt": "2026-10-20T07:26:36.028Z",
+      "fetchedAt": "2026-10-20T11:38:32.175Z",
       "digest": "sha256:cef87c5d398c7a400929fa3ed30bbd93e8635e350c774bdba9a2dc2494e1b9db"
     },
     {
       "precedence": 5,
       "kind": "microsoft-learn-docs",
       "url": "https://raw.githubusercontent.com/MicrosoftDocs/PowerShell-Docs/main/reference/docs-conceptual/whats-new/What-s-New-in-PowerShell-77.md",
-      "fetchedAt": "2026-10-20T07:26:36.548Z",
+      "fetchedAt": "2026-10-20T11:38:32.615Z",
       "digest": "sha256:c1c213b6e40a2a9c4e04fed3ffe7fd0480ce3f2ff24dbda68ec44007179fb8a8"
     }
   ],
@@ -590,7 +590,7 @@
     {
       "severity": "warning",
       "code": "lts-approaching-eol",
-      "message": "v7.4.21 loses support on 2026-11-10 (.NET 8.0 is in maintenance). Plan the profile's retirement before then.",
+      "message": "v7.4.21 loses support on 2026-11-10 (.NET 8.0 is in maintenance). It is the previous LTS line and no profile is built from it, so nothing here needs to change.",
       "actual": "2026-11-10",
       "sources": [
         "https://builds.dotnet.microsoft.com/dotnet/release-metadata/releases-index.json",

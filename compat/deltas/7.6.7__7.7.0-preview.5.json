@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "from": "powershell/7.6.7/linux",
   "to": "powershell/7.7.0-preview.5/linux",
-  "generatedAt": "2026-10-20T07:26:47.206Z",
+  "generatedAt": "2026-10-20T11:38:42.438Z",
   "summary": {
     "breaking": 4,
     "added": 5,

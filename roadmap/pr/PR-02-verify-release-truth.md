@@ -39,7 +39,8 @@ Nothing. This can start immediately.
 - [x] **2.6** Read LTS membership from PowerShell master:tools/metadata.json
   - Replaces a hardcode. Avoids the aka.ms/pwsh-buildinfo-lts trap, which returns the previous LTS.
   - *evidence:* `compat/upstream/releases.lock.json` — `channels.lts`
-  - *evidence:* `compat/upstream/releases.lock.json` — `channels.ltsPrevious.0`
+  - *evidence:* `tools/verify-release-truth.mts` exports `rankDeclaredLts`
+  - *evidence:* `tests/unit/release-truth-lts.test.mts` — test "keeps every declared LTS line, newest first"
   - *evidence:* `tools/verify-release-truth.mts` matches `/LTSReleaseTag/`
 - [x] **2.7** Cross-check the declared LTS against the .NET release-type rule
   - *evidence:* `compat/upstream/releases.lock.json` — `releases.0.dotnet.releaseType`

@@ -502,7 +502,8 @@ export const WORK = [
         status: 'done',
         evidence: [
           { kind: 'json', file: 'compat/upstream/releases.lock.json', path: 'channels.lts' },
-          { kind: 'json', file: 'compat/upstream/releases.lock.json', path: 'channels.ltsPrevious.0' },
+          { kind: 'export', file: 'tools/verify-release-truth.mts', symbol: 'rankDeclaredLts' },
+          { kind: 'test', file: 'tests/unit/release-truth-lts.test.mts', name: 'keeps every declared LTS line, newest first' },
           { kind: 'code', file: 'tools/verify-release-truth.mts', pattern: 'LTSReleaseTag' },
         ],
       },
