@@ -350,6 +350,29 @@ function charWidth(){
   return charW||8;
 }
 function availCols(){ return Math.max(24, Math.floor((con.clientWidth-32)/charWidth())); }
+/* GNU ls 的分欄版面(-C 與 -x),照 coreutils ls.c 的 calculate_columns:
+   每欄寬是該欄最長名稱的顯示寬度加 2(最後一欄不加),從最多欄往下試,
+   第一個總寬小於終端機寬度的就採用。-C 先由上往下填滿一欄再換欄,-x 由左往右。
+   GNU 用 tab 對齊,這裡補空白,畫面上一樣。 */
+function lsColumns(names,across){
+  const W=availCols(), n=names.length, MIN=3, len=names.map(dw);
+  let cols=Math.max(1,Math.min(Math.floor(W/MIN),n)), w=null;
+  for(;cols>1;cols--){
+    const rows=Math.ceil(n/cols); let total=cols*MIN, ok=true;
+    w=new Array(cols).fill(MIN);
+    for(let f=0;f<n&&ok;f++){
+      const idx=across?f%cols:Math.floor(f/rows), real=len[f]+(idx===cols-1?0:2);
+      if(w[idx]<real){ total+=real-w[idx]; w[idx]=real; ok=total<W; } }
+    if(ok) break; }
+  if(cols===1) return names.slice();
+  const rows=Math.ceil(n/cols), out=[];
+  for(let r=0;r<rows;r++){ let s='';
+    for(let c=0;c<cols;c++){
+      const f=across?r*cols+c:c*rows+r; if(f>=n) break;
+      const next=across?(c<cols-1&&f+1<n):(f+rows<n);
+      s+=next?padw(names[f],w[c]):names[f]; }
+    out.push(s); }
+  return out; }
 /* 放不下就改用清單格式(等同 PowerShell 的 Format-List),欄位才不會因換行而錯位 */
 function listFormat(headers,rows){
   const hw=Math.max.apply(null,headers.map(dw));
@@ -1069,18 +1092,23 @@ const CMDLETS={
   /* ===== 原生 Unix 指令 =====
      PowerShell 在 Linux/macOS 上「刻意移除」ls/cp/mv/rm/cat/man/mount/ps 這幾個別名,
      好讓原生執行檔直接跑。所以這些走 coreutils 的旗標與錯誤訊息,不是 cmdlet。 */
-  'ls':{type:'Application',params:[],paths:true,help:'list directory contents',run:function(a,raw){
-    let long=false,all=false,almostAll=false,human=false,one=false,target='';
+  'ls':{type:'Application',params:[],paths:true,help:'list directory contents',run:function(a,raw,input,toPipe){
+    /* 版面跟 GNU ls 一樣由最後一個格式旗標決定:-l 長格式,-1 每行一個(在 -l 之後無效),
+       -C 分欄由上往下,-x 分欄由左往右。沒給的話,輸出到終端機用 -C,接管線就每行一個,
+       所以 ls | Measure-Object 數到的是檔案數。 */
+    let fmt=toPipe?'one':'cols',all=false,almostAll=false,human=false,target='';
     for(let i=1;i<raw.length;i++){
       const t=stripQ(raw[i]);
       if(/^--/.test(t)){ if(t==='--all')all=true; else if(t==='--almost-all'){all=true;almostAll=true;}
         else if(t==='--human-readable')human=true; continue; }
       if(t.charAt(0)==='-'&&t.length>1){
         for(let j=1;j<t.length;j++){ const c=t.charAt(j);
-          if(c==='l')long=true; else if(c==='a')all=true; else if(c==='A'){all=true;almostAll=true;}
-          else if(c==='h')human=true; else if(c==='1')one=true; }
+          if(c==='l')fmt='long'; else if(c==='a')all=true; else if(c==='A'){all=true;almostAll=true;}
+          else if(c==='h')human=true; else if(c==='1'){ if(fmt!=='long') fmt='one'; }
+          else if(c==='C')fmt='cols'; else if(c==='x')fmt='across'; }
         continue; }
       target=t; }
+    const long=fmt==='long';
     const p=target?resolvePath(target):CWD, n=fsGet(p);
     if(!n) return [line('err',"ls: cannot access '"+(target||p)+"': No such file or directory")];
     const humanSize=function(node){ const s=fsSize(node);
@@ -1099,7 +1127,8 @@ const CMDLETS={
     const nodeOf=function(name){ return name==='.'?n:(name==='..'?(fsParent(p)||n):n.ch[name]); };
     const nlink=function(node){ return node.t!=='d'?1:
       2+Object.keys(node.ch).filter(function(k){return node.ch[k].t==='d';}).length; };
-    if(!long) return one?names.map(function(x){return line('',x);}):[line('',names.join('  '))];
+    if(fmt==='one') return names.map(function(x){return line('',x);});
+    if(!long) return lsColumns(names,fmt==='across').map(function(x){return line('',x);});
     const rows=names.map(function(name){ const node=nodeOf(name);
       return [modeStr(node),String(nlink(node)),ownerOf(node),ownerOf(node),humanSize(node),lsTime(node.mt),name]; });
     const wN=Math.max.apply(null,rows.map(function(r){return r[1].length;}));
@@ -1667,14 +1696,14 @@ function unknownParam(c,args){
   for(let i=0;i<keys.length;i++){ if(allowed.indexOf(keys[i].toLowerCase())<0) return keys[i]; }
   return null;
 }
-function execOne(seg,input,piped){
+function execOne(seg,input,piped,toPipe){
   let parts=seg.match(/"[^"]*"|'[^']*'|\S+/g)||[];
   if(!parts.length) return input;
   let key=parts[0].toLowerCase(), c=CMDLETS[alias(key)], args=parseArgsOf(parts);
   if(c){
     const bad=unknownParam(c,args);
     if(bad) return [line('err',(c.disp||key)+': A parameter cannot be found that matches parameter name \''+bad+'\'.')];
-    try{ return (piped&&c.pipe)?c.pipe(input||[],args,parts):c.run(args,parts,input); }
+    try{ return (piped&&c.pipe)?c.pipe(input||[],args,parts):c.run(args,parts,input,toPipe); }
     catch(e){ return [line('err',(c.disp||key)+': '+e.message)]; } }
   if(EGGS[key]){ try{ return EGGS[key](parts); }catch(e){ return [line('err',e.message)]; } }
   return [line('err',`${parts[0]}: The term '${parts[0]}' is not recognized as a name of a cmdlet, function, script file, or executable program.`),
@@ -1699,7 +1728,7 @@ function run(){
         print(line('','')); closeMenu(); setVal(''); scrollBottom(); return;
       }
     }
-    for(i=0;i<segs.length;i++) rows=execOne(segs[i],rows,i>0);
+    for(i=0;i<segs.length;i++) rows=execOne(segs[i],rows,i>0,i<segs.length-1);
     if(rows && rows.length){ print(rows); print(line('','')); }
   }
   closeMenu(); setVal(''); scrollBottom();
