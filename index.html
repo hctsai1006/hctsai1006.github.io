@@ -1565,11 +1565,13 @@ function printPrompt(cmd){
   appendRow(d); trimOutput(); }               // 提示行也要計入上限,否則空 Enter 可以繞過
 /* 新區塊第一次真正渲染前,高度是 contain-intrinsic-size 的估計值。窄螢幕上長行會折行,
    渲染後比估計高,剛捲到底的位置就停在半途,命令列落到畫面外。ResizeObserver 在排版之後、
-   繪製之前通知:使用者本來就在底部,就再捲一次;使用者自己往上捲時 pinned 是 false,不去動它。 */
+   繪製之前通知:使用者本來就在底部,就再捲一次;使用者自己往上捲時 pinned 是 false,不去動它。
+   主控台本身變矮(例如把視窗拉矮)時捲動位置不變,命令列一樣會被切到畫面外,所以兩個都觀察。 */
 let pinned=true;
 function scrollBottom(){ pinned=true; con.scrollTop=con.scrollHeight; }
 con.addEventListener('scroll',function(){ pinned=con.scrollTop+con.clientHeight>=con.scrollHeight-2; },{passive:true});
-if(window.ResizeObserver) new ResizeObserver(function(){ if(pinned) scrollBottom(); }).observe(out);
+if(window.ResizeObserver){ const ro=new ResizeObserver(function(){ if(pinned) scrollBottom(); });
+  ro.observe(out); ro.observe(con); }
 /* 清屏會遞增 outGen;正在串流的非同步輸出發現世代已變就整批放棄,
    否則清屏後殘留的 setTimeout 會把舊輸出「復活」印回畫面。 */
 let outGen=0;
