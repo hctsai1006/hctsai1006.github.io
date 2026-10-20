@@ -34,7 +34,7 @@ Dependency-respecting. An item cannot be complete before everything it depends o
 | --- | --- | --- | --- | --- | --- |
 | 1 | [Archive the single-file terminal and capture golden transcripts](roadmap/pr/PR-01-archive-and-golden-transcripts.md) | Ground truth | [x] done | — | 6/6 |
 | 2 | [Mechanise version truth across five axes](roadmap/pr/PR-02-verify-release-truth.md) | Ground truth | [x] done | — | 17/17 |
-| 3 | [Express 7.6.5 and 7.7.0-preview.4 as compatibility profiles](roadmap/pr/PR-03-compatibility-profiles.md) | Ground truth | [~] in progress | 2 | 7/8 +1 partial |
+| 3 | [Express 7.6.7 and 7.7.0-preview.5 as compatibility profiles](roadmap/pr/PR-03-compatibility-profiles.md) | Ground truth | [~] in progress | 2 | 7/8 +1 partial |
 | 4 | [Extract portfolio data and command manifests out of index.html](roadmap/pr/PR-04-extract-data-and-manifests.md) | Core | [~] in progress | 1 | 8/9 |
 | 5 | [Extract a headless LineEditorCore behind input and render adapters](roadmap/pr/PR-05-headless-line-editor.md) | Core | [~] in progress | 4 | 5/5 |
 | 6 | [Move execution into a worker behind a typed kernel protocol](roadmap/pr/PR-06-worker-kernel-protocol.md) | Core | [~] in progress | 5 | 2/4 +2 partial |
@@ -42,7 +42,7 @@ Dependency-respecting. An item cannot be complete before everything it depends o
 | 8 | [Build one lexer, one AST and a version-aware parameter binder](roadmap/pr/PR-08-version-aware-binder.md) | Core | [~] in progress | 3, 7 | 6/7 +1 partial |
 | 9 | [OPFS-backed filesystem with overlay, WAL, snapshots and migrations](roadmap/pr/PR-09-storage-layer.md) | State | [~] in progress | 6 | 6/7 +1 partial |
 | 10 | [PowerShell provider model over the mount table](roadmap/pr/PR-10-provider-model.md) | State | [~] in progress | 9 | 3/4 |
-| 11 | [Differential conformance against real pwsh 7.6.5](roadmap/pr/PR-11-differential-conformance.md) | Compatibility | [~] in progress | 8 | 5/5 |
+| 11 | [Differential conformance against real pwsh 7.6.7](roadmap/pr/PR-11-differential-conformance.md) | Compatibility | [~] in progress | 8 | 5/5 |
 | 12 | [Ship the version-difference explorer](roadmap/pr/PR-12-behavior-delta-ui.md) | Compatibility | [~] in progress | 11 | 1/3 |
 | 13 | [DSC-style declarative workstation state](roadmap/pr/PR-13-workstation-state.md) | Declarative | [ ] todo | 10 | 0/4 |
 | 14 | [Package identity, integrity, capabilities and trust promotion](roadmap/pr/PR-14-package-trust.md) | Supply chain | [~] in progress | 10 | 0/4 +1 partial |
@@ -73,7 +73,7 @@ Every claim below was checked against a primary source on 2026-09-04. These are 
 
 ### wrong — Hardcoding which PowerShell version is LTS is unavoidable.
 
-**Correction.** PowerShell publishes master:tools/metadata.json with LTSReleaseTag as an array (currently ["v7.4.19","v7.6.5"]), plus Stable/Preview/Next release tags. First-party and machine-readable.
+**Correction.** PowerShell publishes master:tools/metadata.json with LTSReleaseTag as an array (["v7.4.19","v7.6.5"] on 2026-09-05), plus Stable/Preview/Next release tags. First-party and machine-readable.
 
 **Impact on the plan.** The verifier reads this instead of hardcoding. TRAP: aka.ms/pwsh-buildinfo-lts looks authoritative but returns v7.4.19 — it tracks an install channel, not LTS membership, and would be wrong by a full cycle.
 
@@ -212,11 +212,11 @@ Every claim below was checked against a primary source on 2026-09-04. These are 
   - [x] 2.15 Validate every upstream payload shape at the trust boundary
   - [x] 2.16 Fetch timeouts, retry with backoff, and distinct exit codes
   - [x] 2.17 Cross-check the support-lifecycle doc as an independent LTS assertion
-- [~] **3. Express 7.6.5 and 7.7.0-preview.4 as compatibility profiles** — [detail](roadmap/pr/PR-03-compatibility-profiles.md)
-  - [x] 3.1 Author compat/profiles/powershell-7.6.5-linux.json from the lockfile
-  - [x] 3.2 Author powershell-7.7.0-preview.4-linux.json inheriting from it
+- [~] **3. Express 7.6.7 and 7.7.0-preview.5 as compatibility profiles** — [detail](roadmap/pr/PR-03-compatibility-profiles.md)
+  - [x] 3.1 Author compat/profiles/powershell-7.6.7-linux.json from the lockfile
+  - [x] 3.2 Author powershell-7.7.0-preview.5-linux.json inheriting from it
   - [x] 3.3 Populate behaviors for every 7.7 breaking change, each with a behaviorDocs entry citing its upstream PR
-  - [x] 3.4 Generate compat/deltas/7.6.5__7.7.0-preview.4.json
+  - [x] 3.4 Generate compat/deltas/7.6.7__7.7.0-preview.5.json
   - [/] 3.5 Mark each delta entry implemented:false until a conformance fixture proves it
   - [x] 3.6 Record engineLimits.nativePowerShellEngine=false and the unimplemented AST node list
   - [x] 3.7 Record bundled module versions
@@ -279,7 +279,7 @@ Every claim below was checked against a primary source on 2026-09-04. These are 
 
 ### Compatibility
 
-- [~] **11. Differential conformance against real pwsh 7.6.5** — [detail](roadmap/pr/PR-11-differential-conformance.md)
+- [~] **11. Differential conformance against real pwsh 7.6.7** — [detail](roadmap/pr/PR-11-differential-conformance.md)
   - [x] 11.1 Write generate-conformance-fixtures.ps1 to capture real pwsh output for a command corpus
   - [x] 11.2 Normalise machine-specific output (paths, times, pids, widths) before comparison
   - [x] 11.3 Capture Get-Command metadata from real pwsh to validate our manifests

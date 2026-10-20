@@ -73,8 +73,8 @@ interface Profile {
 }
 
 const profiles: readonly Profile[] = [
-  'powershell-7.6.5-linux.json',
-  'powershell-7.7.0-preview.4-linux.json',
+  'powershell-7.6.7-linux.json',
+  'powershell-7.7.0-preview.5-linux.json',
 ].map((name) => JSON.parse(readFileSync(resolve(PROFILES, name), 'utf8')) as Profile);
 
 describe('the engine names what it will not run', () => {

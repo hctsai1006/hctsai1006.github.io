@@ -371,7 +371,7 @@ const DEFAULT_ROWS = 24;
  * profiles arrive from the compatibility layer.
  */
 const DEFAULT_PROFILE: CompatibilityView = {
-  displayVersion: '7.6.5',
+  displayVersion: '7.6.7',
   behavior<T extends boolean | number | string>(_key: string, fallback: T): T {
     return fallback;
   },

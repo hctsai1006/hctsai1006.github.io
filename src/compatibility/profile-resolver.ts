@@ -2,8 +2,8 @@
  * profile-resolver.ts — turn a stored compatibility profile into the view a
  * command reads.
  *
- * A profile on disk is a delta: `powershell/7.7.0-preview.4/linux` declares
- * `inherits: powershell/7.6.5/linux` and states only what differs. That is the
+ * A profile on disk is a delta: `powershell/7.7.0-preview.5/linux` declares
+ * `inherits: powershell/7.6.7/linux` and states only what differs. That is the
  * whole point — adding a PowerShell version must never mean forking a command —
  * but it means nothing can read a profile file directly. The inheritance chain
  * has to be resolved first, and this is the only place that happens.

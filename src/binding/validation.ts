@@ -3,7 +3,7 @@
  *
  * Two things make this more than a switch statement.
  *
- * FIRST, the captured metadata is lossy. `compat/upstream/v7.6.5/command-metadata.json`
+ * FIRST, the captured metadata is lossy. `compat/upstream/v7.6.7/command-metadata.json`
  * records `ValidateRangeAttribute` on `Get-Date -Month` WITH its bounds, but
  * `CommandManifest` flattens the attribute list to `readonly string[]`, so by
  * the time a manifest reaches the binder the bounds are gone. Guessing them
@@ -220,7 +220,7 @@ export interface ValidationFailure {
    * `validation.throwsArgumentException` (PR 26668) changes this in 7.7. The
    * 7.6 value is verified — pwsh 7.6.5 reports ValidationMetadataException
    * inside a ParameterBindingValidationException. The 7.7 value is taken from
-   * the recorded delta and could NOT be verified here, because only 7.6.5 is
+   * the recorded delta and could NOT be verified here, because no 7.7 build is
    * installed; it is marked as such rather than presented as measured.
    */
   readonly exceptionTypeName: string;

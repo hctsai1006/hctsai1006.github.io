@@ -84,7 +84,7 @@ describe('an upstream LTS bump cannot silently delete measured metadata', () => 
       parameterReference: string;
       commands: { parameterSource: string }[];
     };
-    assert.equal(m.parameterReference, 'v7.6.5');
+    assert.equal(m.parameterReference, 'v7.6.7');
     assert.equal(
       m.commands.filter((c) => c.parameterSource === 'reference-implementation').length,
       31,

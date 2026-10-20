@@ -66,8 +66,8 @@ function raw(file: string): RawProfile {
   return JSON.parse(readFileSync(join(PROFILE_DIR, file), 'utf8')) as RawProfile;
 }
 
-const RAW_76 = raw('powershell-7.6.5-linux.json');
-const RAW_77 = raw('powershell-7.7.0-preview.4-linux.json');
+const RAW_76 = raw('powershell-7.6.7-linux.json');
+const RAW_77 = raw('powershell-7.7.0-preview.5-linux.json');
 
 const view = (r: RawProfile): CompatibilityView =>
   viewOfBehaviors(r.displayVersion ?? '?', r.behaviors ?? {});

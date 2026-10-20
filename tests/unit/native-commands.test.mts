@@ -954,28 +954,28 @@ describe('$PSVersionTable', () => {
   });
 
   it('takes the version from the profile, never from a literal', async () => {
-    const seventySix = await run(need('$psversiontable'), {}, [], { displayVersion: '7.6.5' });
+    const seventySix = await run(need('$psversiontable'), {}, [], { displayVersion: '7.6.7' });
     assert.equal(prop(prop(seventySix.values[0], 'PSVersion'), 'Major'), 7);
     assert.equal(prop(prop(seventySix.values[0], 'PSVersion'), 'Minor'), 6);
-    assert.equal(prop(prop(seventySix.values[0], 'PSVersion'), 'Patch'), 5);
+    assert.equal(prop(prop(seventySix.values[0], 'PSVersion'), 'Patch'), 7);
 
     const preview = await run(need('$psversiontable'), {}, [], {
-      displayVersion: '7.7.0-preview.4',
+      displayVersion: '7.7.0-preview.5',
     });
     assert.equal(prop(prop(preview.values[0], 'PSVersion'), 'Patch'), 0);
-    assert.equal(prop(prop(preview.values[0], 'PSVersion'), 'PreReleaseLabel'), 'preview.4');
+    assert.equal(prop(prop(preview.values[0], 'PSVersion'), 'PreReleaseLabel'), 'preview.5');
   });
 
   it('checks GitCommitId against the release lock', () => {
     // pwsh reports the version string for an official build, and the lock is
     // consulted so an unknown version cannot pass unnoticed.
-    assert.equal(gitCommitIdFor('7.6.5'), '7.6.5');
-    assert.equal(gitCommitIdFor('7.7.0-preview.4'), '7.7.0-preview.4');
+    assert.equal(gitCommitIdFor('7.6.7'), '7.6.7');
+    assert.equal(gitCommitIdFor('7.7.0-preview.5'), '7.7.0-preview.5');
     assert.match(gitCommitIdFor('9.9.9'), /no release for 9\.9\.9 in releases\.lock\.json/);
   });
 
   it('reports the simulated machine, and says which fields those are', () => {
-    const table = psVersionTable('7.6.5', SIMULATED_MACHINE);
+    const table = psVersionTable('7.6.7', SIMULATED_MACHINE);
     assert.equal(table.properties['OS'], SIMULATED_MACHINE.os);
     assert.equal(table.properties['Platform'], 'Unix');
   });

@@ -1052,9 +1052,10 @@ async function build(): Promise<Lockfile> {
   // carries NextReleaseTag, naming a tag that does not exist.
   //
   // Deliberately NOT used: aka.ms/pwsh-buildinfo-lts. It looks first-party and
-  // authoritative, but tracks an INSTALL CHANNEL and today returns v7.4.19 while
-  // this file and the lifecycle doc both say v7.6.5 is the current LTS. Trusting
-  // it would be wrong by a full release cycle.
+  // authoritative, but tracks an INSTALL CHANNEL: on 2026-09-05 it returned
+  // v7.4.19 while this file and the lifecycle doc both said v7.6.5 was the
+  // current LTS, and on 2026-10-20 it returned v7.4.21 while this file listed
+  // v7.6.7. Trusting it would be wrong by a full release cycle.
   const meta: PowerShellMetadata = await getShape(
     METADATA_URL,
     1,
@@ -1079,7 +1080,8 @@ async function build(): Promise<Lockfile> {
   }
 
   // Every declared LTS is kept, not just the newest: two LTS lines are supported
-  // concurrently (today v7.4.19 and v7.6.5), and discarding one leaves the
+  // concurrently (v7.4.19 and v7.6.5 on 2026-09-05, v7.4.21 and v7.6.7 on
+  // 2026-10-20), and discarding one leaves the
   // lockfile unable to answer "is 7.4 still supported?".
   const declaredPresent: GhRelease[] = [];
   for (const tag of ltsTags) {

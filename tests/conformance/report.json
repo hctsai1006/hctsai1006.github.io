@@ -1,11 +1,11 @@
 {
   "engine": {
-    "psVersion": "7.6.5",
+    "psVersion": "7.6.7",
     "psEdition": "Core",
-    "gitCommitId": "7.6.5",
+    "gitCommitId": "7.6.7",
     "os": "Ubuntu 24.04.4 LTS",
     "platform": "Unix",
-    "framework": ".NET 10.0.11"
+    "framework": ".NET 10.0.13"
   },
   "capture": {
     "renderWidth": 120,
@@ -17,7 +17,7 @@
     "strictMode": "Latest",
     "updatableHelp": "not-installed"
   },
-  "fixtureCapturedAt": "2026-09-05T01:30:19.6549806Z",
+  "fixtureCapturedAt": "2026-10-20T09:13:50.6356308Z",
   "platformCaveat": null,
   "totals": {
     "cases": 115,
@@ -39,12 +39,12 @@
   },
   "profileCoverage": [
     {
-      "profile": "powershell/7.6.5/linux",
-      "displayVersion": "7.6.5",
+      "profile": "powershell/7.6.7/linux",
+      "displayVersion": "7.6.7",
       "fixture": {
-        "comparedAgainstVersion": "7.6.5",
+        "comparedAgainstVersion": "7.6.7",
         "applies": true,
-        "reason": "compared against a captured run of PowerShell 7.6.5"
+        "reason": "compared against a captured run of PowerShell 7.6.7"
       },
       "commands": {
         "population": 31,
@@ -74,12 +74,12 @@
       }
     },
     {
-      "profile": "powershell/7.7.0-preview.4/linux",
-      "displayVersion": "7.7.0-preview.4",
+      "profile": "powershell/7.7.0-preview.5/linux",
+      "displayVersion": "7.7.0-preview.5",
       "fixture": {
-        "comparedAgainstVersion": "7.6.5",
+        "comparedAgainstVersion": "7.6.7",
         "applies": false,
-        "reason": "no fixture was captured from PowerShell 7.7.0-preview.4. The only capture is from 7.6.5, which is evidence about that version and not this one."
+        "reason": "no fixture was captured from PowerShell 7.7.0-preview.5. The only capture is from 7.6.7, which is evidence about that version and not this one."
       },
       "commands": {
         "population": 31,

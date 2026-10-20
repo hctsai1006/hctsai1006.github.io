@@ -47,8 +47,8 @@ function profileView(file: string): CompatibilityView {
   return viewOfBehaviors((raw as { displayVersion?: string }).displayVersion ?? '?', behaviors);
 }
 
-const V76 = profileView('powershell-7.6.5-linux.json');
-const V77 = profileView('powershell-7.7.0-preview.4-linux.json');
+const V76 = profileView('powershell-7.6.7-linux.json');
+const V77 = profileView('powershell-7.7.0-preview.5-linux.json');
 
 const ALL = '__AllParameterSets';
 const anySet = (over: Partial<ParameterSetBinding> = {}): Record<string, ParameterSetBinding> => ({
@@ -456,7 +456,7 @@ describe('validation that depends on the profile', () => {
     // PR 26668. The 7.6 value is verified — pwsh 7.6.5 reports
     // ValidationMetadataException inside a ParameterBindingValidationException.
     // The 7.7 value comes from the recorded delta and could NOT be verified
-    // here, because only 7.6.5 is installed.
+    // here, because no 7.7 build is installed.
     const vnoe = manifest('Test-Val', [
       param('Value', { validation: ['ValidateNotNullOrEmpty'] }),
     ]);

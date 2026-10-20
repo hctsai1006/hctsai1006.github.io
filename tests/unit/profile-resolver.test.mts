@@ -29,8 +29,8 @@ function loadRealProfiles(): StoredProfile[] {
     .map((f) => JSON.parse(readFileSync(join(PROFILE_DIR, f), 'utf8')) as StoredProfile);
 }
 
-const LTS = 'powershell/7.6.5/linux';
-const PREVIEW = 'powershell/7.7.0-preview.4/linux';
+const LTS = 'powershell/7.6.7/linux';
+const PREVIEW = 'powershell/7.7.0-preview.5/linux';
 
 describe('resolving the real profiles', () => {
   const map = profileMap(loadRealProfiles());

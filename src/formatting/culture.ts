@@ -28,22 +28,22 @@
  * So the tables are gone and the data below is READ from a capture:
  *
  *     tools/capture-pwsh-culture.ps1
- *       -> compat/upstream/v7.6.5/culture-metadata-linux.json
+ *       -> compat/upstream/v7.6.7/culture-metadata-linux.json
  *
  * The reason is not that a capture is more accurate on the day it is taken. It
  * is that a capture can be RE-RUN and diffed, and a transcription can only be
  * re-read by the person who already believed it. `Intl` is still not used, and
  * now for a reason that survives checking: `Intl` reports what a BROWSER's ICU
  * thinks, which is neither pinned nor the thing this project claims to
- * reproduce. The claim is "PowerShell 7.6.5 on Linux", and that is what the
+ * reproduce. The claim is "PowerShell 7.6.7 on Linux", and that is what the
  * capture asks.
  *
  * WHERE THE TWO PLATFORMS DISAGREE, LINUX WINS
  *
- * The same capture was taken under pwsh 7.6.5 on Windows
+ * The same capture was taken under pwsh 7.6.7 on Windows
  * (`culture-metadata-windows.json`, committed beside it). Two real divergences
  * came out, and the compatibility profiles this project publishes target
- * `powershell-7.6.5-linux`, so the Linux answer is the one loaded here:
+ * `powershell-7.6.7-linux`, so the Linux answer is the one loaded here:
  *
  *   1. en-US's time patterns separate the AM/PM designator with U+202F NARROW
  *      NO-BREAK SPACE on Linux and with U+0020 on Windows. CLDR 42 made that
@@ -71,7 +71,7 @@
  * rest of this project refuses. Adding fr-FR is a capture run, not an edit here.
  */
 
-import captured from '../../compat/upstream/v7.6.5/culture-metadata-linux.json' with { type: 'json' };
+import captured from '../../compat/upstream/v7.6.7/culture-metadata-linux.json' with { type: 'json' };
 
 /**
  * Where the currency symbol goes for a POSITIVE value. .NET numbers these
@@ -230,7 +230,7 @@ export interface CultureData {
  */
 export class CultureCaptureError extends Error {
   constructor(message: string) {
-    super(`${message} (compat/upstream/v7.6.5/culture-metadata-linux.json)`);
+    super(`${message} (compat/upstream/v7.6.7/culture-metadata-linux.json)`);
     this.name = 'CultureCaptureError';
   }
 }

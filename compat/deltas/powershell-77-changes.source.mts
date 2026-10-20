@@ -614,7 +614,7 @@ export const POWERSHELL_77_CHANGES = [
  * Verified from src/Modules/PSGalleryModules.csproj at each tag.
  */
 export const BUNDLED_MODULES = {
-  '7.6.5': {
+  '7.6.7': {
     PowerShellGet: '2.2.5',
     PackageManagement: '1.4.8.1',
     'Microsoft.PowerShell.PSResourceGet': '1.2.0',
@@ -622,14 +622,15 @@ export const BUNDLED_MODULES = {
     PSReadLine: '2.4.5',
     'Microsoft.PowerShell.ThreadJob': '2.2.0',
   },
-  '7.7.0-preview.4': {
+  '7.7.0-preview.5': {
     PowerShellGet: '2.2.5',
     PackageManagement: '1.4.8.1',
     // The only module that differs between the two lines. Everything else is
     // pinned identically, which is itself worth recording: it means a behaviour
     // difference between the profiles cannot be blamed on a module version
-    // unless it is this one.
-    'Microsoft.PowerShell.PSResourceGet': '1.3.0-preview1',
+    // unless it is this one. preview.4 shipped 1.3.0-preview1; preview.5 moved
+    // to 1.3.0-preview2 (PowerShell #28031).
+    'Microsoft.PowerShell.PSResourceGet': '1.3.0-preview2',
     'Microsoft.PowerShell.Archive': '1.2.6',
     PSReadLine: '2.4.5',
     'Microsoft.PowerShell.ThreadJob': '2.2.0',

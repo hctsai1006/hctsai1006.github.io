@@ -12,7 +12,7 @@ The whole point of profiles is being able to answer "what would this script do d
 
 ## Depends on
 
-- [~] **11. Differential conformance against real pwsh 7.6.5** — [detail](PR-11-differential-conformance.md)
+- [~] **11. Differential conformance against real pwsh 7.6.7** — [detail](PR-11-differential-conformance.md)
 
 ## Tasks
 
@@ -21,7 +21,7 @@ The whole point of profiles is being able to answer "what would this script do d
   - *evidence:* nothing under `src/**/*.{ts,mts}` matches `/compareProfiles/`
 - [x] **12.2** Show, per difference, whether BrowserShell actually emulates it or merely documents it
   - STALE todo, corrected 2026-09-06. The generated explorer page labels every documented difference either emulated or "documented, not emulated", sorts the emulated ones first, and prints the ratio. Delivered as a generated static page rather than as in-session UI, which is what 12.1 and 12.3 would add.
-  - *evidence:* `compat/deltas/7.6.5__7.7.0-preview.4.json` — `summary`
+  - *evidence:* `compat/deltas/7.6.7__7.7.0-preview.5.json` — `summary`
   - *evidence:* `tools/generate-compat-explorer.mts` matches `/documented, not emulated/`
   - *evidence:* `npm run explorer`
 - [ ] **12.3** Let the session switch profiles without losing the filesystem
