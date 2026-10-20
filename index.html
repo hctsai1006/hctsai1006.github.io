@@ -1064,9 +1064,17 @@ const CMDLETS={
       line('cmd','  sudo apt install net-tools')];}},
   'hostname':{type:'Application',params:[],help:'show the system\'s host name',run:function(){return [line('',HOSTN)];}},
   '$psversiontable':{disp:'$PSVersionTable',type:'Variable',params:[],help:'PowerShell version information',run:function(){
-    return table(['Name','Value'],[['PSVersion','7.6.7'],['PSEdition','Core'],
-      ['OS','Linux 6.8.0-51-generic #52-Ubuntu SMP PREEMPT_DYNAMIC'],
-      ['Platform','Unix'],['GitCommitId','7.6.7']]);}},
+    /* 照真機 pwsh 7.6.7(Ubuntu 24.04)印:九個鍵的順序固定;OS 是 /etc/os-release 的 PRETTY_NAME,
+       不是 uname;PSCompatibleVersions 是陣列,表格只列前 4 個再接 …($FormatEnumerationLimit)。
+       Hashtable 的表格檢視 Name 欄寬固定 30,標題底線跟標題字一樣長。
+       真機在 N 欄的終端機排到 N-1 欄,不到 53 欄 Value 就被截斷;那時跟其他表格一樣改用清單,
+       印出來就是 $PSVersionTable | Format-List */
+    const rows=[['PSVersion','7.6.7'],['PSEdition','Core'],['GitCommitId','7.6.7'],
+      ['OS','Ubuntu 24.04.4 LTS'],['Platform','Unix'],['PSCompatibleVersions','{1.0, 2.0, 3.0, 4.0…}'],
+      ['PSRemotingProtocolVersion','2.4'],['SerializationVersion','1.1.0.1'],['WSManStackVersion','3.0']];
+    if(32+Math.max.apply(null,rows.map(function(r){ return dw(r[1]); }))>availCols()) return listFormat(['Name','Value'],rows);
+    return [line('head',padw('Name',31)+'Value'),line('rule',padw('----',31)+'-----')]
+      .concat(rows.map(function(r){ return line('',padw(r[0],31)+r[1]); }));}},
   'git':{type:'Application',params:[],help:'the stupid content tracker',run:function(a,raw){
     let sub=String(raw[1]||'').toLowerCase();
     if(sub==='status') return [line('','On branch main'),line('','Your branch is up to date with \'origin/main\'.'),line(''),
