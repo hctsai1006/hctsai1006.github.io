@@ -54,6 +54,11 @@
       "cncf": false
     },
     {
+      "repository": "cloud-native-taiwan/infra-labs-docs",
+      "merged": 6,
+      "cncf": false
+    },
+    {
       "repository": "jaegertracing/jaeger-ui",
       "merged": 6,
       "cncf": true
@@ -90,11 +95,6 @@
     },
     {
       "repository": "AcademySoftwareFoundation/rawtoaces",
-      "merged": 4,
-      "cncf": false
-    },
-    {
-      "repository": "cloud-native-taiwan/infra-labs-docs",
       "merged": 4,
       "cncf": false
     },
