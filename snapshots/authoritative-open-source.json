@@ -1,9 +1,9 @@
 {
   "capturedFrom": "C:/Users/thc1006/Desktop/MAY/personal-homepage/open-source/index.html",
-  "capturedAt": "2026-10-21",
+  "capturedAt": "2026-10-22",
   "metrics": {
-    "merged": 466,
-    "projects": 109,
+    "merged": 468,
+    "projects": 110,
     "foundations": 11
   },
   "cncfRepositories": [
@@ -40,6 +40,7 @@
     "kubernetes-sigs/kernel-module-management",
     "kubernetes-sigs/kubespray",
     "kubernetes-sigs/kueue",
+    "kubernetes-sigs/prow",
     "kubernetes-sigs/signalhound",
     "kubernetes/kubernetes",
     "kubernetes/minikube",
