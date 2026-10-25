@@ -28,8 +28,8 @@
     },
     {
       "year": "2026",
-      "status": "Accepted",
-      "venue": "TASTI 2026 (Taiwan International Assembly of Space Science, Technology, and Industry), abstract accepted for oral presentation",
+      "status": "Abstract accepted",
+      "venue": "TASTI 2026 (Taiwan International Assembly of Space Science, Technology, and Industry), oral presentation",
       "title": "Reliability of Sentinel-2 Cloud Segmentation Under Product-Level Shift",
       "identifier": "10.2139/ssrn.7467639",
       "authors": "Hsiu-Chi Tsai, Chia-Tung Chung"
@@ -142,7 +142,7 @@
     {
       "venue": "TASTI 2026",
       "title": "Reliability of Sentinel-2 Cloud Segmentation",
-      "status": "Accepted"
+      "status": "Abstract accepted"
     },
     {
       "venue": "SSRN 7448003",
