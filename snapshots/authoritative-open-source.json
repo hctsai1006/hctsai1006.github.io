@@ -1,9 +1,9 @@
 {
   "capturedFrom": "C:/Users/thc1006/Desktop/MAY/personal-homepage/open-source/index.html",
-  "capturedAt": "2026-10-22",
+  "capturedAt": "2026-10-26",
   "metrics": {
-    "merged": 470,
-    "projects": 110,
+    "merged": 471,
+    "projects": 111,
     "foundations": 11
   },
   "cncfRepositories": [
@@ -13,6 +13,7 @@
     "cncf/prow-github-actions",
     "containerd/nerdbox",
     "containerd/nri",
+    "containernetworking/plugins",
     "cortexproject/cortex",
     "envoyproxy/envoy",
     "external-secrets/external-secrets",
