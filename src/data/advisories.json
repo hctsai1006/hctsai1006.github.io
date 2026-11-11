@@ -9,7 +9,7 @@
       "published": "2026-10-11",
       "cve": "CVE-2026-19737",
       "foundation": "Linux Foundation",
-      "fixedIn": "main / v4.4-branch / v4.3-branch(4.5.0 尚未發佈)",
+      "fixedIn": "main / v4.4-branch / v4.3-branch(隨 4.5.0 發佈)",
       "summary": "ESP32 的 I2S 驅動觸發沒接線的方向時解參考空指標;開了 userspace 的 ESP32-C6 上,獲准使用 I2S 裝置的使用者執行緒一次呼叫就能讓系統停機(CWE-476)。我回報 #115719 並寫了修正 #115721。",
       "url": "https://github.com/zephyrproject-rtos/zephyr/security/advisories/GHSA-5g9q-h8wq-rrf3",
       "bulletin": null
