@@ -229,8 +229,8 @@ describe('Get-Advisory', () => {
 
   it('filters by -Foundation', async () => {
     const result = await run(need('get-advisory'), { Foundation: 'graduated' });
-    assert.equal(result.values.length, 1);
-    assert.equal(prop(result.values[0], 'Repository'), 'istio/istio');
+    // NATS and Istio are both CNCF Graduated; Volcano is Incubating and Zephyr is under the Linux Foundation.
+    assert.deepEqual(result.values.map((v) => prop(v, 'Repository')), ['nats-io/nats-server', 'istio/istio']);
   });
 });
 
