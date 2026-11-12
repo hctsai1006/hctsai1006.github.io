@@ -72,8 +72,14 @@ import type {
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..');
 const INVENTORY = join(REPO, 'src', 'commands', 'v1-inventory.json');
-const LOCKFILE = join(REPO, 'compat', 'upstream', 'releases.lock.json');
-const OUT = join(REPO, 'src', 'commands', 'manifests.json');
+// --lock= and --out= exist for tests/unit/manifest-generator-guards.test.mts, which
+// has to run this tool on a lockfile it altered. It used to alter the real one
+// and restore it afterwards; the test runner runs test files in parallel, so
+// another file reading the lockfile in that window saw an LTS of v7.6.6 and
+// failed (tests/conformance, 2026-11-13). Pointing the tool at copies keeps the
+// repository's files untouched while a test runs.
+let LOCKFILE = join(REPO, 'compat', 'upstream', 'releases.lock.json');
+let OUT = join(REPO, 'src', 'commands', 'manifests.json');
 
 interface Inventory {
   commands: Array<{
@@ -501,14 +507,19 @@ const serialise = (manifests: CommandManifest[], engine: string): string =>
   ) + '\n';
 
 const KNOWN_FLAGS = new Set(['--check']);
+const PATH_FLAGS = ['--lock=', '--out='];
 
 function main(): void {
   const argv = process.argv.slice(2);
-  const unknown = argv.filter((a) => !KNOWN_FLAGS.has(a));
+  const unknown = argv.filter((a) => !KNOWN_FLAGS.has(a) && !PATH_FLAGS.some((f) => a.startsWith(f) && a.length > f.length));
   if (unknown.length > 0) {
     process.stderr.write(`\n  unknown option(s): ${unknown.join(', ')}\n\n`);
     process.exitCode = 2;
     return;
+  }
+  for (const a of argv) {
+    if (a.startsWith('--lock=')) LOCKFILE = resolve(a.slice('--lock='.length));
+    if (a.startsWith('--out=')) OUT = resolve(a.slice('--out='.length));
   }
 
   const { manifests, problems, stats } = build();

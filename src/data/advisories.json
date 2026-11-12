@@ -2,14 +2,27 @@
   "$comment": "Published security advisories that credit me by name.",
   "advisories": [
     {
+      "id": "GHSA-27c4-m7hq-v6pw",
+      "repository": "nats-io/nats-server",
+      "severity": "6.5 medium",
+      "role": "reporter",
+      "published": "2026-11-13",
+      "cve": null,
+      "foundation": "CNCF Graduated",
+      "fixedIn": "v2.14.9 / v2.15.2",
+      "summary": "route 或 leafnode 的對端宣告過大的 queue 訂閱權重時,伺服器比對訊息會配置大量記憶體;這段工作握著訂閱清單的鎖,訊息投遞會卡住,伺服器也可能因記憶體耗盡而終止(CWE-770、CWE-789)。",
+      "url": "https://github.com/nats-io/nats-server/security/advisories/GHSA-27c4-m7hq-v6pw",
+      "bulletin": null
+    },
+    {
       "id": "GHSA-5g9q-h8wq-rrf3",
       "repository": "zephyrproject-rtos/zephyr",
       "severity": "5.5 medium",
       "role": "remediation developer",
-      "published": "2026-10-11",
+      "published": "2026-10-12",
       "cve": "CVE-2026-19737",
       "foundation": "Linux Foundation",
-      "fixedIn": "main / v4.4-branch / v4.3-branch(4.5.0 尚未發佈)",
+      "fixedIn": "main / v4.4-branch / v4.3-branch(隨 4.5.0 發佈)",
       "summary": "ESP32 的 I2S 驅動觸發沒接線的方向時解參考空指標;開了 userspace 的 ESP32-C6 上,獲准使用 I2S 裝置的使用者執行緒一次呼叫就能讓系統停機(CWE-476)。我回報 #115719 並寫了修正 #115721。",
       "url": "https://github.com/zephyrproject-rtos/zephyr/security/advisories/GHSA-5g9q-h8wq-rrf3",
       "bulletin": null

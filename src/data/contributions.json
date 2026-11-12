@@ -3,19 +3,19 @@
   "foundations": {
     "cncf": {
       "label": "CNCF",
-      "merged": 317,
-      "repositories": 59
+      "merged": 346,
+      "repositories": 60
     }
   },
   "top": [
     {
       "repository": "kubernetes-sigs/kueue",
-      "merged": 87,
+      "merged": 101,
       "cncf": true
     },
     {
       "repository": "kubernetes/kubernetes",
-      "merged": 55,
+      "merged": 59,
       "cncf": true
     },
     {
@@ -30,18 +30,18 @@
     },
     {
       "repository": "zephyrproject-rtos/zephyr",
-      "merged": 22,
+      "merged": 23,
       "cncf": false
+    },
+    {
+      "repository": "kubernetes/test-infra",
+      "merged": 15,
+      "cncf": true
     },
     {
       "repository": "ocudu/ocudu",
       "merged": 14,
       "cncf": false
-    },
-    {
-      "repository": "kubernetes/test-infra",
-      "merged": 12,
-      "cncf": true
     },
     {
       "repository": "kubernetes-sigs/dra-driver-cpu",
@@ -52,6 +52,11 @@
       "repository": "nephio-project/nephio",
       "merged": 8,
       "cncf": false
+    },
+    {
+      "repository": "open-telemetry/opentelemetry-collector-contrib",
+      "merged": 7,
+      "cncf": true
     },
     {
       "repository": "cloud-native-taiwan/infra-labs-docs",
@@ -82,11 +87,6 @@
       "repository": "sysprog21/muxleq",
       "merged": 6,
       "cncf": false
-    },
-    {
-      "repository": "open-telemetry/opentelemetry-collector-contrib",
-      "merged": 5,
-      "cncf": true
     },
     {
       "repository": "volcano-sh/volcano",
@@ -154,7 +154,17 @@
       "cncf": true
     },
     {
+      "repository": "kubernetes-sigs/external-dns",
+      "merged": 3,
+      "cncf": true
+    },
+    {
       "repository": "kubernetes-sigs/signalhound",
+      "merged": 3,
+      "cncf": true
+    },
+    {
+      "repository": "lima-vm/lima",
       "merged": 3,
       "cncf": true
     },
