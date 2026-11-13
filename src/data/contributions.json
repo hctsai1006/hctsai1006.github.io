@@ -3,19 +3,19 @@
   "foundations": {
     "cncf": {
       "label": "CNCF",
-      "merged": 346,
+      "merged": 350,
       "repositories": 60
     }
   },
   "top": [
     {
       "repository": "kubernetes-sigs/kueue",
-      "merged": 101,
+      "merged": 104,
       "cncf": true
     },
     {
       "repository": "kubernetes/kubernetes",
-      "merged": 59,
+      "merged": 60,
       "cncf": true
     },
     {
